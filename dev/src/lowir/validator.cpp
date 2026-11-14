@@ -1021,7 +1021,9 @@ bool Validator::check_instruction(InstId id, const Instruction& inst, BlockId bl
 		}
 		return true;
 	case Opcode::Select:
-		if (!(inst.type.is_integer() || inst.type.is_pointer()) || inst.type.kind() == TypeKind::I128)
+		if (!(inst.type.is_integer() || inst.type.is_pointer() || inst.type.kind() == TypeKind::F32 ||
+				inst.type.kind() == TypeKind::F64) ||
+			inst.type.kind() == TypeKind::I128)
 			return fail("invalid select type");
 		return true;
 	case Opcode::Vector:

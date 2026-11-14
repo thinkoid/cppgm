@@ -28,6 +28,11 @@ using lowir::ValueKind;
 
 namespace {
 
+// A floating select's scratch lanes: its compare's mask, and a value that
+// is in no register.
+const Reg kMaskLanes = static_cast<Reg>(XMM0 + 15);
+const Reg kOtherLanes = static_cast<Reg>(XMM0 + 14);
+
 // Whether a narrow result computed at 64 bits already is its canonical
 // value: it fits the type non-negatively, an unsigned type below its
 // width (fits_ stops there for a wrapped unsigned result).
@@ -1314,23 +1319,16 @@ void FunctionSelector::emit_count(const Instruction& inst, Cond cc)
 	finish_result(inst, d);
 }
 
-void FunctionSelector::emit_select(const Instruction& inst)
+// The flags of a select's condition: a compare fused into the select, a
+// test of the condition, or its truth. `known` when the condition is a
+// literal (no flags are set), `taken` its truth then.
+Cond FunctionSelector::select_condition(Value cond, bool& known, bool& taken)
 {
-	const Value cond = resolve(inst.ops[0]);
-	Value t = resolve(inst.ops[1]), f = resolve(inst.ops[2]);
-	const TypeKind kind = inst.type.is_pointer() ? TypeKind::Ptr : inst.type.kind();
 	Cond cc = CC_NE;
-	bool known = cond.kind == ValueKind::Integer, taken = known && (literal(cond).low | literal(cond).high) != 0;
+	known = cond.kind == ValueKind::Integer;
+	taken = known && (literal(cond).low | literal(cond).high) != 0;
 	if (cond.kind == ValueKind::Temp && (temps_[cond.index].flags & TF_FUSED))
-	{
 		cc = compare_flags(body_->instructions[body_->temps[cond.index].def]);
-		if ((t.kind == ValueKind::Temp && (temps_[t.index].flags & TF_FUSED)) ||
-			(f.kind == ValueKind::Temp && (temps_[f.index].flags & TF_FUSED)))
-		{
-			emit_count(inst, cc);
-			return;
-		}
-	}
 	else if (cond.kind == ValueKind::Temp && (temps_[cond.index].flags & TF_TESTED))
 		cc = emit_and_test(body_->instructions[body_->temps[cond.index].def], true);
 	else if (!known)
@@ -1348,6 +1346,150 @@ void FunctionSelector::emit_select(const Instruction& inst)
 			emit2(Op::Test, width, c, c);
 		else if (c.kind == OperandKind::Mem)
 			emit2(Op::Cmp, width, c, Operand::make_imm(0));
+	}
+	return cc;
+}
+
+// A choice between floating values. A fused compare of values as wide makes
+// a lane mask over the bits in which the two values differ, which turn the
+// second value into the first (lanes above the scalars are not read).
+// Under any other condition the two values' bits go through the scratch
+// registers and a cmov (moves between the register classes keep the flags).
+void FunctionSelector::emit_float_select(const Instruction& inst)
+{
+	const Value cond = resolve(inst.ops[0]);
+	Value t = resolve(inst.ops[1]), f = resolve(inst.ops[2]);
+	const TypeKind kind = inst.type.kind();
+	const bool wide = kind == TypeKind::F64;
+	const Instruction* test = cond.kind == ValueKind::Temp && (temps_[cond.index].flags & TF_FUSED)
+		? &body_->instructions[body_->temps[cond.index].def]
+		: nullptr;
+	// The lane compare's predicates: less (1), less or equal (2) and, true
+	// of a NaN, not less (5) and not less or equal (6); the others swap
+	// the operands.
+	unsigned code = 0;
+	bool swap = false;
+	if (test != nullptr && test->op == Opcode::Compare && test->type == inst.type && !(t == f))
+		switch (static_cast<lowir::ComparePredicate>(test->sub))
+		{
+		case lowir::ComparePredicate::Lt:
+			code = 1;
+			break;
+		case lowir::ComparePredicate::Gt:
+			code = 1;
+			swap = true;
+			break;
+		case lowir::ComparePredicate::Le:
+			code = 2;
+			break;
+		case lowir::ComparePredicate::Ge:
+			code = 2;
+			swap = true;
+			break;
+		case lowir::ComparePredicate::Uge:
+			code = 5;
+			break;
+		case lowir::ComparePredicate::Ule:
+			code = 5;
+			swap = true;
+			break;
+		case lowir::ComparePredicate::Ugt:
+			code = 6;
+			break;
+		case lowir::ComparePredicate::Ult:
+			code = 6;
+			swap = true;
+			break;
+		default:
+			break;
+		}
+	if (code != 0)
+	{
+		load_into(kMaskLanes, rm_operand(test->ops[swap ? 1 : 0], inst.type, kSelectScratch), kind);
+		Operand y = rm_operand(test->ops[swap ? 0 : 1], inst.type, kSelectScratch);
+		if (y.kind != OperandKind::Reg)
+		{
+			load_into(kOtherLanes, y, kind);
+			y = Operand::make_reg(kOtherLanes);
+		}
+		Inst& mask = emit3(Op::Vector, TypeKind::V128, Operand::make_reg(kMaskLanes), Operand::make_reg(kMaskLanes), y);
+		mask.sub = static_cast<uint8_t>(wide ? lowir::VectorOp::Cmppd : lowir::VectorOp::Cmpps);
+		mask.aux = code;
+		Operand other = rm_operand(f, inst.type, kSelectScratch);
+		if (other.kind != OperandKind::Reg)
+		{
+			load_into(kOtherLanes, other, kind);
+			other = Operand::make_reg(kOtherLanes);
+		}
+		const Reg d = result_reg(inst, dying_reg(t), kNoReg, 1u << other.reg);
+		load_into(d, rm_operand(t, inst.type, kSelectScratch), kind);
+		const auto lanes = [&](lowir::VectorOp op, const Operand& with) {
+			emit3(Op::Vector, TypeKind::V128, Operand::make_reg(d), Operand::make_reg(d), with).sub =
+				static_cast<uint8_t>(op);
+		};
+		lanes(lowir::VectorOp::Pxor, other);
+		lanes(lowir::VectorOp::Pand, Operand::make_reg(kMaskLanes));
+		lanes(lowir::VectorOp::Pxor, other);
+		finish_result(inst, d);
+		return;
+	}
+	bool known, taken;
+	const Cond cc = select_condition(cond, known, taken);
+	if (known)
+		t = f = taken ? t : f;
+	if (t == f)
+	{
+		const Reg d = result_reg(inst, dying_reg(t));
+		load_into(d, rm_operand(t, inst.type, kSelectScratch), kind);
+		finish_result(inst, d);
+		return;
+	}
+	const TypeKind word = wide ? TypeKind::I64 : TypeKind::U32;
+	const auto bits = [&](Value v, Reg into, Reg lanes) {
+		Operand from = rm_operand(v, inst.type, into);
+		if (from.kind == OperandKind::Mem)
+		{
+			emit2(Op::Load, word, Operand::make_reg(into), from);
+			return;
+		}
+		if (from.kind != OperandKind::Reg)
+		{
+			load_into(lanes, from, kind);
+			from = Operand::make_reg(lanes);
+		}
+		emit2(Op::Vector, TypeKind::V128, Operand::make_reg(into), from).sub = static_cast<uint8_t>(
+			wide ? lowir::VectorOp::Toi64 : lowir::VectorOp::Toi32);
+	};
+	// (A literal's lanes are loaded through the first scratch register:
+	// the second value's bits go there last.)
+	bits(f, kEmitScratch, kMaskLanes);
+	bits(t, kSelectScratch, kOtherLanes);
+	Inst& mov = emit2(Op::Cmov, TypeKind::Void, Operand::make_reg(kEmitScratch), Operand::make_reg(kSelectScratch));
+	mov.sub = cc;
+	const Reg d = result_reg(inst);
+	emit2(Op::Vector, TypeKind::V128, Operand::make_reg(d), Operand::make_reg(kEmitScratch)).sub = static_cast<uint8_t>(
+		wide ? lowir::VectorOp::Fromi64 : lowir::VectorOp::Fromi32);
+	finish_result(inst, d);
+}
+
+void FunctionSelector::emit_select(const Instruction& inst)
+{
+	if (inst.type.is_float())
+	{
+		emit_float_select(inst);
+		return;
+	}
+	const Value cond = resolve(inst.ops[0]);
+	Value t = resolve(inst.ops[1]), f = resolve(inst.ops[2]);
+	const TypeKind kind = inst.type.is_pointer() ? TypeKind::Ptr : inst.type.kind();
+	bool known, taken;
+	const Cond cc = select_condition(cond, known, taken);
+	if (cond.kind == ValueKind::Temp && (temps_[cond.index].flags & TF_FUSED) &&
+		((t.kind == ValueKind::Temp && (temps_[t.index].flags & TF_FUSED)) ||
+			(f.kind == ValueKind::Temp && (temps_[f.index].flags & TF_FUSED))))
+	{
+		emit_count(inst, cc);
+		return;
 	}
 	// A known condition copies its operand.
 	if (known)

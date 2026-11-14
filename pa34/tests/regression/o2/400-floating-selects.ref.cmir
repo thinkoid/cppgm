@@ -1,0 +1,1190 @@
+machine_ir x86_64 <host-target>
+
+startup
+    call @main [args=()]
+    mov rdi, rax
+    exit
+
+global @nan_bits
+  storage scalar i64
+  init i64 9221120237041090560
+
+function @lt_f64
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    param %a -> <xmm0> : f64
+    param %b -> <xmm1> : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f64 xmm15, xmm0
+    vector.cmppd xmm15, xmm15, xmm1, 1
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @le_f64
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    param %a -> <xmm0> : f64
+    param %b -> <xmm1> : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f64 xmm15, xmm0
+    vector.cmppd xmm15, xmm15, xmm1, 2
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @gt_f64
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    param %a -> <xmm0> : f64
+    param %b -> <xmm1> : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f64 xmm15, xmm1
+    vector.cmppd xmm15, xmm15, xmm0, 1
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @ge_f64
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    param %a -> <xmm0> : f64
+    param %b -> <xmm1> : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f64 xmm15, xmm1
+    vector.cmppd xmm15, xmm15, xmm0, 2
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @ult_f64
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    param %a -> <xmm0> : f64
+    param %b -> <xmm1> : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f64 xmm15, xmm1
+    vector.cmppd xmm15, xmm15, xmm0, 6
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @ule_f64
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    param %a -> <xmm0> : f64
+    param %b -> <xmm1> : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f64 xmm15, xmm1
+    vector.cmppd xmm15, xmm15, xmm0, 5
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @ugt_f64
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    param %a -> <xmm0> : f64
+    param %b -> <xmm1> : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f64 xmm15, xmm0
+    vector.cmppd xmm15, xmm15, xmm1, 6
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @uge_f64
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    param %a -> <xmm0> : f64
+    param %b -> <xmm1> : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f64 xmm15, xmm0
+    vector.cmppd xmm15, xmm15, xmm1, 5
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @eq_f64
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    param %a -> <xmm0> : f64
+    param %b -> <xmm1> : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    feq.f64 rax, xmm0, xmm1
+    test.u8 rax, rax
+    vector.toi64 <gpr0>, <xmm1>
+    vector.toi64 <gpr1>, <xmm0>
+    cmovne <gpr0>, <gpr1>
+    vector.fromi64 xmm0, <gpr0>
+    ret xmm0
+
+function @ne_f64
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    param %a -> <xmm0> : f64
+    param %b -> <xmm1> : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fne.f64 rax, xmm0, xmm1
+    test.u8 rax, rax
+    vector.toi64 <gpr0>, <xmm1>
+    vector.toi64 <gpr1>, <xmm0>
+    cmovne <gpr0>, <gpr1>
+    vector.fromi64 xmm0, <gpr0>
+    ret xmm0
+
+function @lt_f32
+  abi
+    param %x -> xmm0 : f32
+    param %y -> xmm1 : f32
+    param %a -> <xmm0> : f32
+    param %b -> <xmm1> : f32
+    return f32 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f32 xmm15, xmm0
+    vector.cmpps xmm15, xmm15, xmm1, 1
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @le_f32
+  abi
+    param %x -> xmm0 : f32
+    param %y -> xmm1 : f32
+    param %a -> <xmm0> : f32
+    param %b -> <xmm1> : f32
+    return f32 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f32 xmm15, xmm0
+    vector.cmpps xmm15, xmm15, xmm1, 2
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @gt_f32
+  abi
+    param %x -> xmm0 : f32
+    param %y -> xmm1 : f32
+    param %a -> <xmm0> : f32
+    param %b -> <xmm1> : f32
+    return f32 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f32 xmm15, xmm1
+    vector.cmpps xmm15, xmm15, xmm0, 1
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @ge_f32
+  abi
+    param %x -> xmm0 : f32
+    param %y -> xmm1 : f32
+    param %a -> <xmm0> : f32
+    param %b -> <xmm1> : f32
+    return f32 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f32 xmm15, xmm1
+    vector.cmpps xmm15, xmm15, xmm0, 2
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @ult_f32
+  abi
+    param %x -> xmm0 : f32
+    param %y -> xmm1 : f32
+    param %a -> <xmm0> : f32
+    param %b -> <xmm1> : f32
+    return f32 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f32 xmm15, xmm1
+    vector.cmpps xmm15, xmm15, xmm0, 6
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @ule_f32
+  abi
+    param %x -> xmm0 : f32
+    param %y -> xmm1 : f32
+    param %a -> <xmm0> : f32
+    param %b -> <xmm1> : f32
+    return f32 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f32 xmm15, xmm1
+    vector.cmpps xmm15, xmm15, xmm0, 5
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @ugt_f32
+  abi
+    param %x -> xmm0 : f32
+    param %y -> xmm1 : f32
+    param %a -> <xmm0> : f32
+    param %b -> <xmm1> : f32
+    return f32 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f32 xmm15, xmm0
+    vector.cmpps xmm15, xmm15, xmm1, 6
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @uge_f32
+  abi
+    param %x -> xmm0 : f32
+    param %y -> xmm1 : f32
+    param %a -> <xmm0> : f32
+    param %b -> <xmm1> : f32
+    return f32 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f32 xmm15, xmm0
+    vector.cmpps xmm15, xmm15, xmm1, 5
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, <xmm1>
+    ret <xmm0>
+
+function @eq_f32
+  abi
+    param %x -> xmm0 : f32
+    param %y -> xmm1 : f32
+    param %a -> <xmm0> : f32
+    param %b -> <xmm1> : f32
+    return f32 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    feq.f32 rax, xmm0, xmm1
+    test.u8 rax, rax
+    vector.toi32 <gpr0>, <xmm1>
+    vector.toi32 <gpr1>, <xmm0>
+    cmovne <gpr0>, <gpr1>
+    vector.fromi32 xmm0, <gpr0>
+    ret xmm0
+
+function @ne_f32
+  abi
+    param %x -> xmm0 : f32
+    param %y -> xmm1 : f32
+    param %a -> <xmm0> : f32
+    param %b -> <xmm1> : f32
+    return f32 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fne.f32 rax, xmm0, xmm1
+    test.u8 rax, rax
+    vector.toi32 <gpr0>, <xmm1>
+    vector.toi32 <gpr1>, <xmm0>
+    cmovne <gpr0>, <gpr1>
+    vector.fromi32 xmm0, <gpr0>
+    ret xmm0
+
+function @table_f64
+  abi
+    param %test -> rdi : ptr
+    param %nan -> xmm0 : f64
+    return i64 -> rax
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    preserve <gpr2> <gpr3>
+    param-slot %nan -> [rbp-<off0>] : f64
+
+  block ^entry
+    mov <gpr2>, rdi
+    fmov.f64 [rbp-<off0>], xmm0
+    fmov.f64 xmm0, 1.0
+    fmov.f64 xmm1, 2.0
+    fmov.f64 <xmm0>, 3.0
+    fmov.f64 <xmm1>, 5.0
+    call *<gpr2> [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    feq.f64 rax, xmm0, 3.0
+    mov <gpr3>, rax
+    or <gpr3>, 0
+    fmov.f64 xmm0, 2.0
+    fmov.f64 xmm1, 1.0
+    fmov.f64 <xmm0>, 3.0
+    fmov.f64 <xmm1>, 5.0
+    call *<gpr2> [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    feq.f64 rax, xmm0, 3.0
+    shl <gpr3>, 1
+    or <gpr3>, rax
+    fmov.f64 xmm0, 1.0
+    fmov.f64 xmm1, 1.0
+    fmov.f64 <xmm0>, 3.0
+    fmov.f64 <xmm1>, 5.0
+    call *<gpr2> [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    feq.f64 rax, xmm0, 3.0
+    shl <gpr3>, 1
+    or <gpr3>, rax
+    fmov.f64 xmm0, [rbp-<off0>]
+    fmov.f64 xmm1, 1.0
+    fmov.f64 <xmm0>, 3.0
+    fmov.f64 <xmm1>, 5.0
+    call *<gpr2> [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    feq.f64 rax, xmm0, 3.0
+    shl <gpr3>, 1
+    or <gpr3>, rax
+    fmov.f64 xmm0, 1.0
+    fmov.f64 xmm1, [rbp-<off0>]
+    fmov.f64 <xmm0>, 3.0
+    fmov.f64 <xmm1>, 5.0
+    call *<gpr2> [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    feq.f64 rax, xmm0, 3.0
+    shl <gpr3>, 1
+    or rax, <gpr3>
+    ret rax
+
+function @table_f32
+  abi
+    param %test -> rdi : ptr
+    param %nan -> xmm0 : f32
+    return i64 -> rax
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    preserve <gpr2> <gpr3>
+    param-slot %nan -> [rbp-<off0>] : f32
+
+  block ^entry
+    mov <gpr2>, rdi
+    fmov.f32 [rbp-<off0>], xmm0
+    fmov.f32 xmm0, 1.0f
+    fmov.f32 xmm1, 2.0f
+    fmov.f32 <xmm0>, 3.0f
+    fmov.f32 <xmm1>, 5.0f
+    call *<gpr2> [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    feq.f32 rax, xmm0, 3.0f
+    mov <gpr3>, rax
+    or <gpr3>, 0
+    fmov.f32 xmm0, 2.0f
+    fmov.f32 xmm1, 1.0f
+    fmov.f32 <xmm0>, 3.0f
+    fmov.f32 <xmm1>, 5.0f
+    call *<gpr2> [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    feq.f32 rax, xmm0, 3.0f
+    shl <gpr3>, 1
+    or <gpr3>, rax
+    fmov.f32 xmm0, 1.0f
+    fmov.f32 xmm1, 1.0f
+    fmov.f32 <xmm0>, 3.0f
+    fmov.f32 <xmm1>, 5.0f
+    call *<gpr2> [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    feq.f32 rax, xmm0, 3.0f
+    shl <gpr3>, 1
+    or <gpr3>, rax
+    fmov.f32 xmm0, [rbp-<off0>]
+    fmov.f32 xmm1, 1.0f
+    fmov.f32 <xmm0>, 3.0f
+    fmov.f32 <xmm1>, 5.0f
+    call *<gpr2> [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    feq.f32 rax, xmm0, 3.0f
+    shl <gpr3>, 1
+    or <gpr3>, rax
+    fmov.f32 xmm0, 1.0f
+    fmov.f32 xmm1, [rbp-<off0>]
+    fmov.f32 <xmm0>, 3.0f
+    fmov.f32 <xmm1>, 5.0f
+    call *<gpr2> [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    feq.f32 rax, xmm0, 3.0f
+    shl <gpr3>, 1
+    or rax, <gpr3>
+    ret rax
+
+function @by_flag
+  abi
+    param %flag -> rdi : i64
+    param %a -> xmm0 : f64
+    param %b -> xmm1 : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    test.i64 rdi, rdi
+    vector.toi64 <gpr0>, xmm1
+    vector.toi64 <gpr1>, xmm0
+    cmovne <gpr0>, <gpr1>
+    vector.fromi64 xmm0, <gpr0>
+    ret xmm0
+
+function @by_narrow_test
+  abi
+    param %x -> xmm0 : f32
+    param %y -> xmm1 : f32
+    param %a -> <xmm0> : f64
+    param %b -> <xmm1> : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fcmp.f32 xmm1, xmm0
+    vector.toi64 <gpr0>, <xmm1>
+    vector.toi64 <gpr1>, <xmm0>
+    cmova <gpr0>, <gpr1>
+    vector.fromi64 xmm0, <gpr0>
+    ret xmm0
+
+function @by_integer_test
+  abi
+    param %i -> rdi : i64
+    param %j -> rsi : i64
+    param %a -> xmm0 : f32
+    param %b -> xmm1 : f32
+    return f32 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    cmp.i64 rdi, rsi
+    vector.toi32 <gpr0>, xmm1
+    vector.toi32 <gpr1>, xmm0
+    cmovl <gpr0>, <gpr1>
+    vector.fromi32 xmm0, <gpr0>
+    ret xmm0
+
+function @literals
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f64 xmm15, xmm0
+    vector.cmppd xmm15, xmm15, xmm1, 1
+    fmov.f64 xmm14, -0.0
+    fmov.f64 xmm0, 3.0
+    vector.pxor xmm0, xmm0, xmm14
+    vector.pand xmm0, xmm0, xmm15
+    vector.pxor xmm0, xmm0, xmm14
+    ret xmm0
+
+function @one_value
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    param %a -> <xmm0> : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fcmp.f64 xmm1, xmm0
+    ret <xmm0>
+
+function @two_readers
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    param %a -> <xmm0> : f64
+    param %b -> <xmm1> : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    flt.f64 rax, xmm0, xmm1
+    test.u8 rax, rax
+    vector.toi64 <gpr0>, <xmm1>
+    vector.toi64 <gpr1>, <xmm0>
+    cmovne <gpr0>, <gpr1>
+    vector.fromi64 xmm0, <gpr0>
+    test.u8 rax, rax
+    vector.toi64 <gpr0>, <xmm0>
+    vector.toi64 <gpr1>, <xmm1>
+    cmovne <gpr0>, <gpr1>
+    vector.fromi64 xmm1, <gpr0>
+    fmul.f64 xmm0, xmm0, 4.0
+    fadd.f64 xmm0, xmm0, xmm1
+    ret xmm0
+
+function @wrap
+  abi
+    param %t -> xmm0 : f64
+    param %lim -> xmm1 : f64
+    return f64 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fsub.f64 <xmm0>, xmm0, xmm1
+    fmov.f64 xmm15, xmm1
+    vector.cmppd xmm15, xmm15, xmm0, 2
+    vector.pxor <xmm0>, <xmm0>, xmm0
+    vector.pand <xmm0>, <xmm0>, xmm15
+    vector.pxor <xmm0>, <xmm0>, xmm0
+    ret <xmm0>
+
+function @values_read_after
+  abi
+    param %x -> xmm0 : f32
+    param %y -> xmm1 : f32
+    param %a -> <xmm0> : f32
+    param %b -> <xmm1> : f32
+    return f32 -> xmm0
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    fmov.f32 xmm15, xmm0
+    vector.cmpps xmm15, xmm15, xmm1, 2
+    fmov.f32 xmm0, <xmm0>
+    vector.pxor xmm0, xmm0, <xmm1>
+    vector.pand xmm0, xmm0, xmm15
+    vector.pxor xmm0, xmm0, <xmm1>
+    fmul.f32 xmm0, xmm0, 16.0f
+    fmul.f32 <xmm0>, <xmm0>, 4.0f
+    fadd.f32 xmm0, xmm0, <xmm0>
+    fadd.f32 xmm0, xmm0, <xmm1>
+    ret xmm0
+
+function @zero_sign
+  abi
+    param %x -> xmm0 : f64
+    param %y -> xmm1 : f64
+    return i64 -> rax
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    slot $cell -> [rbp-<off0>] : f64
+
+  block ^entry
+    call @literals [args=(xmm0,xmm1)]
+    fmov.f64 [rbp-<off0>], xmm0
+    load.i64 rax, [rbp-<off0>]
+    shr rax, 63
+    ret rax
+
+function @main
+  abi
+    return i32 -> rax
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    temp %nan -> [rbp-<off0>] : f64
+    temp %nan32 -> [rbp-<off1>] : f32
+
+  block ^entry
+    fmov.f64 xmm0, @nan_bits
+    fmov.f64 [rbp-<off0>], xmm0
+    fptrunc.f64.f32 xmm1, xmm0
+    fmov.f32 [rbp-<off1>], xmm1
+    mov rdi, @lt_f64
+    call @table_f64 [args=(rdi,xmm0)]
+    cmp.i64 rax, 16
+    je ^pass1
+
+  block ^fail1
+    mov rax, 1
+    ret rax
+
+  block ^pass1
+    mov rdi, @le_f64
+    fmov.f64 xmm0, [rbp-<off0>]
+    call @table_f64 [args=(rdi,xmm0)]
+    cmp.i64 rax, 20
+    je ^pass2
+
+  block ^fail2
+    mov rax, 2
+    ret rax
+
+  block ^pass2
+    mov rdi, @gt_f64
+    fmov.f64 xmm0, [rbp-<off0>]
+    call @table_f64 [args=(rdi,xmm0)]
+    cmp.i64 rax, 8
+    je ^pass3
+
+  block ^fail3
+    mov rax, 3
+    ret rax
+
+  block ^pass3
+    mov rdi, @ge_f64
+    fmov.f64 xmm0, [rbp-<off0>]
+    call @table_f64 [args=(rdi,xmm0)]
+    cmp.i64 rax, 12
+    je ^pass4
+
+  block ^fail4
+    mov rax, 4
+    ret rax
+
+  block ^pass4
+    mov rdi, @ult_f64
+    fmov.f64 xmm0, [rbp-<off0>]
+    call @table_f64 [args=(rdi,xmm0)]
+    cmp.i64 rax, 19
+    je ^pass5
+
+  block ^fail5
+    mov rax, 5
+    ret rax
+
+  block ^pass5
+    mov rdi, @ule_f64
+    fmov.f64 xmm0, [rbp-<off0>]
+    call @table_f64 [args=(rdi,xmm0)]
+    cmp.i64 rax, 23
+    je ^pass6
+
+  block ^fail6
+    mov rax, 6
+    ret rax
+
+  block ^pass6
+    mov rdi, @ugt_f64
+    fmov.f64 xmm0, [rbp-<off0>]
+    call @table_f64 [args=(rdi,xmm0)]
+    cmp.i64 rax, 11
+    je ^pass7
+
+  block ^fail7
+    mov rax, 7
+    ret rax
+
+  block ^pass7
+    mov rdi, @uge_f64
+    fmov.f64 xmm0, [rbp-<off0>]
+    call @table_f64 [args=(rdi,xmm0)]
+    cmp.i64 rax, 15
+    je ^pass8
+
+  block ^fail8
+    mov rax, 8
+    ret rax
+
+  block ^pass8
+    mov rdi, @eq_f64
+    fmov.f64 xmm0, [rbp-<off0>]
+    call @table_f64 [args=(rdi,xmm0)]
+    cmp.i64 rax, 4
+    je ^pass9
+
+  block ^fail9
+    mov rax, 9
+    ret rax
+
+  block ^pass9
+    mov rdi, @ne_f64
+    fmov.f64 xmm0, [rbp-<off0>]
+    call @table_f64 [args=(rdi,xmm0)]
+    cmp.i64 rax, 27
+    je ^pass10
+
+  block ^fail10
+    mov rax, 10
+    ret rax
+
+  block ^pass10
+    mov rdi, @lt_f32
+    fmov.f32 xmm0, [rbp-<off1>]
+    call @table_f32 [args=(rdi,xmm0)]
+    cmp.i64 rax, 16
+    je ^pass11
+
+  block ^fail11
+    mov rax, 11
+    ret rax
+
+  block ^pass11
+    mov rdi, @le_f32
+    fmov.f32 xmm0, [rbp-<off1>]
+    call @table_f32 [args=(rdi,xmm0)]
+    cmp.i64 rax, 20
+    jne ^fail12
+
+  block ^pass12
+    mov rdi, @gt_f32
+    fmov.f32 xmm0, [rbp-<off1>]
+    call @table_f32 [args=(rdi,xmm0)]
+    cmp.i64 rax, 8
+    jne ^fail13
+
+  block ^pass13
+    mov rdi, @ge_f32
+    fmov.f32 xmm0, [rbp-<off1>]
+    call @table_f32 [args=(rdi,xmm0)]
+    cmp.i64 rax, 12
+    jne ^fail14
+
+  block ^pass14
+    mov rdi, @ult_f32
+    fmov.f32 xmm0, [rbp-<off1>]
+    call @table_f32 [args=(rdi,xmm0)]
+    cmp.i64 rax, 19
+    jne ^fail15
+
+  block ^pass15
+    mov rdi, @ule_f32
+    fmov.f32 xmm0, [rbp-<off1>]
+    call @table_f32 [args=(rdi,xmm0)]
+    cmp.i64 rax, 23
+    jne ^fail16
+
+  block ^pass16
+    mov rdi, @ugt_f32
+    fmov.f32 xmm0, [rbp-<off1>]
+    call @table_f32 [args=(rdi,xmm0)]
+    cmp.i64 rax, 11
+    jne ^fail17
+
+  block ^pass17
+    mov rdi, @uge_f32
+    fmov.f32 xmm0, [rbp-<off1>]
+    call @table_f32 [args=(rdi,xmm0)]
+    cmp.i64 rax, 15
+    jne ^fail18
+
+  block ^pass18
+    mov rdi, @eq_f32
+    fmov.f32 xmm0, [rbp-<off1>]
+    call @table_f32 [args=(rdi,xmm0)]
+    cmp.i64 rax, 4
+    jne ^fail19
+
+  block ^pass19
+    mov rdi, @ne_f32
+    fmov.f32 xmm0, [rbp-<off1>]
+    call @table_f32 [args=(rdi,xmm0)]
+    cmp.i64 rax, 27
+    jne ^fail20
+
+  block ^pass20
+    mov rdi, 256
+    fmov.f64 xmm0, 3.0
+    fmov.f64 xmm1, 5.0
+    call @by_flag [args=(rdi,xmm0,xmm1)]
+    fcmp.f64 xmm0, 3.0
+    jp ^fail21
+    jne ^fail21
+
+  block ^pass21
+    mov rdi, 0
+    fmov.f64 xmm0, 3.0
+    fmov.f64 xmm1, 5.0
+    call @by_flag [args=(rdi,xmm0,xmm1)]
+    fcmp.f64 xmm0, 5.0
+    jp ^fail22
+    jne ^fail22
+
+  block ^pass22
+    fmov.f32 xmm0, 1.0f
+    fmov.f32 xmm1, 2.0f
+    fmov.f64 <xmm0>, 3.0
+    fmov.f64 <xmm1>, 5.0
+    call @by_narrow_test [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    fcmp.f64 xmm0, 3.0
+    jp ^fail23
+    jne ^fail23
+
+  block ^pass23
+    fmov.f32 xmm0, [rbp-<off1>]
+    fmov.f32 xmm1, 2.0f
+    fmov.f64 <xmm0>, 3.0
+    fmov.f64 <xmm1>, 5.0
+    call @by_narrow_test [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    fcmp.f64 xmm0, 5.0
+    jp ^fail24
+    jne ^fail24
+
+  block ^pass24
+    mov rdi, -1
+    mov rsi, 0
+    fmov.f32 xmm0, 3.0f
+    fmov.f32 xmm1, 5.0f
+    call @by_integer_test [args=(rsi,rdi,xmm0,xmm1)]
+    fcmp.f32 xmm0, 3.0f
+    jp ^fail25
+    jne ^fail25
+
+  block ^pass25
+    mov rdi, 0
+    mov rsi, -1
+    fmov.f32 xmm0, 3.0f
+    fmov.f32 xmm1, 5.0f
+    call @by_integer_test [args=(rsi,rdi,xmm0,xmm1)]
+    fcmp.f32 xmm0, 5.0f
+    jp ^fail26
+    jne ^fail26
+
+  block ^pass26
+    fmov.f64 xmm0, 1.0
+    fmov.f64 xmm1, 2.0
+    call @literals [args=(xmm0,xmm1)]
+    fcmp.f64 xmm0, 3.0
+    jp ^fail27
+    jne ^fail27
+
+  block ^pass27
+    fmov.f64 xmm0, 1.0
+    fmov.f64 xmm1, 2.0
+    call @zero_sign [args=(xmm0,xmm1)]
+    cmp.i64 rax, 0
+    jne ^fail28
+
+  block ^pass28
+    fmov.f64 xmm0, [rbp-<off0>]
+    fmov.f64 xmm1, 2.0
+    call @zero_sign [args=(xmm0,xmm1)]
+    cmp.i64 rax, 1
+    jne ^fail29
+
+  block ^pass29
+    fmov.f64 xmm0, 1.0
+    fmov.f64 xmm1, 2.0
+    fmov.f64 <xmm0>, 7.0
+    call @one_value [args=(xmm0,xmm1,<xmm0>)]
+    fcmp.f64 xmm0, 7.0
+    jp ^fail30
+    jne ^fail30
+
+  block ^pass30
+    fmov.f64 xmm0, 1.0
+    fmov.f64 xmm1, 2.0
+    fmov.f64 <xmm0>, 3.0
+    fmov.f64 <xmm1>, 5.0
+    call @two_readers [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    fcmp.f64 xmm0, 17.0
+    jp ^fail31
+    jne ^fail31
+
+  block ^pass31
+    fmov.f64 xmm0, 2.0
+    fmov.f64 xmm1, 1.0
+    fmov.f64 <xmm0>, 3.0
+    fmov.f64 <xmm1>, 5.0
+    call @two_readers [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    fcmp.f64 xmm0, 23.0
+    jp ^fail32
+    jne ^fail32
+
+  block ^pass32
+    fmov.f64 xmm0, 1.25
+    fmov.f64 xmm1, 1.0
+    call @wrap [args=(xmm0,xmm1)]
+    fcmp.f64 xmm0, 0.25
+    jp ^fail33
+    jne ^fail33
+
+  block ^pass33
+    fmov.f64 xmm0, 0.75
+    fmov.f64 xmm1, 1.0
+    call @wrap [args=(xmm0,xmm1)]
+    fcmp.f64 xmm0, 0.75
+    jp ^fail34
+    jne ^fail34
+
+  block ^pass34
+    fmov.f32 xmm0, 1.0f
+    fmov.f32 xmm1, 2.0f
+    fmov.f32 <xmm0>, 3.0f
+    fmov.f32 <xmm1>, 5.0f
+    call @values_read_after [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    fcmp.f32 xmm0, 65.0f
+    jp ^fail35
+    jne ^fail35
+
+  block ^pass35
+    fmov.f32 xmm0, 2.0f
+    fmov.f32 xmm1, 1.0f
+    fmov.f32 <xmm0>, 3.0f
+    fmov.f32 <xmm1>, 5.0f
+    call @values_read_after [args=(xmm0,xmm1,<xmm0>,<xmm1>)]
+    fcmp.f32 xmm0, 97.0f
+    jp ^fail36
+    jne ^fail36
+
+  block ^pass36
+    mov rax, 0
+    ret rax
+
+  block ^fail36
+    mov rax, 36
+    ret rax
+
+  block ^fail35
+    mov rax, 35
+    ret rax
+
+  block ^fail34
+    mov rax, 34
+    ret rax
+
+  block ^fail33
+    mov rax, 33
+    ret rax
+
+  block ^fail32
+    mov rax, 32
+    ret rax
+
+  block ^fail31
+    mov rax, 31
+    ret rax
+
+  block ^fail30
+    mov rax, 30
+    ret rax
+
+  block ^fail29
+    mov rax, 29
+    ret rax
+
+  block ^fail28
+    mov rax, 28
+    ret rax
+
+  block ^fail27
+    mov rax, 27
+    ret rax
+
+  block ^fail26
+    mov rax, 26
+    ret rax
+
+  block ^fail25
+    mov rax, 25
+    ret rax
+
+  block ^fail24
+    mov rax, 24
+    ret rax
+
+  block ^fail23
+    mov rax, 23
+    ret rax
+
+  block ^fail22
+    mov rax, 22
+    ret rax
+
+  block ^fail21
+    mov rax, 21
+    ret rax
+
+  block ^fail20
+    mov rax, 20
+    ret rax
+
+  block ^fail19
+    mov rax, 19
+    ret rax
+
+  block ^fail18
+    mov rax, 18
+    ret rax
+
+  block ^fail17
+    mov rax, 17
+    ret rax
+
+  block ^fail16
+    mov rax, 16
+    ret rax
+
+  block ^fail15
+    mov rax, 15
+    ret rax
+
+  block ^fail14
+    mov rax, 14
+    ret rax
+
+  block ^fail13
+    mov rax, 13
+    ret rax
+
+  block ^fail12
+    mov rax, 12
+    ret rax

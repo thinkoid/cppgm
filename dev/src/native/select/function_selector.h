@@ -246,6 +246,8 @@ public:
 	bool word_shift(const lowir::Instruction& inst) const;
 	void emit_compare(const lowir::Instruction& inst);
 	void emit_select(const lowir::Instruction& inst);
+	void emit_float_select(const lowir::Instruction& inst);
+	Cond select_condition(lowir::Value cond, bool& known, bool& taken);
 	void emit_count(const lowir::Instruction& inst, Cond cc);
 	int count_step(const lowir::Instruction& add, lowir::Value base) const;
 	void absorb_count(const lowir::Instruction& select, uint32_t block);
