@@ -4,16 +4,16 @@ function @fill(%x : ptr, %y : ptr, %out : ptr, %n : i64) -> void [binding=strong
     branch %any, ^loop_preheader_1, ^done
 
   block ^loop_preheader_1:
-    %t2 = cmp uge i64 %n, 2
+    %t2 = cmp uge i64 %n, 4
     %t3 = binary and i64 %any, %t2
     branch %t3, ^loop_preheader_2, ^loop_preheader_5
 
   block ^loop_preheader_2:
-    %t4 = binary add i64 %n, -2
+    %t4 = binary add i64 %n, -4
     jump ^wide_loop_3
 
   block ^wide_loop_3:
-    %t5 = phi i64 [^loop_preheader_2: 0, ^wide_loop_3: %t18]
+    %t5 = phi i64 [^loop_preheader_2: 0, ^wide_loop_3: %t31]
     %t6 = index i32 %x, %t5
     %t7 = index i32 %y, %t5
     %t8 = load i64 %t6
@@ -28,19 +28,33 @@ function @fill(%x : ptr, %y : ptr, %out : ptr, %n : i64) -> void [binding=strong
     %t17 = index f64 %out, %t5
     store v128 %t16, %t17
     %t18 = binary add nowrap i64 %t5, 2
-    %t19 = cmp le i64 %t18, %t4
-    branch %t19, ^wide_loop_3, ^loop_exit_4
+    %t19 = index i32 %x, %t18
+    %t20 = index i32 %y, %t18
+    %t21 = load i64 %t19
+    %t22 = vector fromi64 %t21
+    %t23 = load i64 %t20
+    %t24 = vector fromi64 %t23
+    %t25 = vector pshufd %t22, 80
+    %t26 = vector pshufd %t24, 80
+    %t27 = vector pmuludq %t25, %t26
+    %t28 = vector pshufd %t27, 8
+    %t29 = vector cvtdq2pd %t28
+    %t30 = index f64 %out, %t18
+    store v128 %t29, %t30
+    %t31 = binary add nowrap i64 %t5, 4
+    %t32 = cmp le i64 %t31, %t4
+    branch %t32, ^wide_loop_3, ^loop_exit_4
 
   block ^loop_exit_4:
-    %t20 = cmp lt i64 %t18, %n
-    branch %t20, ^loop_preheader_5, ^done
+    %t33 = cmp lt i64 %t31, %n
+    branch %t33, ^loop_preheader_5, ^done
 
   block ^loop_preheader_5:
-    %t21 = phi i64 [^loop_preheader_1: 0, ^loop_exit_4: %t18]
+    %t34 = phi i64 [^loop_preheader_1: 0, ^loop_exit_4: %t31]
     jump ^body
 
   block ^body:
-    %i = phi i64 [^loop_preheader_5: %t21, ^body: %next]
+    %i = phi i64 [^loop_preheader_5: %t34, ^body: %next]
     %a = index i32 %x, %i
     %b = index i32 %y, %i
     %c = load typed i32 %a

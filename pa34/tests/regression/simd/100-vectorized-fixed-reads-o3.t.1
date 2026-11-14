@@ -1,0 +1,193 @@
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+__attribute__((noinline)) void addw(double* a, const double& w, size_t from, size_t n)
+{
+	for (size_t i = from; i < n; ++i)
+		a[i] += w;
+}
+struct S { double* act; double* des; double sow; size_t b; };
+__attribute__((noinline)) void desired(S& s)
+{
+	for (size_t i = 1; i < s.b + 1; ++i)
+		s.des[i] = s.act[0] + ((i - 1) * (s.sow - s.act[0])) / s.b;
+}
+__attribute__((noinline)) void bump(double* act, size_t from, size_t n)
+{
+	for (size_t i = from; i < n + 1; ++i)
+		++act[i];
+}
+__attribute__((noinline)) void u2d(double* out, const uint64_t* in, size_t n)
+{
+	for (size_t i = 0; i < n; ++i)
+		out[i] = static_cast<double>(in[i]);
+}
+__attribute__((noinline)) void s2d(double* out, const int64_t* in, size_t n)
+{
+	for (size_t i = 0; i < n; ++i)
+		out[i] = static_cast<double>(in[i]);
+}
+__attribute__((noinline)) int isum(const int* a, int n)
+{
+	int s = 0;
+	for (int i = 0; i < n; ++i)
+		s += a[i];
+	return s;
+}
+__attribute__((noinline)) long long lsum(const long long* a, int n, const long long& k)
+{
+	long long s = 0;
+	for (int i = 0; i < n; ++i)
+		s += a[i] * 3 + k;
+	return s;
+}
+__attribute__((noinline)) void scale(long long* a, const long long* b, const long long& k, size_t n)
+{
+	for (size_t i = 0; i < n; ++i)
+		a[i] = b[i] + k;
+}
+__attribute__((noinline)) void mix(float* a, const float* b, const int& k, size_t n)
+{
+	for (size_t i = 0; i < n; ++i)
+		a[i] = b[i] * static_cast<float>(k);
+}
+
+static uint64_t state = 88172645463325252ull;
+static uint64_t next()
+{
+	state ^= state << 13;
+	state ^= state >> 7;
+	state ^= state << 17;
+	return state;
+}
+static uint64_t hash;
+static void fold(const void* p, size_t bytes)
+{
+	const unsigned char* c = static_cast<const unsigned char*>(p);
+	for (size_t i = 0; i < bytes; ++i)
+		hash = (hash ^ c[i]) * 1099511628211ull;
+}
+
+int main()
+{
+	hash = 1469598103934665603ull;
+	double a[67];
+	for (size_t n = 0; n <= 66; ++n)
+		for (size_t from = 0; from <= n && from < 9; ++from)
+		{
+			for (int i = 0; i < 67; ++i)
+				a[i] = i * 0.25;
+			double w = 1.5 + n;
+			addw(a, w, from, n);
+			fold(a, sizeof a);
+			// The weight inside the array: each pass after the store reads the new value.
+			for (int i = 0; i < 67; ++i)
+				a[i] = i * 0.25 + 1;
+			if (n > 2)
+			{
+				addw(a, a[n / 2], from, n);
+				fold(a, sizeof a);
+				addw(a, a[0], from, n);
+				fold(a, sizeof a);
+				addw(a, a[n - 1], from, n);
+				fold(a, sizeof a);
+			}
+			bump(a, from, n);
+			fold(a, sizeof a);
+		}
+	double act[40], des[40];
+	for (size_t b = 0; b < 38; ++b)
+	{
+		for (int i = 0; i < 40; ++i)
+		{
+			act[i] = 3.25 * i + 1;
+			des[i] = -1;
+		}
+		S s = { act, des, 1234.5 + b, b };
+		desired(s);
+		fold(des, sizeof des);
+		// The first position inside the stored range.
+		S t = { des, des, 77.0, b };
+		for (int i = 0; i < 40; ++i)
+			des[i] = 2.5 * i + 3;
+		desired(t);
+		fold(des, sizeof des);
+		S u = { des + 3, des, 77.0, b };
+		desired(u);
+		fold(des, sizeof des);
+	}
+	uint64_t in[41];
+	int64_t sin[41];
+	double out[41];
+	for (int round = 0; round < 4000; ++round)
+	{
+		for (int i = 0; i < 41; ++i)
+		{
+			uint64_t v = next();
+			const unsigned shift = static_cast<unsigned>(next() % 64);
+			v >>= shift;
+			if (round % 7 == 0)
+				v |= 0x8000000000000000ull;
+			if (round % 11 == 0)
+				v = (v & ~0xfffull) | 0x800ull; // ties
+			if (round % 13 == 0)
+				v = ~uint64_t(0) - (v & 0xffff);
+			in[i] = v;
+			sin[i] = static_cast<int64_t>(v) * ((next() & 1) ? 1 : -1);
+		}
+		in[0] = 0;
+		in[1] = ~uint64_t(0);
+		in[2] = 0x8000000000000000ull;
+		in[3] = 0x7fffffffffffffffull;
+		in[4] = 0x0020000000000001ull;
+		in[5] = 0xfffffffffffff800ull;
+		in[6] = 0xfffffffffffffbffull;
+		in[7] = 0xfffffffffffffc00ull;
+		sin[0] = INT64_MIN;
+		sin[1] = INT64_MAX;
+		sin[2] = -1;
+		sin[3] = 0;
+		sin[4] = -0x0020000000000001ll;
+		const size_t n = static_cast<size_t>(round % 42);
+		memset(out, 0, sizeof out);
+		u2d(out, in, n);
+		fold(out, sizeof out);
+		s2d(out, sin, n);
+		fold(out, sizeof out);
+	}
+	int ia[70];
+	long long la[70], lb[70];
+	float fa[70], fb[70];
+	for (int n = 0; n < 70; ++n)
+	{
+		for (int i = 0; i < 70; ++i)
+		{
+			ia[i] = static_cast<int>(next());
+			la[i] = static_cast<long long>(next());
+			lb[i] = static_cast<long long>(next());
+			fb[i] = static_cast<float>(i) * 0.5f;
+			fa[i] = 0;
+		}
+		const int s = isum(ia, n);
+		fold(&s, sizeof s);
+		const long long k = static_cast<long long>(next());
+		const long long l = lsum(la, n, k);
+		fold(&l, sizeof l);
+		scale(la, lb, k, static_cast<size_t>(n));
+		fold(la, sizeof la);
+		if (n > 3)
+		{
+			scale(la, lb, la[n / 2], static_cast<size_t>(n));
+			fold(la, sizeof la);
+			scale(la, la + 1, la[1], static_cast<size_t>(n - 1));
+			fold(la, sizeof la);
+		}
+		const int m = n * 3 - 7;
+		mix(fa, fb, m, static_cast<size_t>(n));
+		fold(fa, sizeof fa);
+	}
+	printf("%016llx\n", static_cast<unsigned long long>(hash));
+	return 0;
+}

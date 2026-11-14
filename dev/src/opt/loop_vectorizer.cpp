@@ -21,6 +21,8 @@ const int64_t kCellGroups = 4;
 const int64_t kCellModulus = 64;
 // How deep a truncation's arithmetic is rewritten.
 const unsigned kNarrowDepth = 6;
+// The most instructions of a loop whose rounds run the lanes' code twice.
+const size_t kPairedCode = 12;
 
 // Loop vectorization at O3: a loop of one block, whose count a counter and an
 // invariant bound give, runs in portable sixteen-byte vector steps. The
@@ -162,6 +164,7 @@ private:
 	Value extend(Value v, unsigned from, unsigned to, bool is_signed);
 	Value narrow(Value v, unsigned from, unsigned to);
 	void widen_convert(const Instruction& inst);
+	Value widen_word_to_double(Value v, bool is_signed);
 	Value widen_multiply(Value a, Value b);
 	Value widen_shift(const Instruction& inst);
 	Value widen_mask(const Instruction& test, bool& swapped);
@@ -178,6 +181,7 @@ private:
 	bool halves(const Instruction& inst, unsigned& shift) const;
 	void make_phi(BlockId block, Type type, std::initializer_list<Value> pairs, Value& out);
 	bool read_live_outs(BlockId after);
+	bool pairs_rounds() const;
 	bool literal_rounds(int64_t span, bool& whole) const;
 	void join_exits(
 		BlockId after, BlockId exit, const std::vector<Value>& finals, const std::vector<Value>& next_values);
@@ -200,6 +204,7 @@ private:
 	int64_t copies_ = 1; // copies of the lanes' code a round of the vector loop runs
 	std::vector<InstId> code_;
 	std::vector<Access> accesses_;
+	std::vector<InstId> fixed_reads_; // loads of one address on every pass
 	std::vector<Group> groups_;
 	std::vector<std::pair<uint32_t, uint32_t>> tests_;
 	std::vector<uint8_t> in_scalar_, in_wide_; // per temp
@@ -1055,6 +1060,7 @@ bool LoopVectorizer::address(Value v, Linear& out, Value& base, Value& object) c
 bool LoopVectorizer::read_accesses()
 {
 	accesses_.clear();
+	fixed_reads_.clear();
 	backward_ = false;
 	for (InstId id : code_)
 	{
@@ -1066,6 +1072,15 @@ bool LoopVectorizer::read_accesses()
 		if (!address(inst.ops[a.store ? 1 : 0], a.at, a.base, a.object))
 			return false;
 		const int64_t bytes = static_cast<int64_t>(lane_bytes(inst.type));
+		// A read of one address: every pass reads what was there before the
+		// loop, once its stores are apart from it (read_dependences), so the
+		// lanes take that value.
+		if (!a.store && bytes != 0 && a.at.scale == 0 && fixed_address(inst.ops[0]))
+		{
+			fixed_reads_.push_back(id);
+			accesses_.push_back(a);
+			continue;
+		}
 		// One direction: lanes hold their passes in one order, in every access.
 		if (bytes == 0 || (a.at.scale != bytes && a.at.scale != -bytes) ||
 			(!accesses_.empty() && (a.at.scale < 0) != backward_))
@@ -1177,7 +1192,9 @@ bool LoopVectorizer::supported(const Instruction& inst) const
 		case ConvertOp::Trunc:
 			return lane_bytes(source) != 0 && !source.is_float() && !inst.type.is_float();
 		case ConvertOp::SIToFP:
-			return from == TypeKind::I32;
+			return from == TypeKind::I32 || (from == TypeKind::I64 && to == TypeKind::F64);
+		case ConvertOp::UIToFP:
+			return lane_bytes(source) == 8 && source.is_integer() && to == TypeKind::F64;
 		case ConvertOp::FPToSI:
 			return to == TypeKind::I32;
 		case ConvertOp::FPExt:
@@ -1652,7 +1669,10 @@ void LoopVectorizer::widen_convert(const Instruction& inst)
 		out = narrow(v, from, to);
 		break;
 	case ConvertOp::SIToFP:
-		out = vector(to == 8 ? VectorOp::Cvtdq2pd : VectorOp::Cvtdq2ps, v);
+		out = from == 8 ? widen_word_to_double(v, true) : vector(to == 8 ? VectorOp::Cvtdq2pd : VectorOp::Cvtdq2ps, v);
+		break;
+	case ConvertOp::UIToFP:
+		out = widen_word_to_double(v, false);
 		break;
 	case ConvertOp::FPToSI:
 		out = vector(from == 8 ? VectorOp::Cvttpd2dq : VectorOp::Cvttps2dq, v);
@@ -1665,6 +1685,30 @@ void LoopVectorizer::widen_convert(const Instruction& inst)
 		break;
 	}
 	wides_[inst.result] = out;
+}
+
+// 64-bit integer lanes as doubles, rounded once as the scalar conversion
+// rounds. The high half h and the low half l of a lane each become the
+// mantissa of a double: 2^84 + h * 2^32 and 2^52 + l. Less 2^84 + 2^52 the
+// first is h * 2^32 - 2^52 exactly, and the sum of the two is the lane's
+// value. A signed lane's high half has its sign bit flipped (h + 2^31), and
+// 2^63 more is taken off.
+Value LoopVectorizer::widen_word_to_double(Value v, bool is_signed)
+{
+	const Type i64 = Type::scalar(TypeKind::I64);
+	auto bits = [&](uint64_t pattern) { return broadcast(literal(static_cast<int64_t>(pattern)), i64); };
+	if (is_signed)
+		v = vector(VectorOp::Pxor, v, bits(0x8000000000000000ull));
+	// (Each constant is named in turn: the order its lanes are made in is
+	// then the same under every host compiler.)
+	const Value high_bias = bits(0x4530000000000000ull);
+	const Value high = vector(VectorOp::Por, vector(VectorOp::Psrlqi, v, Value::none(), 32), high_bias);
+	const Value low_bias = bits(0x4330000000000000ull);
+	const Value low_half = bits(0xffffffffull);
+	const Value low = vector(VectorOp::Por, vector(VectorOp::Pand, v, low_half), low_bias);
+	const Value both = bits(is_signed ? 0x4530000080100000ull : 0x4530000000100000ull);
+	const Value above = vector(VectorOp::Subpd, high, both);
+	return vector(VectorOp::Addpd, above, low);
 }
 
 // i32 lanes multiplied: use packed multiplication when the target has it;
@@ -1795,11 +1839,18 @@ void LoopVectorizer::widen_binary(const Instruction& inst)
 			return;
 		}
 	}
-	const Value a = wide(inst.ops[0], inst.type), b = wide(inst.ops[1], inst.type);
-	if (lane_operation(operation, inst.type, op))
-		wides_[inst.result] = vector(op, a, b);
-	else
+	Value a = wide(inst.ops[0], inst.type), b = wide(inst.ops[1], inst.type);
+	if (!lane_operation(operation, inst.type, op))
+	{
 		wides_[inst.result] = widen_multiply(a, b);
+		return;
+	}
+	// A reduction reads its lanes first: the round's result is then computed
+	// in their register, where the next round reads it.
+	for (const Reduction& r : reductions_)
+		if (r.next == inst.result && inst.ops[1] == Value::temp(r.phi) && vector_commutes(op))
+			std::swap(a, b);
+	wides_[inst.result] = vector(op, a, b);
 }
 
 Value LoopVectorizer::widen_shift(const Instruction& inst)
@@ -1976,6 +2027,9 @@ void LoopVectorizer::widen(const Instruction& inst, InstId origin)
 	switch (inst.op)
 	{
 	case Opcode::Load:
+		// (A fixed read's lanes are set before the loop.)
+		if (std::find(fixed_reads_.begin(), fixed_reads_.end(), origin) != fixed_reads_.end())
+			break;
 		wides_[inst.result] = widen_load(
 			lane_address(scalar(inst.ops[0]), inst.type), lanes_ * lane_bytes(inst.type), origin);
 		break;
@@ -2212,6 +2266,19 @@ bool LoopVectorizer::read_live_outs(BlockId after)
 	return live_outs_.empty() || cfg_.pred_count(after) == 1;
 }
 
+// Whether a round runs the lanes' code twice: two lanes of short code, between
+// bounds that are not both literals, in a loop the lanes may finish. One test
+// then serves four passes, and a loop of a fixed count leaves after half as
+// many branches. (Between literals, and where the lanes leave a pass to the
+// scalar loop, the short loop unrolling groups the rounds. More lanes would
+// leave the scalar loop more passes than the rounds save.)
+bool LoopVectorizer::pairs_rounds() const
+{
+	if (copies_ != 1 || lanes_ != 2 || !lane_cells_.empty() || code_.size() > kPairedCode)
+		return false;
+	return std::none_of(reductions_.begin(), reductions_.end(), [](const Reduction& r) { return r.ordered; });
+}
+
 // Whether the counter runs between literals; `whole` is then whether that is
 // whole rounds of `span`, so that each vector loop the lanes start ends at
 // the bound, or else leaves passes to the scalar loop.
@@ -2361,18 +2428,21 @@ void LoopVectorizer::vectorize(uint32_t loop)
 	const bool up = counter.step > 0;
 	const Type type = counter.type, v128 = Type::scalar(TypeKind::V128);
 	const Type i64 = Type::scalar(TypeKind::I64);
-	const int64_t span = static_cast<int64_t>(lanes_) * copies_ * (up ? counter.step : -counter.step);
 	const ComparePredicate below = unsigned_counter_ ? ComparePredicate::Ult : ComparePredicate::Lt;
 	const ComparePredicate within = unsigned_counter_ ? ComparePredicate::Ule : ComparePredicate::Le;
 	const BlockId after = body_.instructions[body_.blocks[b_].last].ops[1].index == b_
 		? body_.instructions[body_.blocks[b_].last].ops[2].index
 		: body_.instructions[body_.blocks[b_].last].ops[1].index;
+	bool whole = false;
+	const bool may_finish = read_live_outs(after);
+	if (may_finish && !literal_rounds(1, whole) && pairs_rounds())
+		copies_ = 2;
+	const int64_t span = static_cast<int64_t>(lanes_) * copies_ * (up ? counter.step : -counter.step);
 	// (Between literals the exit knows whether passes are left: with some,
 	// the scalar loop always runs; with none, never, when the lanes may
 	// finish the loop.)
-	bool whole = false;
 	const bool literal_bounds = literal_rounds(span, whole);
-	const bool drains = (!literal_bounds || whole) && read_live_outs(after), finishes = drains && literal_bounds;
+	const bool drains = (!literal_bounds || whole) && may_finish, finishes = drains && literal_bounds;
 	const BlockId guard = tests_.empty() ? kNoId : place_block(BlockKind::LoopPreheader);
 	vector_pre_ = place_block(BlockKind::LoopPreheader);
 	const BlockId wide_loop = place_block(BlockKind::WideLoop);
@@ -2425,7 +2495,32 @@ void LoopVectorizer::vectorize(uint32_t loop)
 			read.next = kNoId;
 			r.start = emit(read, r.type);
 		}
+	std::vector<Value> fixed_values;
+	for (InstId id : fixed_reads_)
+	{
+		Instruction read = body_.instructions[id];
+		read.next = kNoId;
+		if (!in_wide_[read.result])
+		{
+			fixed_values.push_back(Value::none());
+			continue;
+		}
+		// (Its address may be a field's, which the loop names on each pass.)
+		if (in_body(read.ops[0]))
+		{
+			Instruction field = body_.instructions[body_.temps[read.ops[0].index].def];
+			field.next = kNoId;
+			read.ops[0] = emit(field, body_.temps[read.ops[0].index].type);
+		}
+		fixed_values.push_back(emit(read, read.type));
+	}
 	const std::vector<Value> wide_start = reduction_starts();
+	for (size_t k = 0; k < fixed_reads_.size(); ++k)
+		if (!fixed_values[k].is(ValueKind::None))
+		{
+			const Instruction& read = body_.instructions[fixed_reads_[k]];
+			wides_[read.result] = broadcast(fixed_values[k], read.type);
+		}
 	const std::vector<Value> wide_counter = counter_lanes();
 	std::vector<std::vector<Value>> cells(lane_cells_.size());
 	at(vector_pre_, pre_tail_);

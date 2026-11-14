@@ -69,40 +69,46 @@ function @counter_as_data(%d : ptr, %n : i64) -> void [no_inline=yes] {
 function @long_counter_as_data(%d : ptr, %n : i64) -> void [no_inline=yes] {
   block ^entry:
     %t1 = cmp gt i64 %n, 0
-    %t2 = cmp uge i64 %n, 2
+    %t2 = cmp uge i64 %n, 4
     %t3 = binary and i64 %t1, %t2
     branch %t3, ^loop_preheader_1, ^loop_preheader_4
 
   block ^loop_preheader_1:
-    %t4 = binary add i64 %n, -2
+    %t4 = binary add i64 %n, -4
     %t5 = vector pzero
     %t6 = vector fromi64 1
     %t7 = vector punpcklqdq %t5, %t6
     %t8 = vector paddq %t5, %t7
     %t9 = vector fromi64 2
     %t10 = vector pshufd %t9, 68
+    %t11 = vector fromi64 4
+    %t12 = vector pshufd %t11, 68
     jump ^wide_loop_2
 
   block ^wide_loop_2:
-    %t11 = phi v128 [^loop_preheader_1: %t8, ^wide_loop_2: %t15]
-    %t12 = phi i64 [^loop_preheader_1: 0, ^wide_loop_2: %t14]
-    %t13 = index i64 %d, %t12
-    store v128 %t11, %t13
-    %t14 = binary add nowrap i64 %t12, 2
-    %t15 = vector paddq %t11, %t10
-    %t16 = cmp le i64 %t14, %t4
-    branch %t16, ^wide_loop_2, ^loop_exit_3
+    %t13 = phi v128 [^loop_preheader_1: %t8, ^wide_loop_2: %t20]
+    %t14 = phi i64 [^loop_preheader_1: 0, ^wide_loop_2: %t19]
+    %t15 = index i64 %d, %t14
+    store v128 %t13, %t15
+    %t16 = binary add nowrap i64 %t14, 2
+    %t17 = vector paddq %t13, %t10
+    %t18 = index i64 %d, %t16
+    store v128 %t17, %t18
+    %t19 = binary add nowrap i64 %t14, 4
+    %t20 = vector paddq %t13, %t12
+    %t21 = cmp le i64 %t19, %t4
+    branch %t21, ^wide_loop_2, ^loop_exit_3
 
   block ^loop_exit_3:
-    %t17 = cmp lt i64 %t14, %n
-    branch %t17, ^loop_preheader_4, ^done
+    %t22 = cmp lt i64 %t19, %n
+    branch %t22, ^loop_preheader_4, ^done
 
   block ^loop_preheader_4:
-    %t18 = phi i64 [^entry: 0, ^loop_exit_3: %t14]
+    %t23 = phi i64 [^entry: 0, ^loop_exit_3: %t19]
     jump ^body
 
   block ^body:
-    %i = phi i64 [^loop_preheader_4: %t18, ^body: %next]
+    %i = phi i64 [^loop_preheader_4: %t23, ^body: %next]
     %o = index i64 %d, %i
     store typed i64 %i, %o
     %next = binary add nowrap i64 %i, 1
@@ -269,46 +275,64 @@ function @gather(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
 }
 function @from_long(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
   block ^entry:
-    %t1 = binary and i64 %n, -4
-    %t2 = cmp gt i64 %t1, 0
-    branch %t2, ^unrolled_1, ^wide_tail_3
+    %t1 = cmp gt i64 %n, 0
+    %t2 = cmp uge i64 %n, 4
+    %t3 = binary and i64 %t1, %t2
+    branch %t3, ^loop_preheader_1, ^loop_preheader_4
 
-  block ^unrolled_1:
-    %t3 = phi i64 [^unrolled_1: %t20, ^entry: 0]
-    %t4 = index i64 %x, %t3
-    %t5 = load typed i64 %t4
-    %t6 = convert sitofp f64 i64 %t5
-    %t7 = index f64 %d, %t3
-    store typed f64 %t6, %t7
-    %t8 = index i64 %t4, 1
-    %t9 = load typed i64 %t8
-    %t10 = convert sitofp f64 i64 %t9
-    %t11 = index f64 %t7, 1
-    store typed f64 %t10, %t11
-    %t12 = index i64 %t4, 2
-    %t13 = load typed i64 %t12
-    %t14 = convert sitofp f64 i64 %t13
-    %t15 = index f64 %t7, 2
-    store typed f64 %t14, %t15
-    %t16 = index i64 %t4, 3
-    %t17 = load typed i64 %t16
-    %t18 = convert sitofp f64 i64 %t17
-    %t19 = index f64 %t7, 3
-    store typed f64 %t18, %t19
-    %t20 = binary add nowrap i64 %t3, 4
-    %t21 = cmp ne i64 %t1, %t20
-    branch %t21, ^unrolled_1, ^loop_exit_2
+  block ^loop_preheader_1:
+    %t4 = binary add i64 %n, -4
+    %t5 = vector fromi64 -9223372036854775808
+    %t6 = vector pshufd %t5, 68
+    %t7 = vector fromi64 4985484787499139072
+    %t8 = vector pshufd %t7, 68
+    %t9 = vector fromi64 4841369599423283200
+    %t10 = vector pshufd %t9, 68
+    %t11 = vector fromi64 4294967295
+    %t12 = vector pshufd %t11, 68
+    %t13 = vector fromi64 4985484789647671296
+    %t14 = vector pshufd %t13, 68
+    jump ^wide_loop_2
 
-  block ^loop_exit_2:
-    %t22 = cmp lt i64 %t20, %n
-    branch %t22, ^wide_tail_3, ^done
+  block ^wide_loop_2:
+    %t15 = phi i64 [^loop_preheader_1: 0, ^wide_loop_2: %t37]
+    %t16 = index i64 %x, %t15
+    %t17 = load v128 %t16
+    %t18 = vector pxor %t17, %t6
+    %t19 = vector psrlqi %t18, 32
+    %t20 = vector por %t19, %t8
+    %t21 = vector pand %t18, %t12
+    %t22 = vector por %t21, %t10
+    %t23 = vector subpd %t20, %t14
+    %t24 = vector addpd %t23, %t22
+    %t25 = index f64 %d, %t15
+    store v128 %t24, %t25
+    %t26 = binary add nowrap i64 %t15, 2
+    %t27 = index i64 %x, %t26
+    %t28 = load v128 %t27
+    %t29 = vector pxor %t28, %t6
+    %t30 = vector psrlqi %t29, 32
+    %t31 = vector por %t30, %t8
+    %t32 = vector pand %t29, %t12
+    %t33 = vector por %t32, %t10
+    %t34 = vector subpd %t31, %t14
+    %t35 = vector addpd %t34, %t33
+    %t36 = index f64 %d, %t26
+    store v128 %t35, %t36
+    %t37 = binary add nowrap i64 %t15, 4
+    %t38 = cmp le i64 %t37, %t4
+    branch %t38, ^wide_loop_2, ^loop_exit_3
 
-  block ^wide_tail_3:
-    %t23 = phi i64 [^entry: 0, ^loop_exit_2: %t20]
+  block ^loop_exit_3:
+    %t39 = cmp lt i64 %t37, %n
+    branch %t39, ^loop_preheader_4, ^done
+
+  block ^loop_preheader_4:
+    %t40 = phi i64 [^entry: 0, ^loop_exit_3: %t37]
     jump ^body
 
   block ^body:
-    %i = phi i64 [^wide_tail_3: %t23, ^body: %next]
+    %i = phi i64 [^loop_preheader_4: %t40, ^body: %next]
     %p = index i64 %x, %i
     %v = load typed i64 %p
     %w = convert sitofp f64 i64 %v

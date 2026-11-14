@@ -54,40 +54,44 @@ function @sum(%x : ptr, %n : i64) -> u32 [no_inline=yes] {
 function @sum_and_count(%x : ptr, %n : i64) -> i64 [no_inline=yes] {
   block ^entry:
     %t1 = cmp ne i64 %n, 0
-    %t2 = cmp uge i64 %n, 2
+    %t2 = cmp uge i64 %n, 4
     %t3 = binary and i64 %t1, %t2
     branch %t3, ^loop_preheader_1, ^loop_preheader_4
 
   block ^loop_preheader_1:
-    %t4 = binary add i64 %n, -2
+    %t4 = binary add i64 %n, -4
     %t5 = vector fromi64 7
     jump ^wide_loop_2
 
   block ^wide_loop_2:
-    %t6 = phi v128 [^loop_preheader_1: %t5, ^wide_loop_2: %t10]
-    %t7 = phi i64 [^loop_preheader_1: 0, ^wide_loop_2: %t11]
+    %t6 = phi v128 [^loop_preheader_1: %t5, ^wide_loop_2: %t14]
+    %t7 = phi i64 [^loop_preheader_1: 0, ^wide_loop_2: %t15]
     %t8 = index i64 %x, %t7
     %t9 = load v128 %t8
     %t10 = vector paddq %t6, %t9
     %t11 = binary add nowrap i64 %t7, 2
-    %t12 = cmp ule i64 %t11, %t4
-    branch %t12, ^wide_loop_2, ^loop_exit_3
+    %t12 = index i64 %x, %t11
+    %t13 = load v128 %t12
+    %t14 = vector paddq %t10, %t13
+    %t15 = binary add nowrap i64 %t7, 4
+    %t16 = cmp ule i64 %t15, %t4
+    branch %t16, ^wide_loop_2, ^loop_exit_3
 
   block ^loop_exit_3:
-    %t13 = vector pshufd %t10, 78
-    %t14 = vector paddq %t10, %t13
-    %t15 = vector toi64 %t14
-    %t16 = cmp ult i64 %t11, %n
-    branch %t16, ^loop_preheader_4, ^done
+    %t17 = vector pshufd %t14, 78
+    %t18 = vector paddq %t14, %t17
+    %t19 = vector toi64 %t18
+    %t20 = cmp ult i64 %t15, %n
+    branch %t20, ^loop_preheader_4, ^done
 
   block ^loop_preheader_4:
-    %t17 = phi i64 [^entry: 7, ^loop_exit_3: %t15]
-    %t18 = phi i64 [^entry: 0, ^loop_exit_3: %t11]
+    %t21 = phi i64 [^entry: 7, ^loop_exit_3: %t19]
+    %t22 = phi i64 [^entry: 0, ^loop_exit_3: %t15]
     jump ^body
 
   block ^body:
-    %i = phi i64 [^loop_preheader_4: %t18, ^body: %next]
-    %s = phi i64 [^loop_preheader_4: %t17, ^body: %t]
+    %i = phi i64 [^loop_preheader_4: %t22, ^body: %next]
+    %s = phi i64 [^loop_preheader_4: %t21, ^body: %t]
     %p = index i64 %x, %i
     %v = load typed i64 %p
     %t = binary add i64 %s, %v
@@ -96,10 +100,10 @@ function @sum_and_count(%x : ptr, %n : i64) -> i64 [no_inline=yes] {
     branch %more, ^body, ^done
 
   block ^done:
-    %t26 = phi i64 [^body: %t, ^loop_exit_3: %t15]
-    %t27 = phi i64 [^body: %next, ^loop_exit_3: %t11]
-    %scaled = binary mul i64 %t27, 3
-    %r = binary add i64 %scaled, %t26
+    %t30 = phi i64 [^body: %t, ^loop_exit_3: %t19]
+    %t31 = phi i64 [^body: %next, ^loop_exit_3: %t15]
+    %scaled = binary mul i64 %t31, 3
+    %r = binary add i64 %scaled, %t30
     return i64 %r
 }
 function @backward(%x : ptr, %n : i64) -> u32 [no_inline=yes] {

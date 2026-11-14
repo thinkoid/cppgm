@@ -24,7 +24,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t11 = index i32 %p, %t10
     %t12 = load v128 %t11
     %t13 = vector paddd %t12, %t8
-    %t14 = vector paddd %t13, %t9
+    %t14 = vector paddd %t9, %t13
     %t15 = binary add nowrap i64 %t10, 4
     %t16 = cmp le i64 %t15, %t5
     branch %t16, ^wide_loop_3, ^loop_exit_4
@@ -77,7 +77,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t43 = index i32 %p, %t42
     %t44 = load v128 %t43
     %t45 = vector paddd %t44, %t40
-    %t46 = vector paddd %t45, %t41
+    %t46 = vector paddd %t41, %t45
     %t47 = binary add nowrap i64 %t42, 4
     %t48 = cmp le i64 %t47, %t37
     branch %t48, ^wide_loop_10, ^loop_exit_11
@@ -131,7 +131,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t76 = index i32 %p, %t75
     %t77 = load v128 %t76
     %t78 = vector paddd %t77, %t73
-    %t79 = vector paddd %t78, %t74
+    %t79 = vector paddd %t74, %t78
     %t80 = binary add nowrap i64 %t75, 4
     %t81 = cmp le i64 %t80, %t70
     branch %t81, ^wide_loop_17, ^loop_exit_18
@@ -184,7 +184,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t108 = index i32 %p, %t107
     %t109 = load v128 %t108
     %t110 = vector paddd %t109, %t105
-    %t111 = vector paddd %t110, %t106
+    %t111 = vector paddd %t106, %t110
     %t112 = binary add nowrap i64 %t107, 4
     %t113 = cmp le i64 %t112, %t102
     branch %t113, ^wide_loop_24, ^loop_exit_25
@@ -238,7 +238,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t141 = index i32 %p, %t140
     %t142 = load v128 %t141
     %t143 = vector paddd %t142, %t138
-    %t144 = vector paddd %t143, %t139
+    %t144 = vector paddd %t139, %t143
     %t145 = binary add nowrap i64 %t140, 4
     %t146 = cmp le i64 %t145, %t135
     branch %t146, ^wide_loop_31, ^loop_exit_32
@@ -291,7 +291,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t173 = index i32 %p, %t172
     %t174 = load v128 %t173
     %t175 = vector paddd %t174, %t170
-    %t176 = vector paddd %t175, %t171
+    %t176 = vector paddd %t171, %t175
     %t177 = binary add nowrap i64 %t172, 4
     %t178 = cmp le i64 %t177, %t167
     branch %t178, ^wide_loop_38, ^loop_exit_39
@@ -345,7 +345,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t206 = index i32 %p, %t205
     %t207 = load v128 %t206
     %t208 = vector paddd %t207, %t203
-    %t209 = vector paddd %t208, %t204
+    %t209 = vector paddd %t204, %t208
     %t210 = binary add nowrap i64 %t205, 4
     %t211 = cmp le i64 %t210, %t200
     branch %t211, ^wide_loop_45, ^loop_exit_46
@@ -398,7 +398,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t238 = index i32 %p, %t237
     %t239 = load v128 %t238
     %t240 = vector paddd %t239, %t235
-    %t241 = vector paddd %t240, %t236
+    %t241 = vector paddd %t236, %t240
     %t242 = binary add nowrap i64 %t237, 4
     %t243 = cmp le i64 %t242, %t232
     branch %t243, ^wide_loop_52, ^loop_exit_53
@@ -452,7 +452,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t271 = index i32 %p, %t270
     %t272 = load v128 %t271
     %t273 = vector paddd %t272, %t268
-    %t274 = vector paddd %t273, %t269
+    %t274 = vector paddd %t269, %t273
     %t275 = binary add nowrap i64 %t270, 4
     %t276 = cmp le i64 %t275, %t265
     branch %t276, ^wide_loop_59, ^loop_exit_60
@@ -505,7 +505,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t303 = index i32 %p, %t302
     %t304 = load v128 %t303
     %t305 = vector paddd %t304, %t300
-    %t306 = vector paddd %t305, %t301
+    %t306 = vector paddd %t301, %t305
     %t307 = binary add nowrap i64 %t302, 4
     %t308 = cmp le i64 %t307, %t297
     branch %t308, ^wide_loop_66, ^loop_exit_67
@@ -559,7 +559,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t336 = index i32 %p, %t335
     %t337 = load v128 %t336
     %t338 = vector paddd %t337, %t333
-    %t339 = vector paddd %t338, %t334
+    %t339 = vector paddd %t334, %t338
     %t340 = binary add nowrap i64 %t335, 4
     %t341 = cmp le i64 %t340, %t330
     branch %t341, ^wide_loop_73, ^loop_exit_74
@@ -612,7 +612,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t368 = index i32 %p, %t367
     %t369 = load v128 %t368
     %t370 = vector paddd %t369, %t365
-    %t371 = vector paddd %t370, %t366
+    %t371 = vector paddd %t366, %t370
     %t372 = binary add nowrap i64 %t367, 4
     %t373 = cmp le i64 %t372, %t362
     branch %t373, ^wide_loop_80, ^loop_exit_81
@@ -666,7 +666,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t401 = index i32 %p, %t400
     %t402 = load v128 %t401
     %t403 = vector paddd %t402, %t398
-    %t404 = vector paddd %t403, %t399
+    %t404 = vector paddd %t399, %t403
     %t405 = binary add nowrap i64 %t400, 4
     %t406 = cmp le i64 %t405, %t395
     branch %t406, ^wide_loop_87, ^loop_exit_88
@@ -719,7 +719,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t433 = index i32 %p, %t432
     %t434 = load v128 %t433
     %t435 = vector paddd %t434, %t430
-    %t436 = vector paddd %t435, %t431
+    %t436 = vector paddd %t431, %t435
     %t437 = binary add nowrap i64 %t432, 4
     %t438 = cmp le i64 %t437, %t427
     branch %t438, ^wide_loop_94, ^loop_exit_95
@@ -773,7 +773,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t466 = index i32 %p, %t465
     %t467 = load v128 %t466
     %t468 = vector paddd %t467, %t463
-    %t469 = vector paddd %t468, %t464
+    %t469 = vector paddd %t464, %t468
     %t470 = binary add nowrap i64 %t465, 4
     %t471 = cmp le i64 %t470, %t460
     branch %t471, ^wide_loop_101, ^loop_exit_102
@@ -826,7 +826,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t498 = index i32 %p, %t497
     %t499 = load v128 %t498
     %t500 = vector paddd %t499, %t495
-    %t501 = vector paddd %t500, %t496
+    %t501 = vector paddd %t496, %t500
     %t502 = binary add nowrap i64 %t497, 4
     %t503 = cmp le i64 %t502, %t492
     branch %t503, ^wide_loop_108, ^loop_exit_109
@@ -880,7 +880,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t531 = index i32 %p, %t530
     %t532 = load v128 %t531
     %t533 = vector paddd %t532, %t528
-    %t534 = vector paddd %t533, %t529
+    %t534 = vector paddd %t529, %t533
     %t535 = binary add nowrap i64 %t530, 4
     %t536 = cmp le i64 %t535, %t525
     branch %t536, ^wide_loop_115, ^loop_exit_116
@@ -933,7 +933,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t563 = index i32 %p, %t562
     %t564 = load v128 %t563
     %t565 = vector paddd %t564, %t560
-    %t566 = vector paddd %t565, %t561
+    %t566 = vector paddd %t561, %t565
     %t567 = binary add nowrap i64 %t562, 4
     %t568 = cmp le i64 %t567, %t557
     branch %t568, ^wide_loop_122, ^loop_exit_123
@@ -987,7 +987,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t596 = index i32 %p, %t595
     %t597 = load v128 %t596
     %t598 = vector paddd %t597, %t593
-    %t599 = vector paddd %t598, %t594
+    %t599 = vector paddd %t594, %t598
     %t600 = binary add nowrap i64 %t595, 4
     %t601 = cmp le i64 %t600, %t590
     branch %t601, ^wide_loop_129, ^loop_exit_130
@@ -1040,7 +1040,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t628 = index i32 %p, %t627
     %t629 = load v128 %t628
     %t630 = vector paddd %t629, %t625
-    %t631 = vector paddd %t630, %t626
+    %t631 = vector paddd %t626, %t630
     %t632 = binary add nowrap i64 %t627, 4
     %t633 = cmp le i64 %t632, %t622
     branch %t633, ^wide_loop_136, ^loop_exit_137
@@ -1094,7 +1094,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t661 = index i32 %p, %t660
     %t662 = load v128 %t661
     %t663 = vector paddd %t662, %t658
-    %t664 = vector paddd %t663, %t659
+    %t664 = vector paddd %t659, %t663
     %t665 = binary add nowrap i64 %t660, 4
     %t666 = cmp le i64 %t665, %t655
     branch %t666, ^wide_loop_143, ^loop_exit_144
@@ -1147,7 +1147,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t693 = index i32 %p, %t692
     %t694 = load v128 %t693
     %t695 = vector paddd %t694, %t690
-    %t696 = vector paddd %t695, %t691
+    %t696 = vector paddd %t691, %t695
     %t697 = binary add nowrap i64 %t692, 4
     %t698 = cmp le i64 %t697, %t687
     branch %t698, ^wide_loop_150, ^loop_exit_151
@@ -1201,7 +1201,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t726 = index i32 %p, %t725
     %t727 = load v128 %t726
     %t728 = vector paddd %t727, %t723
-    %t729 = vector paddd %t728, %t724
+    %t729 = vector paddd %t724, %t728
     %t730 = binary add nowrap i64 %t725, 4
     %t731 = cmp le i64 %t730, %t720
     branch %t731, ^wide_loop_157, ^loop_exit_158
@@ -1254,7 +1254,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t758 = index i32 %p, %t757
     %t759 = load v128 %t758
     %t760 = vector paddd %t759, %t755
-    %t761 = vector paddd %t760, %t756
+    %t761 = vector paddd %t756, %t760
     %t762 = binary add nowrap i64 %t757, 4
     %t763 = cmp le i64 %t762, %t752
     branch %t763, ^wide_loop_164, ^loop_exit_165
@@ -1308,7 +1308,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t791 = index i32 %p, %t790
     %t792 = load v128 %t791
     %t793 = vector paddd %t792, %t788
-    %t794 = vector paddd %t793, %t789
+    %t794 = vector paddd %t789, %t793
     %t795 = binary add nowrap i64 %t790, 4
     %t796 = cmp le i64 %t795, %t785
     branch %t796, ^wide_loop_171, ^loop_exit_172
@@ -1361,7 +1361,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t823 = index i32 %p, %t822
     %t824 = load v128 %t823
     %t825 = vector paddd %t824, %t820
-    %t826 = vector paddd %t825, %t821
+    %t826 = vector paddd %t821, %t825
     %t827 = binary add nowrap i64 %t822, 4
     %t828 = cmp le i64 %t827, %t817
     branch %t828, ^wide_loop_178, ^loop_exit_179
@@ -1415,7 +1415,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t856 = index i32 %p, %t855
     %t857 = load v128 %t856
     %t858 = vector paddd %t857, %t853
-    %t859 = vector paddd %t858, %t854
+    %t859 = vector paddd %t854, %t858
     %t860 = binary add nowrap i64 %t855, 4
     %t861 = cmp le i64 %t860, %t850
     branch %t861, ^wide_loop_185, ^loop_exit_186
@@ -1468,7 +1468,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t888 = index i32 %p, %t887
     %t889 = load v128 %t888
     %t890 = vector paddd %t889, %t885
-    %t891 = vector paddd %t890, %t886
+    %t891 = vector paddd %t886, %t890
     %t892 = binary add nowrap i64 %t887, 4
     %t893 = cmp le i64 %t892, %t882
     branch %t893, ^wide_loop_192, ^loop_exit_193
@@ -1522,7 +1522,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t921 = index i32 %p, %t920
     %t922 = load v128 %t921
     %t923 = vector paddd %t922, %t918
-    %t924 = vector paddd %t923, %t919
+    %t924 = vector paddd %t919, %t923
     %t925 = binary add nowrap i64 %t920, 4
     %t926 = cmp le i64 %t925, %t915
     branch %t926, ^wide_loop_199, ^loop_exit_200
@@ -1575,7 +1575,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t953 = index i32 %p, %t952
     %t954 = load v128 %t953
     %t955 = vector paddd %t954, %t950
-    %t956 = vector paddd %t955, %t951
+    %t956 = vector paddd %t951, %t955
     %t957 = binary add nowrap i64 %t952, 4
     %t958 = cmp le i64 %t957, %t947
     branch %t958, ^wide_loop_206, ^loop_exit_207
@@ -1629,7 +1629,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t986 = index i32 %p, %t985
     %t987 = load v128 %t986
     %t988 = vector paddd %t987, %t983
-    %t989 = vector paddd %t988, %t984
+    %t989 = vector paddd %t984, %t988
     %t990 = binary add nowrap i64 %t985, 4
     %t991 = cmp le i64 %t990, %t980
     branch %t991, ^wide_loop_213, ^loop_exit_214
@@ -1682,7 +1682,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t1018 = index i32 %p, %t1017
     %t1019 = load v128 %t1018
     %t1020 = vector paddd %t1019, %t1015
-    %t1021 = vector paddd %t1020, %t1016
+    %t1021 = vector paddd %t1016, %t1020
     %t1022 = binary add nowrap i64 %t1017, 4
     %t1023 = cmp le i64 %t1022, %t1012
     branch %t1023, ^wide_loop_220, ^loop_exit_221
@@ -1736,7 +1736,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t1051 = index i32 %p, %t1050
     %t1052 = load v128 %t1051
     %t1053 = vector paddd %t1052, %t1048
-    %t1054 = vector paddd %t1053, %t1049
+    %t1054 = vector paddd %t1049, %t1053
     %t1055 = binary add nowrap i64 %t1050, 4
     %t1056 = cmp le i64 %t1055, %t1045
     branch %t1056, ^wide_loop_227, ^loop_exit_228
@@ -1789,7 +1789,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t1083 = index i32 %p, %t1082
     %t1084 = load v128 %t1083
     %t1085 = vector paddd %t1084, %t1080
-    %t1086 = vector paddd %t1085, %t1081
+    %t1086 = vector paddd %t1081, %t1085
     %t1087 = binary add nowrap i64 %t1082, 4
     %t1088 = cmp le i64 %t1087, %t1077
     branch %t1088, ^wide_loop_234, ^loop_exit_235
@@ -1843,7 +1843,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t1116 = index i32 %p, %t1115
     %t1117 = load v128 %t1116
     %t1118 = vector paddd %t1117, %t1113
-    %t1119 = vector paddd %t1118, %t1114
+    %t1119 = vector paddd %t1114, %t1118
     %t1120 = binary add nowrap i64 %t1115, 4
     %t1121 = cmp le i64 %t1120, %t1110
     branch %t1121, ^wide_loop_241, ^loop_exit_242
@@ -1896,7 +1896,7 @@ function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=y
     %t1148 = index i32 %p, %t1147
     %t1149 = load v128 %t1148
     %t1150 = vector paddd %t1149, %t1145
-    %t1151 = vector paddd %t1150, %t1146
+    %t1151 = vector paddd %t1146, %t1150
     %t1152 = binary add nowrap i64 %t1147, 4
     %t1153 = cmp le i64 %t1152, %t1142
     branch %t1153, ^wide_loop_248, ^loop_exit_249

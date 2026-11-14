@@ -101,7 +101,7 @@ function @field(%this : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
     %t15 = phi i64 [^loop_preheader_2: 0, ^wide_loop_3: %t19]
     %t16 = index i32 %x, %t15
     %t17 = load v128 %t16
-    %t18 = vector paddd %t17, %t14
+    %t18 = vector paddd %t14, %t17
     %t19 = binary add nowrap i64 %t15, 4
     %t20 = cmp le i64 %t19, %t12
     branch %t20, ^wide_loop_3, ^loop_exit_4
@@ -139,19 +139,19 @@ function @typed(%out : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
   block ^entry:
     %t1 = load typed i64 %out
     %t2 = cmp gt i64 %n, 0
-    %t3 = cmp uge i64 %n, 2
+    %t3 = cmp uge i64 %n, 4
     %t4 = binary and i64 %t2, %t3
     branch %t4, ^loop_preheader_1, ^loop_preheader_4
 
   block ^loop_preheader_1:
-    %t5 = binary add i64 %n, -2
+    %t5 = binary add i64 %n, -4
     %t6 = vector fromi64 %t1
     %t7 = vector pzero
     jump ^wide_loop_2
 
   block ^wide_loop_2:
-    %t8 = phi v128 [^loop_preheader_1: %t6, ^wide_loop_2: %t15]
-    %t9 = phi i64 [^loop_preheader_1: 0, ^wide_loop_2: %t16]
+    %t8 = phi v128 [^loop_preheader_1: %t6, ^wide_loop_2: %t22]
+    %t9 = phi i64 [^loop_preheader_1: 0, ^wide_loop_2: %t23]
     %t10 = index i32 %x, %t9
     %t11 = load i64 %t10
     %t12 = vector fromi64 %t11
@@ -159,24 +159,31 @@ function @typed(%out : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
     %t14 = vector punpckldq %t12, %t13
     %t15 = vector paddq %t8, %t14
     %t16 = binary add nowrap i64 %t9, 2
-    %t17 = cmp le i64 %t16, %t5
-    branch %t17, ^wide_loop_2, ^loop_exit_3
+    %t17 = index i32 %x, %t16
+    %t18 = load i64 %t17
+    %t19 = vector fromi64 %t18
+    %t20 = vector pcmpgtd %t7, %t19
+    %t21 = vector punpckldq %t19, %t20
+    %t22 = vector paddq %t15, %t21
+    %t23 = binary add nowrap i64 %t9, 4
+    %t24 = cmp le i64 %t23, %t5
+    branch %t24, ^wide_loop_2, ^loop_exit_3
 
   block ^loop_exit_3:
-    %t18 = vector pshufd %t15, 78
-    %t19 = vector paddq %t15, %t18
-    %t20 = vector toi64 %t19
-    %t21 = cmp lt i64 %t16, %n
-    branch %t21, ^loop_preheader_4, ^loop_exit_6
+    %t25 = vector pshufd %t22, 78
+    %t26 = vector paddq %t22, %t25
+    %t27 = vector toi64 %t26
+    %t28 = cmp lt i64 %t23, %n
+    branch %t28, ^loop_preheader_4, ^loop_exit_6
 
   block ^loop_preheader_4:
-    %t22 = phi i64 [^entry: %t1, ^loop_exit_3: %t20]
-    %t23 = phi i64 [^entry: 0, ^loop_exit_3: %t16]
+    %t29 = phi i64 [^entry: %t1, ^loop_exit_3: %t27]
+    %t30 = phi i64 [^entry: 0, ^loop_exit_3: %t23]
     jump ^body
 
   block ^body:
-    %old = phi i64 [^loop_preheader_4: %t22, ^body: %sum]
-    %i = phi i64 [^loop_preheader_4: %t23, ^body: %next]
+    %old = phi i64 [^loop_preheader_4: %t29, ^body: %sum]
+    %i = phi i64 [^loop_preheader_4: %t30, ^body: %next]
     %p = index i32 %x, %i
     %v = load typed i32 %p
     %wide = convert sext i64 i32 %v
@@ -186,8 +193,8 @@ function @typed(%out : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
     branch %c, ^body, ^loop_exit_6
 
   block ^loop_exit_6:
-    %t32 = phi i64 [^body: %sum, ^loop_exit_3: %t20]
-    store typed i64 %t32, %out
+    %t39 = phi i64 [^body: %sum, ^loop_exit_3: %t27]
+    store typed i64 %t39, %out
     return void
 }
 function @refused(%out : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {

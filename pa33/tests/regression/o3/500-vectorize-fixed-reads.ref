@@ -1,0 +1,199 @@
+function @add_weight(%a : ptr, %w : ptr, %from : i64, %n : i64) -> void [no_inline=yes] {
+  block ^entry:
+    %any = cmp ult i64 %from, %n
+    branch %any, ^loop_preheader_1, ^done
+
+  block ^loop_preheader_1:
+    %t2 = binary sub i64 %n, %from
+    %t3 = cmp uge i64 %t2, 4
+    %t4 = binary and i64 %any, %t3
+    branch %t4, ^loop_preheader_2, ^loop_preheader_6
+
+  block ^loop_preheader_2:
+    %t5 = index f64 %a, %from
+    %t6 = index i8 %w, 8
+    %t7 = binary mul i64 %t2, 8
+    %t8 = index i8 %t5, %t7
+    %t9 = cmp ule ptr %t6, %t5
+    %t10 = cmp ule ptr %t8, %w
+    %t11 = binary or i64 %t9, %t10
+    branch %t11, ^loop_preheader_3, ^loop_preheader_6
+
+  block ^loop_preheader_3:
+    %t12 = binary add i64 %n, -4
+    %t13 = load typed f64 %w
+    %t14 = vector fromf64 %t13
+    %t15 = vector pshufd %t14, 68
+    jump ^wide_loop_4
+
+  block ^wide_loop_4:
+    %t16 = phi i64 [^loop_preheader_3: %from, ^wide_loop_4: %t24]
+    %t17 = index f64 %a, %t16
+    %t18 = load v128 %t17
+    %t19 = vector addpd %t15, %t18
+    store v128 %t19, %t17
+    %t20 = binary add nowrap i64 %t16, 2
+    %t21 = index f64 %a, %t20
+    %t22 = load v128 %t21
+    %t23 = vector addpd %t15, %t22
+    store v128 %t23, %t21
+    %t24 = binary add nowrap i64 %t16, 4
+    %t25 = cmp ule i64 %t24, %t12
+    branch %t25, ^wide_loop_4, ^loop_exit_5
+
+  block ^loop_exit_5:
+    %t26 = cmp ult i64 %t24, %n
+    branch %t26, ^loop_preheader_6, ^done
+
+  block ^loop_preheader_6:
+    %t27 = phi i64 [^loop_preheader_1: %from, ^loop_preheader_2: %from, ^loop_exit_5: %t24]
+    jump ^body
+
+  block ^body:
+    %i = phi i64 [^loop_preheader_6: %t27, ^body: %next]
+    %x = load typed f64 %w
+    %p = index f64 %a, %i
+    %v = load typed f64 %p
+    %r = binary add f64 %x, %v
+    store typed f64 %r, %p
+    %next = binary add i64 %i, 1
+    %c = cmp ult i64 %next, %n
+    branch %c, ^body, ^done
+
+  block ^done:
+    return void
+}
+function @field(%this : ptr, %d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
+  block ^entry:
+    branch %n, ^loop_preheader_1, ^done
+
+  block ^loop_preheader_1:
+    %t1 = cmp uge i64 %n, 4
+    branch %t1, ^loop_preheader_2, ^loop_preheader_6
+
+  block ^loop_preheader_2:
+    %t2 = index i8 %this, 16
+    %t3 = index i8 %this, 24
+    %t4 = binary mul i64 %n, 8
+    %t5 = index i8 %d, %t4
+    %t6 = cmp ule ptr %t3, %d
+    %t7 = cmp ule ptr %t5, %t2
+    %t8 = binary or i64 %t6, %t7
+    %t9 = index i8 %x, %t4
+    %t10 = cmp ule ptr %t9, %d
+    %t11 = cmp ule ptr %t5, %x
+    %t12 = binary or i64 %t10, %t11
+    %t13 = binary and i64 %t8, %t12
+    branch %t13, ^loop_preheader_3, ^loop_preheader_6
+
+  block ^loop_preheader_3:
+    %t14 = binary add i64 %n, -4
+    %t15 = load typed f64 %t2
+    %t16 = vector fromf64 %t15
+    %t17 = vector pshufd %t16, 68
+    jump ^wide_loop_4
+
+  block ^wide_loop_4:
+    %t18 = phi i64 [^loop_preheader_3: 0, ^wide_loop_4: %t28]
+    %t19 = index f64 %x, %t18
+    %t20 = load v128 %t19
+    %t21 = vector mulpd %t17, %t20
+    %t22 = index f64 %d, %t18
+    store v128 %t21, %t22
+    %t23 = binary add nowrap i64 %t18, 2
+    %t24 = index f64 %x, %t23
+    %t25 = load v128 %t24
+    %t26 = vector mulpd %t17, %t25
+    %t27 = index f64 %d, %t23
+    store v128 %t26, %t27
+    %t28 = binary add nowrap i64 %t18, 4
+    %t29 = cmp ule i64 %t28, %t14
+    branch %t29, ^wide_loop_4, ^loop_exit_5
+
+  block ^loop_exit_5:
+    %t30 = cmp ult i64 %t28, %n
+    branch %t30, ^loop_preheader_6, ^done
+
+  block ^loop_preheader_6:
+    %t31 = phi i64 [^loop_preheader_1: 0, ^loop_preheader_2: 0, ^loop_exit_5: %t28]
+    jump ^body
+
+  block ^body:
+    %i = phi i64 [^loop_preheader_6: %t31, ^body: %next]
+    %cell = index i8 %this, 16
+    %k = load typed f64 %cell
+    %p = index f64 %x, %i
+    %v = load typed f64 %p
+    %r = binary mul f64 %k, %v
+    %o = index f64 %d, %i
+    store typed f64 %r, %o
+    %next = binary add i64 %i, 1
+    %c = cmp ult i64 %next, %n
+    branch %c, ^body, ^done
+
+  block ^done:
+    return void
+}
+function @words(%d : ptr, %x : ptr, %k : ptr, %n : i64) -> void [no_inline=yes] {
+  block ^entry:
+    branch %n, ^loop_preheader_1, ^done
+
+  block ^loop_preheader_1:
+    %t1 = cmp uge i64 %n, 4
+    branch %t1, ^loop_preheader_2, ^loop_preheader_6
+
+  block ^loop_preheader_2:
+    %t2 = binary mul i64 %n, 4
+    %t3 = index i8 %x, %t2
+    %t4 = index i8 %d, %t2
+    %t5 = cmp ule ptr %t3, %d
+    %t6 = cmp ule ptr %t4, %x
+    %t7 = binary or i64 %t5, %t6
+    %t8 = index i8 %k, 4
+    %t9 = cmp ule ptr %t8, %d
+    %t10 = cmp ule ptr %t4, %k
+    %t11 = binary or i64 %t9, %t10
+    %t12 = binary and i64 %t7, %t11
+    branch %t12, ^loop_preheader_3, ^loop_preheader_6
+
+  block ^loop_preheader_3:
+    %t13 = binary add i64 %n, -4
+    %t14 = load typed i32 %k
+    %t15 = vector fromi32 %t14
+    %t16 = vector pshufd %t15, 0
+    jump ^wide_loop_4
+
+  block ^wide_loop_4:
+    %t17 = phi i64 [^loop_preheader_3: 0, ^wide_loop_4: %t22]
+    %t18 = index i32 %x, %t17
+    %t19 = load v128 %t18
+    %t20 = vector paddd %t19, %t16
+    %t21 = index i32 %d, %t17
+    store v128 %t20, %t21
+    %t22 = binary add nowrap i64 %t17, 4
+    %t23 = cmp ule i64 %t22, %t13
+    branch %t23, ^wide_loop_4, ^loop_exit_5
+
+  block ^loop_exit_5:
+    %t24 = cmp ult i64 %t22, %n
+    branch %t24, ^loop_preheader_6, ^done
+
+  block ^loop_preheader_6:
+    %t25 = phi i64 [^loop_preheader_1: 0, ^loop_preheader_2: 0, ^loop_exit_5: %t22]
+    jump ^body
+
+  block ^body:
+    %i = phi i64 [^loop_preheader_6: %t25, ^body: %next]
+    %p = index i32 %x, %i
+    %v = load typed i32 %p
+    %add = load typed i32 %k
+    %r = binary add i32 %v, %add
+    %o = index i32 %d, %i
+    store typed i32 %r, %o
+    %next = binary add i64 %i, 1
+    %c = cmp ult i64 %next, %n
+    branch %c, ^body, ^done
+
+  block ^done:
+    return void
+}

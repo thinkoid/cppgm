@@ -1,0 +1,1 @@
+// A value read from one address on every pass, two-lane loops in paired rounds and 64-bit words made doubles in lanes at -O3: right for every count, for a read that the stores reach, and for the words that round.

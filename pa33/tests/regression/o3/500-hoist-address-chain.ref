@@ -52,39 +52,46 @@ function @strides(%e : ptr, %d : ptr, %k : i64, %n : i64) -> void [no_inline=yes
 }
 function @same_type(%e : ptr, %d : ptr, %n : i64) -> void [no_inline=yes] {
   block ^entry:
-    %t1 = binary and i64 %n, -4
-    %t2 = cmp gt i64 %t1, 0
-    branch %t2, ^unrolled_1, ^wide_tail_3
+    %t1 = cmp gt i64 %n, 0
+    %t2 = cmp uge i64 %n, 4
+    %t3 = binary and i64 %t1, %t2
+    branch %t3, ^loop_preheader_1, ^loop_preheader_5
 
-  block ^unrolled_1:
-    %t3 = phi i64 [^unrolled_1: %t13, ^entry: 0]
+  block ^loop_preheader_1:
     %t4 = index i8 %e, 24
-    %t5 = load typed i32 %t4
-    %t6 = index i32 %d, %t3
-    store typed i32 %t5, %t6
-    %t7 = load typed i32 %t4
-    %t8 = index i32 %t6, 1
-    store typed i32 %t7, %t8
-    %t9 = load typed i32 %t4
-    %t10 = index i32 %t6, 2
-    store typed i32 %t9, %t10
-    %t11 = load typed i32 %t4
-    %t12 = index i32 %t6, 3
-    store typed i32 %t11, %t12
-    %t13 = binary add nowrap i64 %t3, 4
-    %t14 = cmp ne i64 %t1, %t13
-    branch %t14, ^unrolled_1, ^loop_exit_2
+    %t5 = index i8 %e, 28
+    %t6 = binary mul i64 %n, 4
+    %t7 = index i8 %d, %t6
+    %t8 = cmp ule ptr %t5, %d
+    %t9 = cmp ule ptr %t7, %t4
+    %t10 = binary or i64 %t8, %t9
+    branch %t10, ^loop_preheader_2, ^loop_preheader_5
 
-  block ^loop_exit_2:
-    %t15 = cmp lt i64 %t13, %n
-    branch %t15, ^wide_tail_3, ^done
+  block ^loop_preheader_2:
+    %t11 = binary add i64 %n, -4
+    %t12 = load typed i32 %t4
+    %t13 = vector fromi32 %t12
+    %t14 = vector pshufd %t13, 0
+    jump ^wide_loop_3
 
-  block ^wide_tail_3:
-    %t16 = phi i64 [^entry: 0, ^loop_exit_2: %t13]
+  block ^wide_loop_3:
+    %t15 = phi i64 [^loop_preheader_2: 0, ^wide_loop_3: %t17]
+    %t16 = index i32 %d, %t15
+    store v128 %t14, %t16
+    %t17 = binary add nowrap i64 %t15, 4
+    %t18 = cmp le i64 %t17, %t11
+    branch %t18, ^wide_loop_3, ^loop_exit_4
+
+  block ^loop_exit_4:
+    %t19 = cmp lt i64 %t17, %n
+    branch %t19, ^loop_preheader_5, ^done
+
+  block ^loop_preheader_5:
+    %t20 = phi i64 [^entry: 0, ^loop_preheader_1: 0, ^loop_exit_4: %t17]
     jump ^body
 
   block ^body:
-    %i = phi i64 [^wide_tail_3: %t16, ^body: %next]
+    %i = phi i64 [^loop_preheader_5: %t20, ^body: %next]
     %f = index i8 %e, 24
     %s = load typed i32 %f
     %p = index i32 %d, %i

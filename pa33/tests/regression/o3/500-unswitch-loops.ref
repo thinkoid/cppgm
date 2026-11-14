@@ -10,100 +10,112 @@ function @on_parameter(%flag : i64, %p : ptr, %n : i64) -> i64 [no_inline=yes] {
     branch %flag, ^loop_preheader_2, ^loop_preheader_8
 
   block ^loop_preheader_2:
-    %t2 = cmp uge i64 %n, 2
+    %t2 = cmp uge i64 %n, 4
     %t3 = binary and i64 %more, %t2
     branch %t3, ^loop_preheader_3, ^loop_preheader_6
 
   block ^loop_preheader_3:
-    %t4 = binary add i64 %n, -2
+    %t4 = binary add i64 %n, -4
     %t5 = vector pzero
     jump ^wide_loop_4
 
   block ^wide_loop_4:
-    %t6 = phi v128 [^loop_preheader_3: %t5, ^wide_loop_4: %t11]
-    %t7 = phi i64 [^loop_preheader_3: 0, ^wide_loop_4: %t12]
+    %t6 = phi v128 [^loop_preheader_3: %t5, ^wide_loop_4: %t16]
+    %t7 = phi i64 [^loop_preheader_3: 0, ^wide_loop_4: %t17]
     %t8 = index i64 %p, %t7
     %t9 = load v128 %t8
     %t10 = vector paddq %t9, %t9
     store v128 %t10, %t8
-    %t11 = vector paddq %t10, %t6
+    %t11 = vector paddq %t6, %t10
     %t12 = binary add nowrap i64 %t7, 2
-    %t13 = cmp le i64 %t12, %t4
-    branch %t13, ^wide_loop_4, ^loop_exit_5
+    %t13 = index i64 %p, %t12
+    %t14 = load v128 %t13
+    %t15 = vector paddq %t14, %t14
+    store v128 %t15, %t13
+    %t16 = vector paddq %t11, %t15
+    %t17 = binary add nowrap i64 %t7, 4
+    %t18 = cmp le i64 %t17, %t4
+    branch %t18, ^wide_loop_4, ^loop_exit_5
 
   block ^loop_exit_5:
-    %t14 = vector pshufd %t11, 78
-    %t15 = vector paddq %t11, %t14
-    %t16 = vector toi64 %t15
-    %t17 = cmp lt i64 %t12, %n
-    branch %t17, ^loop_preheader_6, ^exit
+    %t19 = vector pshufd %t16, 78
+    %t20 = vector paddq %t16, %t19
+    %t21 = vector toi64 %t20
+    %t22 = cmp lt i64 %t17, %n
+    branch %t22, ^loop_preheader_6, ^exit
 
   block ^loop_preheader_6:
-    %t18 = phi i64 [^loop_preheader_2: 0, ^loop_exit_5: %t16]
-    %t19 = phi i64 [^loop_preheader_2: 0, ^loop_exit_5: %t12]
+    %t23 = phi i64 [^loop_preheader_2: 0, ^loop_exit_5: %t21]
+    %t24 = phi i64 [^loop_preheader_2: 0, ^loop_exit_5: %t17]
     jump ^body
 
   block ^body:
-    %t20 = phi i64 [^body: %next_sum, ^loop_preheader_6: %t18]
-    %t21 = phi i64 [^body: %next, ^loop_preheader_6: %t19]
-    %at = index i64 %p, %t21
+    %t25 = phi i64 [^body: %next_sum, ^loop_preheader_6: %t23]
+    %t26 = phi i64 [^body: %next, ^loop_preheader_6: %t24]
+    %at = index i64 %p, %t26
     %v = load i64 %at
     %twice = binary add i64 %v, %v
     store i64 %twice, %at
-    %next_sum = binary add i64 %twice, %t20
-    %next = binary add nowrap i64 %t21, 1
-    %t27 = cmp lt i64 %next, %n
-    branch %t27, ^body, ^exit
+    %next_sum = binary add i64 %twice, %t25
+    %next = binary add nowrap i64 %t26, 1
+    %t32 = cmp lt i64 %next, %n
+    branch %t32, ^body, ^exit
 
   block ^loop_preheader_8:
-    %t28 = cmp uge i64 %n, 2
-    %t29 = binary and i64 %more, %t28
-    branch %t29, ^loop_preheader_9, ^loop_preheader_12
+    %t33 = cmp uge i64 %n, 4
+    %t34 = binary and i64 %more, %t33
+    branch %t34, ^loop_preheader_9, ^loop_preheader_12
 
   block ^loop_preheader_9:
-    %t30 = binary add i64 %n, -2
-    %t31 = vector pzero
+    %t35 = binary add i64 %n, -4
+    %t36 = vector pzero
     jump ^wide_loop_10
 
   block ^wide_loop_10:
-    %t32 = phi v128 [^loop_preheader_9: %t31, ^wide_loop_10: %t37]
-    %t33 = phi i64 [^loop_preheader_9: 0, ^wide_loop_10: %t38]
-    %t34 = index i64 %p, %t33
-    %t35 = load v128 %t34
-    %t36 = vector psubq %t31, %t35
-    store v128 %t36, %t34
-    %t37 = vector paddq %t32, %t36
-    %t38 = binary add nowrap i64 %t33, 2
-    %t39 = cmp le i64 %t38, %t30
-    branch %t39, ^wide_loop_10, ^loop_exit_11
+    %t37 = phi v128 [^loop_preheader_9: %t36, ^wide_loop_10: %t47]
+    %t38 = phi i64 [^loop_preheader_9: 0, ^wide_loop_10: %t48]
+    %t39 = index i64 %p, %t38
+    %t40 = load v128 %t39
+    %t41 = vector psubq %t36, %t40
+    store v128 %t41, %t39
+    %t42 = vector paddq %t37, %t41
+    %t43 = binary add nowrap i64 %t38, 2
+    %t44 = index i64 %p, %t43
+    %t45 = load v128 %t44
+    %t46 = vector psubq %t36, %t45
+    store v128 %t46, %t44
+    %t47 = vector paddq %t42, %t46
+    %t48 = binary add nowrap i64 %t38, 4
+    %t49 = cmp le i64 %t48, %t35
+    branch %t49, ^wide_loop_10, ^loop_exit_11
 
   block ^loop_exit_11:
-    %t40 = vector pshufd %t37, 78
-    %t41 = vector paddq %t37, %t40
-    %t42 = vector toi64 %t41
-    %t43 = cmp lt i64 %t38, %n
-    branch %t43, ^loop_preheader_12, ^exit
+    %t50 = vector pshufd %t47, 78
+    %t51 = vector paddq %t47, %t50
+    %t52 = vector toi64 %t51
+    %t53 = cmp lt i64 %t48, %n
+    branch %t53, ^loop_preheader_12, ^exit
 
   block ^loop_preheader_12:
-    %t44 = phi i64 [^loop_preheader_8: 0, ^loop_exit_11: %t42]
-    %t45 = phi i64 [^loop_preheader_8: 0, ^loop_exit_11: %t38]
+    %t54 = phi i64 [^loop_preheader_8: 0, ^loop_exit_11: %t52]
+    %t55 = phi i64 [^loop_preheader_8: 0, ^loop_exit_11: %t48]
     jump ^loop_preheader_13
 
   block ^loop_preheader_13:
-    %t46 = phi i64 [^loop_preheader_13: %t51, ^loop_preheader_12: %t44]
-    %t47 = phi i64 [^loop_preheader_13: %t52, ^loop_preheader_12: %t45]
-    %t48 = index i64 %p, %t47
-    %t49 = load i64 %t48
-    %t50 = unary neg i64 %t49
-    store i64 %t50, %t48
-    %t51 = binary add i64 %t46, %t50
-    %t52 = binary add nowrap i64 %t47, 1
-    %t53 = cmp lt i64 %t52, %n
-    branch %t53, ^loop_preheader_13, ^exit
+    %t56 = phi i64 [^loop_preheader_13: %t61, ^loop_preheader_12: %t54]
+    %t57 = phi i64 [^loop_preheader_13: %t62, ^loop_preheader_12: %t55]
+    %t58 = index i64 %p, %t57
+    %t59 = load i64 %t58
+    %t60 = unary neg i64 %t59
+    store i64 %t60, %t58
+    %t61 = binary add i64 %t56, %t60
+    %t62 = binary add nowrap i64 %t57, 1
+    %t63 = cmp lt i64 %t62, %n
+    branch %t63, ^loop_preheader_13, ^exit
 
   block ^exit:
-    %t54 = phi i64 [^entry: 0, ^body: %next_sum, ^loop_preheader_13: %t51, ^loop_exit_11: %t42, ^loop_exit_5: %t16]
-    return i64 %t54
+    %t64 = phi i64 [^entry: 0, ^body: %next_sum, ^loop_preheader_13: %t61, ^loop_exit_11: %t52, ^loop_exit_5: %t21]
+    return i64 %t64
 }
 function @on_outer_compare(%p : ptr, %n : i64) -> void [no_inline=yes] {
   block ^entry:
