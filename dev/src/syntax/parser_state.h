@@ -183,7 +183,17 @@ protected:
 	NameBinding parameter_base_lookup(const Scope* templ, const Slice<TemplateArgument>& arguments,
 		const Identifier* identifier, bool prefix_only, uint32_t depth);
 	NameBinding argument_class(const TemplateArgument& argument);
-	bool uncertain_base_name(const Identifier* identifier);
+	// The class whose fixed specialization base can hold a name that the
+	// scopes from the current one to it do not declare; null when one of
+	// them declares the name or no such class encloses it.
+	const Scope* uncertain_base_class(const Identifier* identifier);
+	// A class's base that is a specialization, with arguments naming no
+	// template parameter, of a template whose bases name its parameters
+	// (see fixed_bases_).
+	void record_fixed_base(Scope* class_scope, const Scope* templ, const Slice<TemplateArgument>& arguments);
+	// A member of `cls` found through such a base, its own or one of its
+	// base classes': in the argument's class (parameter_base_lookup).
+	NameBinding fixed_base_lookup(const Scope* cls, const Identifier* identifier, bool prefix_only, uint32_t depth);
 	// The specialization record (NameBinding::specialization_record) of a
 	// named specialization of a template whose bases name its parameters: a
 	// template-id's, made (0 when the records are exhausted), or an
@@ -314,6 +324,15 @@ protected:
 	// the index on).
 	static const uint32_t kPackBase = 0x80000000u;
 	std::vector<std::vector<uint32_t>> parameter_bases_;
+	// The classes with bases that are fixed specializations of those
+	// templates (Scope::fixed_bases): each such base's template and
+	// arguments.
+	struct FixedBase
+	{
+		const Scope* templ;
+		Slice<TemplateArgument> arguments;
+	};
+	std::vector<std::vector<FixedBase>> fixed_bases_;
 	// The specializations of templates whose bases name their parameters
 	// that typedefs and aliases name (NameBinding::specialization_record -
 	// 1): the template-id's arguments.

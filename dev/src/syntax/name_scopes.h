@@ -80,6 +80,10 @@ struct Scope
 	// specialization's members include its arguments' members when its
 	// template inherits a parameter (see Parser::parameter_base_lookup).
 	uint32_t parameter_bases;
+	// The parser's record (index + 1), or zero, of this class's bases that
+	// are specializations with fixed arguments of such templates: their
+	// arguments' classes are bases too (see ParserState::fixed_base_lookup).
+	uint32_t fixed_bases;
 	uint32_t id;
 	// A second visit is needed when a lookup first missed without dependent bases.
 	uint32_t specialization_visit;

@@ -137,9 +137,17 @@ NameBinding Parser::resolve_component(
 	case PrefixState::Unqualified:
 	{
 		NameBinding binding = scopes_.lookup(identifier, prefix_only, namespace_only);
-		if (!declared && !prefix_only && scopes_.current()->uncertain_bases && uncertain_base_name(identifier))
-			return guessed_component(identifier, binding);
-		return binding;
+		if (declared || namespace_only || !scopes_.current()->uncertain_bases)
+			return binding;
+		const Scope* const cls = uncertain_base_class(identifier);
+		if (cls == nullptr)
+			return binding;
+		// The member itself where the base's arguments name its class;
+		// otherwise a guess.
+		const NameBinding member = fixed_base_lookup(cls, identifier, prefix_only, 0);
+		if (member.category != NameCategory::None)
+			return member;
+		return prefix_only ? binding : guessed_component(identifier, binding);
 	}
 	case PrefixState::Known:
 	{
@@ -152,6 +160,11 @@ NameBinding Parser::resolve_component(
 				Slice<TemplateArgument>{
 					const_cast<TemplateArgument*>(info.prefix_arguments), info.prefix_argument_count },
 				identifier, prefix_only, 0);
+		// A class's member its scope and known bases lack may be an
+		// argument's of a base that is a fixed specialization.
+		if (binding.category == NameCategory::None && !namespace_only && info.prefix_scope->kind == ScopeKind::Class &&
+			info.prefix_scope->uncertain_bases)
+			binding = fixed_base_lookup(info.prefix_scope, identifier, prefix_only, 0);
 		// Through a template-id prefix that depends on template parameters
 		// (not the current instantiation), a member the specializations
 		// declare with several categories names neither a type nor a
@@ -177,7 +190,7 @@ NameBinding Parser::resolve_component(
 	return NameBinding{ NameCategory::None, false, nullptr };
 }
 
-bool ParserState::uncertain_base_name(const Identifier* identifier)
+const Scope* ParserState::uncertain_base_class(const Identifier* identifier)
 {
 	// Keep a bounded type/value reading only when normal parser lookup
 	// cannot classify a name before reaching a fixed base's unknown
@@ -187,17 +200,58 @@ bool ParserState::uncertain_base_name(const Identifier* identifier)
 		scope = scope->parent)
 	{
 		if (scopes_.own(scope, identifier).category != NameCategory::None)
-			return false;
+			return nullptr;
 		Scope* cls = scope->kind == ScopeKind::Class ? scope : scope->member_of;
 		if (cls != nullptr)
 		{
 			if (scopes_.lookup_in(cls, identifier, false, false).category != NameCategory::None)
-				return false;
+				return nullptr;
 			if (cls->uncertain_bases)
-				return true;
+				return cls;
 		}
 	}
-	return false;
+	return nullptr;
+}
+
+void ParserState::record_fixed_base(Scope* class_scope, const Scope* templ, const Slice<TemplateArgument>& arguments)
+{
+	if (class_scope->fixed_bases == 0)
+	{
+		fixed_bases_.push_back(std::vector<FixedBase>());
+		class_scope->fixed_bases = static_cast<uint32_t>(fixed_bases_.size());
+	}
+	fixed_bases_[class_scope->fixed_bases - 1].push_back(FixedBase{ templ, arguments });
+}
+
+NameBinding ParserState::fixed_base_lookup(
+	const Scope* cls, const Identifier* identifier, bool prefix_only, uint32_t depth)
+{
+	// 10.2: a class's members include its bases' members. A base that is a
+	// specialization of a template inheriting a parameter has that
+	// argument's class as a base (14.7.1); the class's other bases are
+	// searched for such bases in turn.
+	if (!cls->uncertain_bases || depth > 8)
+		return NameBinding();
+	if (cls->fixed_bases != 0)
+	{
+		const std::vector<FixedBase>& bases = fixed_bases_[cls->fixed_bases - 1];
+		for (size_t i = 0; i < bases.size(); ++i)
+		{
+			const NameBinding binding = parameter_base_lookup(
+				bases[i].templ, bases[i].arguments, identifier, prefix_only, depth + 1);
+			if (binding.category != NameCategory::None)
+				return binding;
+		}
+	}
+	for (const ScopeEdge* edge = cls->edges; edge != nullptr; edge = edge->next)
+	{
+		if (edge->dependent || edge->target->kind != ScopeKind::Class)
+			continue;
+		const NameBinding binding = fixed_base_lookup(edge->target, identifier, prefix_only, depth + 1);
+		if (binding.category != NameCategory::None)
+			return binding;
+	}
+	return NameBinding();
 }
 
 NameBinding Parser::guessed_component(const Identifier* identifier, NameBinding binding)
@@ -276,6 +330,9 @@ NameBinding ParserState::parameter_base_lookup(const Scope* templ, const Slice<T
 				binding = parameter_base_lookup(named,
 					last.has_arguments ? last.arguments : specialization_records_[record - 1u], identifier, prefix_only,
 					depth + 1);
+			// (The argument's class may have such bases itself.)
+			if (binding.category == NameCategory::None && !specialization)
+				binding = fixed_base_lookup(named, identifier, prefix_only, depth + 1);
 			if (binding.category != NameCategory::None)
 				return binding;
 		}

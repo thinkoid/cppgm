@@ -1265,6 +1265,16 @@ bool Parser::parse_base_clause(ListFrame<BaseSpecifier>& bases, Scope* class_sco
 				class_scope->uncertain_bases = true;
 				scopes_.note_uncertain();
 			}
+			if (template_parameter_mentions_ == parameters && info.scope->parameter_bases != 0)
+			{
+				// The base's arguments name the classes it inherits.
+				const NameComponent& last = base.name->last();
+				const uint8_t record = last.has_arguments ? 0 : specialization_record(*base.name);
+				if (last.has_arguments)
+					record_fixed_base(class_scope, info.scope, last.arguments);
+				else if (record != 0)
+					record_fixed_base(class_scope, info.scope, specialization_records_[record - 1u]);
+			}
 			if (class_scope->specialization)
 				scopes_.note_specialization_base(class_scope);
 		}
