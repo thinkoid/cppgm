@@ -264,8 +264,17 @@ bool FunctionEmitter::measure_short_loops(const Function& function)
 		const size_t before = static_cast<size_t>(
 			std::lower_bound(branch_offset_.begin(), branch_offset_.end(), loop_heads_[k]) - branch_offset_.begin());
 		const auto span = [&](uint32_t last) -> int32_t {
-			if (last == lowir::kNoId || (k + 1 < loop_heads_.size() && loop_heads_[k + 1] <= branch_offset_[last]))
+			if (last == lowir::kNoId)
 				return 0;
+			// A head inside the cycle that closes inside it is the inner loop
+			// of a nest, and one that takes padding moves the cycle's end. A
+			// head that only a later continuation returns to is the cycle's.
+			for (size_t inner = k + 1; inner < loop_heads_.size() && loop_heads_[inner] <= branch_offset_[last];
+				++inner)
+				if (loop_padded_[inner] || loop_near_[inner] == lowir::kNoId ||
+					branch_offset_[loop_near_[inner]] <= branch_offset_[last] ||
+					branch_offset_[last] - loop_heads_[k] > 2 * kWindowLoop)
+					return 0;
 			// A call on a slow continuation does not penalize the fast cycle.
 			// With no trip estimate, only add alignment to local repeated work.
 			const auto barrier = std::lower_bound(loop_barriers_.begin(), loop_barriers_.end(), loop_heads_[k]);

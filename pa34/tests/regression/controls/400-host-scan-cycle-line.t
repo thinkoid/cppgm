@@ -1,4 +1,4 @@
-// cycles: 18
+// cycles: 26
 // Scans that leave on the data they read, each after a different amount of
 // code, in sections of their own and in the unit's section.
 volatile unsigned sink;
@@ -73,6 +73,35 @@ __attribute__((noinline)) unsigned scan_second(const unsigned char* text, unsign
   return at;
 }
 
+// A cycle that a continuation returns into: the compare of two sequences,
+// one of them in pieces. The step to the next piece is rare and long, and
+// it comes back after the cycle's head.
+template<unsigned K>
+__attribute__((noinline)) bool scan_pieces(const unsigned* const* pieces, unsigned size, const unsigned* flat)
+{
+  Before<K>::run();
+  const unsigned* at = *pieces;
+  const unsigned* piece_end = at + 4;
+  for(unsigned k = 0; k != size; ++k)
+  {
+    if(*at != flat[k]) return false;
+    ++at;
+    if(at == piece_end)
+    {
+      ++pieces;
+      sink = k;
+      sink = size;
+      sink = k + size;
+      sink = k - size;
+      sink = k ^ size;
+      sink = k | size;
+      at = *pieces;
+      piece_end = at + 4;
+    }
+  }
+  return true;
+}
+
 int main()
 {
   static Kinds kinds;
@@ -102,5 +131,17 @@ int main()
   bad |= scan_first(text, 9, &kinds) != 6;
   bad |= scan_first(text + 6, 3, &kinds) != 0;
   bad |= scan_second(text, 5, &kinds) != 5;
+  static const unsigned first[4] = {1, 2, 3, 4}, second[4] = {5, 6, 7, 8}, third[4] = {9, 10, 11, 12};
+  static const unsigned* const pieces[4] = {first, second, third, first};
+  static const unsigned flat[12] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+  static const unsigned other[12] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 11, 12};
+  bad |= !scan_pieces<0>(pieces, 12, flat);
+  bad |= !scan_pieces<1>(pieces, 12, flat);
+  bad |= !scan_pieces<2>(pieces, 12, flat);
+  bad |= !scan_pieces<3>(pieces, 12, flat);
+  bad |= !scan_pieces<4>(pieces, 11, flat);
+  bad |= !scan_pieces<5>(pieces, 5, flat);
+  bad |= scan_pieces<6>(pieces, 12, other);
+  bad |= scan_pieces<7>(pieces, 10, other);
   return bad;
 }
