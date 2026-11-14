@@ -1,0 +1,238 @@
+machine_ir x86_64 linux
+
+startup
+    call @main [args=()]
+    mov rdi, rax
+    exit
+
+function @add
+  abi
+    param %a -> xmm0 : obj<8x4>
+    param %b -> xmm1 : obj<8x4>
+    return obj<8x4> -> rax
+  frame
+    stack_size 32
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    slot $a -> [rbp-8] : obj<8x4>
+    slot $b -> [rbp-16] : obj<8x4>
+    slot $r -> [rbp-24] : obj<8x4>
+    param-slot %a -> [rbp-8] : obj<8x4>
+    param-slot %b -> [rbp-16] : obj<8x4>
+
+  block ^entry
+    fmov.f64 [rbp-8], xmm0
+    fmov.f64 [rbp-16], xmm1
+    fadd.f32 xmm0, [rbp-8], [rbp-16]
+    fadd.f32 xmm1, [rbp-4], [rbp-12]
+    vector.unpcklps xmm0, xmm0, xmm1
+    ret
+
+function @pair
+  abi
+    param %d -> xmm0 : f64
+    param %i -> rdi : i32
+    return obj<16x8> -> rax
+  frame
+    stack_size 0
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    slot $r -> [rbp-16] : obj<16x8>
+
+  block ^entry
+    zext.i32 rax, rdi
+    ret
+
+function @length
+  abi
+    param %v -> xmm0 : i64
+    param %v -> xmm1 : i64
+    return f32 -> xmm0
+  frame
+    stack_size 16
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    slot $v -> [rbp-16] : obj<12x4>
+    param-slot %v -> [rbp-16] : obj<12x4>
+
+  block ^entry
+    fmov.f64 [rbp-16], xmm0
+    fmov.f32 [rbp-8], xmm1
+    fadd.f32 xmm0, [rbp-16], [rbp-12]
+    fadd.f32 xmm0, xmm0, [rbp-8]
+    ret xmm0
+
+function @take
+  abi
+    param %v -> xmm0 : i64
+    param %v -> rdi : i64
+    return f64 -> xmm0
+  frame
+    stack_size 16
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    slot $v -> [rbp-16] : obj<16x8>
+    param-slot %v -> [rbp-16] : obj<16x8>
+
+  block ^entry
+    fmov.f64 [rbp-16], xmm0
+    store.i64 [rbp-8], rdi
+    sext.i32 rax, rdi
+    sitofp.i32.f64 xmm0, rax
+    fadd.f64 xmm0, [rbp-16], xmm0
+    ret xmm0
+
+function @send
+  abi
+    param %a -> xmm0 : f32
+    param %b -> xmm1 : f32
+    param %c -> xmm2 : f32
+    return f32 -> xmm0
+  frame
+    stack_size 16
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    slot $arg -> [rbp-16] : obj<12x4>
+
+  block ^entry
+    fadd.f32 xmm3, xmm0, xmm1
+    fadd.f32 xmm1, xmm1, xmm2
+    fadd.f32 xmm2, xmm2, xmm0
+    fmov.f32 [rbp-16], xmm3
+    fmov.f32 [rbp-12], xmm1
+    fmov.f32 [rbp-8], xmm2
+    fmov.f32 xmm0, [rbp-16]
+    fmov.f32 xmm1, [rbp-8]
+    fmov.f32 xmm15, [rbp-12]
+    vector.unpcklps xmm0, xmm0, xmm15
+    call @length [args=(xmm0,xmm1)]
+    ret xmm0
+
+function @send_pair
+  abi
+    param %d -> xmm0 : f64
+    param %i -> rdi : i32
+    return f64 -> xmm0
+  frame
+    stack_size 16
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    slot $arg -> [rbp-16] : obj<16x8>
+
+  block ^entry
+    fmov.f64 [rbp-16], xmm0
+    zext.i32 rdi, rdi
+    fmov.f64 xmm0, [rbp-16]
+    call @take [args=(rdi,xmm0)]
+    ret xmm0
+
+function @through
+  abi
+    param %q -> rdi : ptr
+    param %x -> xmm0 : f32
+    param %y -> xmm1 : f32
+    return obj<8x4> -> rax
+  frame
+    stack_size 16
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    slot $r -> [rbp-8] : obj<8x4>
+
+  block ^entry
+    fmov.f32 [rbp-8], xmm0
+    fmov.f32 [rbp-4], xmm1
+    fmov.f32 [rdi], xmm0
+    fmov.f64 xmm0, [rbp-8]
+    ret
+
+function @main
+  abi
+    return i32 -> rax
+  frame
+    stack_size 112
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    preserve rbx r12 r13 r14 r15
+    slot $a -> [rbp-8] : obj<8x4>
+    slot $b -> [rbp-16] : obj<8x4>
+    slot $s -> [rbp-24] : obj<8x4>
+    slot $p -> [rbp-48] : obj<16x8>
+    slot $t -> [rbp-32] : obj<8x4>
+    slot $cell -> [rbp-56] : f32
+    temp %oklen -> [rbp-64] : i64
+    temp %oktaken -> [rbp-72] : i64
+
+  block ^entry
+    fmov.f32 [rbp-8], 1.5f
+    fmov.f32 [rbp-4], 2.25f
+    fmov.f32 [rbp-16], 1e+01f
+    fmov.f32 [rbp-12], 2e+01f
+    fmov.f32 xmm0, [rbp-8]
+    fmov.f32 xmm1, [rbp-16]
+    fmov.f32 xmm15, [rbp-4]
+    vector.unpcklps xmm0, xmm0, xmm15
+    fmov.f32 xmm15, [rbp-12]
+    vector.unpcklps xmm1, xmm1, xmm15
+    call @add [args=(xmm0,xmm1)]
+    fmov.f64 [rbp-24], xmm0
+    fmov.f32 xmm0, [rbp-24]
+    fmov.f32 xmm1, [rbp-20]
+    feq.f32 rbx, xmm0, 11.5f
+    feq.f32 r14, xmm1, 22.25f
+    mov rdi, -7
+    fmov.f64 xmm0, 2.5
+    call @pair [args=(rdi,xmm0)]
+    fmov.f64 [rbp-48], xmm0
+    store.i64 [rbp-40], rax
+    fmov.f64 xmm0, [rbp-48]
+    feq.f64 r15, xmm0, 2.5
+    cmp.i32 [rbp-40], -7
+    sete r13
+    movzx r13, r13
+    cmp.u32 [rbp-36], 0
+    sete r12
+    movzx r12, r12
+    fmov.f32 xmm0, 1.0f
+    fmov.f32 xmm1, 2.0f
+    fmov.f32 xmm2, 4.0f
+    call @send [args=(xmm0,xmm1,xmm2)]
+    feq.f32 r10, xmm0, 14.0f
+    store.i64 [rbp-64], r10
+    mov rdi, 40
+    fmov.f64 xmm0, 0.5
+    call @send_pair [args=(rdi,xmm0)]
+    feq.f64 r10, xmm0, 40.5
+    store.i64 [rbp-72], r10
+    lea rdi, [rbp-56]
+    fmov.f32 xmm0, 3.0f
+    fmov.f32 xmm1, 5.0f
+    call @through [args=(rdi,xmm0,xmm1)]
+    fmov.f64 [rbp-32], xmm0
+    fmov.f32 xmm0, [rbp-32]
+    fmov.f32 xmm1, [rbp-28]
+    fmov.f32 xmm2, [rbp-56]
+    feq.f32 rax, xmm0, 3.0f
+    feq.f32 rcx, xmm1, 5.0f
+    feq.f32 rdx, xmm2, 3.0f
+    add.i32 rbx, r14
+    add.i32 rbx, r15
+    add.i32 rbx, r13
+    add.i32 rbx, r12
+    load.u32 r11, [rbp-64]
+    add.i32 rbx, r11
+    load.u32 r11, [rbp-72]
+    add.i32 rbx, r11
+    add.i32 rbx, rax
+    add.i32 rbx, rcx
+    add.i32 rbx, rdx
+    mov rax, 10
+    sub.i32 rax, rbx
+    ret rax

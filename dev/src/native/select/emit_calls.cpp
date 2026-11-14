@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <string>
 
+#include "native/select/mir_facts.h"
 #include "native/select/operand_roles.h"
 #include "support/internal_error.h"
 #include "machine/builtin_contract.h"
@@ -726,6 +727,7 @@ void FunctionSelector::stage_call_arguments(const Instruction& inst, const lowir
 			}
 			continue;
 		}
+		const uint32_t halved = type.is_object() ? halved_eightbytes(v, inst) : 0;
 		for (uint32_t k = 0; k < arg.part_count; ++k)
 		{
 			const ArgPart& part = layout.parts[arg.first_part + k];
@@ -746,7 +748,21 @@ void FunctionSelector::stage_call_arguments(const Instruction& inst, const lowir
 				}
 			}
 			else if (memory_value)
+			{
 				move.src = src.displaced(static_cast<int32_t>(part.offset));
+				// (An eightbyte two four-byte stores wrote last: emit_return.)
+				const uint32_t halves = part.size == 8 && part.offset % 8 == 0 && src.kind == OperandKind::Mem &&
+						src.reg == kFrame
+					? (halved >> (part.offset / 8)) & 5
+					: 0;
+				if ((halves & 4) != 0)
+					move.type = is_xmm(part.reg) ? TypeKind::F32 : TypeKind::U32;
+				else if (halves != 0 && is_xmm(part.reg))
+				{
+					move.type = TypeKind::F32;
+					joined_halves_.push_back(std::make_pair(part.reg, move.src.displaced(4)));
+				}
+			}
 			else
 				move.src = src;
 			arg_mask |= 1u << part.reg;
@@ -802,6 +818,25 @@ uint16_t cold_call_flags(const lowir::Program& program, const Value& callee, uin
 
 } // namespace
 
+// After a call's register moves: the upper halves that join their vector
+// registers, then the stack constants that waited for the scratch register.
+void FunctionSelector::finish_call_arguments(bool scratch_target)
+{
+	for (const std::pair<Reg, Operand>& upper : joined_halves_)
+	{
+		emit2(Op::FMov, TypeKind::F32, Operand::make_reg(XMM15), upper.second);
+		emit3(Op::Vector, TypeKind::V128, Operand::make_reg(upper.first), Operand::make_reg(upper.first),
+			Operand::make_reg(XMM15))
+			.sub = static_cast<uint8_t>(lowir::VectorOp::Unpcklps);
+	}
+	for (size_t k = 0; k < stack_constants_.size() && !scratch_target; ++k)
+	{
+		const Move& move = stack_constants_[k];
+		emit2(Op::Mov, TypeKind::Void, Operand::make_reg(kEmitScratch), move.src);
+		emit2(Op::Store, move.type, move.dst, Operand::make_reg(kEmitScratch));
+	}
+}
+
 void FunctionSelector::emit_call(uint32_t id)
 {
 	const lowir::FunctionBody& body = *body_;
@@ -837,6 +872,7 @@ void FunctionSelector::emit_call(uint32_t id)
 		emit2(Op::And, TypeKind::I64, rsp, Operand::make_imm(-static_cast<int64_t>(layout.stack_align)));
 	moves_.clear();
 	stack_constants_.clear();
+	joined_halves_.clear();
 	uint32_t arg_mask = 0;
 	// Register arguments formed after the moves: (register, address).
 	std::vector<std::pair<Reg, uint32_t>> late;
@@ -906,12 +942,7 @@ void FunctionSelector::emit_call(uint32_t id)
 		emit2(Op::Lea, TypeKind::Ptr, Operand::make_reg(arg.first),
 			Operand::make_mem(arg.first, static_cast<int32_t>(expr.disp)));
 	}
-	for (size_t k = 0; k < stack_constants_.size() && !scratch_target; ++k)
-	{
-		const Move& move = stack_constants_[k];
-		emit2(Op::Mov, TypeKind::Void, Operand::make_reg(kEmitScratch), move.src);
-		emit2(Op::Store, move.type, move.dst, Operand::make_reg(kEmitScratch));
-	}
+	finish_call_arguments(scratch_target);
 	if (cell == kNoId && !variadic && emit_fixed_memcpy(inst, callee, *sig, layout))
 		return;
 	// The course runtime's builtin memcpy is the string copy itself
@@ -1090,6 +1121,115 @@ void FunctionSelector::emit_call(uint32_t id)
 // ---------------------------------------------------------------------------
 // Returns and variadic state
 
+// How four-byte stores last wrote the first two eightbytes of the slot
+// `object` before `reader` in its block: bit k where two of them wrote
+// eightbyte k after anything else that may write it, bit 2 + k where the
+// upper one stored the integer zero. A read of each four bytes forwards
+// from its store; one read of the eight waits for both stores to retire.
+uint32_t FunctionSelector::halved_eightbytes(Value object, const Instruction& reader) const
+{
+	if (level_ < 1 || object.kind != ValueKind::Slot)
+		return 0;
+	const lowir::FunctionBody& body = *body_;
+	// Per four bytes: 1 where a four-byte store wrote them last, 2 one of zero.
+	uint8_t quarter[4] = { 0, 0, 0, 0 };
+	for (lowir::InstId i = body.blocks[blocks_[block_].id].first; i != kNoId && &body.instructions[i] != &reader;
+		i = body.instructions[i].next)
+	{
+		const Instruction& inst = body.instructions[i];
+		if (marks_[i] & IM_DEAD)
+			continue;
+		const bool quiet = inst.op == Opcode::Const || inst.op == Opcode::Copy || inst.op == Opcode::Phi ||
+			inst.op == Opcode::Addr || inst.op == Opcode::Load || inst.op == Opcode::Index ||
+			inst.op == Opcode::Unary || inst.op == Opcode::Binary || inst.op == Opcode::Compare ||
+			inst.op == Opcode::Select || inst.op == Opcode::Convert || inst.op == Opcode::Vector;
+		if (quiet)
+			continue;
+		uint32_t slot = kNoId;
+		int64_t offset = 0;
+		if (inst.op == Opcode::Store && (inst.flags & lowir::IF_VOLATILE) == 0)
+		{
+			const Value at = resolve(inst.ops[1]);
+			if (at.kind == ValueKind::Slot)
+				slot = at.index;
+			else if (at.kind == ValueKind::Temp && temps_[at.index].addr != kNoId &&
+				addrs_[temps_[at.index].addr].kind == AddrExpr::Frame && addrs_[temps_[at.index].addr].index == kNoId)
+			{
+				slot = addrs_[temps_[at.index].addr].base;
+				offset = addrs_[temps_[at.index].addr].disp;
+			}
+		}
+		// (A store into another slot leaves this one; anything else may write it.)
+		if (slot == kNoId)
+		{
+			quarter[0] = quarter[1] = quarter[2] = quarter[3] = 0;
+			continue;
+		}
+		if (slot != object.index)
+			continue;
+		const int64_t end = offset + value_bytes(inst.type);
+		for (int64_t q = 0; q < 4; ++q)
+			if (offset < 4 * q + 4 && end > 4 * q)
+				quarter[q] = 0;
+		if (end - offset != 4 || offset < 0 || offset >= 16 || offset % 4 != 0)
+			continue;
+		const Value stored = resolve(inst.ops[0]);
+		const bool zero = stored.kind == ValueKind::Integer && literal(stored).low == 0 && literal(stored).high == 0;
+		quarter[offset / 4] = zero ? 2 : 1;
+	}
+	uint32_t halved = 0;
+	for (unsigned k = 0; k < 2; ++k)
+		if (quarter[2 * k] != 0 && quarter[2 * k + 1] != 0)
+			halved |= (1u << k) | (quarter[2 * k + 1] == 2 ? 4u << k : 0);
+	return halved;
+}
+
+// The XMM register that still holds the `bytes` (4 or 8) a floating store
+// of this MIR block wrote at the frame location `home`, or kNoReg: that
+// store is the last write of those bytes, and only plain moves and
+// arithmetic that leave the register follow it.
+Reg FunctionSelector::stored_xmm(const Operand& home, uint32_t bytes) const
+{
+	const unsigned kReach = 48;
+	const auto frame = [](const Operand& op) {
+		return op.kind == OperandKind::Mem && op.reg == kFrame && op.index == kNoReg && op.symbol == kNoId;
+	};
+	if (!frame(home))
+		return kNoReg;
+	const std::vector<Inst>& insts = out_->insts;
+	const size_t first = out_->blocks.back().first;
+	uint32_t written = 0; // XMM registers written after the instruction at hand
+	for (size_t i = insts.size(); i > first && insts.size() - i < kReach; --i)
+	{
+		const Inst& mir = insts[i - 1];
+		if (mir.op == Op::Nop || mir.nops == 0)
+			continue;
+		const bool floating = (mir.type == TypeKind::F32 || mir.type == TypeKind::F64) &&
+			(mir.flags & MF_VOLATILE) == 0 &&
+			(mir.op == Op::FMov || mir.op == Op::FAdd || mir.op == Op::FSub || mir.op == Op::FMul ||
+				mir.op == Op::FDiv);
+		if (!floating && !simple_inst(mir))
+			return kNoReg;
+		const Operand& to = mir.ops[0];
+		if (to.kind == OperandKind::Reg && is_xmm(to.reg))
+			written |= 1u << (to.reg - XMM0);
+		if (to.kind != OperandKind::Mem || mir.op == Op::Cmp || mir.op == Op::Test || mir.op == Op::Bt)
+			continue;
+		// (A write through a pointer may be of the object.)
+		if (!frame(to))
+			return kNoReg;
+		const int32_t width = mir.type == TypeKind::F32 ? 4 : 8;
+		if (to.disp >= home.disp + static_cast<int32_t>(bytes) || home.disp >= to.disp + width)
+			continue;
+		const Operand& value = mir.ops[1];
+		const bool whole = mir.op == Op::FMov && floating && to.disp == home.disp &&
+			static_cast<uint32_t>(width) == bytes && value.kind == OperandKind::Reg && is_xmm(value.reg) &&
+			value.reg < XMM0 + 14 && (written & (1u << (value.reg - XMM0))) == 0;
+		return whole ? value.reg : kNoReg;
+	}
+	return kNoReg;
+}
+
 void FunctionSelector::emit_return(const Instruction& inst)
 {
 	const Type type = inst.type;
@@ -1167,11 +1307,63 @@ void FunctionSelector::emit_return(const Instruction& inst)
 		if (type.is_object() && layout.result == ArgClass::Mixed)
 		{
 			// A host object's classified eightbytes into rax/rdx, xmm0/xmm1.
+			const uint32_t halved = src.kind == OperandKind::Mem ? halved_eightbytes(v, inst) : 0;
+			// The registers that still hold what the floating stores of
+			// this block wrote of each vector eightbyte (its two halves, or
+			// all of it): read before any part is written. A part an
+			// earlier part's register feeds is read from the home.
+			Reg held[2][2] = { { kNoReg, kNoReg }, { kNoReg, kNoReg } };
+			for (uint32_t k = 0; k < layout.result_parts && k < 2 && level_ >= 1 && src.kind == OperandKind::Mem; ++k)
+			{
+				const ArgPart& part = layout.result_part[k];
+				const Operand from = src.displaced(static_cast<int32_t>(part.offset));
+				const uint32_t state = part.offset % 8 == 0 && part.size == 8 ? (halved >> (part.offset / 8)) & 5 : 0;
+				if (!is_xmm(part.reg) || (state & 4) != 0 || part.size > 8)
+					continue;
+				held[k][0] = stored_xmm(from, state != 0 || part.size <= 4 ? 4 : 8);
+				held[k][1] = state != 0 ? stored_xmm(from.displaced(4), 4) : held[k][0];
+				for (uint32_t before = 0; before < k; ++before)
+					if (held[k][0] == layout.result_part[before].reg || held[k][1] == layout.result_part[before].reg)
+						held[k][0] = kNoReg;
+				if (held[k][0] == kNoReg || held[k][1] == kNoReg)
+					held[k][0] = held[k][1] = kNoReg;
+			}
 			for (uint32_t k = 0; k < layout.result_parts; ++k)
 			{
 				const ArgPart& part = layout.result_part[k];
 				const Operand to = Operand::make_reg(part.reg);
-				if (src.kind == OperandKind::Imm)
+				const Operand from = src.kind == OperandKind::Mem ? src.displaced(static_cast<int32_t>(part.offset))
+																  : src;
+				const bool halves = part.offset % 8 == 0 && part.size == 8 && ((halved >> (part.offset / 8)) & 1) != 0;
+				const bool upper_zero = halves && ((halved >> (part.offset / 8)) & 4) != 0;
+				// An eightbyte two four-byte stores wrote last is read as
+				// they wrote it: its low four bytes alone above a stored
+				// zero, or both, joined in the register.
+				if (upper_zero)
+					emit2(is_xmm(part.reg) ? Op::FMov : Op::Load, is_xmm(part.reg) ? TypeKind::F32 : TypeKind::U32, to,
+						from);
+				else if (k < 2 && held[k][0] != kNoReg)
+				{
+					Reg upper = held[k][1];
+					if (halves && upper == part.reg && held[k][0] != part.reg)
+					{
+						emit2(Op::FMov, TypeKind::F32, Operand::make_reg(XMM15), Operand::make_reg(upper));
+						upper = XMM15;
+					}
+					if (held[k][0] != part.reg)
+						emit2(Op::FMov, halves ? TypeKind::F32 : part_type(part), to, Operand::make_reg(held[k][0]));
+					if (halves)
+						emit3(Op::Vector, TypeKind::V128, to, to, Operand::make_reg(upper)).sub = static_cast<uint8_t>(
+							lowir::VectorOp::Unpcklps);
+				}
+				else if (halves && is_xmm(part.reg))
+				{
+					emit2(Op::FMov, TypeKind::F32, to, from);
+					emit2(Op::FMov, TypeKind::F32, Operand::make_reg(XMM15), from.displaced(4));
+					emit3(Op::Vector, TypeKind::V128, to, to, Operand::make_reg(XMM15)).sub = static_cast<uint8_t>(
+						lowir::VectorOp::Unpcklps);
+				}
+				else if (src.kind == OperandKind::Imm)
 				{
 					lowir::Literal literal = lowir::Literal();
 					literal.low = static_cast<uint64_t>(part.offset == 0 ? src.imm : src.imm_high);

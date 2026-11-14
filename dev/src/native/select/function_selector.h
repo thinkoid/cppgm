@@ -283,7 +283,10 @@ public:
 	void stage_call_arguments(const lowir::Instruction& inst, const lowir::Signature* sig,
 		const lowir::Parameter* params, const CallLayout& layout, uint32_t& arg_mask,
 		std::vector<std::pair<Reg, uint32_t>>& late, uint32_t& late_mask, uint32_t& narrow_mask);
+	void finish_call_arguments(bool scratch_target);
 	void emit_call(uint32_t inst_id);
+	uint32_t halved_eightbytes(lowir::Value object, const lowir::Instruction& reader) const;
+	Reg stored_xmm(const Operand& home, uint32_t bytes) const;
 	void emit_return(const lowir::Instruction& inst);
 	void emit_va_start(const lowir::Instruction& inst);
 	void emit_va_arg_object(const lowir::Instruction& inst, uint8_t classes, const Operand& list);

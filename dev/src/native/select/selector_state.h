@@ -75,6 +75,8 @@ struct SelectorState
 	std::vector<uint32_t> pm_reg_readers_;
 	std::vector<uint32_t> pm_written_;
 	std::vector<Move> stack_constants_; // constant stack arguments of a call
+	// A call's vector registers whose upper four bytes join after its moves: (register, their home).
+	std::vector<std::pair<Reg, Operand>> joined_halves_;
 	std::vector<lowir::Type> arg_types_;
 	std::vector<uint8_t> arg_classes_; // host: their lowir::ObjectClassBits
 

@@ -693,9 +693,12 @@ void HomeForwarding::transfer(uint32_t b, int32_t* holds, bool rewrite)
 	std::vector<Inst>& insts = f_.insts;
 	const Block& block = f_.blocks[b];
 	const uint32_t end = block.first + block.count;
+	// (A register that holds the low bytes of a home keeps them through a
+	// write of the home's other bytes.)
 	auto forget_home = [&](int32_t lo, int32_t hi) {
 		for (Reg r = 0; r < 16; ++r)
-			if (holds[r] != kHoldsNothing && held_home(holds[r]) < hi && lo < held_home(holds[r]) + 8)
+			if (holds[r] != kHoldsNothing && held_home(holds[r]) < hi &&
+				lo < held_home(holds[r]) + static_cast<int32_t>(held_bytes(holds[r])))
 				holds[r] = kHoldsNothing;
 	};
 	auto drop_caller_saved = [&]() {
