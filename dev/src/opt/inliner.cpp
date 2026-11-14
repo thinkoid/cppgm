@@ -145,6 +145,11 @@ const uint32_t kEhRegionCost = 6;
 // A read-modify-write atomic's size in non_growing: the locked instruction
 // and the moves around it.
 const uint32_t kAtomicCost = 4;
+// A read-modify-write atomic.
+bool atomic_step(Opcode op)
+{
+	return op == Opcode::AtomicAddFetch || op == Opcode::AtomicExchange || op == Opcode::AtomicCompareExchange;
+}
 // The high half of the product of two extended words (the selector's
 // find_high_products): a move and one multiply.
 const uint32_t kHighProductCost = 2;
@@ -670,9 +675,7 @@ Shape shape_of(
 				if (cost == UINT32_MAX)
 				{
 					++shape.unpriced;
-					shape.atomics += !wasm &&
-						(inst.op == Opcode::AtomicAddFetch || inst.op == Opcode::AtomicExchange ||
-							inst.op == Opcode::AtomicCompareExchange);
+					shape.atomics += !wasm && atomic_step(inst.op);
 				}
 				else
 					shape.cost += cost;
@@ -1184,13 +1187,16 @@ bool partial_cut(const Program& program, const FunctionBody& kb, PartialCut& out
 	build_cfg(program, kb, cfg);
 	const uint32_t n = cfg.block_count;
 	std::vector<uint8_t> side(n, 0), calls(n, 0), fast(n, 0);
+	// (A native read-modify-write atomic is slow code as a call is: a count's
+	// step behind a test of its owner stays out of the copy.)
+	const bool steps = !target_model::is_wasm(program.target);
 	for (BlockId b : kb.layout)
 	{
 		bool returns = false;
 		for (InstId i = kb.blocks[b].first; i != kNoId; i = kb.instructions[i].next)
 		{
 			const Instruction& inst = kb.instructions[i];
-			calls[b] = calls[b] || inst.op == Opcode::Call;
+			calls[b] = calls[b] || inst.op == Opcode::Call || (steps && atomic_step(inst.op));
 			returns = returns || inst.op == Opcode::Return;
 			if (!is_pure(inst) && !is_terminator(inst.op) &&
 				!(inst.op == Opcode::Load && (inst.flags & IF_VOLATILE) == 0))
