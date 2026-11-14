@@ -625,6 +625,7 @@ void finish_function(Program& program, SymbolId symbol, OptimizerStats& stats, c
 	context.nounwind = &nounwind;
 	context.unwritten = &unwritten;
 	context.bit_tables = options.level >= 3 ? &bit_tables : nullptr;
+	context.float_selects = options.level >= 3;
 	enable_verify(context, options);
 	// What a call's newly proved memory footprint no longer hides, and the
 	// loads of globals the late static initialization gave data (and the

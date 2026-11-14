@@ -131,6 +131,9 @@ struct FunctionContext
 	// that magnitude below zero is false now, which the driver has
 	// simplify_values fold (scalar_fold.h, magnitude_below_zero).
 	bool magnitude_formed = false;
+	// O3's final pass: form_selects may choose between floating values in a
+	// loop.
+	bool float_selects = false;
 	// Scratch shared by passes (sized on demand).
 	std::vector<uint32_t> passed; // restore_definition_order's per-instruction stamps
 	uint32_t passed_stamp = 0;

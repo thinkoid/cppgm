@@ -1,0 +1,117 @@
+#include <stdio.h>
+
+struct Engine { unsigned i; double x[607]; };
+
+// t >= 1 ? t - 1 : t over two ranges: the second reads behind its writes.
+__attribute__((noinline)) void fill(Engine& e)
+{
+	for (unsigned j = 0; j < 273; ++j)
+	{
+		double t = e.x[j] + e.x[j + (607 - 273)];
+		if (t >= 1.0)
+			t -= 1.0;
+		e.x[j] = t;
+	}
+	for (unsigned j = 273; j < 607; ++j)
+	{
+		double t = e.x[j] + e.x[j - 273];
+		if (t >= 1.0)
+			t -= 1.0;
+		e.x[j] = t;
+	}
+	e.i = 0;
+}
+
+// Four float lanes; a NaN limit keeps the product.
+__attribute__((noinline)) void reduce(float* v, const float* lim, int n)
+{
+	for (int i = 0; i < n; ++i)
+	{
+		float t = v[i] * 1.5f;
+		if (t > lim[i])
+			t = t - lim[i];
+		v[i] = t;
+	}
+}
+
+// The chosen value is carried to the next pass: the choice stays scalar.
+__attribute__((noinline)) double carried(const double* v, int n, double lim)
+{
+	double s = 0;
+	for (int i = 0; i < n; ++i)
+	{
+		double t = s + v[i];
+		if (t >= lim)
+			t -= lim;
+		s = t;
+	}
+	return s;
+}
+
+// A negative zero and a NaN are chosen with their bits.
+__attribute__((noinline)) void choose_bits(double* out, const double* a, const double* b, const double* x, int n)
+{
+	for (int i = 0; i < n; ++i)
+	{
+		double t = a[i];
+		if (x[i] < 0.5)
+			t = b[i] * 1.0;
+		out[i] = t;
+	}
+}
+
+static unsigned long long hash(unsigned long long h, const void* p, unsigned long n)
+{
+	const unsigned char* c = (const unsigned char*)p;
+	for (unsigned long i = 0; i < n; ++i)
+		h = (h ^ c[i]) * 1099511628211ULL;
+	return h;
+}
+
+int main()
+{
+	static Engine e;
+	unsigned long long seed = 12345;
+	for (int k = 0; k < 607; ++k)
+	{
+		seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
+		e.x[k] = (double)(seed >> 11) / 9007199254740992.0;
+	}
+	e.x[5] = __builtin_nan("");
+	for (int r = 0; r < 50; ++r)
+		fill(e);
+	unsigned long long h = hash(1469598103934665603ULL, e.x, sizeof e.x);
+
+	static float v[37], lim[37];
+	for (int k = 0; k < 37; ++k)
+	{
+		v[k] = (float)k * 0.37f;
+		lim[k] = (float)(k % 5) + 1.0f;
+	}
+	lim[7] = __builtin_nanf("");
+	for (int r = 0; r < 7; ++r)
+		reduce(v, lim, 37);
+	h = hash(h, v, sizeof v);
+
+	static double w[101];
+	for (int k = 0; k < 101; ++k)
+		w[k] = (double)((k * 37) % 19) * 0.125;
+	const double s = carried(w, 101, 1.75);
+	h = hash(h, &s, sizeof s);
+
+	static double a[9], b[9], x[9], out[9];
+	for (int k = 0; k < 9; ++k)
+	{
+		a[k] = k % 2 ? -0.0 : (double)k;
+		b[k] = k % 3 ? __builtin_nan("") : -0.0;
+		x[k] = k % 4 ? 0.25 : (k == 4 ? __builtin_nan("") : 0.75);
+	}
+	choose_bits(out, a, b, x, 9);
+	// (Any NaN is one pattern here: a product's NaN sign is the processor's.)
+	for (int k = 0; k < 9; ++k)
+		if (out[k] != out[k])
+			out[k] = __builtin_nan("");
+	h = hash(h, out, sizeof out);
+	printf("%016llx\n", h);
+	return 0;
+}

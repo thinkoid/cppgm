@@ -30,11 +30,17 @@ bool selectable(Type type)
 }
 
 // Integer computation that cannot trap, safe where its block's branch did
-// not lead (its result unused there).
-bool speculatable(const FunctionBody& body, const Instruction& inst)
+// not lead (its result unused there). `floats`: also a floating sum,
+// difference or product, the arm of a floating choice.
+bool speculatable(const FunctionBody& body, const Instruction& inst, bool floats = false)
 {
 	if (inst.result == kNoId)
 		return false;
+	if (floats && inst.op == Opcode::Binary && (inst.type.kind() == TypeKind::F32 || inst.type.kind() == TypeKind::F64))
+	{
+		const BinaryOp op = static_cast<BinaryOp>(inst.sub);
+		return op == BinaryOp::Add || op == BinaryOp::Sub || op == BinaryOp::Mul;
+	}
 	// A floating negation flips a sign bit and raises nothing: the arm of a
 	// conditional magnitude (min_or_max).
 	if (inst.op == Opcode::Unary && static_cast<UnaryOp>(inst.sub) == UnaryOp::Neg &&
@@ -129,6 +135,7 @@ private:
 	InstId hoist(BlockId a, BlockId e, InstId after);
 	bool nonzero_literal(Value v) const;
 	bool min_or_max(Value cond, Value a, Value b, MinMax& out) const;
+	bool float_test(BlockId e, Value cond);
 	Value emit_min_max(BlockId e, InstId& at, const MinMax& m, Type type, uint32_t location);
 
 	FunctionContext& c_;
@@ -137,6 +144,7 @@ private:
 	const std::vector<uint32_t>* uses_ = nullptr;
 	LoopForest loops_;
 	bool loops_ready_ = false;
+	bool float_arms_ = false; // the branch form() reads tests floating values in a loop
 };
 
 const Instruction* SelectFormation::producer(Value v) const
@@ -341,7 +349,7 @@ bool SelectFormation::arm(BlockId a, BlockId from, BlockId& to) const
 	unsigned count = 0, copies = 0;
 	for (InstId i = body_.blocks[a].first; i != last; i = body_.instructions[i].next)
 		if ((body_.instructions[i].op == Opcode::Copy ? ++copies > kArmCopies : ++count > kArmCap) ||
-			!speculatable(body_, body_.instructions[i]))
+			!speculatable(body_, body_.instructions[i], float_arms_))
 			return false;
 	to = body_.instructions[last].ops[0].index;
 	return true;
@@ -478,6 +486,32 @@ bool SelectFormation::min_or_max(Value cond, Value a, Value b, MinMax& out) cons
 	return true;
 }
 
+// Whether the branch of `e` on `cond` tests floating values in a loop, in
+// O3's final pass: its merge may then choose between floating values of the
+// test's type (a `select`), and an arm may compute one.
+bool SelectFormation::float_test(BlockId e, Value cond)
+{
+	if (!c_.float_selects || !cond.is(ValueKind::Temp) || cond.index < body_.parameter_count)
+		return false;
+	const InstId def = body_.temps[cond.index].def;
+	if (def == kNoId)
+		return false;
+	const Instruction& test = body_.instructions[def];
+	if (test.op != Opcode::Compare || (test.type.kind() != TypeKind::F32 && test.type.kind() != TypeKind::F64))
+		return false;
+	const ComparePredicate p = static_cast<ComparePredicate>(test.sub);
+	if (p != ComparePredicate::Eq && p != ComparePredicate::Ne && p != ComparePredicate::Lt &&
+		p != ComparePredicate::Le && p != ComparePredicate::Gt && p != ComparePredicate::Ge)
+		return false;
+	if (!loops_ready_)
+	{
+		find_loops(body_, c_.cfg, loops_);
+		c_.entry_block_of(form_selects);
+		loops_ready_ = true;
+	}
+	return !loops_.partial && !loops_.dropped[e] && loops_.innermost[e] != kNoId;
+}
+
 Value SelectFormation::emit_min_max(BlockId e, InstId& at, const MinMax& m, Type type, uint32_t location)
 {
 	const bool wide = type.kind() == TypeKind::F64;
@@ -526,7 +560,12 @@ bool SelectFormation::form(BlockId e)
 	if (!cond.is(ValueKind::Temp) || !selectable(body_.temps[cond.index].type) || t == f)
 		return false;
 	BlockId jt = kNoId, jf = kNoId, join = kNoId;
+	float_arms_ = float_test(e, cond);
 	const bool t_arm = arm(t, e, jt), f_arm = arm(f, e, jf);
+	const bool floats = float_arms_;
+	float_arms_ = false;
+	// The type a floating choice takes: the test's.
+	const Type tested = floats ? body_.instructions[body_.temps[cond.index].def].type : Type::scalar(TypeKind::Void);
 	// The blocks the two paths reach the merge from.
 	BlockId from_t = kNoId, from_f = kNoId;
 	if (t_arm && f_arm && jt == jf)
@@ -558,7 +597,8 @@ bool SelectFormation::form(BlockId e)
 		if (a == b)
 			continue;
 		MinMax unused;
-		if (++selects > kSelectCap || (!selectable(phi.type) && !min_or_max(cond, a, b, unused)) ||
+		if (++selects > kSelectCap ||
+			(!selectable(phi.type) && !min_or_max(cond, a, b, unused) && !(floats && phi.type == tested)) ||
 			a.is(ValueKind::Slot) || b.is(ValueKind::Slot) || a.is(ValueKind::None) || b.is(ValueKind::None))
 			return false;
 	}
