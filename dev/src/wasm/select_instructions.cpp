@@ -162,6 +162,11 @@ bool Selector::global_element(Value address, uint32_t& symbol, Value& index, uin
 			if (def.ops[1].is(ValueKind::Integer))
 			{
 				const auto& literal = body_.literals[def.ops[1].index];
+				// A dynamic step from an interior base can be negative while
+				// both pointers remain in bounds. Its zero-extended index
+				// cannot be added to a positive Wasm memory immediate.
+				if (index.is(ValueKind::Temp) && (literal.low != 0 || literal.high != 0))
+					return false;
 				if (literal.high != 0 || literal.low > (uint64_t(1) << 30) / bytes ||
 					literal.low * bytes > (uint64_t(1) << 30) - offset)
 					return false;

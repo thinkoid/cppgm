@@ -416,12 +416,21 @@ void CounterWidening::rewrite(const Loop& l, uint32_t loop, Read& read)
 		read.sum.stepped = false;
 	}
 	Value offset = read.sum.stepped ? counter.wide_next : counter.wide;
+	const bool rising = counter.by.is(ValueKind::Integer) &&
+		(counter.down ? -literal_of(counter.by, counter.is_signed) : literal_of(counter.by, counter.is_signed)) >= 0;
+	const bool nonnegative = !counter.is_signed ||
+		(counter.start.is(ValueKind::Integer) && literal_of(counter.start, true) >= 0 && rising);
+	// Nonnegative partial sums lie between the original base and final
+	// inbounds result. Otherwise a split can leave the allocation first.
+	const bool ordered_steps = nonnegative && (!counter.is_signed || read.sum.count == 0) && read.sum.offset >= 0;
+	bool changed_base = false;
 	if (outside(loop, base) && read.sum.count != 0)
 	{
 		// (A literal stays at the access: its displacement costs nothing.)
 		for (unsigned k = 0; k < read.sum.count; ++k)
 			base = rebased(l, base, type, read.sum.terms[k]);
 		read.sum.count = 0;
+		changed_base = true;
 	}
 	else if (read.sum.count != 0)
 	{
@@ -431,6 +440,8 @@ void CounterWidening::rewrite(const Loop& l, uint32_t loop, Read& read)
 		read.sum.offset = literal;
 	}
 	Instruction& inst = body_.instructions[read.id];
+	if (changed_base && !ordered_steps)
+		inst.set_index_bounds(IndexBounds::None);
 	if (read.sum.offset == 0)
 	{
 		inst.ops[0] = base;
@@ -438,10 +449,18 @@ void CounterWidening::rewrite(const Loop& l, uint32_t loop, Read& read)
 		return;
 	}
 	Instruction scaled = inst;
+	// Only the original whole sum is known to stay in its allocation. A
+	// split can first step one byte before it (a counter starting at -1),
+	// then return inside it. Without the proof above, neither step has
+	// that allocation promise.
+	if (!ordered_steps)
+		scaled.set_index_bounds(IndexBounds::None);
 	scaled.ops[0] = base;
 	scaled.ops[1] = offset;
 	const Value advanced = emit_after(block, at, scaled, body_.pointer_type());
 	Instruction& index = body_.instructions[read.id];
+	if (!ordered_steps)
+		index.set_index_bounds(IndexBounds::None);
 	index.ops[0] = advanced;
 	index.ops[1] = integer_value(body_, integer_literal(read.sum.offset));
 }

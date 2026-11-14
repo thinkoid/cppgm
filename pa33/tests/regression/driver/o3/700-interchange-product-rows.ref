@@ -26,13 +26,13 @@ function @f() -> void [binding=strong, object=_Z1fv] {
 
   block ^unrolled_2:
     %t9 = phi i64 [^unrolled_2: %t14, ^loop_preheader_1: 0]
-    %t10 = index inbounds f64 [projection=array_element] %t8, %t9
+    %t10 = index f64 [projection=array_element] %t8, %t9
     store v128 %t5, %t10
-    %t11 = index inbounds f64 [projection=array_element] %t10, 2
+    %t11 = index f64 [projection=array_element] %t10, 2
     store v128 %t5, %t11
-    %t12 = index inbounds f64 [projection=array_element] %t10, 4
+    %t12 = index f64 [projection=array_element] %t10, 4
     store v128 %t5, %t12
-    %t13 = index inbounds f64 [projection=array_element] %t10, 6
+    %t13 = index f64 [projection=array_element] %t10, 6
     store v128 %t5, %t13
     %t14 = binary add nowrap i64 %t9, 8
     %t15 = convert trunc exact i32 i64 %t14
@@ -44,7 +44,7 @@ function @f() -> void [binding=strong, object=_Z1fv] {
 
   block ^wide_loop_4:
     %t17 = phi i64 [^wide_loop_4: %t19, ^loop_preheader_3: 48]
-    %t18 = index inbounds f64 [projection=array_element] %t8, %t17
+    %t18 = index f64 [projection=array_element] %t8, %t17
     store v128 %t5, %t18
     %t19 = binary add nowrap i64 %t17, 2
     %t20 = convert trunc exact i32 i64 %t19
@@ -58,7 +58,7 @@ function @f() -> void [binding=strong, object=_Z1fv] {
   block ^for_body_6:
     %t23 = phi i64 [^for_end_10: %t58, ^loop_preheader_5: 0]
     %t24 = phi i64 [^for_end_10: %t56, ^loop_preheader_5: 0]
-    %t25 = index inbounds f64 [projection=array_element] %t22, %t24
+    %t25 = index f64 [projection=array_element] %t22, %t24
     %t26 = load typed f64 %t25
     %t27 = vector fromf64 %t26
     %t28 = vector pshufd %t27, 68
@@ -67,16 +67,16 @@ function @f() -> void [binding=strong, object=_Z1fv] {
 
   block ^unrolled_7:
     %t30 = phi i64 [^for_body_6: 0, ^unrolled_7: %t43]
-    %t31 = index inbounds f64 [projection=array_element] %t8, %t30
+    %t31 = index f64 [projection=array_element] %t8, %t30
     %t32 = load v128 %t31
-    %t33 = index inbounds f64 [projection=array_element] %t29, %t30
+    %t33 = index f64 [projection=array_element] %t29, %t30
     %t34 = load v128 %t33
     %t35 = vector mulpd %t28, %t34
     %t36 = vector addpd %t35, %t32
     store v128 %t36, %t31
-    %t37 = index inbounds f64 [projection=array_element] %t31, 2
+    %t37 = index f64 [projection=array_element] %t31, 2
     %t38 = load v128 %t37
-    %t39 = index inbounds f64 [projection=array_element] %t33, 2
+    %t39 = index f64 [projection=array_element] %t33, 2
     %t40 = load v128 %t39
     %t41 = vector mulpd %t28, %t40
     %t42 = vector addpd %t41, %t38
@@ -91,9 +91,9 @@ function @f() -> void [binding=strong, object=_Z1fv] {
 
   block ^wide_loop_9:
     %t46 = phi i64 [^wide_tail_8: 48, ^wide_loop_9: %t53]
-    %t47 = index inbounds f64 [projection=array_element] %t8, %t46
+    %t47 = index f64 [projection=array_element] %t8, %t46
     %t48 = load v128 %t47
-    %t49 = index inbounds f64 [projection=array_element] %t29, %t46
+    %t49 = index f64 [projection=array_element] %t29, %t46
     %t50 = load v128 %t49
     %t51 = vector mulpd %t28, %t50
     %t52 = vector addpd %t51, %t48
