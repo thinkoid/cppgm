@@ -779,10 +779,12 @@ public:
 	// The module's DSO handle (`__dso_handle`, the C runtime's), which
 	// __cxa_thread_atexit's third argument names.
 	lowir::SymbolId dso_handle();
-	lowir::SymbolId local_static_destructor(lowir::SymbolId global, const sema::Type* type, uint32_t location);
+	lowir::SymbolId local_static_destructor(
+		lowir::SymbolId global, const sema::Type* type, uint32_t location, bool thread = false);
 	// One destroying a local static's temporaries (each a finalizer, the
 	// last first), named after the static.
-	lowir::SymbolId local_static_destructor(lowir::SymbolId global, const std::vector<Finalizer>& temporaries);
+	lowir::SymbolId local_static_destructor(
+		lowir::SymbolId global, const std::vector<Finalizer>& temporaries, bool thread = false);
 	// A finalizer for a static object or temporary of `type` (not queued).
 	Finalizer finalizer_for(lowir::SymbolId symbol, const sema::Type* type, uint32_t location);
 	// A static reference's temporary's i8 flag, set once it is constructed.

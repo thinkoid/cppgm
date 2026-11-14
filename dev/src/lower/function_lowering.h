@@ -2121,6 +2121,7 @@ private:
 	bool static_temporary(lowir::SymbolId storage, const sema::Type* type, uint32_t location);
 	const syntax::BracedInitList* list_variable(const sema::VariableEntity* variable, const syntax::Initializer* init);
 	void register_static_temporaries(lowir::SymbolId global, const StaticTemporaries& temporaries);
+	void register_exit_callback(lowir::SymbolId callback, bool thread);
 	// A static reference's binding: the class prvalues whose temporaries
 	// it extends (12.2p5: the bound object or the complete object of the
 	// bound subobject), which persist in globals.

@@ -399,10 +399,10 @@ ProgramLowering::StaticOutcome ProgramLowering::static_global(lowir::SymbolId sy
 	// and in a host object at least 16 for an array of 16 bytes or more (the
 	// psABI's 3.1.2 rule, which host compilers' code assumes of another
 	// unit's arrays).
-	uint64_t alignment = type->is_reference() ? 8 : alignment_of(type, location);
+	uint64_t alignment = type->is_reference() ? program_.pointer_type().pointer_bytes() : alignment_of(type, location);
 	if (variable->alignment_request > alignment)
 		alignment = variable->alignment_request;
-	const uint64_t size = type->is_reference() ? 8 : size_of(type, location);
+	const uint64_t size = type->is_reference() ? program_.pointer_type().pointer_bytes() : size_of(type, location);
 	if (object_mode_ && type->kind == sema::TypeKind::Array && alignment < 16 && size >= 16)
 		alignment = 16;
 	state_storage_type(global, size, alignment);

@@ -250,20 +250,31 @@ lowir::SymbolId ProgramLowering::dso_handle()
 }
 
 lowir::SymbolId ProgramLowering::local_static_destructor(
-	lowir::SymbolId global, const sema::Type* type, uint32_t location)
+	lowir::SymbolId global, const sema::Type* type, uint32_t location, bool thread)
 {
 	// An internal function destroying the object (an array's elements last
 	// to first), which atexit calls at program end.
-	return local_static_destructor(global, std::vector<Finalizer>(1, finalizer_for(global, type, location)));
+	return local_static_destructor(global, std::vector<Finalizer>(1, finalizer_for(global, type, location)), thread);
 }
 
 lowir::SymbolId ProgramLowering::local_static_destructor(
-	lowir::SymbolId global, const std::vector<Finalizer>& temporaries)
+	lowir::SymbolId global, const std::vector<Finalizer>& temporaries, bool thread)
 {
+	thread = thread || program_.symbols[global].metadata.storage == ir_model::GSM_THREAD_LOCAL;
 	const lowir::SymbolId symbol = new_symbol(
 		"__cppgm_local_static_destructor__" + std::string(program_.spelling(program_.symbols[global].name)));
 	lowir::Signature signature = lowir::Signature();
 	signature.first_parameter = static_cast<uint32_t>(program_.parameters.size());
+	if (thread)
+	{
+		// The thread-exit ABI calls void(void*), even when this wrapper
+		// finds its object directly and does not read that argument.
+		lowir::Parameter parameter = lowir::Parameter();
+		parameter.name = argument_name(0);
+		parameter.type = program_.pointer_type();
+		program_.parameters.push_back(parameter);
+		signature.parameter_count = 1;
+	}
 	signature.result = lowir::Type::scalar(lowir::TypeKind::Void);
 	signature.boundary.unwind = ir_model::CUM_NO;
 	program_.declare_function(symbol, lowir::SymbolKind::FunctionDefinition, program_.add_signature(signature));
@@ -333,7 +344,7 @@ void FunctionLowering::local_static_variable(const sema::VariableEntity* variabl
 	locals_.push_back(local);
 	if (guard == lowir::kNoId || unreachable_storage_)
 		return;
-	const lowir::Type i64 = lowir::Type::scalar(lowir::TypeKind::I64);
+	const lowir::Type guard_type = program_.globals[program_.symbols[guard].detail].type;
 	Place flag = Place();
 	flag.storage = lowir::Value::symbol(guard);
 	const lowir::BlockId ready = new_block(lowir::BlockKind::LocalStaticReady);
@@ -366,7 +377,8 @@ void FunctionLowering::local_static_variable(const sema::VariableEntity* variabl
 	}
 	else
 	{
-		branch(compare(lowir::ComparePredicate::Ne, i64, load(i64, flag), integer(i64, 0)), ready, initialize);
+		branch(compare(lowir::ComparePredicate::Ne, guard_type, load(guard_type, flag), integer(guard_type, 0)), ready,
+			initialize);
 		place(initialize);
 	}
 	const sema::Type* type = variable->type;
@@ -466,10 +478,10 @@ void FunctionLowering::complete_static_initialization(const StaticInitialization
 		guard_call(ProgramLowering::GuardCall::Release, initialization.guard);
 	else
 	{
-		const lowir::Type i64 = lowir::Type::scalar(lowir::TypeKind::I64);
+		const lowir::Type guard_type = program_.globals[program_.symbols[initialization.guard].detail].type;
 		Place flag = Place();
 		flag.storage = lowir::Value::symbol(initialization.guard);
-		store(i64, integer(i64, 1), flag);
+		store(guard_type, integer(guard_type, 1), flag);
 	}
 }
 
@@ -521,28 +533,27 @@ void FunctionLowering::register_static_temporaries(lowir::SymbolId global, const
 {
 	if (temporaries.made.empty())
 		return;
-	const size_t base = arguments_.size();
-	arguments_.push_back(lowir::Value::symbol(lowering_.local_static_destructor(global, temporaries.made)));
-	emit_call(lowir::Type::scalar(lowir::TypeKind::I32), lowir::Value::symbol(lowering_.atexit_function()), base,
-		lowir::kNoId, false);
+	const bool thread = program_.symbols[global].metadata.storage == ir_model::GSM_THREAD_LOCAL;
+	register_exit_callback(lowering_.local_static_destructor(global, temporaries.made, thread), thread);
 }
 
 void FunctionLowering::register_destruction(
 	lowir::SymbolId object, const sema::Type* type, uint32_t location, bool thread)
 {
 	thread = thread || program_.symbols[object].metadata.storage == ir_model::GSM_THREAD_LOCAL;
-	// 3.6.3p1: objects of static storage duration are destroyed in the
-	// reverse order of the completion of their construction, so one
-	// constructed on a first pass has its destructor registered now; so are
-	// a thread's objects, all before any of static storage duration: on the
-	// thread's own list (the destructor finds the thread's object itself).
+	// Registration follows successful construction, so each exit list
+	// destroys its own objects in reverse completion order.
+	register_exit_callback(lowering_.local_static_destructor(object, type, location, thread), thread);
+}
+
+void FunctionLowering::register_exit_callback(lowir::SymbolId callback, bool thread)
+{
 	const size_t base = arguments_.size();
-	arguments_.push_back(lowir::Value::symbol(lowering_.local_static_destructor(object, type, location)));
+	arguments_.push_back(lowir::Value::symbol(callback));
 	if (thread)
 	{
-		// The object (the destructor finds it) and the module's handle:
-		// glibc keeps the module loaded while a thread's destructors are
-		// pending and needs a real one (a null handle crashes it).
+		// The wrapper finds its object itself. glibc still requires a real
+		// DSO handle to keep its module loaded until thread exit.
 		const lowir::Type ptr = program_.pointer_type();
 		arguments_.push_back(integer(ptr, 0).value);
 		if (!lowering_.darwin_host_objects())

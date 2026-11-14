@@ -345,7 +345,8 @@ uint64_t FunctionLowering::member_end_bits(const sema::DataMember* member, uint3
 	const sema::VariableEntity* variable = static_cast<const sema::VariableEntity*>(member->variable);
 	if (member->bit_field)
 		return lowering_.member_bit_offset(variable, location) + member->width;
-	const uint64_t size = variable->type->is_reference() ? 8 : lowering_.size_of(variable->type, location);
+	const uint64_t size = variable->type->is_reference() ? program_.pointer_type().pointer_bytes()
+														 : lowering_.size_of(variable->type, location);
 	return (lowering_.member_offset(variable, location) + size) * 8;
 }
 
