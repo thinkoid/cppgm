@@ -1,5 +1,5 @@
-<svg data-original-label="Wasm simd128 compile vs Clang; AMD EPYC 7763 64-Core Processor; revision b19fe49250af0b6050c1791ff584c423942b8b79" data-original-message="9.89×" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="Wasm simd128 compile vs Clang; AMD EPYC 7763 64-Core Processor; revision b19fe49250af0b6050c1791ff584c423942b8b79; measured b19fe49250af0b6050c1791ff584c423942b8b79; 0 commits behind main: 9.89×">
-  <title>Wasm simd128 compile vs Clang; AMD EPYC 7763 64-Core Processor; revision b19fe49250af0b6050c1791ff584c423942b8b79; measured b19fe49250af0b6050c1791ff584c423942b8b79; 0 commits behind main: 9.89×</title>
+<svg data-original-label="Wasm simd128 compile vs Clang; AMD EPYC 7763 64-Core Processor; revision b19fe49250af0b6050c1791ff584c423942b8b79" data-original-message="9.89×" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="Wasm simd128 compile vs Clang; AMD EPYC 7763 64-Core Processor; revision b19fe49250af0b6050c1791ff584c423942b8b79; measured b19fe49250af0b6050c1791ff584c423942b8b79; 1 commits behind main: 9.89×">
+  <title>Wasm simd128 compile vs Clang; AMD EPYC 7763 64-Core Processor; revision b19fe49250af0b6050c1791ff584c423942b8b79; measured b19fe49250af0b6050c1791ff584c423942b8b79; 1 commits behind main: 9.89×</title>
   <defs><clipPath id="badge"><rect width="120" height="24" rx="4"/></clipPath></defs>
   <g clip-path="url(#badge)">
     <rect width="64" height="24" fill="#555"/>
