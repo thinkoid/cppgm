@@ -16,6 +16,9 @@ using namespace lowir;
 
 namespace {
 
+// A reader count that is no longer kept (a retyped load's): not one, not none.
+const uint32_t kManyReaders = 0xffffffffu;
+
 // An operand of a hashed expression: a temporary, symbol or slot by id, a
 // literal by value.
 struct OperandKey
@@ -204,10 +207,19 @@ private:
 	BlockId current_block_ = kNoId;
 	std::vector<Value> repl_;
 	bool has_replacements_ = false;
-	void replace(TempId temp, Value value)
+	// (The readers of a replaced temporary read its value from here on:
+	// `own` of the value's counted readers were the replaced instruction's.)
+	void replace(TempId temp, Value value, uint32_t own = 0)
 	{
 		repl_[temp] = value;
 		has_replacements_ = true;
+		if (value.is(ValueKind::Temp) && !repl_[value.index].is(ValueKind::None))
+			value = resolve(value);
+		if (!value.is(ValueKind::Temp) || value.index >= uses_.size() || uses_[value.index] == kManyReaders)
+			return;
+		const TempId to = value.index;
+		const uint32_t moved = temp < uses_.size() ? uses_[temp] : 1;
+		uses_[to] = moved == kManyReaders ? kManyReaders : uses_[to] + moved - std::min(own, uses_[to]);
 	}
 	std::vector<uint32_t> uses_;  // per temp at the pass start (a retyped load: none)
 	bool edited_ = false;         // substitute changed an operand (reported or not)
@@ -654,7 +666,7 @@ bool Simplifier::select_phi(BlockId block, InstId prev, InstId id)
 	merged.extra_first = append_operands(body_, pairs.data(), static_cast<uint32_t>(pairs.size()));
 	merged.extra_count = static_cast<uint32_t>(pairs.size());
 	for (uint32_t k = 1; k < pairs.size(); k += 2)
-		if (pairs[k].is(ValueKind::Temp) && uses_[pairs[k].index] != 0xffffffffu)
+		if (pairs[k].is(ValueKind::Temp) && uses_[pairs[k].index] != kManyReaders)
 			++uses_[pairs[k].index];
 	unlink_after(body_, block, prev, id);
 	body_.instructions[id] = merged;
@@ -693,7 +705,7 @@ void Simplifier::select_equal_arm(Instruction& inst)
 				: !constant(value, inst.type, compared) || !same_constant(inst.type, selected, compared)))
 		return;
 	inst.ops[arm] = x;
-	if (uses_[x.index] != 0xffffffffu)
+	if (uses_[x.index] != kManyReaders)
 		++uses_[x.index];
 	changed_ = true;
 }
@@ -759,7 +771,7 @@ bool Simplifier::identity(Instruction& inst, Value& out)
 			return false;
 		load->type = inst.type;
 		body_.temps[loaded].type = inst.type;
-		uses_[loaded] = 0xffffffffu; // its readers are this copy's now
+		uses_[loaded] = kManyReaders; // its readers are this copy's now
 		out = inst.ops[0];
 		return true;
 	}
@@ -2946,7 +2958,7 @@ bool Simplifier::shifted_truth_mask(BlockId block, InstId& prev, InstId id)
 		body_.instructions[id].ops[0] = Value::temp(temp);
 		grow_facts();
 		uses_[temp] = 1;
-		if (direct.ops[0].is(ValueKind::Temp) && uses_[direct.ops[0].index] != 0xffffffffu)
+		if (direct.ops[0].is(ValueKind::Temp) && uses_[direct.ops[0].index] != kManyReaders)
 			++uses_[direct.ops[0].index];
 		return true;
 	}
@@ -3106,12 +3118,16 @@ void Simplifier::process_block(BlockId block)
 		if ((inst.op == Opcode::Binary && reassociate(inst)) || narrow_truncation(inst) || mask_or(inst) ||
 			packed_part(inst) || unsigned_division(inst) || even_product_halved(inst) ||
 			cheaper_float_arithmetic(body_, uses_, inst) || merge_index(inst) || narrow_compare(inst) ||
-			exact_compare(inst) || bulk_call(inst) || readonly_table_address(inst))
+			exact_compare(inst) || bulk_call(inst) || (inst.op == Opcode::Load && readonly_table_address(inst)))
 			changed_ = true;
 		Value value;
 		if (inst.result != kNoId && (fold(inst, value) || identity(inst, value)))
 		{
-			replace(inst.result, value);
+			// (A phi's inputs are not counted: its value keeps them as readers.)
+			const uint32_t own = inst.op == Opcode::Phi ? 0
+														: (inst.ops[0] == value ? 1u : 0u) +
+					(inst.ops[1] == value ? 1u : 0u) + (inst.ops[2] == value ? 1u : 0u);
+			replace(inst.result, value, own);
 			unlink_after(body_, block, prev, id);
 			++c_.stats.folded;
 			changed_ = true;
@@ -3132,7 +3148,7 @@ void Simplifier::process_block(BlockId block)
 			mark_object(accessed_pointer(body_, inst.ops[inst.op == Opcode::Load ? 0 : 1]));
 		// The rewrite appends instructions (`inst` may move): the remainder,
 		// now a subtraction, is taken up again.
-		if (reuse_quotient(block, prev, id))
+		if (inst.op == Opcode::Binary && reuse_quotient(block, prev, id))
 		{
 			changed_ = true;
 			continue;
