@@ -1,7 +1,7 @@
 # Internal assignment tests
 
-11,010 / 11,010 passed.
+11,020 / 11,020 passed.
 
-Compiler: [`f77a0af0a`](https://github.com/vishvananda/cppgm-extended/commit/f77a0af0a4dff64a88aa767427b9fac47da1949e) · [CI report](https://github.com/vishvananda/cppgm-extended/actions/runs/43628287862)
+Compiler: [`b19fe4925`](https://github.com/vishvananda/cppgm-extended/commit/b19fe49250af0b6050c1791ff584c423942b8b79) · [CI report](https://github.com/vishvananda/cppgm-extended/actions/runs/43632677096)
 
 This is the strict `make test-report-nobuild` run with GCC on Ubuntu 26.04. The count covers the required assignment suites on Linux. Optional target features, debug information, macOS and self-host checks have separate CI jobs.
