@@ -1,0 +1,88 @@
+function @ahead(%p : ptr, %n : i64) -> void [no_inline=yes] {
+  block ^entry:
+    jump ^head
+
+  block ^head:
+    %i = phi i64 [^entry: 1, ^split_4: %t10]
+    %more = cmp ult i64 %i, %n
+    branch %more, ^body, ^done
+
+  block ^body:
+    %next = binary add i64 %i, 1
+    %r = index f64 %p, %next
+    %w = load typed f64 %r
+    %q = index f64 %p, %i
+    %v = load typed f64 %q
+    %less = cmp lt f64 %v, %w
+    branch %less, ^split_4, ^fix
+
+  block ^fix:
+    %t9 = index f64 %p, %i
+    store typed f64 %w, %t9
+    jump ^split_4
+
+  block ^split_4:
+    %t10 = binary add i64 %i, 1
+    jump ^head
+
+  block ^done:
+    return void
+}
+function @scaled(%p : ptr, %n : i64) -> void [no_inline=yes] {
+  block ^entry:
+    jump ^head
+
+  block ^head:
+    %i = phi i64 [^entry: 1, ^split_4: %t12]
+    %more = cmp ult i64 %i, %n
+    branch %more, ^body, ^done
+
+  block ^body:
+    %next = binary add i64 %i, 1
+    %ahead = binary mul i64 %next, 8
+    %r = index i8 %p, %ahead
+    %w = load typed f64 %r
+    %at = binary mul i64 %i, 8
+    %q = index i8 %p, %at
+    %v = load typed f64 %q
+    %less = cmp lt f64 %v, %w
+    branch %less, ^split_4, ^fix
+
+  block ^fix:
+    %t11 = index i8 %p, %at
+    store typed f64 %w, %t11
+    jump ^split_4
+
+  block ^split_4:
+    %t12 = binary add i64 %i, 1
+    jump ^head
+
+  block ^done:
+    return void
+}
+function @stored(%p : ptr, %n : i64) -> void [no_inline=yes] {
+  block ^entry:
+    jump ^head
+
+  block ^head:
+    %i = phi i64 [^entry: 1, ^body: %next, ^fix: %next]
+    %more = cmp ult i64 %i, %n
+    branch %more, ^body, ^done
+
+  block ^body:
+    %next = binary add i64 %i, 1
+    %r = index i64 %p, %next
+    %w = load typed i64 %r
+    %q = index i64 %p, %i
+    %v = load typed i64 %q
+    %less = cmp lt i64 %v, %w
+    branch %less, ^head, ^fix
+
+  block ^fix:
+    %t9 = index i64 %p, %i
+    store typed i64 %next, %t9
+    jump ^head
+
+  block ^done:
+    return void
+}

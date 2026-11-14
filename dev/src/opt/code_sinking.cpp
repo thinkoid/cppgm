@@ -1,6 +1,8 @@
+#include "lowir/builder.h"
 #include "opt/integer_patterns.h"
 #include "opt/loops.h"
 #include "opt/passes.h"
+#include "opt/scalar_fold.h"
 
 #include <algorithm>
 #include <vector>
@@ -659,6 +661,237 @@ bool StepPlacement::run()
 	return changed;
 }
 
+// The most instructions of a step's block read for its readers, the most
+// inputs of a merge's phi, and the largest step.
+constexpr unsigned kLatchScan = 256;
+constexpr uint32_t kLatchInputs = 32;
+constexpr int64_t kLatchStep = int64_t(1) << 20;
+
+// O2+, late: a counter that its block's accesses also index one step ahead
+// keeps one register. `x = phi [.., P: y, ..]` with `y = x + literal` in a
+// block that reads x after it, where every other reader of y is an index's
+// offset there: the address reads x and takes the literal in its
+// displacement. The edges that carry y enter one block that steps x again
+// for the phi, so x's register takes that step and no copy carries y into
+// it.
+class LatchSteps
+{
+public:
+	explicit LatchSteps(FunctionContext& context) : c_(context), body_(context.body) {}
+
+	bool run();
+
+private:
+	bool scales(const Instruction& inst, TempId y) const;
+	bool indexed_ahead(TempId x, TempId y, uint32_t carried);
+	bool step_again(BlockId merge, InstId phi_id);
+
+	FunctionContext& c_;
+	FunctionBody& body_;
+	const std::vector<uint32_t>* uses_ = nullptr;
+	const std::vector<BlockId>* block_ = nullptr;
+	std::vector<BlockId> carriers_;
+	std::vector<std::pair<TempId, uint32_t>> scaled_; // byte offsets y * K, with their indexes found
+	std::vector<Value> pairs_;
+	std::vector<std::pair<BlockId, InstId>> phis_;
+};
+
+// Whether `inst` is y * 2, 4 or 8: a byte offset that an address scales.
+bool LatchSteps::scales(const Instruction& inst, TempId y) const
+{
+	if (inst.op != Opcode::Binary || inst.type.kind() != TypeKind::I64 || inst.result == kNoId)
+		return false;
+	const BinaryOp op = static_cast<BinaryOp>(inst.sub);
+	const bool swapped = op == BinaryOp::Mul && inst.ops[0].is(ValueKind::Integer);
+	const Value k = inst.ops[swapped ? 0 : 1];
+	if ((op != BinaryOp::Mul && op != BinaryOp::Shl) || !(inst.ops[swapped ? 1 : 0] == Value::temp(y)) ||
+		!k.is(ValueKind::Integer) || body_.literals[k.index].high != 0)
+		return false;
+	const uint64_t low = body_.literals[k.index].low;
+	return op == BinaryOp::Mul ? low == 2 || low == 4 || low == 8 : low >= 1 && low <= 3;
+}
+
+// Whether the readers of step y other than `carried` phi inputs are offsets
+// of indexes of 1, 2, 4 or 8 byte elements in y's block, or such byte
+// offsets y * 2, 4 or 8 that only indexes of bytes there read, and x is
+// read there after y.
+bool LatchSteps::indexed_ahead(TempId x, TempId y, uint32_t carried)
+{
+	uint32_t readers = 0, scanned = 0;
+	bool later = false;
+	scaled_.clear();
+	for (InstId i = body_.instructions[body_.temps[y].def].next; i != kNoId; i = body_.instructions[i].next)
+	{
+		const Instruction& inst = body_.instructions[i];
+		if (++scanned > kLatchScan)
+			return false;
+		unsigned read = 0;
+		size_t multiple = scaled_.size();
+		for_each_operand(body_, inst, [&](const Value& v) {
+			if (!v.is(ValueKind::Temp))
+				return;
+			later = later || v.index == x;
+			read += v.index == y ? 1 : 0;
+			for (size_t k = 0; k < scaled_.size(); ++k)
+				if (scaled_[k].first == v.index)
+				{
+					++read;
+					multiple = k;
+				}
+		});
+		if (read == 0)
+			continue;
+		if (read == 1 && multiple == scaled_.size() && scales(inst, y))
+		{
+			scaled_.push_back(std::make_pair(inst.result, 0u));
+			++readers;
+			continue;
+		}
+		const TempId offset = multiple == scaled_.size() ? y : scaled_[multiple].first;
+		const uint64_t bytes = inst.op == Opcode::Index ? storage_bytes(inst.type) : 0;
+		if (read != 1 || !(bytes == 1 || (offset == y && (bytes == 2 || bytes == 4 || bytes == 8))) ||
+			!(inst.ops[0].is(ValueKind::Temp) || inst.ops[0].is(ValueKind::Slot)) ||
+			!(inst.ops[1] == Value::temp(offset)))
+			return false;
+		++(offset == y ? readers : scaled_[multiple].second);
+	}
+	for (const std::pair<TempId, uint32_t>& offset : scaled_)
+		if (offset.second == 0 || (*uses_)[offset.first] != offset.second)
+			return false;
+	return later && readers != 0 && (*uses_)[y] == readers + carried;
+}
+
+bool LatchSteps::step_again(BlockId merge, InstId phi_id)
+{
+	const Instruction phi = body_.instructions[phi_id];
+	if (phi.type.kind() != TypeKind::I64 || phi.extra_count > 2 * kLatchInputs)
+		return false;
+	const TempId x = phi.result;
+	TempId y = kNoId;
+	carriers_.clear();
+	for (uint32_t k = 0; k + 1 < phi.extra_count; k += 2)
+	{
+		const Value v = body_.operands[phi.extra_first + k + 1];
+		if (!v.is(ValueKind::Temp) || v.index < body_.parameter_count || v.index >= uses_->size())
+			continue;
+		const Instruction& step = body_.instructions[body_.temps[v.index].def];
+		if (step.op != Opcode::Binary || step.type != phi.type ||
+			(static_cast<BinaryOp>(step.sub) != BinaryOp::Add && static_cast<BinaryOp>(step.sub) != BinaryOp::Sub) ||
+			!(step.ops[0] == Value::temp(x)) || !step.ops[1].is(ValueKind::Integer))
+			continue;
+		// (Two steps of one counter stay as they are.)
+		if (y != kNoId && y != v.index)
+			return false;
+		y = v.index;
+		carriers_.push_back(body_.operands[phi.extra_first + k].index);
+	}
+	if (y == kNoId)
+		return false;
+	const Instruction step = body_.instructions[body_.temps[y].def];
+	const int64_t literal = static_cast<int64_t>(body_.literals[step.ops[1].index].low);
+	if (literal < -kLatchStep || literal > kLatchStep || (*block_)[body_.temps[y].def] == merge ||
+		!indexed_ahead(x, y, static_cast<uint32_t>(carriers_.size())))
+		return false;
+	// The merge's other phis take one value from the carriers.
+	for (InstId i = body_.blocks[merge].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
+		i = body_.instructions[i].next)
+	{
+		const Instruction& other = body_.instructions[i];
+		const Value first = phi_incoming(body_, other, carriers_[0]);
+		for (size_t k = 1; k < carriers_.size(); ++k)
+		{
+			const Value next = phi_incoming(body_, other, carriers_[k]);
+			if (!(next == first) && !same_literal(body_, other.type, first, next))
+				return false;
+		}
+	}
+	Instruction again = step;
+	again.result = kNoId;
+	again.next = kNoId;
+	const InstId id = append_instruction(body_, again);
+	const Value stepped = Value::temp(append_temp(body_, step.type, id));
+	body_.instructions[id].result = stepped.index;
+	const Instruction& only = body_.instructions[body_.blocks[carriers_[0]].last];
+	BlockId from = carriers_[0];
+	if (carriers_.size() == 1 && only.op == Opcode::Jump)
+		insert_after(body_, from, previous_in_block(body_, from, body_.blocks[from].last), id);
+	else
+	{
+		from = append_block(body_, BlockKind::Split);
+		insert_after(body_, from, kNoId, id);
+		Instruction jump = make_instruction(Opcode::Jump, Type::scalar(TypeKind::Void));
+		jump.ops[0] = Value::block(merge);
+		jump.location = step.location;
+		insert_after(body_, from, id, append_instruction(body_, jump));
+		// Each phi of the merge: its carriers' one input, from the new block.
+		for (InstId i = body_.blocks[merge].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
+			i = body_.instructions[i].next)
+		{
+			const Instruction other = body_.instructions[i];
+			pairs_.clear();
+			bool taken = false;
+			for (uint32_t k = 0; k + 1 < other.extra_count; k += 2)
+			{
+				const BlockId pred = body_.operands[other.extra_first + k].index;
+				const bool carrier = std::find(carriers_.begin(), carriers_.end(), pred) != carriers_.end();
+				if (carrier && taken)
+					continue;
+				taken = taken || carrier;
+				pairs_.push_back(Value::block(carrier ? from : pred));
+				pairs_.push_back(body_.operands[other.extra_first + k + 1]);
+			}
+			body_.instructions[i].extra_first = append_operands(
+				body_, pairs_.data(), static_cast<uint32_t>(pairs_.size()));
+			body_.instructions[i].extra_count = static_cast<uint32_t>(pairs_.size());
+		}
+		size_t last = 0;
+		for (size_t at = 0; at < body_.layout.size(); ++at)
+			if (std::find(carriers_.begin(), carriers_.end(), body_.layout[at]) != carriers_.end())
+				last = at;
+		for (BlockId carrier : carriers_)
+		{
+			Instruction& term = body_.instructions[body_.blocks[carrier].last];
+			for (unsigned k = 0; k < 3; ++k)
+				if (term.ops[k].is(ValueKind::Block) && term.ops[k].index == merge)
+					term.ops[k] = Value::block(from);
+			for (uint32_t k = 0; k < term.extra_count; ++k)
+				if (body_.operands[term.extra_first + k].is(ValueKind::Block) &&
+					body_.operands[term.extra_first + k].index == merge)
+					body_.operands[term.extra_first + k] = Value::block(from);
+		}
+		body_.layout.insert(body_.layout.begin() + static_cast<std::ptrdiff_t>(last + 1), from);
+		c_.invalidate_cfg();
+	}
+	const Instruction& placed = body_.instructions[phi_id];
+	for (uint32_t k = 0; k + 1 < placed.extra_count; k += 2)
+		if (body_.operands[placed.extra_first + k].index == from)
+			body_.operands[placed.extra_first + k + 1] = stepped;
+	return true;
+}
+
+bool LatchSteps::run()
+{
+	phis_.clear();
+	for (BlockId b : body_.layout)
+		for (InstId i = body_.blocks[b].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
+			i = body_.instructions[i].next)
+			if (body_.instructions[i].type.kind() == TypeKind::I64)
+				phis_.push_back(std::make_pair(b, i));
+	if (phis_.empty())
+		return false;
+	uses_ = &c_.entry_uses(place_steps, false);
+	block_ = &c_.entry_block_of(place_steps, false);
+	bool changed = false;
+	for (const std::pair<BlockId, InstId>& phi : phis_)
+		changed = step_again(phi.first, phi.second) || changed;
+	if (changed)
+	{
+		c_.invalidate_uses();
+		c_.invalidate_block_of();
+	}
+	return changed;
+}
+
 } // namespace
 
 bool sink_values(FunctionContext& context)
@@ -680,7 +913,9 @@ bool place_steps(FunctionContext& context)
 	if (context.body.temps.size() < 3)
 		return false;
 	StepPlacement pass(context);
-	return pass.run();
+	const bool placed = pass.run();
+	LatchSteps latches(context);
+	return latches.run() || placed;
 }
 
 } // namespace opt
