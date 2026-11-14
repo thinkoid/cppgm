@@ -23,6 +23,14 @@ void add_runtime_inputs(LinkInputs& inputs, const backend::Options& options)
 	}
 	if (options.no_standard_libraries)
 		return;
+	// Emscripten's runtime and JS imports depend on the selected SDK build
+	// settings. Supply those archives explicitly instead of using WASI's.
+	if (options.target == target_model::Target::Emscripten)
+	{
+		if (!options.sysroot.empty() || !options.resource_directory.empty())
+			throw WasmError("Emscripten links require explicit runtime archives and -nostdlib or -nodefaultlibs");
+		return;
+	}
 	if (!options.sysroot.empty())
 	{
 		const std::string root = options.sysroot + "/lib/wasm32-wasip1/";

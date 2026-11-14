@@ -165,7 +165,7 @@ void Linker::emit(Bytes& output)
 		exports.unsigned_leb(entry.second.second);
 	}
 	output.section(7, exports);
-	if (ctor_index_ != kAbsent && options_.target == target_model::Target::Wasm32 &&
+	if (ctor_index_ != kAbsent && options_.target != target_model::Target::Wasi &&
 		!options_.wasm_link.export_constructors)
 	{
 		Bytes start;

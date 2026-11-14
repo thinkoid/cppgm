@@ -745,7 +745,7 @@ ExprFacts* Analyzer::allocation(const syntax::NewExpr& expr, Scope* scope)
 	{
 		if (!type_size(type, element_size, element_alignment, expr.location))
 			return nullptr;
-		if (element_alignment > 16)
+		if (element_alignment > target_model::default_new_alignment(types_.target()))
 		{
 			alignment = alignment_type();
 			if (alignment == nullptr)

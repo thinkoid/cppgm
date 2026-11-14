@@ -29,6 +29,12 @@ lowir2native --target=wasm32-wasip1 -O2 \
   --dump-machine-ir program.mir -o program.wasm source.lowir
 ```
 
+The additional `wasm32-unknown-emscripten` SDK profile carries Emscripten's
+layout and allocation alignment. Use explicit SDK runtime archives and import
+declarations for links; it does not generate JS glue. The
+[target contract](target-abi.md) specifies its differences from the two
+sixteen-byte-aligned `long double` profiles.
+
 Wasm invocations of `lowir2native` may also take relocatable object and
 archive inputs, including the supplied arithmetic/runtime libraries.
 

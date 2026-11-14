@@ -108,7 +108,7 @@ lowir::Type SpecType(char code, target_model::Target target)
 	case 'b':
 		return lowir::Type::object(2, 1);
 	case 'q':
-		return lowir::Type::object(16, 4);
+		return lowir::Type::object(16, target_model::data_layout(target).long_double_alignment == 8 ? 3 : 4);
 	case 'f':
 		return lowir::Type::scalar(lowir::TypeKind::F32);
 	case 'd':

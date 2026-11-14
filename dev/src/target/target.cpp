@@ -14,6 +14,11 @@ bool parse(const std::string& text, Target& result)
 		result = Target::Wasi;
 		return true;
 	}
+	if (text == spelling(Target::Emscripten))
+	{
+		result = Target::Emscripten;
+		return true;
+	}
 	const std::string darwin = "x86_64-apple-darwin";
 	const std::string macos = "x86_64-apple-macos";
 	if (text == "macos" || text == "darwin" || text == "osx" || text.compare(0, darwin.size(), darwin) == 0 ||

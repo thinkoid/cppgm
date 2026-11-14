@@ -1374,9 +1374,10 @@ lowir::Type ProgramLowering::storage_type(const sema::Type* type)
 		case FundamentalType::Float32x:
 			return Type::scalar(TypeKind::F64);
 		case FundamentalType::LongDouble:
-			return target_model::is_wasm(type->target) ? Type::object(16, 4) : Type::scalar(TypeKind::F80);
 		case FundamentalType::Float64x:
-			return Type::scalar(TypeKind::F80);
+			return target_model::is_wasm(type->target)
+				? Type::object(16, target_model::data_layout(type->target).long_double_alignment == 8 ? 3 : 4)
+				: Type::scalar(TypeKind::F80);
 		case FundamentalType::Float16:
 		case FundamentalType::BFloat16:
 		case FundamentalType::StorageHalf:
@@ -1386,7 +1387,7 @@ lowir::Type ProgramLowering::storage_type(const sema::Type* type)
 			return Type::object(2, 1);
 		case FundamentalType::Float128:
 		case FundamentalType::GnuFloat128:
-			return Type::object(16, 4);
+			return Type::object(16, target_model::data_layout(type->target).long_double_alignment == 8 ? 3 : 4);
 		case FundamentalType::Int128:
 		case FundamentalType::UnsignedInt128:
 			return Type::scalar(TypeKind::I128);

@@ -122,7 +122,7 @@ const FunctionEntity* Analyzer::usual_deallocation(const FunctionList* functions
 	const Type* alignment = cxx17_ ? alignment_type() : nullptr;
 	uint64_t bytes = 0, align = 0;
 	const bool over_aligned = alignment != nullptr && object != nullptr && type_size(object, bytes, align, 0) &&
-		align > 16;
+		align > target_model::default_new_alignment(types_.target());
 	// Prefer alignment-aware forms for over-aligned objects, alignment-
 	// unaware ones otherwise. Unsized wins within each group; a sized
 	// member remains a usual function when its unsized form is absent.

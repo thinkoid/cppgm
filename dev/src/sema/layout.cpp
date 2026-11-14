@@ -204,7 +204,7 @@ bool Analyzer::type_size(const Type* type, uint64_t& size, uint64_t& alignment, 
 		if (type->fundamental == FundamentalType::Void)
 			error(location, "size of void");
 		size = FundamentalTypeSize(type->fundamental, type->target);
-		alignment = size;
+		alignment = type->binary128 ? target_model::data_layout(type->target).long_double_alignment : size;
 		return true;
 	case TypeKind::Pointer:
 	case TypeKind::BlockPointer:

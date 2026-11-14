@@ -58,8 +58,10 @@ std::string PredefinedText(const PreprocessorOptions& options)
 	for (unsigned i = 0; i < options.sse_level; ++i)
 		text += std::string("#define ") + features[i] + " 1\n";
 	if (options.cplusplus == "201703L")
-		text += "#define __STDCPP_DEFAULT_NEW_ALIGNMENT__ 16UL\n#define __cpp_aligned_new 201606L\n"
-				"#define __cpp_deduction_guides 201703L\n";
+		text += "#define __STDCPP_DEFAULT_NEW_ALIGNMENT__ " +
+			std::to_string(target_model::default_new_alignment(options.target)) +
+			"UL\n#define __cpp_aligned_new 201606L\n"
+			"#define __cpp_deduction_guides 201703L\n";
 	return text;
 }
 

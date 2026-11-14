@@ -65,16 +65,20 @@ void add_wasm_headers(PreprocessorOptions& options, const std::string& sysroot, 
 {
 	if (!sysroot.empty() && options.language != SourceLanguage::C)
 	{
-		options.system_include_paths.push_back(
-			sysroot + "/include/wasm32-wasip1/" + (options.modes.exceptions ? "eh" : "noeh") + "/c++/v1");
-		options.system_include_paths.push_back(sysroot + "/include/wasm32-wasip1/c++/v1");
+		if (options.target != target_model::Target::Emscripten)
+		{
+			options.system_include_paths.push_back(
+				sysroot + "/include/wasm32-wasip1/" + (options.modes.exceptions ? "eh" : "noeh") + "/c++/v1");
+			options.system_include_paths.push_back(sysroot + "/include/wasm32-wasip1/c++/v1");
+		}
 		options.system_include_paths.push_back(sysroot + "/include/c++/v1");
 	}
 	if (!resource_directory.empty())
 		options.system_include_paths.push_back(resource_directory + "/include");
 	if (!sysroot.empty())
 	{
-		options.system_include_paths.push_back(sysroot + "/include/wasm32-wasip1");
+		if (options.target != target_model::Target::Emscripten)
+			options.system_include_paths.push_back(sysroot + "/include/wasm32-wasip1");
 		options.system_include_paths.push_back(sysroot + "/include");
 	}
 }
@@ -115,6 +119,8 @@ void configure_wasm_environment(PreprocessorOptions& options)
 	text += kNumericPredefines;
 	if (options.target == target_model::Target::Wasi)
 		text += "#define __wasi__ 1\n";
+	if (options.target == target_model::Target::Emscripten)
+		text += "#define __EMSCRIPTEN__ 1\n#define __unix__ 1\n#define __unix 1\n";
 	options.command_line.insert(0, text);
 }
 
