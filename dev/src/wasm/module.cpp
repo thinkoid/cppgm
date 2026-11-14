@@ -2,6 +2,8 @@
 
 #include <map>
 
+#include "machine/global_data.h"
+
 namespace wasm {
 
 namespace {
@@ -56,9 +58,32 @@ void function_types(const lowir::Program& program, Module& module)
 
 void prepare_module(const lowir::Program& program, Module& module)
 {
+	const lowir::SymbolId conflict = machine::object_identities(program, module.object_symbols);
+	if (conflict != lowir::kNoId)
+	{
+		const auto& symbol = program.symbols[conflict];
+		throw WasmError(std::string("duplicate or incompatible Wasm object definition: ") +
+			program.spelling(symbol.metadata.object != 0 ? symbol.metadata.object : symbol.name));
+	}
 	module.function_indices.assign(program.symbols.size(), lowir::kNoId);
 	module.addresses.assign(program.symbols.size(), lowir::kNoId);
 	function_types(program, module);
+	// An address-only declaration can borrow the signature of any typed alias.
+	// Compare target ABI boundaries rather than source parameter spellings.
+	std::vector<lowir::SignatureId> signatures(program.symbols.size(), lowir::kNoId);
+	for (lowir::SymbolId id : program.order)
+	{
+		const auto& symbol = program.symbols[id];
+		if (!lowir::is_function_kind(symbol.kind))
+			continue;
+		const auto signature = program.functions[symbol.detail].signature;
+		if (signature == lowir::kNoId)
+			continue;
+		auto& prior = signatures[module.object_symbols[id]];
+		if (prior != lowir::kNoId && module.signature_types[signature] != module.signature_types[prior])
+			throw WasmError("incompatible Wasm declarations for one object function");
+		prior = signature;
+	}
 	module.stack_symbol = static_cast<uint32_t>(program.symbols.size());
 	module.stack_low_symbol = module.stack_symbol + 1;
 	module.table_symbol = module.stack_symbol + 2;
@@ -102,39 +127,17 @@ void prepare_module(const lowir::Program& program, Module& module)
 	// Address-only imports carry a placeholder type until a real definition
 	// supplies the ABI. A direct call's typed boundary is materialized earlier.
 	uint32_t address_type = lowir::kNoId;
-	std::map<lowir::NameId, std::pair<lowir::SymbolId, lowir::SignatureId>> declarations;
 	for (lowir::SymbolId id : program.order)
 	{
 		const auto& symbol = program.symbols[id];
-		if (symbol.kind != lowir::SymbolKind::FunctionDeclaration)
+		if (symbol.kind != lowir::SymbolKind::FunctionDeclaration || module.object_symbols[id] != id)
 			continue;
 		if (module.nonlocal_function(id) == lowir::NonlocalFunction::Longjmp)
 		{
 			module.nonlocal_wrappers.push_back(id);
 			continue;
 		}
-		const auto signature = program.functions[symbol.detail].signature;
-		// Source builtins and optimizer-created declarations can denote the
-		// same object function. They share one import and linking identity.
-		if (symbol.metadata.binding != ir_model::SBM_INTERNAL)
-		{
-			const auto name = symbol.metadata.object != 0 ? symbol.metadata.object : symbol.name;
-			const auto inserted = declarations.emplace(name, std::make_pair(id, signature));
-			if (!inserted.second)
-			{
-				auto& prior = inserted.first->second;
-				if (signature != lowir::kNoId && prior.second != lowir::kNoId &&
-					module.signature_types[signature] != module.signature_types[prior.second])
-					throw WasmError("incompatible Wasm declarations for one object function");
-				module.function_indices[id] = module.function_indices[prior.first];
-				if (prior.second == lowir::kNoId && signature != lowir::kNoId)
-				{
-					module.definition_types[module.function_indices[id]] = module.signature_types[signature];
-					prior.second = signature;
-				}
-				continue;
-			}
-		}
+		const auto signature = signatures[id];
 		module.function_indices[id] = static_cast<uint32_t>(module.definition_types.size());
 		if (signature == lowir::kNoId && address_type == lowir::kNoId)
 		{
@@ -156,7 +159,7 @@ void prepare_module(const lowir::Program& program, Module& module)
 	}
 	for (lowir::SymbolId id : program.order)
 	{
-		if (program.symbols[id].kind == lowir::SymbolKind::FunctionDefinition)
+		if (program.symbols[id].kind == lowir::SymbolKind::FunctionDefinition && module.object_symbols[id] == id)
 		{
 			const auto& symbol = program.symbols[id];
 			if (symbol.metadata.role == ir_model::SR_INIT)
@@ -172,6 +175,9 @@ void prepare_module(const lowir::Program& program, Module& module)
 				module.signature_types[program.functions[program.symbols[id].detail].signature]);
 		}
 	}
+	for (lowir::SymbolId id : program.order)
+		if (lowir::is_function_kind(program.symbols[id].kind))
+			module.function_indices[id] = module.function_indices[module.object_symbols[id]];
 }
 
 } // namespace wasm

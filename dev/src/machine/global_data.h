@@ -33,4 +33,9 @@ bool global_is_zero(const lowir::Program& program, const lowir::Global& global);
 // Whether the global holds an address (an item a loader relocates).
 bool global_has_addresses(const lowir::Program& program, const lowir::Global& global);
 
+// Canonical source identities for symbols sharing an external object name.
+// Definitions supersede declarations; strong supersedes weak. Internal names
+// remain distinct. Returns a conflicting strong definition, or kNoId.
+lowir::SymbolId object_identities(const lowir::Program& program, std::vector<lowir::SymbolId>& canonical);
+
 } // namespace machine

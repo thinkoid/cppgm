@@ -105,7 +105,7 @@ bool ParserState::at_gnu_decltype(uint32_t ahead)
 		return false;
 	const uint8_t name = gnu_names_.kind(tok(ahead).identifier);
 	return name == GnuNames::kTypeof ||
-		(name != 0 && name < GnuNames::kAttribute && IsGnuTypeTransform(static_cast<GnuTrait>(name - 1)));
+		(name != 0 && name < GnuNames::kFirstSpecial && IsGnuTypeTransform(static_cast<GnuTrait>(name - 1)));
 }
 
 bool ParserState::at_typeof()

@@ -125,6 +125,21 @@ void discard_unused_local_declarations(lowir::Program& program)
 	program.order.resize(count);
 }
 
+void bind_object_aliases(const lowir::Program& program, const std::vector<lowir::SymbolId>& identities,
+	std::vector<uint32_t>& symbols, std::vector<uint32_t>& groups, Object& object)
+{
+	for (lowir::SymbolId id : program.order)
+	{
+		const lowir::SymbolId canonical = identities[id];
+		if (canonical == lowir::kNoId || canonical == id)
+			continue;
+		symbols[id] = symbols[canonical];
+		groups[id] = groups[canonical];
+		if ((program.symbols[id].metadata.flags & ir_model::SF_OBJECT_ROOT) != 0)
+			object.symbols[symbols[id]].flags |= 0x80;
+	}
+}
+
 } // namespace
 
 void make_object(lowir::Program& program, const backend::Options& options, Object& object, std::string& dump)
@@ -160,7 +175,6 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 		for (uint32_t i = 0; i < labels.size(); ++i)
 			code_labels[labels[i].symbol] = { segment, i };
 	}
-	std::vector<uint32_t> function_symbols(object.functions.size(), lowir::kNoId);
 	std::vector<uint32_t> symbols(program.symbols.size() + 3 + module.tag_types.size(), lowir::kNoId);
 	std::vector<uint32_t> groups(program.symbols.size(), lowir::kNoId);
 	const lowir::NameId stack_low_name = program.names.find("__stack_low", 11);
@@ -169,6 +183,8 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 	{
 		const auto& source = program.symbols[id];
 		if (!lowir::is_function_kind(source.kind) && !lowir::is_global_kind(source.kind))
+			continue;
+		if (module.object_symbols[id] != id)
 			continue;
 		ObjectSymbol symbol;
 		const lowir::NameId object_name = source.metadata.object != 0 ? source.metadata.object : source.name;
@@ -181,16 +197,6 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 		if (lowir::is_function_kind(source.kind))
 		{
 			symbol.index = module.function_indices[id];
-			if (function_symbols[symbol.index] != lowir::kNoId)
-			{
-				symbols[id] = function_symbols[symbol.index];
-				ObjectSymbol& previous = object.symbols[symbols[id]];
-				if (!symbol.weak())
-					previous.flags &= ~1u;
-				previous.flags |= symbol.flags & 0x80;
-				continue;
-			}
-			function_symbols[symbol.index] = static_cast<uint32_t>(object.symbols.size());
 			ObjectFunction& function = object.functions[symbol.index];
 			function.type = module.definition_types[symbol.index];
 			function.name = symbol.name;
@@ -253,12 +259,15 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 		if (source.metadata.role == ir_model::SR_INIT)
 			object.initializers.push_back({ 65535, symbols[id] });
 	}
+	bind_object_aliases(program, module.object_symbols, symbols, groups, object);
 	for (const lowir::FunctionBinding& binding : program.function_bindings)
 	{
 		ObjectSymbol& symbol = object.symbols[symbols[binding.symbol]];
 		ObjectFunction& function = object.functions[symbol.index];
 		if (binding.imported)
 		{
+			if (!function.imported)
+				continue;
 			if ((symbol.flags & 0x40) != 0 &&
 				(function.module != program.spelling(binding.module) ||
 					function.name != program.spelling(binding.name)))

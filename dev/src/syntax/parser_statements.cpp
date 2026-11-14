@@ -423,6 +423,10 @@ bool Parser::statement_starts_declaration(bool& tentative)
 	{
 		return true;
 	}
+	else if (gnu_names_.kind(token.identifier) == GnuNames::kConstinit && at_constinit_specifier())
+	{
+		return true;
+	}
 	else if (at_gnu_decltype())
 	{
 		// GNU `__typeof__ (` and `__underlying_type (`, as decltype.

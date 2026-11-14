@@ -465,6 +465,23 @@ bool Parser::parse_alignment_operand(Attribute& attribute)
 	return attribute.expression != nullptr;
 }
 
+bool Parser::at_constinit_specifier()
+{
+	const ParseToken token = tok();
+	if (!token.is_identifier() || gnu_names_.kind(token.identifier) != GnuNames::kConstinit)
+		return false;
+	if (token.identifier->length != 9) // GNU __constinit is reserved.
+		return true;
+	// Accept the later keyword in hosted declarations without reserving a
+	// valid C++11--17 identifier. A known name keeps its existing meaning;
+	// punctuation after a declarator name is not a specifier sequence.
+	if (!hosted_ || scopes_.lookup(token.identifier, false).category != NameCategory::None)
+		return false;
+	const ParseToken following = tok(1);
+	return at_type_specifier_start(1) ||
+		(following.kind == ParseTokenKind::Simple && IsKeywordSpecifier(following.simple));
+}
+
 bool Parser::parse_decl_specifiers(ListFrame<DeclSpecifier>& list, SpecifierInfo& info)
 {
 	uint32_t standard_after = 0;
@@ -544,7 +561,8 @@ bool Parser::parse_decl_specifiers(ListFrame<DeclSpecifier>& list, SpecifierInfo
 			}
 			break;
 		}
-		if (token.is_identifier() && gnu_names_.kind(token.identifier) == GnuNames::kConstinit)
+		if (token.is_identifier() && gnu_names_.kind(token.identifier) == GnuNames::kConstinit &&
+			at_constinit_specifier())
 		{
 			DeclSpecifier specifier = DeclSpecifier();
 			specifier.kind = DeclSpecKind::Constinit;

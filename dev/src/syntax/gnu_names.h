@@ -44,6 +44,8 @@ public:
 		mark(identifiers, "__imag__", kImagPart);
 		mark(identifiers, "__imag", kImagPart);
 		mark(identifiers, "__constinit", kConstinit);
+		if (identifiers.language() != SourceLanguage::C)
+			mark(identifiers, "constinit", kConstinit);
 		if (identifiers.language() == SourceLanguage::C)
 		{
 			mark(identifiers, "_Noreturn", kCNoReturn);

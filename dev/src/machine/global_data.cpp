@@ -1,6 +1,7 @@
 #include "machine/global_data.h"
 
 #include <cstring>
+#include <unordered_map>
 
 #include "lowir/literals.h"
 
@@ -8,6 +9,48 @@ namespace machine {
 
 using lowir::Type;
 using lowir::TypeKind;
+
+lowir::SymbolId object_identities(const lowir::Program& program, std::vector<lowir::SymbolId>& canonical)
+{
+	using namespace lowir;
+	canonical.assign(program.symbols.size(), kNoId);
+	std::unordered_map<NameId, SymbolId> external;
+	for (SymbolId id : program.order)
+	{
+		const Symbol& symbol = program.symbols[id];
+		if (!is_global_kind(symbol.kind) && !is_function_kind(symbol.kind))
+			continue;
+		canonical[id] = id;
+		if (symbol.metadata.binding == ir_model::SBM_INTERNAL)
+			continue;
+		const NameId name = symbol.metadata.object != 0 ? symbol.metadata.object : symbol.name;
+		auto inserted = external.emplace(name, id);
+		if (inserted.second)
+			continue;
+		SymbolId& selected = inserted.first->second;
+		const Symbol& previous = program.symbols[selected];
+		if (is_function_kind(symbol.kind) != is_function_kind(previous.kind))
+			return id;
+		const bool defined = symbol.kind == SymbolKind::GlobalDefinition ||
+			symbol.kind == SymbolKind::FunctionDefinition;
+		const bool prior_defined = previous.kind == SymbolKind::GlobalDefinition ||
+			previous.kind == SymbolKind::FunctionDefinition;
+		const bool weak = symbol.metadata.binding == ir_model::SBM_WEAK;
+		const bool prior_weak = previous.metadata.binding == ir_model::SBM_WEAK;
+		if (defined && prior_defined && !weak && !prior_weak)
+			return id;
+		if ((defined && !prior_defined) || (defined == prior_defined && prior_weak && !weak))
+			selected = id;
+	}
+	for (SymbolId id : program.order)
+	{
+		const Symbol& symbol = program.symbols[id];
+		if ((is_global_kind(symbol.kind) || is_function_kind(symbol.kind)) &&
+			symbol.metadata.binding != ir_model::SBM_INTERNAL)
+			canonical[id] = external.find(symbol.metadata.object != 0 ? symbol.metadata.object : symbol.name)->second;
+	}
+	return kNoId;
+}
 
 namespace {
 
