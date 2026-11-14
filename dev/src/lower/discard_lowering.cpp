@@ -110,6 +110,11 @@ void FunctionLowering::discard(const syntax::Expr& expr)
 	// volatile lvalue in one of read_when_discarded's forms is also read
 	// (the lvalue-to-rvalue conversion is applied).
 	const syntax::Expr* e = WithoutParentheses(&expr);
+	if (e->kind == syntax::ExprKind::Generic)
+	{
+		discard(*static_cast<const syntax::GenericExpr&>(*e).selected);
+		return;
+	}
 	check_stack(e->location);
 	const DebugScope debug(*this, e->location);
 	const sema::ExprFacts* facts = e->facts;

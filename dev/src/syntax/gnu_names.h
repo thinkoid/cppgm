@@ -26,7 +26,8 @@ public:
 	static const uint8_t kImagPart = 0xfb;
 	static const uint8_t kConstinit = 0xfa;
 	static const uint8_t kCNoReturn = 0xf9;
-	static const uint8_t kFirstSpecial = 0xf9;
+	static const uint8_t kCGeneric = 0xf8;
+	static const uint8_t kFirstSpecial = 0xf8;
 
 	explicit GnuNames(IdentifierTable& identifiers)
 	{
@@ -44,7 +45,10 @@ public:
 		mark(identifiers, "__imag", kImagPart);
 		mark(identifiers, "__constinit", kConstinit);
 		if (identifiers.language() == SourceLanguage::C)
+		{
 			mark(identifiers, "_Noreturn", kCNoReturn);
+			mark(identifiers, "_Generic", kCGeneric);
+		}
 	}
 
 	// 0 for an identifier of no special GNU name.

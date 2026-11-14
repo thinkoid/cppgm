@@ -39,7 +39,9 @@ enum class ExprKind : uint8_t
 	// A GNU type trait `__is_class ( type-id )` ... (lex/gnu_builtins.h).
 	BuiltinTrait,
 	// C++17's fold-expression (a hosted-header extension in C++11 mode).
-	Fold
+	Fold,
+	// C11 generic selection; its controlling expression is unevaluated.
+	Generic
 };
 
 struct Expr
@@ -84,6 +86,19 @@ struct LabelAddressExpr : Expr
 struct ParenExpr : Expr
 {
 	Expr* inner;
+};
+
+struct GenericAssociation
+{
+	TypeId* type; // null for default
+	Expr* expression;
+};
+
+struct GenericExpr : Expr
+{
+	Expr* control;
+	Slice<GenericAssociation> associations;
+	mutable const Expr* selected = nullptr;
 };
 
 // Binary operators including `,`, `.*` and `->*`; Assign uses it too.

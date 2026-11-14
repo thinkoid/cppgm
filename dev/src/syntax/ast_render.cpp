@@ -546,6 +546,24 @@ void SyntaxRenderer::operand(const Expr& expr)
 		expression(*static_cast<const ParenExpr&>(expr).inner);
 		text(")");
 		break;
+	case ExprKind::Generic:
+	{
+		const GenericExpr& generic = static_cast<const GenericExpr&>(expr);
+		text("_Generic(");
+		expression(*generic.control);
+		for (const GenericAssociation& association : generic.associations)
+		{
+			text(",");
+			if (association.type != nullptr)
+				type_id(*association.type);
+			else
+				text("default");
+			text(":");
+			expression(*association.expression);
+		}
+		text(")");
+		break;
+	}
 	case ExprKind::Conditional:
 	{
 		const ConditionalExpr& conditional = static_cast<const ConditionalExpr&>(expr);

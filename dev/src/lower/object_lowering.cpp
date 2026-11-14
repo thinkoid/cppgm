@@ -874,6 +874,11 @@ void FunctionLowering::materialize_prvalue(const syntax::Expr& expr, lowir::Valu
 	// A class prvalue initializes the object it is materialized in (12.2,
 	// 12.8p31): `T(args)`, `T{...}` and `T()` construct there.
 	const syntax::Expr* e = WithoutParentheses(&expr);
+	if (e->kind == syntax::ExprKind::Generic)
+	{
+		materialize_prvalue(*static_cast<const syntax::GenericExpr&>(*e).selected, object, location);
+		return;
+	}
 	const sema::ExprFacts* facts = e->facts;
 	const sema::FunctionEntity* constructor = facts != nullptr && facts->entity != nullptr &&
 			facts->entity->kind == sema::EntityKind::Function
@@ -1100,6 +1105,8 @@ lowir::Value FunctionLowering::temporary_object(const syntax::Expr& expr, bool p
 	// A comma's left operand is evaluated before the temporary its right
 	// operand makes (5.18p1; the course's form).
 	const syntax::Expr* e = WithoutParentheses(&expr);
+	if (e->kind == syntax::ExprKind::Generic)
+		return temporary_object(*static_cast<const syntax::GenericExpr&>(*e).selected, persistent, kind);
 	if (e->kind == syntax::ExprKind::Binary && static_cast<const syntax::BinaryExpr*>(e)->op == TokenKind::OP_COMMA &&
 		(e->facts->flags & sema::kOperatorCall) == 0)
 	{

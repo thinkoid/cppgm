@@ -1170,6 +1170,21 @@ Expr* SyntaxCloner::expr(const Expr* expr)
 		result = paren;
 		break;
 	}
+	case ExprKind::Generic:
+	{
+		GenericExpr* generic = copy(static_cast<const GenericExpr*>(expr));
+		generic->control = this->expr(generic->control);
+		generic->selected = nullptr;
+		GenericAssociation* associations = arena_.copy_array(generic->associations.data, generic->associations.size);
+		for (uint32_t i = 0; i < generic->associations.size; ++i)
+		{
+			associations[i].type = type_id(associations[i].type);
+			associations[i].expression = this->expr(associations[i].expression);
+		}
+		generic->associations.data = associations;
+		result = generic;
+		break;
+	}
 	case ExprKind::Binary:
 	case ExprKind::Assign:
 	{

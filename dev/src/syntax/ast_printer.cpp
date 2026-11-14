@@ -1082,6 +1082,24 @@ void AstDumper::operand(const Expr& expr)
 		expression(*static_cast<const ParenExpr&>(expr).inner);
 		close();
 		break;
+	case ExprKind::Generic:
+	{
+		const GenericExpr& generic = static_cast<const GenericExpr&>(expr);
+		open("generic-selection");
+		expression(*generic.control);
+		for (const GenericAssociation& association : generic.associations)
+		{
+			open("generic-association");
+			if (association.type != nullptr)
+				type_id(*association.type);
+			else
+				line("default");
+			expression(*association.expression);
+			close();
+		}
+		close();
+		break;
+	}
 	case ExprKind::Conditional:
 	{
 		const ConditionalExpr& conditional = static_cast<const ConditionalExpr&>(expr);

@@ -79,6 +79,8 @@ bool ConstantInterpreter::temporary(const syntax::Expr& expr, ConstPlace& out)
 	// 12.2p1: the temporary a class prvalue initializes (it lives until the
 	// evaluation leaves the statement or call that made it).
 	const syntax::Expr* e = WithoutParentheses(&expr);
+	if (e->kind == syntax::ExprKind::Generic)
+		return temporary(*static_cast<const syntax::GenericExpr&>(*e).selected, out);
 	const Type* type = e->facts->type;
 	const bool array = type->kind == TypeKind::Array;
 	const bool prefix = array || ClassOf(type) != nullptr;

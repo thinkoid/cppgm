@@ -1049,6 +1049,8 @@ Expr* Parser::parse_primary_expression()
 	}
 	if (token.is_identifier())
 	{
+		if (c_source_ && gnu_names_.kind(token.identifier) == GnuNames::kCGeneric)
+			return parse_generic_selection();
 		GnuTrait trait;
 		if (at_trait(trait) && !IsGnuTypeTransform(trait))
 			return parse_builtin_trait(trait);

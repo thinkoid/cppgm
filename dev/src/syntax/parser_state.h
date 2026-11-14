@@ -208,6 +208,7 @@ protected:
 	ScratchStack<Decl*> decls_;
 	ScratchStack<Stmt*> stmts_;
 	ScratchStack<Expr*> exprs_;
+	ScratchStack<GenericAssociation> generic_associations_;
 	ScratchStack<DeclSpecifier> specs_;
 	ScratchStack<NameComponent> components_;
 	ScratchStack<TemplateArgument> template_args_;

@@ -371,6 +371,8 @@ bool ConstantInterpreter::rvalue(const syntax::Expr& expr, ConstValue& out)
 		out = PointerTo(self, facts->type->unqualified);
 		return true;
 	}
+	case syntax::ExprKind::Generic:
+		return rvalue(*static_cast<const syntax::GenericExpr&>(*e).selected, out);
 	case syntax::ExprKind::Binary:
 		return binary(static_cast<const syntax::BinaryExpr&>(*e), out);
 	case syntax::ExprKind::Unary:
@@ -785,6 +787,8 @@ bool ConstantInterpreter::glvalue(const syntax::Expr& expr, ConstPlace& out)
 		return call_place(*e, out);
 	switch (e->kind)
 	{
+	case syntax::ExprKind::Generic:
+		return glvalue(*static_cast<const syntax::GenericExpr&>(*e).selected, out);
 	case syntax::ExprKind::Id:
 		if ((facts->flags & kImplicitThis) != 0 && facts->entity != nullptr &&
 			facts->entity->kind == EntityKind::Variable && static_cast<const VariableEntity*>(facts->entity)->member)

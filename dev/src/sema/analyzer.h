@@ -607,6 +607,7 @@ private:
 	LookupResult scalar_destructor_name(const syntax::Name& name, const Type* object, Scope* scope);
 	ExprFacts* cast_expression(const syntax::CastExpr& expr, Scope* scope);
 	ExprFacts* functional_cast(const syntax::FunctionalCastExpr& expr, Scope* scope);
+	ExprFacts* generic_selection(const syntax::GenericExpr& expr, Scope* scope);
 	ClassEntity* deduction_template(const syntax::Slice<syntax::DeclSpecifier>& type, Scope* scope);
 	const Type* deduce_class_type(ClassEntity* templ, const syntax::Slice<syntax::Expr*>& arguments, Scope* scope,
 		uint32_t location, bool copy_initialization = false, const syntax::BracedInitList* list = nullptr);

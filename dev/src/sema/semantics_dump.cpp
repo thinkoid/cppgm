@@ -1159,6 +1159,11 @@ void Printer::node(const Item& item, std::vector<Item>& stack)
 		push(stack, binary.left, depth + 1);
 		return;
 	}
+	case syntax::ExprKind::Generic:
+		header("generic-selection", category, type);
+		end();
+		push(stack, static_cast<const syntax::GenericExpr&>(*expr).selected, depth + 1);
+		return;
 	case syntax::ExprKind::Conditional:
 	{
 		const syntax::ConditionalExpr& conditional = static_cast<const syntax::ConditionalExpr&>(*expr);

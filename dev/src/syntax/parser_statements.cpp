@@ -419,6 +419,10 @@ bool Parser::statement_starts_declaration(bool& tentative)
 	{
 		return false;
 	}
+	else if (c_source_ && gnu_names_.kind(token.identifier) == static_cast<uint8_t>(GnuTrait::AddAtomic) + 1)
+	{
+		return true;
+	}
 	else if (at_gnu_decltype())
 	{
 		// GNU `__typeof__ (` and `__underlying_type (`, as decltype.

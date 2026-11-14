@@ -187,6 +187,13 @@ bool ConstantEvaluator::eval(const syntax::Expr& expr, Constant& value)
 	}
 	case syntax::ExprKind::Paren:
 		return eval(*static_cast<const syntax::ParenExpr&>(expr).inner, value);
+	case syntax::ExprKind::Generic:
+	{
+		const auto& generic = static_cast<const syntax::GenericExpr&>(expr);
+		if (generic.selected == nullptr && analyzer_.typed(expr, scope_) == nullptr)
+			return false;
+		return eval(*generic.selected, value);
+	}
 	case syntax::ExprKind::Id:
 		return identifier(static_cast<const syntax::IdExpr&>(expr), value);
 	case syntax::ExprKind::Binary:
