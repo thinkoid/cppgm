@@ -2212,7 +2212,9 @@ bool Simplifier::reassociate(Instruction& inst)
 	// Two steps by constants that never wrap (`nowrap`) are one such step when
 	// the constants' sum is a value of the type: the outer step's exact result
 	// is x plus that sum. (Words and narrower: the sum fits 64 bits.)
-	bool exact_sum = false;
+	// (Below zero in an unsigned type, the two steps are one subtraction
+	// that never borrows.)
+	bool exact_sum = false, exact_difference = false;
 	{
 		const unsigned width = lowir::integer_bits(inst.type.kind());
 		const auto step = [](BinaryOp o) { return o == BinaryOp::Add || o == BinaryOp::Sub; };
@@ -2226,6 +2228,7 @@ bool Simplifier::reassociate(Instruction& inst)
 			const int64_t low = is_unsigned ? 0 : -(int64_t(1) << (width - 1));
 			const int64_t high = (int64_t(1) << (is_unsigned ? width : width - 1)) - 1;
 			exact_sum = sum >= low && sum <= high;
+			exact_difference = is_unsigned && sum < 0 && -sum <= high;
 		}
 	}
 	Literal zero = { 0, 0 };
@@ -2255,6 +2258,12 @@ bool Simplifier::reassociate(Instruction& inst)
 	inst.flags &= static_cast<uint8_t>(~(IF_NO_WRAP | IF_EXACT)); // a different computation
 	if (exact_sum)
 		inst.flags |= IF_NO_WRAP;
+	if (exact_difference && fold_binary(BinaryOp::Sub, inst.type, zero_c, r, r))
+	{
+		inst.sub = static_cast<uint8_t>(BinaryOp::Sub);
+		inst.ops[1] = literal(r);
+		inst.flags |= IF_NO_WRAP;
+	}
 	return true;
 }
 

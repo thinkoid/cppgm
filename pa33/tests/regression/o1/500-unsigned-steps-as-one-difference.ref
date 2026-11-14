@@ -1,0 +1,31 @@
+function @down(%x : u32) -> u32 [no_inline=yes] {
+  block ^entry:
+    %b = binary sub nowrap u32 %x, 271
+    return u32 %b
+}
+function @up(%x : u32) -> u32 [no_inline=yes] {
+  block ^entry:
+    %b = binary add nowrap u32 %x, 27
+    return u32 %b
+}
+function @may_wrap(%x : u32) -> u32 [no_inline=yes] {
+  block ^entry:
+    %b = binary add u32 %x, 4294967025
+    return u32 %b
+}
+function @signed_down(%x : i32) -> i32 [no_inline=yes] {
+  block ^entry:
+    %b = binary add nowrap i32 %x, -271
+    return i32 %b
+}
+function @main() -> i32 [role=entry] {
+  block ^entry:
+    %a = call u32 @down(300)
+    %b = call u32 @up(1)
+    %c = call u32 @may_wrap(4294967295)
+    %d = call i32 @signed_down(1)
+    %ab = binary add u32 %a, %b
+    %abc = binary add u32 %c, %ab
+    %s = binary add i32 %d, %abc
+    return i32 %s
+}

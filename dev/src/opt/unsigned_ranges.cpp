@@ -54,6 +54,17 @@ bool phi_range(const FunctionBody& body, BlockId block, const Instruction& phi, 
 	const uint64_t bound = normalize_integer(phi.type, body.literals[cmp.ops[1 - side].index]).low;
 	const uint64_t high = pred == ComparePredicate::Ult && bound != 0 ? bound - 1 : bound;
 	range = Range{ pred == ComparePredicate::Eq ? std::min(first, bound) : 0, std::max(first, high) };
+	// A step that adds a literal the range's top leaves room for never
+	// wraps: the counter stays at or above its seed.
+	const InstId step_def = next.is(ValueKind::Temp) ? body.temps[next.index].def : kNoId;
+	if (pred != ComparePredicate::Eq && step_def != kNoId)
+	{
+		const Instruction& step = body.instructions[step_def];
+		if (step.op == Opcode::Binary && static_cast<BinaryOp>(step.sub) == BinaryOp::Add && step.type == phi.type &&
+			step.ops[0] == Value::temp(phi.result) && step.ops[1].is(ValueKind::Integer) &&
+			range.high + normalize_integer(phi.type, body.literals[step.ops[1].index]).low <= kUnsignedMax)
+			range.low = first;
+	}
 	return true;
 }
 

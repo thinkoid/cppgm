@@ -25,6 +25,6 @@ function @plain(%x : i32) -> i32 {
 }
 function @down(%x : u32) -> u32 {
   block ^entry:
-    %b = binary add u32 %x, 4294967293
+    %b = binary sub nowrap u32 %x, 3
     return u32 %b
 }
