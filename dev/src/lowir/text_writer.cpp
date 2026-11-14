@@ -845,11 +845,13 @@ bool Writer::write_value_instruction(const Instruction& inst)
 		type(inst.type);
 		return true;
 	case Opcode::ReadMxcsr:
+	case Opcode::MemorySize:
 	case Opcode::StackSave:
 	case Opcode::FrameAddress:
 		spelled(kHeads[static_cast<unsigned>(inst.op)]);
 		return true;
 	case Opcode::WriteMxcsr:
+	case Opcode::MemoryGrow:
 	case Opcode::StackRestore:
 	case Opcode::StackAlloc:
 		head(inst.op);

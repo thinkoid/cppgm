@@ -460,6 +460,13 @@ void Selector::instruction(const lowir::Instruction& inst)
 		out_.relocate(RelocationKind::GlobalIndex, module_.stack_symbol);
 		break;
 	}
+	case Opcode::MemorySize:
+		out_.emit(Op::MemorySize, { 0 });
+		break;
+	case Opcode::MemoryGrow:
+		value(inst.ops[0], Type::scalar(TypeKind::U32));
+		out_.emit(Op::MemoryGrow, { 0 });
+		break;
 	default:
 		throw WasmError("unsupported operation in this Wasm profile: " + std::string(spelling(inst.op)));
 	}

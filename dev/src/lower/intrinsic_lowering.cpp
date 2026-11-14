@@ -199,6 +199,17 @@ RValue FunctionLowering::gnu_intrinsic(const syntax::CallExpr& expr, sema::Intri
 		}
 		return result;
 	}
+	case sema::Intrinsic::WasmMemorySize:
+	case sema::Intrinsic::WasmMemoryGrow:
+	{
+		const bool grow = kind == sema::Intrinsic::WasmMemoryGrow;
+		const lowir::Type size = lowir::Type::scalar(lowir::TypeKind::U32);
+		lowir::Instruction inst = lowir::make_instruction(
+			grow ? lowir::Opcode::MemoryGrow : lowir::Opcode::MemorySize, size);
+		if (grow)
+			inst.ops[0] = operand(*expr.arguments[1], ConversionContext::Argument).value;
+		return RValue{ emit_value(inst, size), size };
+	}
 	case sema::Intrinsic::Alloca:
 	{
 		const RValue size = operand(*expr.arguments[0], ConversionContext::Argument);

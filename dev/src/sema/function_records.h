@@ -292,7 +292,9 @@ enum class Intrinsic : uint8_t
 	ElementwiseMinMax,
 	// Clang's __builtin_nondeterministic_value(x): zero of x's type, x not
 	// evaluated.
-	NondeterministicValue
+	NondeterministicValue,
+	WasmMemorySize,
+	WasmMemoryGrow
 };
 
 // Generic GNU atomics whose object needs the size-prefixed runtime ABI.

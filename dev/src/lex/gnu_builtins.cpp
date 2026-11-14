@@ -709,6 +709,8 @@ const struct
 	{ "__builtin_va_end", { GnuBuiltin::VaList, 1, nullptr, 0 } },
 	{ "__builtin_va_start", { GnuBuiltin::VaList, 0, nullptr, 0 } },
 	{ "__builtin_vsnprintf", { GnuBuiltin::Library, 0, "ic*zCc*V", 0 } },
+	{ "__builtin_wasm_memory_grow", { GnuBuiltin::WasmMemory, 1, nullptr, 0 } },
+	{ "__builtin_wasm_memory_size", { GnuBuiltin::WasmMemory, 0, nullptr, 0 } },
 	{ "_mm_getcsr", { GnuBuiltin::Mxcsr, 0, "u", 0 } },
 	{ "_mm_setcsr", { GnuBuiltin::Mxcsr, 1, "vu", 0 } },
 };
@@ -908,7 +910,7 @@ const GnuC11Operation kGnuC11Operations[] = { { "init", 2, "pv", '-', 1, 0xff },
 	{ "is_lock_free", 25, "s", 'C', 0, 0xff } };
 const unsigned kGnuC11OperationCount = sizeof kGnuC11Operations / sizeof kGnuC11Operations[0];
 
-uint32_t ProvidedBuiltinVersion(const char* spelling, uint32_t length)
+uint32_t ProvidedBuiltinVersion(const char* spelling, uint32_t length, bool wasm)
 {
 	// Clang's builtin templates, which the hosted builtin declarations
 	// declare (driver/host_environment.cpp).
@@ -923,6 +925,8 @@ uint32_t ProvidedBuiltinVersion(const char* spelling, uint32_t length)
 	if (FindGnuTrait(spelling, length, trait))
 		return 1;
 	if (!FindGnuBuiltin(spelling, length, entry))
+		return 0;
+	if (entry.builtin == GnuBuiltin::WasmMemory && !wasm)
 		return 0;
 	return entry.builtin == GnuBuiltin::OperatorNew || entry.builtin == GnuBuiltin::OperatorDelete ? 201802 : 1;
 }

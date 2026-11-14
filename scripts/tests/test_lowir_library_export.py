@@ -33,7 +33,11 @@ class LibraryExportTests(unittest.TestCase):
                 ("abimangle", "pptoken", "posttoken", "ppexpr", "preproc", "cppgm++", "lowir", "lowiropt", "lowir2native")))
             subprocess.run(["make", "-s", "-C", dev, "lowir-library", "-j2", "CPPGM_TEST_RUNNER=0", "CXX=g++"], check=True, capture_output=True, text=True)
             source = root / "client.c"
-            source.write_text('#include "lowir_interface.h"\nint main(void) {\n'
+            source.write_text('#include "lowir_interface.h"\n'
+                              '_Static_assert(CPPGM_OP_CALL == 21, "existing call ABI");\n'
+                              '_Static_assert(CPPGM_OP_RETURN == 46, "existing return ABI");\n'
+                              '_Static_assert(CPPGM_OP_UNREACHABLE == 47, "existing terminator ABI");\n'
+                              'int main(void) {\n'
                               'CppgmLowir* m = cppgm_lowir_create(CPPGM_LOWIR_ABI_VERSION, 0);\n'
                               'if (m || !cppgm_lowir_error(m)[0]) return 1;\n'
                               'cppgm_lowir_destroy(m); return 0; }\n')

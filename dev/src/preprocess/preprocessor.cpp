@@ -5,6 +5,7 @@
 #include <sstream>
 
 #include "lex/text_literal.h"
+#include "lex/gnu_builtins.h"
 #include "preprocess/lexer/pp_lexer.h"
 
 namespace {
@@ -363,6 +364,11 @@ TokenSpelling Preprocessor::presumed_file_literal(uint32_t location)
 bool Preprocessor::has_feature(const char* spelling, uint32_t length)
 {
 	return IsProvidedFeature(spelling, length, modes_);
+}
+
+uint32_t Preprocessor::builtin_version(const char* spelling, uint32_t length)
+{
+	return ProvidedBuiltinVersion(spelling, length, wasm_attributes_);
 }
 
 bool Preprocessor::has_target_attribute(const char* spelling, uint32_t length)

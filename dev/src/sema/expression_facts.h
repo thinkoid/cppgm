@@ -61,7 +61,9 @@ enum class ValueConversion : uint8_t
 	// the imaginary part zero; ComplexReal rank), or a complex value to
 	// another complex type part by part (Conversion rank; Promotion when
 	// the parts promote, 4.5, 4.6).
-	Complex
+	Complex,
+	// GNU C's function/void pointer and integer pointer-sign extensions.
+	CPointer
 };
 
 // 13.3.3.1.1 Table 12; a user-defined conversion sequence ranks below a

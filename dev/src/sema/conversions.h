@@ -73,6 +73,9 @@ public:
 	bool function_conversion(const Type* source, const Type* target);
 	bool c_function_compatible(const Type* source, const Type* target);
 	bool c_type_compatible(const Type* source, const Type* target, bool ignore_cv = false);
+	// Pointee types accepted by C's implicit function/void-pointer and
+	// corresponding integer signedness extensions. No C++ conversion.
+	static bool c_pointer_extension(const Type* source, const Type* target);
 	// A type without its cv-qualifiers (an array's are its elements').
 	const Type* without_cv(const Type* type);
 

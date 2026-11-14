@@ -188,6 +188,7 @@ private:
 	TokenSpelling presumed_file_literal(uint32_t location) override;
 	bool can_include(const std::string& name, bool angle, bool next) override;
 	bool has_feature(const char* spelling, uint32_t length) override;
+	uint32_t builtin_version(const char* spelling, uint32_t length) override;
 	bool has_target_attribute(const char* spelling, uint32_t length) override;
 	bool continue_macro_arguments() override;
 	// SourceFrameObserver.

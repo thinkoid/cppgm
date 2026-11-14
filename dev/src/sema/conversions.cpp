@@ -313,6 +313,41 @@ bool ConversionRules::c_type_compatible(const Type* source, const Type* target, 
 	return true;
 }
 
+bool ConversionRules::c_pointer_extension(const Type* source, const Type* target)
+{
+	if ((IsVoid(source) && target->kind == TypeKind::Function) ||
+		(IsVoid(target) && source->kind == TypeKind::Function))
+		return true;
+	if (((source->cv | target->cv) & kAtomic) != 0)
+		return false;
+	source = source->unqualified;
+	target = target->unqualified;
+	if (source->kind != TypeKind::Fundamental || target->kind != TypeKind::Fundamental ||
+		source->fundamental == target->fundamental)
+		return false;
+	const auto family = [](FundamentalType type) {
+		switch (type)
+		{
+		case FundamentalType::Char:
+		case FundamentalType::SignedChar:
+			return FundamentalType::UnsignedChar;
+		case FundamentalType::ShortInt:
+			return FundamentalType::UnsignedShortInt;
+		case FundamentalType::Int:
+			return FundamentalType::UnsignedInt;
+		case FundamentalType::LongInt:
+			return FundamentalType::UnsignedLongInt;
+		case FundamentalType::LongLongInt:
+			return FundamentalType::UnsignedLongLongInt;
+		case FundamentalType::Int128:
+			return FundamentalType::UnsignedInt128;
+		default:
+			return type;
+		}
+	};
+	return family(source->fundamental) == family(target->fundamental);
+}
+
 bool ConversionRules::qualification_convertible(const Type* from, const Type* to)
 {
 	bool added = false, convertible = false;
@@ -555,6 +590,12 @@ bool ConversionRules::value_conversion(
 	// 4.10p2: pointer to cv T (an object type) to pointer to cv void, then
 	// a qualification adjustment.
 	const Type* pointee = source->element;
+	if (c_source_ && c_pointer_extension(pointee, goal->element))
+	{
+		out.second = ValueConversion::CPointer;
+		out.result = goal;
+		return true;
+	}
 	if (c_source_ && IsVoid(pointee) && goal->element->kind != TypeKind::Function &&
 		(CvOf(pointee) & ~CvOf(goal->element)) == 0)
 	{

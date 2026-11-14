@@ -701,12 +701,15 @@ const Type* Analyzer::composite_pointer(const ExprFacts* a, const ExprFacts* b, 
 	const uint8_t cv = pa->cv | pb->cv;
 	if (IsVoid(pa) || IsVoid(pb))
 	{
-		if ((IsVoid(pa) || pa->kind != TypeKind::Function) && (IsVoid(pb) || pb->kind != TypeKind::Function))
+		if (c_source_ ||
+			((IsVoid(pa) || pa->kind != TypeKind::Function) && (IsVoid(pb) || pb->kind != TypeKind::Function)))
 			return types_.pointer(types_.qualified(types_.fundamental(FundamentalType::Void), cv));
 		return nullptr;
 	}
 	if (pa->unqualified == pb->unqualified)
 		return types_.pointer(types_.qualified(pa->unqualified, cv));
+	if (c_source_ && ConversionRules::c_pointer_extension(pa, pb))
+		return types_.pointer(types_.qualified(types_.fundamental(FundamentalType::Void), cv));
 	if (ConversionRules::qualification_convertible(ta, tb))
 		return tb;
 	if (ConversionRules::qualification_convertible(tb, ta))

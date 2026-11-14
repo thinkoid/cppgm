@@ -253,6 +253,8 @@ inline bool may_write_memory(const lowir::Program& program, const lowir::Instruc
 	case lowir::Opcode::AtomicSignalFence:
 	case lowir::Opcode::AtomicLoad:
 	case lowir::Opcode::ReadMxcsr:
+	case lowir::Opcode::MemorySize:
+	case lowir::Opcode::MemoryGrow:
 	case lowir::Opcode::WriteMxcsr:
 	case lowir::Opcode::StackRestore:
 	case lowir::Opcode::VaStart:

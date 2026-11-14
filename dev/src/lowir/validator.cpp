@@ -254,10 +254,11 @@ const OperandRule kOperandRules[] = {
 	{ { kValueOperand, kNoOperand, kNoOperand }, ExtraOperands::Blocks, 1 },                          // IndirectJump
 	{ { kValueOperand | kNoOperand, kNoOperand, kNoOperand }, ExtraOperands::None, 1 },               // Return
 	{ { kNoOperand, kNoOperand, kNoOperand }, ExtraOperands::None, 1 },                               // Unreachable
+	{ { kNoOperand, kNoOperand, kNoOperand }, ExtraOperands::None, 1 },                               // MemorySize
+	{ { kValueOperand, kNoOperand, kNoOperand }, ExtraOperands::None, 1 },                            // MemoryGrow
 };
 
-static_assert(sizeof kOperandRules / sizeof kOperandRules[0] == static_cast<unsigned>(Opcode::Unreachable) + 1,
-	"one operand rule per opcode");
+static_assert(sizeof kOperandRules / sizeof kOperandRules[0] == kOpcodeCount, "one operand rule per opcode");
 
 class Validator
 {
@@ -809,7 +810,7 @@ bool Validator::check_operands(InstId id, const Instruction& inst)
 		return fail("invalid call signature");
 	// Value instructions define one temporary of their result type; a void
 	// call and the effects define none.
-	const bool defines = inst.op <= Opcode::ExceptionSelector && (inst.op != Opcode::Call || !inst.type.is_void());
+	const bool defines = defines_value(inst.op) && (inst.op != Opcode::Call || !inst.type.is_void());
 	if (!defines)
 		return inst.result == kNoId || fail("a void instruction has no result");
 	if (inst.result >= body_->temps.size() || body_->temps[inst.result].def != id)
@@ -1048,6 +1049,15 @@ bool Validator::check_instruction(InstId id, const Instruction& inst, BlockId bl
 		return true;
 	case Opcode::ReadMxcsr:
 		return inst.type.kind() == TypeKind::U32 || fail("read_mxcsr requires a u32 result");
+	case Opcode::MemorySize:
+	case Opcode::MemoryGrow:
+		if (!target_model::is_wasm(program_.target))
+			return fail("memory page operations require a Wasm target");
+		if (inst.type.kind() != TypeKind::U32)
+			return fail("memory page operations require a u32 result");
+		return inst.op == Opcode::MemorySize || inst.ops[0].is(ValueKind::Integer) ||
+			(value_type(inst.ops[0], type) && type.kind() == TypeKind::U32) ||
+			fail("memory_grow requires a u32 page count");
 	case Opcode::WriteMxcsr:
 		return (inst.type.kind() == TypeKind::U32 &&
 				   (inst.ops[0].is(ValueKind::Integer) ||

@@ -453,8 +453,14 @@ bool Parser::parse_value_instruction(FunctionBuilder& builder, Opcode keyword, I
 		result = keyword == Opcode::Exception ? inst.type : kI64;
 		return true;
 	case Opcode::ReadMxcsr:
+	case Opcode::MemorySize:
 		inst.op = keyword;
 		inst.type = result = Type::scalar(TypeKind::U32);
+		return true;
+	case Opcode::MemoryGrow:
+		inst.op = keyword;
+		inst.type = result = Type::scalar(TypeKind::U32);
+		inst.ops[0] = parse_value(builder, TypeKind::U32);
 		return true;
 	case Opcode::StackSave:
 	case Opcode::FrameAddress:

@@ -163,13 +163,16 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 	std::vector<uint32_t> function_symbols(object.functions.size(), lowir::kNoId);
 	std::vector<uint32_t> symbols(program.symbols.size() + 3 + module.tag_types.size(), lowir::kNoId);
 	std::vector<uint32_t> groups(program.symbols.size(), lowir::kNoId);
+	const lowir::NameId stack_low_name = program.names.find("__stack_low", 11);
+	uint32_t stack_low_object = lowir::kNoId;
 	for (lowir::SymbolId id : program.order)
 	{
 		const auto& source = program.symbols[id];
 		if (!lowir::is_function_kind(source.kind) && !lowir::is_global_kind(source.kind))
 			continue;
 		ObjectSymbol symbol;
-		symbol.name = program.spelling(source.metadata.object != 0 ? source.metadata.object : source.name);
+		const lowir::NameId object_name = source.metadata.object != 0 ? source.metadata.object : source.name;
+		symbol.name = program.spelling(object_name);
 		symbol.flags = flags(source);
 		if ((source.metadata.flags & ir_model::SF_OBJECT_ROOT) != 0)
 			symbol.flags |= 0x80;
@@ -244,6 +247,8 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 			object.groups.push_back(std::move(group));
 		}
 		symbols[id] = static_cast<uint32_t>(object.symbols.size());
+		if (symbol.kind == 1 && !symbol.local() && object_name == stack_low_name)
+			stack_low_object = symbols[id];
 		object.symbols.push_back(std::move(symbol));
 		if (source.metadata.role == ir_model::SR_INIT)
 			object.initializers.push_back({ 65535, symbols[id] });
@@ -279,8 +284,15 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 	symbols[module.stack_symbol] = static_cast<uint32_t>(object.symbols.size());
 	object.symbols.push_back(imported_symbol(2, 0, "__stack_pointer"));
 	object.global_imports.push_back(ObjectGlobal{ "env", "__stack_pointer", ValueType::I32, true });
-	symbols[module.stack_low_symbol] = static_cast<uint32_t>(object.symbols.size());
-	object.symbols.push_back(imported_symbol(1, 0, "__stack_low"));
+	// Source declarations and the frame guard designate the same linker
+	// boundary. Keep one object identity when the source names it too.
+	if (stack_low_object != lowir::kNoId)
+		symbols[module.stack_low_symbol] = stack_low_object;
+	else
+	{
+		symbols[module.stack_low_symbol] = static_cast<uint32_t>(object.symbols.size());
+		object.symbols.push_back(imported_symbol(1, 0, "__stack_low"));
+	}
 	symbols[module.table_symbol] = static_cast<uint32_t>(object.symbols.size());
 	object.symbols.push_back(imported_symbol(5, 0, "__indirect_function_table"));
 	if (module.exception_regions)

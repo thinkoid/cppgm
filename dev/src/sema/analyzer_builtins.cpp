@@ -733,6 +733,7 @@ ExprFacts* Analyzer::gnu_intrinsic(const syntax::CallExpr& expr, GnuBuiltin buil
 	case GnuBuiltin::Mxcsr:
 	case GnuBuiltin::FltRounds:
 	case GnuBuiltin::FrameAddress:
+	case GnuBuiltin::WasmMemory:
 		return control_intrinsic(expr, builtin, variant, scope);
 	case GnuBuiltin::VectorTruncate:
 	{
@@ -879,7 +880,32 @@ ExprFacts* Analyzer::gnu_intrinsic(const syntax::CallExpr& expr, GnuBuiltin buil
 ExprFacts* Analyzer::control_intrinsic(const syntax::CallExpr& expr, GnuBuiltin builtin, uint8_t variant, Scope* scope)
 {
 	ExprFacts* facts;
-	if (builtin == GnuBuiltin::FrameAddress)
+	if (builtin == GnuBuiltin::WasmMemory)
+	{
+		if (!target_model::is_wasm(types_.target()))
+			error(expr.location, "Wasm memory builtin requires a Wasm target");
+		if (expr.arguments.size != 1u + variant)
+			error(expr.location, "wrong number of arguments to a Wasm memory builtin");
+		const ExprFacts* index = typed_value(*expr.arguments[0], scope);
+		if (index == nullptr)
+			return nullptr;
+		Constant memory = Constant();
+		uint64_t high = 0;
+		const bool constant = integral_constant(*expr.arguments[0], scope, memory, high);
+		if ((!constant && (template_depth_ == 0 || (index->flags & (kDependentUse | kValueDependentUse)) == 0)) ||
+			(constant && (memory.bits != 0 || high != 0)))
+			error(expr.arguments[0]->location, "Wasm memory index must be the integer constant zero");
+		const Type* size = types_.fundamental(FundamentalType::UnsignedLongInt);
+		if (variant != 0)
+		{
+			if (typed_value(*expr.arguments[1], scope) == nullptr)
+				return nullptr;
+			convert(*expr.arguments[1], size, false);
+		}
+		facts = new_facts(expr, size, ValueCategory::PRValue);
+		facts->value = static_cast<uint64_t>(variant == 0 ? Intrinsic::WasmMemorySize : Intrinsic::WasmMemoryGrow);
+	}
+	else if (builtin == GnuBuiltin::FrameAddress)
 	{
 		if (expr.arguments.size != 1)
 			error(expr.location, "__builtin_frame_address takes one argument");
