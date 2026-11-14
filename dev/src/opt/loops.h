@@ -47,6 +47,11 @@ bool rare_float_path(const lowir::FunctionBody& body, const Cfg& cfg, lowir::Blo
 // the predecessors outside the loop and the header. False when one is a
 // handler. The graph changes.
 bool make_loop_preheader(lowir::FunctionBody& body, const Cfg& cfg, const LoopForest& forest, uint32_t loop);
+// Gives a loop of several back edges one latch: a new block of one jump to
+// its header that every back edge passes through, where a phi merges what
+// the header's phis took from the latches when those differ. False for a
+// loop of one latch or with a handler latch. The graph changes.
+bool make_loop_latch(lowir::FunctionBody& body, const Cfg& cfg, const LoopForest& forest, uint32_t loop);
 
 // For a pass that rewrites several loops between finding them: marks in
 // `touched` (per block) the blocks a rewrite of `l` may change -- the loop, the

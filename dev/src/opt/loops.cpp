@@ -338,9 +338,10 @@ Located locate_steps(const FunctionBody& body, Value v)
 	return out;
 }
 
-// The header's phis take from the new preheader what they took from the blocks
-// entering the loop, merged there by a phi where those differ.
-static void merge_entry_values(FunctionBody& body, const LoopForest& forest, uint32_t loop, BlockId pre)
+// The header's phis take from the new block `through` what they took from
+// the blocks entering the loop (`back`: from its latches), merged there by
+// a phi where those differ.
+static void merge_side_values(FunctionBody& body, const LoopForest& forest, uint32_t loop, BlockId through, bool back)
 {
 	const BlockId header = forest.loops[loop].header;
 	InstId at = kNoId;
@@ -348,31 +349,31 @@ static void merge_entry_values(FunctionBody& body, const LoopForest& forest, uin
 		i = body.instructions[i].next)
 	{
 		const Instruction phi = body.instructions[i];
-		std::vector<Value> kept, entering;
+		std::vector<Value> kept, moved;
 		bool same = true;
 		for (uint32_t k = 0; k < phi.extra_count; k += 2)
 		{
 			const Value from = body.operands[phi.extra_first + k];
 			const Value value = body.operands[phi.extra_first + k + 1];
-			std::vector<Value>& side = in_loop(forest, loop, from.index) ? kept : entering;
+			std::vector<Value>& side = in_loop(forest, loop, from.index) == back ? moved : kept;
 			side.push_back(from);
 			side.push_back(value);
-			same = same && (&side == &kept || value == entering[1]);
+			same = same && (&side == &kept || value == moved[1]);
 		}
-		Value merged = entering[1];
+		Value merged = moved[1];
 		if (!same)
 		{
 			Instruction values = make_instruction(Opcode::Phi, phi.type);
-			values.extra_first = append_operands(body, entering.data(), static_cast<uint32_t>(entering.size()));
-			values.extra_count = static_cast<uint32_t>(entering.size());
+			values.extra_first = append_operands(body, moved.data(), static_cast<uint32_t>(moved.size()));
+			values.extra_count = static_cast<uint32_t>(moved.size());
 			const InstId id = append_instruction(body, values);
 			const TempId result = append_temp(body, phi.type, id);
 			body.instructions[id].result = result;
-			insert_after(body, pre, at, id);
+			insert_after(body, through, at, id);
 			at = id;
 			merged = Value::temp(result);
 		}
-		kept.push_back(Value::block(pre));
+		kept.push_back(Value::block(through));
 		kept.push_back(merged);
 		const uint32_t first = append_operands(body, kept.data(), static_cast<uint32_t>(kept.size()));
 		body.instructions[i].extra_first = first;
@@ -417,7 +418,34 @@ bool make_loop_preheader(FunctionBody& body, const Cfg& cfg, const LoopForest& f
 		rename_phi_incoming(body, l.header, entries[0], pre);
 		return true;
 	}
-	merge_entry_values(body, forest, loop, pre);
+	merge_side_values(body, forest, loop, pre, false);
+	return true;
+}
+
+bool make_loop_latch(FunctionBody& body, const Cfg& cfg, const LoopForest& forest, uint32_t loop)
+{
+	const Loop& l = forest.loops[loop];
+	if (l.latches.size() < 2)
+		return false;
+	for (BlockId b : l.latches)
+		if ((cfg.flags[b] & BF_HANDLER) != 0)
+			return false;
+	const BlockId latch = append_block(body, BlockKind::Split);
+	Instruction jump = make_instruction(Opcode::Jump, Type::scalar(TypeKind::Void));
+	jump.ops[0] = Value::block(l.header);
+	insert_after(body, latch, kNoId, append_instruction(body, jump));
+	// After the last of the loop's blocks.
+	size_t last = 0;
+	for (size_t k = 0; k < body.layout.size(); ++k)
+		if (in_loop(forest, loop, body.layout[k]))
+			last = k;
+	body.layout.insert(body.layout.begin() + static_cast<std::ptrdiff_t>(last) + 1, latch);
+	for (BlockId b : l.latches)
+		for_each_successor(body, body.instructions[body.blocks[b].last], [&](BlockId& t) {
+			if (t == l.header)
+				t = latch;
+		});
+	merge_side_values(body, forest, loop, latch, true);
 	return true;
 }
 

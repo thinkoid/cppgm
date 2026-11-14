@@ -1,0 +1,186 @@
+#include <assert.h>
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+
+struct Five
+{
+	double e[5];
+	double& operator[](unsigned long i)
+	{
+		assert(i < 5);
+		return e[i];
+	}
+};
+
+// The marker step of a five-marker quantile estimate: the three inner
+// markers move toward their wanted places.
+struct Markers
+{
+	Five heights, places, wanted;
+	void adjust();
+	void add(double sample, unsigned long count);
+};
+
+__attribute__((noinline)) void Markers::adjust()
+{
+	for (unsigned long i = 1; i <= 3; ++i)
+	{
+		double d = wanted[i] - places[i];
+		double dp = places[i + 1] - places[i];
+		double dm = places[i - 1] - places[i];
+		double hp = (heights[i + 1] - heights[i]) / dp;
+		double hm = (heights[i - 1] - heights[i]) / dm;
+		if ((d >= 1. && dp > 1.) || (d <= -1. && dm < -1.))
+		{
+			short sign_d = static_cast<short>(d / fabs(d));
+			double h = heights[i] + sign_d / (dp - dm) * ((sign_d - dm) * hp + (dp - sign_d) * hm);
+			if (heights[i - 1] < h && h < heights[i + 1])
+				heights[i] = h;
+			else
+			{
+				if (d > 0)
+					heights[i] += hp;
+				if (d < 0)
+					heights[i] -= hm;
+			}
+			places[i] += sign_d;
+		}
+	}
+}
+
+__attribute__((noinline)) void Markers::add(double sample, unsigned long count)
+{
+	unsigned long cell = 1;
+	if (sample < heights[0])
+		heights[0] = sample;
+	else if (heights[4] <= sample)
+	{
+		heights[4] = sample;
+		cell = 4;
+	}
+	else
+		while (cell < 4 && heights[cell] <= sample)
+			++cell;
+	for (unsigned long i = cell; i < 5; ++i)
+		places[i] += 1;
+	const double n = static_cast<double>(count);
+	wanted[0] = 1;
+	wanted[1] = n * 0.25 + 1;
+	wanted[2] = n * 0.5 + 1;
+	wanted[3] = n * 0.75 + 1;
+	wanted[4] = n + 1;
+	adjust();
+}
+
+// Three passes, each returning to the header from one of three places.
+__attribute__((noinline)) void marks(const int* v, int* below, int* same, int x)
+{
+	for (unsigned long i = 1; i <= 3; ++i)
+	{
+		if (v[i] < v[i + 1])
+		{
+			++*below;
+			continue;
+		}
+		if (v[i] == x)
+			++*same;
+	}
+}
+
+// Each way back to the header brings its own value.
+__attribute__((noinline)) int weights(int* v, int x)
+{
+	int n = 0;
+	for (unsigned long i = 0; i < 4; ++i)
+	{
+		if (v[i + 1] < x)
+		{
+			v[i] = 1;
+			n += 3;
+			continue;
+		}
+		if (v[i + 1] == x)
+		{
+			v[i] = 2;
+			n ^= 5;
+		}
+	}
+	return n;
+}
+
+static uint64_t hash = 1469598103934665603ull;
+static void mix(uint64_t v)
+{
+	for (int k = 0; k < 8; ++k)
+	{
+		hash ^= (v >> (8 * k)) & 0xff;
+		hash *= 1099511628211ull;
+	}
+}
+static void mix_double(double d)
+{
+	uint64_t bits;
+	__builtin_memcpy(&bits, &d, 8);
+	mix(bits);
+}
+
+int main()
+{
+	Markers m;
+	uint32_t state = 12345;
+	double first[5];
+	for (int k = 0; k < 5; ++k)
+	{
+		state = state * 1664525u + 1013904223u;
+		first[k] = static_cast<double>(state >> 8) / 16777216.0;
+	}
+	for (int a = 0; a < 5; ++a)
+		for (int b = a + 1; b < 5; ++b)
+			if (first[b] < first[a])
+			{
+				double t = first[a];
+				first[a] = first[b];
+				first[b] = t;
+			}
+	for (int k = 0; k < 5; ++k)
+	{
+		m.heights[k] = first[k];
+		m.places[k] = k + 1;
+		m.wanted[k] = k + 1;
+	}
+	for (unsigned long count = 5; count < 20000; ++count)
+	{
+		state = state * 1664525u + 1013904223u;
+		m.add(static_cast<double>(state >> 8) / 16777216.0, count);
+		if (count % 997 == 0)
+			for (int k = 0; k < 5; ++k)
+			{
+				mix_double(m.heights[k]);
+				mix_double(m.places[k]);
+			}
+	}
+	for (int k = 0; k < 5; ++k)
+	{
+		mix_double(m.heights[k]);
+		mix_double(m.places[k]);
+	}
+	int v[6], below = 0, same = 0, total = 0;
+	for (int round = 0; round < 500; ++round)
+	{
+		for (int k = 0; k < 6; ++k)
+		{
+			state = state * 1664525u + 1013904223u;
+			v[k] = static_cast<int>(state >> 28);
+		}
+		marks(v, &below, &same, round % 16);
+		total += weights(v, round % 16);
+		for (int k = 0; k < 6; ++k)
+			mix(static_cast<uint64_t>(v[k]));
+	}
+	mix(static_cast<uint64_t>(below));
+	mix(static_cast<uint64_t>(same));
+	mix(static_cast<uint64_t>(total));
+	printf("%016llx\n", static_cast<unsigned long long>(hash));
+	return 0;
+}

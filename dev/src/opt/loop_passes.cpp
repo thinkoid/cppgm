@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstring>
 
 #include "lowir/builder.h"
@@ -60,7 +61,7 @@ private:
 		std::vector<uint8_t>& owned, BlockId& through);
 	void add_exit_phis(const std::vector<uint8_t>& member, const std::vector<uint8_t>& owned, BlockId exit);
 	bool invariant(uint32_t loop, Value v) const;
-	bool induction(uint32_t loop, InstId phi, Induction& out) const;
+	bool induction(uint32_t loop, InstId phi, Induction& out, bool several = false) const;
 	void add_narrow_accumulators(uint32_t loop, std::vector<Induction>& ivs) const;
 	bool exit_test(uint32_t loop, ExitTest& out, std::vector<Induction>& ivs, bool fixed_bounds = false) const;
 	bool effect_free(uint32_t loop) const;
@@ -101,6 +102,7 @@ private:
 	FunctionBody& body_;
 	Cfg& cfg_;
 	LoopForest forest_;
+	std::vector<BlockId> latches_made_;  // unroll's make_loop_latch blocks (not copies)
 	std::vector<uint32_t> hoist_uses_;   // use counts for hoist_from (empty: not counted)
 	std::vector<uint8_t> hoist_escaped_; // escaped_slots, once a loop writes memory
 	std::vector<uint32_t> loop_reads_;   // hoist_from's reads in the loop per temp
@@ -122,20 +124,31 @@ bool LoopPass::invariant(uint32_t loop, Value v) const
 	return def != kNoId && c_.block_of[def] != kNoId && !in_loop(forest_, loop, c_.block_of[def]);
 }
 
-bool LoopPass::induction(uint32_t loop, InstId id, Induction& out) const
+// (`several`: the loop may have several latches, which all bring one value.)
+bool LoopPass::induction(uint32_t loop, InstId id, Induction& out, bool several) const
 {
 	const Loop& l = forest_.loops[loop];
 	const Instruction& phi = body_.instructions[id];
-	if (phi.op != Opcode::Phi || phi.extra_count != 4 || l.latches.size() != 1)
+	if (phi.op != Opcode::Phi || l.latches.empty() ||
+		(several ? phi.extra_count != 2 * l.latches.size() + 2 : phi.extra_count != 4 || l.latches.size() != 1))
 		return false;
 	out.phi = id;
 	out.value = phi.result;
 	out.init = phi_incoming(body_, phi, l.preheader != kNoId ? l.preheader : kNoId);
 	const Value next = phi_incoming(body_, phi, l.latches[0]);
-	for (uint32_t k = 0; k < 4; k += 2)
-		if (body_.operands[phi.extra_first + k].index != l.latches[0])
-			out.init = body_.operands[phi.extra_first + k + 1];
-	if (!next.is(ValueKind::Temp) || !invariant(loop, out.init))
+	unsigned entering = 0;
+	for (uint32_t k = 0; k < phi.extra_count; k += 2)
+	{
+		const Value value = body_.operands[phi.extra_first + k + 1];
+		if (std::find(l.latches.begin(), l.latches.end(), body_.operands[phi.extra_first + k].index) == l.latches.end())
+		{
+			out.init = value;
+			++entering;
+		}
+		else if (!(value == next))
+			return false;
+	}
+	if ((several && entering != 1) || !next.is(ValueKind::Temp) || !invariant(loop, out.init))
 		return false;
 	const InstId def = body_.temps[next.index].def;
 	if (def == kNoId)
@@ -2048,7 +2061,7 @@ bool LoopPass::unroll_search_shape(uint32_t loop, int64_t trips, TempId iv, std:
 		{
 			const BlockId b = stack.back();
 			stack.pop_back();
-			if (b == l.latches[0])
+			if (std::find(l.latches.begin(), l.latches.end(), b) != l.latches.end())
 				return true;
 			for (uint32_t k = cfg_.succ_first[b]; k < cfg_.succ_first[b + 1]; ++k)
 			{
@@ -2257,7 +2270,7 @@ int64_t LoopPass::unroll_bound(uint32_t loop, BlockId tested, TempId& iv_temp) c
 		i = body_.instructions[i].next)
 	{
 		Induction iv;
-		if (!induction(loop, i, iv))
+		if (!induction(loop, i, iv, l.latches.size() > 1))
 			continue;
 		for (unsigned side = 0; side < 2; ++side)
 		{
@@ -2301,11 +2314,13 @@ int64_t LoopPass::unroll_bound(uint32_t loop, BlockId tested, TempId& iv_temp) c
 bool LoopPass::try_unroll_search(uint32_t loop)
 {
 	const Loop& l = forest_.loops[loop];
-	if (l.latches.size() != 1)
+	if (l.latches.empty())
 		return false;
+	// (A loop of several back edges is counted at its header.)
+	const bool several = l.latches.size() != 1;
 	TempId iv_temp = kNoId;
 	int64_t trips = unroll_bound(loop, l.header, iv_temp);
-	if (trips < 0 && l.latches[0] != l.header)
+	if (trips < 0 && !several && l.latches[0] != l.header)
 		trips = unroll_bound(loop, l.latches[0], iv_temp);
 	if (trips < 1 || trips > kSearchTrips)
 		return false;
@@ -2313,6 +2328,15 @@ bool LoopPass::try_unroll_search(uint32_t loop)
 	BlockId through = kNoId;
 	if (!unroll_search_shape(loop, trips, iv_temp, member, owned, through))
 		return false;
+	// Its back edges pass through one latch first (the caller finds the
+	// loops again and comes back).
+	if (several)
+	{
+		if (!make_loop_latch(body_, cfg_, forest_, loop))
+			return false;
+		latches_made_.push_back(static_cast<BlockId>(body_.blocks.size() - 1));
+		return true;
+	}
 	// A loop entered from a branching block gets its preheader first (the
 	// caller finds the loops again and comes back).
 	if (l.preheader == kNoId)
@@ -2509,7 +2533,9 @@ bool LoopPass::unroll()
 		{
 			bool copies = false;
 			for (BlockId b : forest_.loops[k].blocks)
-				copies = copies || b >= first_copy;
+				copies = copies ||
+					(b >= first_copy &&
+						std::find(latches_made_.begin(), latches_made_.end(), b) == latches_made_.end());
 			one = !copies && (try_unroll(k) || try_unroll_search(k));
 		}
 		if (!one)
