@@ -1536,6 +1536,12 @@ bool ProgramLowering::static_object(const sema::Type* type, const syntax::Initia
 	if (initializer->kind == syntax::InitializerKind::Parenthesized)
 		return false;
 	const syntax::Expr* expr = initializer->expression;
+	if (expr->kind == syntax::ExprKind::FunctionalCast)
+	{
+		const auto& literal = static_cast<const syntax::FunctionalCastExpr&>(*expr);
+		if (literal.compound_type != nullptr && literal.compound_static)
+			return static_element(type, *literal.braced, out);
+	}
 	if (expr->kind != syntax::ExprKind::BracedInit)
 		return static_string(type, *expr, out);
 	return static_element(type, *expr, out);
@@ -1543,6 +1549,12 @@ bool ProgramLowering::static_object(const sema::Type* type, const syntax::Initia
 
 bool ProgramLowering::static_element(const sema::Type* type, const syntax::Expr& element, StaticData& out)
 {
+	if (element.kind == syntax::ExprKind::FunctionalCast)
+	{
+		const auto& literal = static_cast<const syntax::FunctionalCastExpr&>(element);
+		if (literal.compound_type != nullptr && literal.compound_static)
+			return static_element(type, *literal.braced, out);
+	}
 	if (element.kind == syntax::ExprKind::BracedInit &&
 		static_cast<const syntax::BracedInitList&>(element).result_source != nullptr)
 		return static_element(type, *static_cast<const syntax::BracedInitList&>(element).result_source, out);
@@ -2179,7 +2191,7 @@ bool ProgramLowering::static_converted(
 				value.bits = 1;
 				value.high = 0;
 			}
-			else if (kind.bits < 64)
+			else if (kind.bits < target_model::data_layout(program_.target).pointer_bytes * 8)
 				return false;
 			out = value;
 			return true;
@@ -2518,6 +2530,17 @@ bool ProgramLowering::static_lvalue(const syntax::Expr& expr, StaticValue& out)
 	const sema::ExprFacts* facts = e->facts;
 	if (facts == nullptr)
 		return false;
+	if (e->kind == syntax::ExprKind::FunctionalCast)
+	{
+		const auto& literal = static_cast<const syntax::FunctionalCastExpr&>(*e);
+		if (literal.compound_type != nullptr && literal.compound_static)
+		{
+			out.kind = StaticValue::Kind::Address;
+			out.symbol = compound_literal(literal);
+			out.offset = 0;
+			return true;
+		}
+	}
 	switch (e->kind)
 	{
 	case syntax::ExprKind::Id:

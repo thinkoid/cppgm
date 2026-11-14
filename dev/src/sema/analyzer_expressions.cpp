@@ -2893,6 +2893,20 @@ ExprFacts* Analyzer::cast_expression(const syntax::CastExpr& expr, Scope* scope)
 
 ExprFacts* Analyzer::functional_cast(const syntax::FunctionalCastExpr& expr, Scope* scope)
 {
+	if (expr.compound_type != nullptr)
+	{
+		const Type* type = type_id(*expr.compound_type, scope, false);
+		if (type == nullptr || failed())
+			return nullptr;
+		if (IsVoid(type) || type->kind == TypeKind::Function)
+			error(expr.location, "C compound literal requires an object type");
+		list_initialize(*expr.braced, type, scope);
+		if (failed())
+			return nullptr;
+		expr.compound_static = scope == graph_.global;
+		return new_facts(expr, expr.braced->facts->type, ValueCategory::LValue);
+	}
+
 	// 5.2.3: T(e) is the cast (T)e; T() and T{} value-initialize.
 	Specifiers specifiers;
 	ClassEntity* deduction = cxx17_ ? deduction_template(expr.type, scope) : nullptr;

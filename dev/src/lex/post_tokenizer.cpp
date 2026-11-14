@@ -4,12 +4,14 @@
 #include "lex/number_literal.h"
 #include "lex/text_literal.h"
 
-PostTokenizer::PostTokenizer(
-	PPTokenCursor& input, IdentifierTable* identifiers, NumberDialect literals, target_model::Target target)
-	: input_(input), identifiers_(identifiers), literals_(literals), target_(target), lookahead_(nullptr), token_(),
-	  split_suffix_(), split_suffix_begin_(0), split_suffix_end_(0), after_operator_(false), scalar_()
+PostTokenizer::PostTokenizer(PPTokenCursor& input, IdentifierTable* identifiers, NumberDialect literals,
+	target_model::Target target, bool conditional_escapes)
+	: input_(input), identifiers_(identifiers), literals_(literals), conditional_escapes_(conditional_escapes),
+	  target_(target), lookahead_(nullptr), token_(), split_suffix_(), split_suffix_begin_(0), split_suffix_end_(0),
+	  after_operator_(false), scalar_()
 {
 	strings_.set_reserved_suffixes(literals == NumberDialect::Gnu);
+	strings_.set_conditional_escapes(conditional_escapes);
 }
 
 const PostToken& PostTokenizer::next()
@@ -165,7 +167,8 @@ void PostTokenizer::convert_character(const PPToken& pp)
 {
 	const CharacterLiteralValue value = EvaluateCharacterLiteral(pp.spelling, pp.length,
 		(literals_ == NumberDialect::Gnu || literals_ == NumberDialect::GnuStream) ? CharacterDialect::Gnu
-																				   : CharacterDialect::Course);
+																				   : CharacterDialect::Course,
+		conditional_escapes_);
 	if (!value.valid)
 		return;
 	set_scalar(LiteralForm::Character, value.type, value.code_point);

@@ -709,8 +709,12 @@ const struct
 	{ "__builtin_va_end", { GnuBuiltin::VaList, 1, nullptr, 0 } },
 	{ "__builtin_va_start", { GnuBuiltin::VaList, 0, nullptr, 0 } },
 	{ "__builtin_vsnprintf", { GnuBuiltin::Library, 0, "ic*zCc*V", 0 } },
+	{ "__builtin_wasm_max_f32", { GnuBuiltin::WasmMinMax, 1, "fff", 0 } },
+	{ "__builtin_wasm_max_f64", { GnuBuiltin::WasmMinMax, 3, "ddd", 0 } },
 	{ "__builtin_wasm_memory_grow", { GnuBuiltin::WasmMemory, 1, nullptr, 0 } },
 	{ "__builtin_wasm_memory_size", { GnuBuiltin::WasmMemory, 0, nullptr, 0 } },
+	{ "__builtin_wasm_min_f32", { GnuBuiltin::WasmMinMax, 0, "fff", 0 } },
+	{ "__builtin_wasm_min_f64", { GnuBuiltin::WasmMinMax, 2, "ddd", 0 } },
 	{ "_mm_getcsr", { GnuBuiltin::Mxcsr, 0, "u", 0 } },
 	{ "_mm_setcsr", { GnuBuiltin::Mxcsr, 1, "vu", 0 } },
 };
@@ -926,7 +930,7 @@ uint32_t ProvidedBuiltinVersion(const char* spelling, uint32_t length, bool wasm
 		return 1;
 	if (!FindGnuBuiltin(spelling, length, entry))
 		return 0;
-	if (entry.builtin == GnuBuiltin::WasmMemory && !wasm)
+	if ((entry.builtin == GnuBuiltin::WasmMemory || entry.builtin == GnuBuiltin::WasmMinMax) && !wasm)
 		return 0;
 	return entry.builtin == GnuBuiltin::OperatorNew || entry.builtin == GnuBuiltin::OperatorDelete ? 201802 : 1;
 }

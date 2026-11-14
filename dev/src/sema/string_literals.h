@@ -16,7 +16,20 @@ struct Type;
 
 // Whether an array of this element type is a character array, one a
 // string literal initializes by its code units (8.5.2p1).
+// Includes the underlying integer types of C prefixed literals. Semantic
+// initialization still requires the literal's actual element type to match.
 bool IsCharacterArrayElement(const Type* type);
+
+// C's prefixed literals use the compatible integer typedef types, rather
+// than C++'s distinct wchar_t/char16_t/char32_t fundamental types. Every
+// supported target uses a signed 32-bit wchar_t.
+inline FundamentalType CCharacterType(FundamentalType type)
+{
+	return type == FundamentalType::WcharT ? FundamentalType::Int
+		: type == FundamentalType::Char16T ? FundamentalType::UnsignedShortInt
+		: type == FundamentalType::Char32T ? FundamentalType::UnsignedInt
+										   : type;
+}
 
 // The array a string literal denotes (2.14.5p8, p13-p15): its element type
 // from the encoding prefix, and its length in code units of that encoding
@@ -34,6 +47,8 @@ struct StringLiteralFacts
 	uint32_t suffix_length;
 };
 
+// Input has passed lexical validation for its source dialect; decode any
+// conditional escapes accepted there without repeating dialect checks.
 // False for a malformed literal, pieces with different encoding prefixes
 // or different ud-suffixes.
 bool AnalyzeStringLiteral(const TokenSpelling& spelling, StringLiteralFacts& out);

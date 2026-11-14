@@ -33,6 +33,8 @@ void AppendQuoted(std::string& text, const std::string& contents)
 std::string PredefinedText(const PreprocessorOptions& options)
 {
 	std::string text = "#define __CPPGM__ 201303L\n";
+	if (options.assembler)
+		text += "#define __ASSEMBLER__ 1\n";
 	if (options.language == SourceLanguage::C)
 		text += "#define __STDC__ 1\n#define __STDC_VERSION__ 201710L\n"
 				"#define __STDC_NO_VLA__ 1\n#define __STDC_NO_THREADS__ 1\n";
@@ -108,8 +110,9 @@ Preprocessor::Preprocessor(const PreprocessorOptions& options, const std::string
 	  macro_query_(identifiers_), evaluator_(macro_query_, options.literals, options.plain_char_unsigned),
 	  definition_parser_(arena_, names_.va_args, options.hosted), predefined_(nullptr), command_line_begin_(0),
 	  command_line_end_(0), host_predefines_begin_(0), host_predefines_end_(0), builtin_begin_(0), builtin_end_(0),
-	  hosted_(options.hosted), modes_(options.modes), wasm_attributes_(target_model::is_wasm(options.target)),
-	  directives_(0), skipped_directives_(0), includes_(0), guarded_skips_(0), finished_(false), pack_(0)
+	  hosted_(options.hosted), assembler_(options.assembler), modes_(options.modes),
+	  wasm_attributes_(target_model::is_wasm(options.target)), directives_(0), skipped_directives_(0), includes_(0),
+	  guarded_skips_(0), finished_(false), pack_(0)
 {
 	modes_.language = options.language == SourceLanguage::C ? 0
 		: options.cplusplus == "201703L"                    ? 17
@@ -117,6 +120,9 @@ Preprocessor::Preprocessor(const PreprocessorOptions& options, const std::string
 															: 11;
 	expander_.set_input(&source_);
 	source_.set_hosted(hosted_);
+	source_.set_conditional_escapes(options.gnu_c());
+	expander_.set_conditional_escapes(options.gnu_c());
+	evaluator_.set_conditional_escapes(options.gnu_c());
 	const bool separators = hosted_ || options.literals != NumberDialect::Cxx11;
 	const bool exponents = hosted_ || options.literals == NumberDialect::Cxx17;
 	source_.set_number_syntax(separators, exponents);

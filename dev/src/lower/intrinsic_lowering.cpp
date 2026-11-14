@@ -6,6 +6,9 @@
 #include "lower/function_lowering.h"
 
 #include <limits>
+#include <cstring>
+
+#include "lex/identifier_table.h"
 
 #include "lowir/literals.h"
 #include "sema/expression_facts.h"
@@ -15,6 +18,79 @@
 #include "sema/floating/binary128.h"
 
 namespace lower {
+
+bool FunctionLowering::wasm_float_builtin(
+	const syntax::CallExpr& expr, const sema::FunctionEntity* function, RValue& result)
+{
+	const lowir::Type type = lowering_.storage_type(expr.facts->type);
+	if ((type.kind() != lowir::TypeKind::F32 && type.kind() != lowir::TypeKind::F64) || expr.arguments.size != 1)
+		return false;
+	const char* name = function->name->spelling + 10; // Registered __builtin_ library family.
+	const bool root = std::strcmp(name, "sqrt") == 0 || std::strcmp(name, "sqrtf") == 0;
+	int direction = -1;
+	if (std::strcmp(name, "floor") == 0 || std::strcmp(name, "floorf") == 0)
+		direction = 1;
+	else if (std::strcmp(name, "ceil") == 0 || std::strcmp(name, "ceilf") == 0)
+		direction = 2;
+	else if (std::strcmp(name, "trunc") == 0 || std::strcmp(name, "truncf") == 0)
+		direction = 3;
+	else if (std::strcmp(name, "rint") == 0 || std::strcmp(name, "rintf") == 0 || std::strcmp(name, "nearbyint") == 0 ||
+		std::strcmp(name, "nearbyintf") == 0)
+		direction = 0;
+	if (!root && direction < 0)
+		return false;
+	const RValue argument = fit(
+		operand(*expr.arguments[0], ConversionContext::Argument), function->type->canonical->params[0]);
+	if (root)
+	{
+		result = unary(lowir::UnaryOp::Sqrt, argument);
+		return true;
+	}
+	// Reuse the existing portable LowIR rounding vocabulary. Wasm's floating
+	// environment has a fixed nearest-even mode and no native errno side path.
+	const bool wide = type.kind() == lowir::TypeKind::F64;
+	const RValue packed = vector_instruction(wide ? lowir::VectorOp::Fromf64 : lowir::VectorOp::Fromf32, &argument);
+	const RValue rounded = vector_instruction(
+		wide ? lowir::VectorOp::Roundpd : lowir::VectorOp::Roundps, &packed, nullptr, nullptr, direction);
+	result = vector_instruction(
+		wide ? lowir::VectorOp::Tof64 : lowir::VectorOp::Tof32, &rounded, nullptr, nullptr, -1, type);
+	return true;
+}
+
+RValue FunctionLowering::wasm_float_minmax(const syntax::CallExpr& expr)
+{
+	const RValue first = operand(*expr.arguments[0], ConversionContext::Argument);
+	const RValue second = operand(*expr.arguments[1], ConversionContext::Argument);
+	const bool maximum = (expr.facts->value >> 8 & 1) != 0;
+	const sema::Type* bits = lowering_.graph().types.fundamental(first.type.kind() == lowir::TypeKind::F32
+			? FundamentalType::UnsignedInt
+			: FundamentalType::UnsignedLongLongInt);
+	const RValue a = reinterpret_bytes(first, bits);
+	const RValue b = reinterpret_bytes(second, bits);
+	const auto choose = [&](const RValue& test, const RValue& yes, const RValue& no) {
+		lowir::Instruction select = lowir::make_instruction(lowir::Opcode::Select, yes.type);
+		select.ops[0] = test.value;
+		select.ops[1] = yes.value;
+		select.ops[2] = no.value;
+		RValue result = yes;
+		result.value = emit_value(select, yes.type);
+		return result;
+	};
+	const RValue better = compare(
+		maximum ? lowir::ComparePredicate::Gt : lowir::ComparePredicate::Lt, first.type, first, second);
+	const RValue ordered = choose(better, a, b);
+	// Equal values have identical bits except for the sign of zero. AND
+	// selects +0 for max and OR selects -0 for min, in either argument order.
+	const RValue tied = binary(maximum ? lowir::BinaryOp::And : lowir::BinaryOp::Or, a.type, a, b);
+	const RValue finite = choose(compare(lowir::ComparePredicate::Eq, first.type, first, second), tied, ordered);
+	const RValue unordered = binary(lowir::BinaryOp::Or, lowir::Type::scalar(lowir::TypeKind::I64),
+		compare(lowir::ComparePredicate::Ne, first.type, first, first),
+		compare(lowir::ComparePredicate::Ne, second.type, second, second));
+	// Arithmetic propagates and quiets a NaN. Wasm has no observable floating
+	// exception flags, so computing the unselected sum has no side effects.
+	const RValue nan = reinterpret_bytes(binary(lowir::BinaryOp::Add, first.type, first, second), bits);
+	return reinterpret_bytes(choose(unordered, nan, finite), expr.facts->type);
+}
 
 RValue FunctionLowering::intrinsic(const syntax::CallExpr& expr)
 {
@@ -199,6 +275,8 @@ RValue FunctionLowering::gnu_intrinsic(const syntax::CallExpr& expr, sema::Intri
 		}
 		return result;
 	}
+	case sema::Intrinsic::WasmFloatMinMax:
+		return wasm_float_minmax(expr);
 	case sema::Intrinsic::WasmMemorySize:
 	case sema::Intrinsic::WasmMemoryGrow:
 	{

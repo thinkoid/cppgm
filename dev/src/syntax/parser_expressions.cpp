@@ -441,6 +441,8 @@ bool Parser::at_compound_literal(const TypeId* type)
 {
 	// At `)` of `( type-id )`, `{` after it: a GNU compound literal of a
 	// type-id that is a simple-type-specifier alone (hosted compilations).
+	if (c_source_)
+		return at(TokenKind::OP_LBRACE, 1);
 	const Declarator* declarator = type->declarator;
 	return hosted_ && at(TokenKind::OP_LBRACE, 1) &&
 		(declarator == nullptr ||
@@ -454,6 +456,8 @@ Expr* Parser::compound_literal(const TypeId* type, uint32_t start)
 	next();
 	FunctionalCastExpr* literal = make<FunctionalCastExpr>(ExprKind::FunctionalCast, start);
 	literal->type = type->specifiers;
+	if (c_source_)
+		literal->compound_type = type;
 	literal->arguments = Slice<Expr*>{ nullptr, 0 };
 	literal->braced = parse_braced_init_list();
 	return literal->braced == nullptr ? nullptr : literal;

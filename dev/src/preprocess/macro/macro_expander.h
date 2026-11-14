@@ -133,6 +133,7 @@ public:
 	// Pasted spellings are lexed as hosted pp-numbers
 	// (PPLexerOptions::binary_exponents).
 	void set_binary_exponents(bool enabled) { binary_exponents_ = enabled; }
+	void set_conditional_escapes(bool on) { conditional_escapes_ = on; }
 	void set_digit_separators(bool enabled) { digit_separators_ = enabled; }
 	// GNU recursion suppression follows active replacement contexts; the
 	// course-defined token nesting remains the default.
@@ -307,6 +308,7 @@ private:
 	bool binary_exponents_;
 	bool digit_separators_;
 	bool hosted_recursion_;
+	bool conditional_escapes_ = false;
 	// An expansion that produced nothing had white space before its name;
 	// the next token read inherits it.
 	bool pending_space_;

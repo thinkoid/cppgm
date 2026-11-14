@@ -908,7 +908,7 @@ int run_emit_types_mode(vector<string> args)
 			try
 			{
 				sema::Analyzer analyzer(graph, unit.identifiers());
-				analyzer.set_source_language(options.language);
+				analyzer.set_source_language(options.language, options.gnu_c());
 				analyzer.set_hosted(options.hosted);
 				analyzer.set_cxx14(options.language != SourceLanguage::C && options.cplusplus != "201103L");
 				analyzer.set_cxx17(options.cplusplus == "201703L");
@@ -992,7 +992,7 @@ int run_emit_semantics_mode(vector<string> args)
 			try
 			{
 				sema::Analyzer analyzer(graph, unit.identifiers(), sema::AnalysisMode::Semantics);
-				analyzer.set_source_language(options.language);
+				analyzer.set_source_language(options.language, options.gnu_c());
 				analyzer.set_hosted(options.hosted);
 				analyzer.set_cxx14(options.language != SourceLanguage::C && options.cplusplus != "201103L");
 				analyzer.set_cxx17(options.cplusplus == "201703L");
@@ -1142,7 +1142,7 @@ int run_emit_lowir_mode(vector<string> args)
 			sema::SemanticGraph graph(options.plain_char_unsigned, options.target);
 			graph.names.reserve(unit.counters().bindings);
 			sema::Analyzer analyzer(graph, unit.identifiers(), sema::AnalysisMode::Semantics);
-			analyzer.set_source_language(options.language);
+			analyzer.set_source_language(options.language, options.gnu_c());
 			analyzer.set_hosted(options.hosted);
 			analyzer.set_cxx14(options.language != SourceLanguage::C && options.cplusplus != "201103L");
 			analyzer.set_cxx17(options.cplusplus == "201703L");

@@ -97,6 +97,7 @@ void ProgramLowering::lower_unit(
 	debug_file_name_ = 0;
 	symbols_.clear();
 	source_object_aliases_.clear();
+	compound_globals_.clear();
 	identities_.clear();
 	queued_.clear();
 	queued_base_.clear();

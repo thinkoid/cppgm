@@ -590,7 +590,12 @@ bool ConversionRules::value_conversion(
 	// 4.10p2: pointer to cv T (an object type) to pointer to cv void, then
 	// a qualification adjustment.
 	const Type* pointee = source->element;
-	if (c_source_ && c_pointer_extension(pointee, goal->element))
+	if (c_source_ &&
+		(c_pointer_extension(pointee, goal->element) ||
+			(c_extensions_ && ((pointee->cv | goal->element->cv) & kAtomic) == 0 &&
+				(c_type_compatible(pointee->unqualified, goal->element->unqualified) ||
+					(IsVoid(pointee) && goal->element->kind != TypeKind::Function) ||
+					(IsVoid(goal->element) && pointee->kind != TypeKind::Function)))))
 	{
 		out.second = ValueConversion::CPointer;
 		out.result = goal;

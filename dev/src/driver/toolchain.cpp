@@ -31,6 +31,7 @@
 #include "support/tool_errors.h"
 #include "syntax/syntax_unit.h"
 #include "wasm/backend.h"
+#include "wasm/assembly.h"
 
 #if CPPGM_TELEMETRY_ENABLED
 #include <sys/resource.h>
@@ -56,6 +57,13 @@ void language_standard(const std::string& standard, PreprocessorOptions& options
 
 void configure_source_language(const std::string& language, const std::string& standard, PreprocessorOptions& options)
 {
+	if (language == "assembler-with-cpp")
+	{
+		language_standard("gnu17", options);
+		options.assembler = true;
+		return;
+	}
+
 	if (!standard.empty())
 		language_standard(standard, options);
 	else if (language == "c")
@@ -91,6 +99,7 @@ struct Input
 	enum class Kind
 	{
 		Source,
+		Assembly,
 		LowIR,
 		Object,
 		Library
@@ -297,6 +306,25 @@ void configure_target_runtime(Invocation& invocation, bool nostdinc)
 		throw InvocationError("target runtime directory/options currently require a Wasm target");
 }
 
+Input source_input(const std::string& name)
+{
+	const Input::Kind kind = object_name(name) ? Input::Kind::Object
+		: ends_with(name, ".S")                ? Input::Kind::Assembly
+		: ends_with(name, ".lowir")            ? Input::Kind::LowIR
+											   : Input::Kind::Source;
+	return Input{ kind, name };
+}
+
+void input_language(Invocation& invocation)
+{
+	if (invocation.source_language.empty())
+		return;
+	for (Input& input : invocation.inputs)
+		if (input.kind == Input::Kind::Source || input.kind == Input::Kind::Assembly)
+			input.kind = invocation.source_language == "assembler-with-cpp" ? Input::Kind::Assembly
+																			: Input::Kind::Source;
+}
+
 Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions& base)
 {
 	Invocation invocation;
@@ -497,11 +525,9 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 		else if (starts_with(arg, "-"))
 			throw InvocationError("unsupported option: " + arg);
 		else
-			invocation.inputs.push_back(Input{ object_name(arg) ? Input::Kind::Object
-					: ends_with(arg, ".lowir")                  ? Input::Kind::LowIR
-																: Input::Kind::Source,
-				arg });
+			invocation.inputs.push_back(source_input(arg));
 	}
+	input_language(invocation);
 	if (invocation.inputs.empty())
 		throw InvocationError("no input files");
 	// GCC's -pthread defines _REENTRANT ahead of every -D and -U wherever
@@ -628,7 +654,7 @@ bool lower_source(const std::string& path, const Invocation& invocation, lower::
 		sema::SemanticGraph graph(invocation.preprocessor.plain_char_unsigned, invocation.target);
 		graph.names.reserve(unit.counters().bindings);
 		sema::Analyzer analyzer(graph, unit.identifiers(), sema::AnalysisMode::Semantics);
-		analyzer.set_source_language(invocation.preprocessor.language);
+		analyzer.set_source_language(invocation.preprocessor.language, invocation.preprocessor.gnu_c());
 		analyzer.set_hosted(invocation.preprocessor.hosted);
 		analyzer.set_cxx14(
 			invocation.preprocessor.language != SourceLanguage::C && invocation.preprocessor.cplusplus != "201103L");
@@ -912,11 +938,55 @@ int link_mode(const Invocation& invocation)
 	return EXIT_SUCCESS;
 }
 
+bool wasm_assembly(const Input& input, const Invocation& invocation, wasm::LinkInputs& inputs, std::string& error)
+{
+	PreprocessorOptions options = invocation.preprocessor;
+	options.assembler = true;
+	options.language = SourceLanguage::C;
+	options.cplusplus.clear();
+	options.builtin_declarations.clear();
+	try
+	{
+		Preprocessor preprocessor(options, input.name);
+		uint32_t location = 0;
+		try
+		{
+			wasm::Object object;
+			wasm::assemble(preprocessor, object, location);
+			inputs.objects.push_back(std::move(object));
+			return true;
+		}
+		catch (const wasm::WasmError& failure)
+		{
+			error = preprocessor.describe(location, failure.what());
+		}
+		catch (const PreprocessError& failure)
+		{
+			error = preprocessor.describe(failure);
+		}
+		catch (const SourceError& failure)
+		{
+			error = preprocessor.describe(failure);
+		}
+	}
+	catch (const PreprocessError& failure)
+	{
+		error = input.name + ": " + failure.what();
+	}
+	catch (const SourceError& failure)
+	{
+		error = input.name + ": " + failure.what();
+	}
+	return false;
+}
+
 // One translation unit's posttoken records (`sof`, the PA2 tokens, `eof`);
 // false after an error.
 bool wasm_input(const Input& input, const Invocation& invocation, const backend::Options& options,
 	wasm::LinkInputs& inputs, std::string& error)
 {
+	if (input.kind == Input::Kind::Assembly)
+		return wasm_assembly(input, invocation, inputs, error);
 	if (input.kind == Input::Kind::Object || input.kind == Input::Kind::Library)
 	{
 		if (invocation.compile_only)
@@ -1035,7 +1105,8 @@ bool preprocess_unit(const std::string& path, const Invocation& invocation, Post
 			// The stream types literals as the course's preprocessor does.
 			PostTokenizer tokens(preprocessor, nullptr,
 				invocation.preprocessor.literals == NumberDialect::Gnu ? NumberDialect::GnuStream
-																	   : invocation.preprocessor.literals);
+																	   : invocation.preprocessor.literals,
+				invocation.target, invocation.preprocessor.gnu_c());
 			for (;;)
 			{
 				const PostToken& token = tokens.next();
@@ -1123,6 +1194,11 @@ int debug_type_request(const std::string& arg)
 int run_toolchain(const std::vector<std::string>& args, const PreprocessorOptions& base)
 {
 	const Invocation invocation = parse(args, base);
+	for (const Input& input : invocation.inputs)
+		if (input.kind == Input::Kind::Assembly &&
+			(!target_model::is_wasm(invocation.target) || invocation.preprocess_only || invocation.syntax_only))
+			throw InvocationError("Wasm assembly requires a Wasm compile or link invocation");
+
 	if (!target_model::is_wasm(invocation.target) && !invocation.exports.empty())
 		throw InvocationError("explicit function exports require a Wasm target");
 	if (invocation.preprocess_only)

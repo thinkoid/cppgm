@@ -161,6 +161,12 @@ void PPLexer::lex_escape_sequence()
 		lex_literal_universal_character_name(backslash);
 		return;
 	}
+	if (conditional_escapes_ && c != kEndOfSource && c != '\n')
+	{
+		take(backslash);
+		take(introducer);
+		return;
+	}
 	throw SourceError(backslash.begin, "invalid escape sequence");
 }
 

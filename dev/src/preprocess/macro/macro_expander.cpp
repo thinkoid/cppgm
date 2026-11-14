@@ -845,6 +845,7 @@ PPToken MacroExpander::paste_tokens(const PPToken& left, const PPToken& right)
 	const SourceBuffer text = SourceBuffer::ForTokenText(scratch_);
 	PPLexerOptions options;
 	options.c_source = identifiers_.language() == SourceLanguage::C;
+	options.conditional_escapes = conditional_escapes_;
 	options.header_names_on_request = true;
 	options.token_text = true;
 	options.binary_exponents = binary_exponents_;

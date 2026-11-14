@@ -43,6 +43,8 @@ struct PreprocessorOptions
 	// Clang probes (macro/macro_definition.h), answered for `modes`, and
 	// the directives #include_next and #warning.
 	bool hosted = false;
+	// GNU assembler-with-cpp: unknown hash directives are assembly comments.
+	bool assembler = false;
 	// The literal forms read (see ClassifyNumber): the compiler's GCC
 	// dialect, or C++11's alone (the standalone PA2-PA4 tools).
 	NumberDialect literals = NumberDialect::Cxx11;
@@ -64,6 +66,7 @@ struct PreprocessorOptions
 	// predefined macros for it (__STRICT_ANSI__) instead of the GNU
 	// dialect's (gnu++11 ..., and the default).
 	bool strict = false;
+	bool gnu_c() const { return language == SourceLanguage::C && !strict; }
 	// -D and -U as #define and #undef lines, then each -include file as an
 	// #include "file" line, read after the predefined macros; a source
 	// #define may replace their definitions.
@@ -251,6 +254,7 @@ private:
 	std::vector<std::string> include_paths_;
 	size_t system_paths_;
 	bool hosted_;
+	bool assembler_;
 	FeatureModes modes_;
 	bool wasm_attributes_;
 	std::vector<Conditional> conditionals_;

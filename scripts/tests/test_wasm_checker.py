@@ -86,6 +86,18 @@ class WasmChecker(unittest.TestCase):
                 for level in range(4):
                     self.assertTrue(any('-O' + str(level) in args for args in compiler))
 
+    def test_assembly_uses_direct_source_and_object_paths_without_lowir(self):
+        result, commands = self.check({'source': True, 'assembly': True,
+                                       'levels': [0, 3],
+                                       'calls': [{'export': 'observe', 'result': '17'}]})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        compiler = [args for tool, args in commands if tool == 'compiler']
+        self.assertFalse(any('--emit-lowir' in args for args in compiler))
+        sources = [args for args in compiler if any(x.endswith('case.t') for x in args)]
+        self.assertTrue(sources)
+        self.assertTrue(all('assembler-with-cpp' in args for args in sources))
+        self.assertTrue(any('-c' in args for args in sources))
+
     def test_fuel_trap_is_distinct_from_an_unreachable_trap_or_return(self):
         expect = {'levels': [1], 'calls': [{'export': 'observe', 'trap': 'fuel', 'fuel': {'1': 1000}}]}
         result, commands = self.check(expect, 'fuel')

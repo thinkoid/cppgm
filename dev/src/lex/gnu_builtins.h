@@ -55,6 +55,7 @@ enum class GnuBuiltin : uint8_t
 	Alloca,
 	FrameAddress,
 	WasmMemory, // size or grow, variants 0 and 1; memory index must be zero
+	WasmMinMax, // IEEE min/max: f32 min/max, then f64 min/max
 	VaList,
 	Prefetch,
 	AssumeAligned,

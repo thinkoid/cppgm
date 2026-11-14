@@ -25,6 +25,7 @@ public:
 	// Accept reserved ud-suffixes (the compiler's dialect, see
 	// IsUserDefinedSuffix).
 	void set_reserved_suffixes(bool on) { reserved_suffixes_ = on; }
+	void set_conditional_escapes(bool on) { conditional_escapes_ = on; }
 
 	// Appends the next piece. The spelling is copied.
 	void add(const char* spelling, uint32_t length);
@@ -70,4 +71,5 @@ private:
 	unsigned width_ = 1;
 	TokenSpelling suffix_ = TokenSpelling{ nullptr, 0 };
 	bool reserved_suffixes_ = false;
+	bool conditional_escapes_ = false;
 };

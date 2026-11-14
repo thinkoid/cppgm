@@ -308,7 +308,8 @@ bool ConstantInterpreter::user_literal(const syntax::LiteralExpr& expr, Result& 
 	else if ((expr.facts->value & 255) == kLiteralCallCharacter)
 	{
 		// p6: the character's value converted to the parameter.
-		const CharacterLiteralValue character = EvaluateCharacterLiteral(expr.spelling.text, expr.spelling.length);
+		const CharacterLiteralValue character = EvaluateCharacterLiteral(
+			expr.spelling.text, expr.spelling.length, CharacterDialect::Gnu, true);
 		const Type* type = analyzer_.types_.fundamental(character.type);
 		IntegralKind kind;
 		IntegralKindOf(type, kind);

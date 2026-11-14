@@ -1400,6 +1400,7 @@ private:
 	RValue vector_sign_mask(const syntax::CallExpr& expr);
 	RValue vector_byte_minmax(const syntax::CallExpr& expr);
 	RValue elementwise_minmax(const syntax::CallExpr& expr);
+	RValue wasm_float_minmax(const syntax::CallExpr& expr);
 	RValue numeric_minmax(const sema::Type* lane, const RValue& first, const RValue& second, bool maximum);
 	RValue vector_andnot(const syntax::CallExpr& expr);
 	// sse_lowering.cpp: the SSE family computed lane by lane; its 256- and
@@ -1632,6 +1633,8 @@ private:
 	// 13.3.1p4), converted to the callee's class.
 	lowir::Value call_object(const syntax::CallExpr& expr, const sema::FunctionEntity* function);
 	lowir::Value object_address(const syntax::Expr& expr);
+	Place compound_literal(const syntax::FunctionalCastExpr& expr);
+	PointerMap compound_slots_;
 	// A class prvalue materialized in a temporary object of the frame,
 	// destroyed at the end of its full-expression (12.2p3).
 	lowir::Value temporary_object(
@@ -1667,6 +1670,7 @@ private:
 		bool persistent, const sema::Entity* owner, const Place& storage, uint32_t saved);
 	RValue operator_call(const syntax::Expr& expr, lowir::Value destination = lowir::Value());
 	RValue intrinsic(const syntax::CallExpr& expr);
+	bool wasm_float_builtin(const syntax::CallExpr& expr, const sema::FunctionEntity* function, RValue& result);
 	RValue truth_i32(const RValue& truth);
 	RValue classify_nan(const RValue& x);
 	RValue classify_infinite(const RValue& x);

@@ -12,7 +12,7 @@ PPLexer::PPLexer(const SourceBuffer& source, const PPLexerOptions& options)
 	  c_source_(options.c_source), binary_exponents_(options.binary_exponents),
 	  digit_separators_(options.digit_separators), legacy_comment_bytes_(options.legacy_comment_bytes),
 	  lone_quotes_(options.lone_quotes), gnu_escapes_(options.gnu_escapes),
-	  dollar_identifiers_(options.dollar_identifiers),
+	  conditional_escapes_(options.conditional_escapes), dollar_identifiers_(options.dollar_identifiers),
 	  context_(options.header_names_on_request ? DirectiveContext::Other : DirectiveContext::LineStart)
 {}
 

@@ -123,7 +123,8 @@ bool LiteralValue(const TokenSpelling& spelling, FundamentalType& type, uint64_t
 	{
 		if (parts.quote != '\'')
 			return false;
-		const CharacterLiteralValue character = EvaluateCharacterLiteral(spelling.text, spelling.length);
+		const CharacterLiteralValue character = EvaluateCharacterLiteral(
+			spelling.text, spelling.length, CharacterDialect::Gnu, true);
 		if (!character.valid || character.multicharacter || character.suffix_begin != spelling.length)
 			return false;
 		type = character.type;

@@ -1019,7 +1019,7 @@ void Analyzer::case_label(const syntax::CaseStmt& stmt, Scope* scope)
 	IntegralKindOf(context->type, kind);
 	// 5.19p3: the conversion of a converted constant expression is not
 	// narrowing (8.5.4p7): the value is representable in the promoted type.
-	if (value.type->kind != TypeKind::Enum && !Representable(value, kind))
+	if (!c_source_ && value.type->kind != TypeKind::Enum && !Representable(value, kind))
 		error(stmt.value->location, "case value narrowed by conversion to the switch condition's type");
 	else if (!HeldAsWideConstant(value, kind))
 		error(stmt.value->location, "a 128-bit case value beyond the 64-bit constants evaluated");

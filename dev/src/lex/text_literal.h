@@ -54,7 +54,8 @@ const uint64_t kNumericEscapeTooLarge = 0x100000000ull;
 
 // Decodes the c-char or s-char at `pos` of a phase-3 literal whose body ends
 // at `end`, and advances `pos` past it. False if the text is malformed.
-bool DecodeLiteralCharacter(const char* text, uint32_t end, uint32_t& pos, LiteralCharacter& c);
+bool DecodeLiteralCharacter(
+	const char* text, uint32_t end, uint32_t& pos, LiteralCharacter& c, bool conditional_escapes = false);
 
 // The code-unit width in bytes and the element type of a string literal
 // with this prefix under the course ABI (wchar_t is UTF-32).
@@ -87,5 +88,5 @@ struct CharacterLiteralValue
 
 // GNU mode also gives ordinary numeric byte escapes type char. PA2's
 // post-token contract keeps its Unicode-code-point classification.
-CharacterLiteralValue EvaluateCharacterLiteral(
-	const char* spelling, uint32_t length, CharacterDialect dialect = CharacterDialect::Gnu);
+CharacterLiteralValue EvaluateCharacterLiteral(const char* spelling, uint32_t length,
+	CharacterDialect dialect = CharacterDialect::Gnu, bool conditional_escapes = false);

@@ -43,7 +43,11 @@ public:
 		: types_(types), visit_(0), completer_(nullptr), arithmetic_(false), c_source_(false)
 	{}
 
-	void set_c_source(bool on) { c_source_ = on; }
+	void set_c_source(bool on, bool extensions = false)
+	{
+		c_source_ = on;
+		c_extensions_ = on && extensions;
+	}
 	void set_completer(ClassCompleter* completer) { completer_ = completer; }
 	// The conversions of a built-in operator's operands to the type of the
 	// usual arithmetic conversions (5p10), which alone convert between
@@ -102,6 +106,7 @@ private:
 	ClassCompleter* completer_;
 	bool arithmetic_;
 	bool c_source_;
+	bool c_extensions_ = false;
 };
 
 // Type classification shared by the conversion rules and expression typing.

@@ -138,6 +138,9 @@ struct CallExpr : Expr
 // T{...}.
 struct FunctionalCastExpr : Expr
 {
+	// C compound literals retain the full declarator and object lifetime.
+	const TypeId* compound_type = nullptr;
+	mutable bool compound_static = false;
 	Slice<DeclSpecifier> type;
 	Slice<Expr*> arguments;
 	BracedInitList* braced;

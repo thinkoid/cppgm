@@ -35,6 +35,22 @@ declarations for links; it does not generate JS glue. The
 [target contract](target-abi.md) specifies its differences from the two
 sixteen-byte-aligned `long double` profiles.
 
+The SDK assembly path accepts `.S` files or `-x assembler-with-cpp` for Wasm
+targets. Preprocess them with `__ASSEMBLER__` defined, then parse GNU Wasm
+assembly directly into the existing machine model and relocatable object.
+This path has no source-to-LowIR view. Native targets must reject this Wasm
+assembly input.
+
+The initial runtime subset covers `.functype`, `.globaltype`, function locals,
+visibility/binding directives, zero-initialized Wasm globals, constructor
+`.init_array` sections, and `target_features` metadata. Support scalar core
+instructions with typed function/global references, structured control flow,
+floating constants, memory size/growth and bulk-memory operations. These are
+the forms used by the SDK's memcpy and stack-management sources. Diagnose
+unsupported directives and operand forms; this is not a general GNU assembler
+profile. Validate instruction stacks before writing objects, and preserve
+symbol relocations and constructor priorities through linking.
+
 Wasm invocations of `lowir2native` may also take relocatable object and
 archive inputs, including the supplied arithmetic/runtime libraries.
 
@@ -71,6 +87,9 @@ Implement the following at `-O0`, `-O1`, `-O2` and `-O3`:
 - Empty GNU assembly used as a compiler barrier, including evaluated inputs
   and scalar read/write register operands. Preserve its memory effects and
   captured input values; reject output-only operands and machine instructions.
+- The scalar Wasm `__builtin_wasm_min_f32/f64` and
+  `__builtin_wasm_max_f32/f64` builtins, including NaN propagation and signed
+  zero. Advertise these builtins only for Wasm targets.
 - Scalar arithmetic and conversions, narrow integer behavior, pointers,
   aggregates, globals, volatile memory, alignment and address-taken locals.
   Preserve wide integer and floating types through valid legalization/helper

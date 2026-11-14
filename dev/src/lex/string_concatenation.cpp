@@ -105,7 +105,7 @@ bool StringLiteralSequence::encode_body(const char* text, const TextLiteralParts
 			c.numeric = false;
 			pos += decoded.length;
 		}
-		else if (!DecodeLiteralCharacter(text, parts.body_end, pos, c))
+		else if (!DecodeLiteralCharacter(text, parts.body_end, pos, c, conditional_escapes_))
 		{
 			return false;
 		}

@@ -156,7 +156,7 @@ private:
 	uint32_t named_section(lowir::NameId name, SectionKind kind);
 	lowir::NameId object_name(lowir::SymbolId symbol) const;
 	bool comdat_definition(lowir::SymbolId symbol) const;
-	uint32_t define_alias(lowir::NameId name, uint32_t target);
+	uint32_t define_alias(lowir::NameId name, uint32_t target, uint32_t declaration = 0);
 	// Image symbols' slots in the per-symbol tables: the program's, then
 	// the image's own.
 	uint32_t slot(uint32_t image_symbol) const
@@ -1076,19 +1076,20 @@ uint32_t ObjectCompiler::object_symbol(uint32_t image_symbol)
 	return object_symbol_[index] = added;
 }
 
-uint32_t ObjectCompiler::define_alias(lowir::NameId name, uint32_t target)
+uint32_t ObjectCompiler::define_alias(lowir::NameId name, uint32_t target, uint32_t declaration)
 {
 	object::Symbol alias = out_->symbols[target];
-	if (by_name_[name] != 0)
+	const uint32_t existing_index = declaration != 0 ? declaration : by_name_[name];
+	if (existing_index != 0)
 	{
-		object::Symbol& existing = out_->symbols[by_name_[name]];
+		object::Symbol& existing = out_->symbols[existing_index];
 		if (existing.section == object::kUndefinedSection)
 		{
 			alias.name = existing.name;
 			alias.binding = existing.binding;
 			existing = alias;
 		}
-		return by_name_[name];
+		return existing_index;
 	}
 	alias.name = out_->add_string(program_.spelling(name), program_.names.length(name));
 	if (alias.binding == Binding::Local)
@@ -1153,24 +1154,26 @@ void ObjectCompiler::add_assembly_symbols()
 
 void ObjectCompiler::add_aliases()
 {
+	std::vector<uint32_t> declarations;
 	// Typed declarations give aliases independent public/weak bindings even
 	// when the target is internal and no instruction references the alias.
 	if (!program_.aliases.empty())
 	{
 		std::vector<uint8_t> names(program_.names.size(), 0);
+		declarations.assign(program_.names.size(), 0);
 		for (const lowir::ObjectAlias& alias : program_.aliases)
 			names[alias.object] = 1;
 		for (lowir::SymbolId id : program_.order)
 			if ((program_.symbols[id].kind == lowir::SymbolKind::FunctionDeclaration ||
 					program_.symbols[id].kind == lowir::SymbolKind::GlobalDeclaration) &&
 				names[object_name(id)])
-				object_symbol(id);
+				declarations[object_name(id)] = object_symbol(id);
 	}
 
 	// (A function left out has no other name either.)
 	for (const lowir::ObjectAlias& alias : program_.aliases)
 		if (alias.target >= pruned_.size() || !pruned_[alias.target])
-			define_alias(alias.object, object_symbol(alias.target));
+			define_alias(alias.object, object_symbol(alias.target), declarations[alias.object]);
 	for (lowir::SymbolId s = 0; s < program_.symbols.size(); ++s)
 	{
 		const lowir::Symbol& symbol = program_.symbols[s];

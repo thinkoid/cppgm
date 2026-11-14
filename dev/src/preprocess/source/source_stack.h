@@ -110,6 +110,7 @@ public:
 	// Hosted lexical extensions (hexadecimal pp-numbers and opaque comment
 	// bytes) in the files entered from now on.
 	void set_hosted(bool enabled) { hosted_ = enabled; }
+	void set_conditional_escapes(bool on) { conditional_escapes_ = on; }
 	void set_number_syntax(bool separators, bool exponents)
 	{
 		digit_separators_ = separators;
@@ -144,6 +145,7 @@ private:
 	bool at_end_;
 	bool allow_va_args_;
 	bool hosted_;
+	bool conditional_escapes_ = false;
 	bool digit_separators_ = false;
 	bool binary_exponents_ = false;
 	uint32_t directive_location_;

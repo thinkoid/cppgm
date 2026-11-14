@@ -1,1 +1,1 @@
-{"source":true,"llvm_interop":true,"calls":[{"export":"observe","result":"42"}]}
+{"source":true,"llvm_interop":true,"calls":[{"export":"observe","result":"84"}]}

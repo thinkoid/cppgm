@@ -294,7 +294,8 @@ enum class Intrinsic : uint8_t
 	// evaluated.
 	NondeterministicValue,
 	WasmMemorySize,
-	WasmMemoryGrow
+	WasmMemoryGrow,
+	WasmFloatMinMax
 };
 
 // Generic GNU atomics whose object needs the size-prefixed runtime ABI.

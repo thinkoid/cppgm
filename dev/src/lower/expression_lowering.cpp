@@ -751,6 +751,8 @@ Place FunctionLowering::glvalue(const syntax::Expr& expr)
 	case syntax::ExprKind::FunctionalCast:
 	{
 		const syntax::FunctionalCastExpr& functional = static_cast<const syntax::FunctionalCastExpr&>(*e);
+		if (functional.compound_type != nullptr)
+			return compound_literal(functional);
 		if (functional.braced != nullptr && (facts->flags & sema::kReferenceCast) != 0)
 			return reference_cast(*e, *functional.braced);
 		if (functional.arguments.size == 1)
@@ -2307,6 +2309,13 @@ RValue FunctionLowering::call(const syntax::CallExpr& expr, lowir::Value destina
 	if ((facts->flags & sema::kDirectCall) != 0)
 	{
 		const sema::FunctionEntity* function = static_cast<const sema::FunctionEntity*>(facts->entity);
+		if (target_model::is_wasm(program_.target) && function->gnu_builtin == GnuBuiltin::Library)
+		{
+			RValue intrinsic_result;
+			if (wasm_float_builtin(expr, function, intrinsic_result))
+				return intrinsic_result;
+		}
+
 		if (function->gnu_builtin == GnuBuiltin::FloatAbs)
 		{
 			const lowir::Type type = lowering_.storage_type(facts->type);

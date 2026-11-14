@@ -104,6 +104,11 @@ void Preprocessor::run_directive()
 		run_pragma_directive();
 		return;
 	default:
+		if (assembler_)
+		{
+			source_.skip_line();
+			return;
+		}
 		// A non-directive is an error in a group that is not skipped
 		// (directives.md).
 		throw PreprocessError(directive.begin, "invalid preprocessing directive");

@@ -120,7 +120,8 @@ FixedFacts FixedLiteral(const TokenSpelling& spelling, TypeTable& types)
 	{
 		if (parts.quote != '\'')
 			return Unknown();
-		const CharacterLiteralValue character = EvaluateCharacterLiteral(spelling.text, spelling.length);
+		const CharacterLiteralValue character = EvaluateCharacterLiteral(
+			spelling.text, spelling.length, CharacterDialect::Gnu, true);
 		if (!character.valid || character.suffix_begin != spelling.length)
 			return Unknown();
 		FixedFacts out = Value(types.fundamental(character.type), true);

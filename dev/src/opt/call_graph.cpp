@@ -20,7 +20,7 @@ bool is_definition(const Program& program, SymbolId s)
 
 // Marks opaque symbol references outside ordinary optimized bodies.
 template<typename Mark>
-void mark_data_references(const Program& program, Mark mark)
+void mark_data_references(const Program& program, Mark mark, const std::vector<SymbolId>& targets)
 {
 	// Code addresses retain their containing function and its ABI. Static
 	// dispatch tables can keep it alive without an ordinary call edge.
@@ -60,14 +60,9 @@ void mark_data_references(const Program& program, Mark mark)
 	// An explicit alias declaration exposes its target under an independently
 	// bound object name. Keep that body/ABI even if no instruction names it;
 	// this compiler root does not require retaining dead code at final linking.
-	if (!program.aliases.empty())
-	{
-		std::vector<SymbolId> targets;
-		if (object_alias_targets(program, {}, targets) == kNoId)
-			for (SymbolId id : program.order)
-				if (targets[id] != kNoId && program.symbols[id].metadata.binding != ir_model::SBM_INTERNAL)
-					mark(targets[id]);
-	}
+	for (SymbolId id : program.order)
+		if (!targets.empty() && targets[id] != kNoId && program.symbols[id].metadata.binding != ir_model::SBM_INTERNAL)
+			mark(targets[id]);
 }
 
 } // namespace
@@ -87,7 +82,13 @@ void build_call_graph(const Program& program, CallGraph& graph, bool forced_call
 	graph.callees.clear();
 	graph.calls_in.assign(n, 0);
 	graph.observed.assign(n, 0);
+	std::vector<SymbolId> aliases;
+	if (!program.aliases.empty() && object_alias_targets(program, {}, aliases) != kNoId)
+		aliases.clear();
+
 	auto observe = [&](SymbolId s) {
+		if (!aliases.empty() && s < aliases.size() && aliases[s] != kNoId)
+			s = aliases[s];
 		if (s < graph.index_of.size() && graph.index_of[s] != kNoId)
 			graph.observed[graph.index_of[s]] = 1;
 	};
@@ -144,7 +145,7 @@ void build_call_graph(const Program& program, CallGraph& graph, bool forced_call
 				}
 	}
 	if (!forced_calls_only)
-		mark_data_references(program, observe);
+		mark_data_references(program, observe, aliases);
 	// Tarjan's SCCs, iteratively; components finish callees first.
 	graph.component.assign(n, kNoId);
 	graph.recursive.assign(n, 0);
@@ -235,18 +236,25 @@ uint32_t prune_unreachable(Program& program, OptimizerStats& stats)
 {
 	std::vector<uint8_t> live(program.symbols.size(), 0);
 	std::vector<SymbolId> work;
+	std::vector<SymbolId> aliases;
+	if (!program.aliases.empty() && object_alias_targets(program, {}, aliases) != kNoId)
+		aliases.clear();
+
 	auto mark = [&](SymbolId s) {
-		if (s < live.size() && !live[s])
+		while (s < live.size() && !live[s])
 		{
 			live[s] = 1;
 			if (is_definition(program, s))
 				work.push_back(s);
+			if (aliases.empty() || aliases[s] == kNoId)
+				break;
+			s = aliases[s];
 		}
 	};
 	for (SymbolId s : program.order)
 		if (is_definition(program, s) && !discardable(program, s))
 			mark(s);
-	mark_data_references(program, mark);
+	mark_data_references(program, mark, aliases);
 	while (!work.empty())
 	{
 		const SymbolId s = work.back();

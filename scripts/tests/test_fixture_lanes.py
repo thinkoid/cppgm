@@ -79,7 +79,8 @@ class RequiredLanguageProfileTests(unittest.TestCase):
 
     def test_mode_sidecars_are_normal_inputs(self):
         for directory in REPO_ROOT.glob('pa[0-9]*'):
-            modes = list((directory / 'tests').rglob('*.cxx-standard'))
+            modes = [* (directory / 'tests').rglob('*.cxx-standard'),
+                     * (directory / 'tests').rglob('*.c-standard')]
             if not modes:
                 continue
             selected = self.selected(directory.name, 'test', '')

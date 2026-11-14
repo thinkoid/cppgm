@@ -56,11 +56,11 @@ public:
 
 	void analyze(const syntax::TranslationUnit& unit);
 	bool c_source() const { return c_source_; }
-	void set_source_language(SourceLanguage language)
+	void set_source_language(SourceLanguage language, bool extensions = false)
 	{
 		c_source_ = language == SourceLanguage::C;
 		c_language_ = c_source_;
-		conversions_.set_c_source(c_source_);
+		conversions_.set_c_source(c_source_, extensions);
 	}
 	// Hosted compilations take GNU's zero-length and flexible array
 	// members (see array_bound and member_size).

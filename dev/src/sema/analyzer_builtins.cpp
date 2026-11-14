@@ -734,6 +734,7 @@ ExprFacts* Analyzer::gnu_intrinsic(const syntax::CallExpr& expr, GnuBuiltin buil
 	case GnuBuiltin::FltRounds:
 	case GnuBuiltin::FrameAddress:
 	case GnuBuiltin::WasmMemory:
+	case GnuBuiltin::WasmMinMax:
 		return control_intrinsic(expr, builtin, variant, scope);
 	case GnuBuiltin::VectorTruncate:
 	{
@@ -880,7 +881,23 @@ ExprFacts* Analyzer::gnu_intrinsic(const syntax::CallExpr& expr, GnuBuiltin buil
 ExprFacts* Analyzer::control_intrinsic(const syntax::CallExpr& expr, GnuBuiltin builtin, uint8_t variant, Scope* scope)
 {
 	ExprFacts* facts;
-	if (builtin == GnuBuiltin::WasmMemory)
+	if (builtin == GnuBuiltin::WasmMinMax)
+	{
+		if (!target_model::is_wasm(types_.target()))
+			error(expr.location, "Wasm floating builtin requires a Wasm target");
+		if (expr.arguments.size != 2)
+			error(expr.location, "Wasm floating minimum or maximum requires two arguments");
+		const Type* type = types_.fundamental(variant < 2 ? FundamentalType::Float : FundamentalType::Double);
+		for (const syntax::Expr* argument : expr.arguments)
+		{
+			if (typed_value(*argument, scope) == nullptr)
+				return nullptr;
+			convert(*argument, type, false);
+		}
+		facts = new_facts(expr, type, ValueCategory::PRValue);
+		facts->value = static_cast<uint64_t>(Intrinsic::WasmFloatMinMax) | (static_cast<uint64_t>(variant & 1) << 8);
+	}
+	else if (builtin == GnuBuiltin::WasmMemory)
 	{
 		if (!target_model::is_wasm(types_.target()))
 			error(expr.location, "Wasm memory builtin requires a Wasm target");

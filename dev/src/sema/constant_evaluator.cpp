@@ -275,7 +275,8 @@ bool ConstantEvaluator::string_element(const syntax::SubscriptExpr& expr, Consta
 	check_integral(index, expr.index->location);
 	if ((IsSignedConstant(index) && static_cast<int64_t>(index.bits) < 0) || index.bits >= units.size())
 		return fail(expr.location, "a string literal subscript outside its array");
-	const Type* type = analyzer_.types_.fundamental(facts.element);
+	const Type* type = analyzer_.types_.fundamental(
+		analyzer_.c_source_ ? CCharacterType(facts.element) : facts.element);
 	value = Constant{ ConvertIntegral(units[index.bits], KindOf(type)), type };
 	return true;
 }
@@ -288,10 +289,13 @@ bool ConstantEvaluator::literal(const syntax::LiteralExpr& expr, Constant& value
 	{
 		if (parts.quote != '\'')
 			return fail(expr.location, "a string literal is not an integral constant");
-		const CharacterLiteralValue character = EvaluateCharacterLiteral(spelling.text, spelling.length);
+		const CharacterLiteralValue character = EvaluateCharacterLiteral(
+			spelling.text, spelling.length, CharacterDialect::Gnu, true);
 		if (!character.valid || character.suffix_begin != spelling.length)
 			return fail(expr.location, "not an integral constant expression");
-		const Type* type = analyzer_.types_.fundamental(character.type);
+		const Type* type = analyzer_.types_.fundamental(analyzer_.c_source_
+				? (parts.prefix == EncodingPrefix::None ? FundamentalType::Int : CCharacterType(character.type))
+				: character.type);
 		value = Constant{ ConvertIntegral(character.code_point, KindOf(type)), type };
 		return true;
 	}

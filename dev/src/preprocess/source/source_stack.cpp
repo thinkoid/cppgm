@@ -35,6 +35,7 @@ void SourceStack::enter(SourceFile* file, std::string presumed_name, std::size_t
 	frame->base = files_.inclusion(frame->inclusion).base;
 	PPLexerOptions options;
 	options.c_source = identifiers_.language() == SourceLanguage::C;
+	options.conditional_escapes = conditional_escapes_;
 	options.location_base = frame->base;
 	options.header_names_on_request = true;
 	options.binary_exponents = hosted_ || binary_exponents_;

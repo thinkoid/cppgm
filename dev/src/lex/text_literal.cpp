@@ -106,7 +106,7 @@ int SimpleEscapeValue(char c)
 	}
 }
 
-bool DecodeEscapeSequence(const char* text, uint32_t end, uint32_t& pos, LiteralCharacter& c)
+bool DecodeEscapeSequence(const char* text, uint32_t end, uint32_t& pos, LiteralCharacter& c, bool conditional_escapes)
 {
 	// text[pos] is the backslash.
 	if (end - pos < 2)
@@ -132,7 +132,11 @@ bool DecodeEscapeSequence(const char* text, uint32_t end, uint32_t& pos, Literal
 	if (introducer == 'x')
 		return DecodeHexEscape(text, end, pos, c.value);
 	if (!IsOctalDigit(introducer))
-		return false;
+	{
+		c.numeric = false;
+		c.value = static_cast<unsigned char>(introducer);
+		return conditional_escapes;
+	}
 	c.value = static_cast<uint64_t>(introducer - '0');
 	for (int digits = 1; digits < 3 && pos < end && IsOctalDigit(text[pos]); ++digits, ++pos)
 		c.value = c.value * 8 + static_cast<uint64_t>(text[pos] - '0');
@@ -215,11 +219,12 @@ uint32_t TextLiteralPieceEnd(const char* text, uint32_t length, uint32_t begin)
 	return at < length ? at : length;
 }
 
-bool DecodeLiteralCharacter(const char* text, uint32_t end, uint32_t& pos, LiteralCharacter& c)
+bool DecodeLiteralCharacter(
+	const char* text, uint32_t end, uint32_t& pos, LiteralCharacter& c, bool conditional_escapes)
 {
 	const unsigned char lead = static_cast<unsigned char>(text[pos]);
 	if (lead == '\\')
-		return DecodeEscapeSequence(text, end, pos, c);
+		return DecodeEscapeSequence(text, end, pos, c, conditional_escapes);
 	c.numeric = false;
 	if (lead < 0x80)
 	{
@@ -266,15 +271,15 @@ FundamentalType StringElementType(EncodingPrefix prefix)
 
 namespace {
 
-CharacterLiteralValue EvaluateMulticharacterLiteral(
-	const char* text, const TextLiteralParts& parts, LiteralCharacter c, uint32_t pos, CharacterLiteralValue result)
+CharacterLiteralValue EvaluateMulticharacterLiteral(const char* text, const TextLiteralParts& parts, LiteralCharacter c,
+	uint32_t pos, CharacterLiteralValue result, bool conditional_escapes)
 {
 	if (parts.prefix != EncodingPrefix::None || c.value > 0xFF)
 		return result;
 	uint32_t value = static_cast<uint32_t>(c.value);
 	while (pos != parts.body_end)
 	{
-		if (!DecodeLiteralCharacter(text, parts.body_end, pos, c) || c.value > 0xFF)
+		if (!DecodeLiteralCharacter(text, parts.body_end, pos, c, conditional_escapes) || c.value > 0xFF)
 			return result;
 		value = (value << 8) | static_cast<uint32_t>(c.value);
 	}
@@ -287,7 +292,8 @@ CharacterLiteralValue EvaluateMulticharacterLiteral(
 
 } // namespace
 
-CharacterLiteralValue EvaluateCharacterLiteral(const char* text, uint32_t length, CharacterDialect dialect)
+CharacterLiteralValue EvaluateCharacterLiteral(
+	const char* text, uint32_t length, CharacterDialect dialect, bool conditional_escapes)
 {
 	CharacterLiteralValue result = { false, false, FundamentalType::Int, 0, length };
 	TextLiteralParts parts;
@@ -301,10 +307,12 @@ CharacterLiteralValue EvaluateCharacterLiteral(const char* text, uint32_t length
 	// escapes included).
 	uint32_t pos = parts.body_begin;
 	LiteralCharacter c;
-	if (pos == parts.body_end || !DecodeLiteralCharacter(text, parts.body_end, pos, c))
+	if (pos == parts.body_end || !DecodeLiteralCharacter(text, parts.body_end, pos, c, conditional_escapes))
 		return result;
 	if (pos != parts.body_end)
-		return parts.suffix_begin == length ? EvaluateMulticharacterLiteral(text, parts, c, pos, result) : result;
+		return parts.suffix_begin == length
+			? EvaluateMulticharacterLiteral(text, parts, c, pos, result, conditional_escapes)
+			: result;
 	if (c.value > 0x10FFFF || !IsUniversalCharacterValue(static_cast<uint32_t>(c.value)))
 		return result;
 	result.code_point = static_cast<uint32_t>(c.value);

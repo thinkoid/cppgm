@@ -195,6 +195,11 @@ void FunctionLowering::discard(const syntax::Expr& expr)
 	case syntax::ExprKind::FunctionalCast:
 	{
 		const syntax::FunctionalCastExpr& functional = static_cast<const syntax::FunctionalCastExpr&>(*e);
+		if (functional.compound_type != nullptr)
+		{
+			compound_literal(functional);
+			return;
+		}
 		if (facts != nullptr && sema::IsVoid(facts->type) && functional.arguments.size == 1)
 		{
 			discard_to_void(*functional.arguments[0]);

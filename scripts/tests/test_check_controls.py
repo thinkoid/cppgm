@@ -200,6 +200,19 @@ class CheckControlsTests(unittest.TestCase):
         result = self.run_checker(fixture)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_control_c_standard_and_conflicting_sidecars(self):
+        fixture = self.control("500-gnu-c.t", "// expect exit 0\nint main() { return 0; }\n")
+        fixture.with_suffix(".c-standard").write_text("gnu17\n")
+        self.frontend.write_text(FRONTEND.replace(
+            "source = pathlib.Path(args[-1]).read_text()",
+            "assert '-std=gnu17' in args, args\nsource = pathlib.Path(args[-1]).read_text()"))
+        result = self.run_checker(fixture)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        fixture.with_suffix(".c-standard").write_text("c++17\n")
+        self.assertIn("Expected one C standard", self.run_checker(fixture).stderr)
+        fixture.with_suffix(".cxx-standard").write_text("c++17\n")
+        self.assertIn("Conflicting language standards", self.run_checker(fixture).stderr)
+
     def test_a_named_control_must_state_an_outcome(self):
         focused = self.control("530-focused-property.t", "int main() { return 3; }\n")
         stated = self.control("100-pass.t", "// expect exit 7\nint main() { return 7; }\n")

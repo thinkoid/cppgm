@@ -1973,6 +1973,8 @@ private:
 	// The globals of temporaries constant references extend, by their
 	// published values (unit-scoped: constant_temporary).
 	PointerMap constant_temporaries_;
+	PointerMap compound_globals_;
+	lowir::SymbolId compound_literal(const syntax::FunctionalCastExpr& expr);
 	// Function-local static objects' globals and guards (unit-scoped:
 	// variable -> index), and atexit's declaration (program-wide).
 	struct LocalStatic

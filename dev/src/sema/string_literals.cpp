@@ -24,6 +24,9 @@ bool IsCharacterArrayElement(const Type* type)
 	case FundamentalType::Char16T:
 	case FundamentalType::Char32T:
 	case FundamentalType::WcharT:
+	case FundamentalType::Int:
+	case FundamentalType::UnsignedShortInt:
+	case FundamentalType::UnsignedInt:
 		return true;
 	default:
 		return false;
@@ -251,7 +254,7 @@ bool DecodeStringLiteral(const TokenSpelling& spelling, StringLiteralFacts& out,
 					continue;
 				}
 				LiteralCharacter character;
-				if (!DecodeLiteralCharacter(body, parts.body_end, position, character))
+				if (!DecodeLiteralCharacter(body, parts.body_end, position, character, true))
 					return false;
 				// A numeric escape designates one code unit (2.14.3p4).
 				if (character.numeric)

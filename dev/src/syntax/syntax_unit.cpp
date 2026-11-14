@@ -4,7 +4,7 @@ namespace syntax {
 
 SyntaxUnit::SyntaxUnit(const PreprocessorOptions& options, const std::string& path, bool syntax_only)
 	: preprocessor_(options, path),
-	  post_tokens_(preprocessor_, &preprocessor_.identifiers(), options.literals, options.target),
+	  post_tokens_(preprocessor_, &preprocessor_.identifiers(), options.literals, options.target, options.gnu_c()),
 	  tokens_(post_tokens_, spellings_),
 	  parser_(tokens_, preprocessor_.identifiers(), arena_, options.hosted, options.cplusplus != "201103L",
 		  options.cplusplus == "201703L", options.language == SourceLanguage::C, syntax_only),
