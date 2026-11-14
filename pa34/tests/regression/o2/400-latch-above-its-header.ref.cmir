@@ -1,0 +1,167 @@
+machine_ir x86_64 <host-target>
+
+startup
+    call @main [args=()]
+    mov rdi, rax
+    exit
+
+global @places
+  storage data
+  item i64 3
+  item i64 40
+  item i64 5
+  item i64 90
+  item i64 7
+  item i64 20
+  item i64 9
+  item i64 300
+
+global @wanted
+  storage data
+  item i64 0
+  item i64 100
+  item i64 6
+  item i64 30
+  item i64 8
+  item i64 500
+  item i64 10
+  item i64 310
+
+function @settle
+  abi
+    param %places -> rdi : ptr
+    param %wanted -> rsi : ptr
+    param %n -> rdx : i64
+    return void -> void
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    preserve <gpr0>
+
+  block ^entry
+    mov <gpr0>, rdx
+    mov rax, 1
+
+  block ^head
+    cmp.i64 rax, <gpr0>
+    jl ^body
+    jmp ^done
+
+  block ^arm
+    mov <gpr1>, rdx
+    sar <gpr1>, 63
+    shr <gpr1>, 60
+    add rdx, <gpr1>
+    sar rdx, 4
+    add rcx, rdx
+    store.i64 [rdi+rax*8], rcx
+
+  block ^latch
+    add rax, 1
+    cmp.i64 rax, <gpr0>
+    jge ^done
+
+  block ^body
+    load.i64 rdx, [rsi+rax*8]
+    load.i64 rcx, [rdi+rax*8]
+    sub rdx, rcx
+    load.i64 r8, [rdi+rax*8+<off0>]
+    sub r8, rcx
+    load.i64 r9, [rdi+rax*8-<off0>]
+    sub r9, rcx
+    cmp.i64 rdx, 16
+    jl ^below
+
+  block ^above
+    cmp.i64 r8, 1
+    jg ^arm
+
+  block ^below
+    cmp.i64 rdx, -16
+    jg ^latch
+
+  block ^under
+    cmp.i64 r9, -1
+    jge ^latch
+    jmp ^arm
+
+  block ^done
+    ret
+
+function @plain
+  abi
+    param %places -> rdi : ptr
+    param %wanted -> rsi : ptr
+    param %n -> rdx : i64
+    return void -> void
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    mov r8, rdx
+    mov rax, 1
+
+  block ^head
+    cmp.i64 rax, r8
+    jge ^done
+
+  block ^body
+    load.i64 rcx, [rsi+rax*8]
+    load.i64 rdx, [rdi+rax*8]
+    sub rcx, rdx
+    cmp.i64 rcx, 16
+    jl ^low
+
+  block ^arm
+    mov <gpr1>, rcx
+    sar <gpr1>, 63
+    shr <gpr1>, 60
+    add rcx, <gpr1>
+    sar rcx, 4
+    add rdx, rcx
+    store.i64 [rdi+rax*8], rdx
+    add rax, 1
+    cmp.i64 rax, r8
+    jl ^body
+    ret
+
+  block ^low
+    test.u8 rcx, 1
+    jne ^arm
+
+  block ^latch
+    add rax, 1
+    cmp.i64 rax, r8
+    jl ^body
+    ret
+
+  block ^done
+    ret
+
+function @main
+  abi
+    return i32 -> rax
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    mov rdi, @places
+    mov rsi, @wanted
+    mov rdx, 7
+    call @settle [args=(rdx,rsi,rdi)]
+    mov rdi, @wanted
+    mov rsi, @places
+    mov rdx, 8
+    call @plain [args=(rdx,rsi,rdi)]
+    load.u32 rax, @places+8
+    add.u32 rax, @places+40
+    add.u32 rax, @wanted+24
+    ret rax

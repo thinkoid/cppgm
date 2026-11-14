@@ -8,6 +8,8 @@
 # shared bottom, which the first case enters about as often, and waits for
 # the cases. The last case then follows the chain, and the chain ends in
 # one conditional branch to the default instead of a branch and a jump.
+# That shared block is the loop's latch: it lies above the chain with the
+# first case before it, and its way back falls into the chain.
 global @kinds : obj<8x1> [binding=internal] = {
   u8 4
   u8 7

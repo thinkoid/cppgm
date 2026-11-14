@@ -820,8 +820,8 @@ uint32_t Placement::walk()
 	// 0: reached, 1: reached and cold, 2: not reached.
 	auto rank = [&](uint32_t b) { return !reached[b] ? 2u : cold_[b] ? 1u : 0u; };
 	std::vector<uint32_t> ready[2]; // per rank: blocks whose forward predecessors are placed, the latest last
-	std::vector<uint8_t> placed(n_, 0);
-	std::vector<uint32_t> order, starts; // starts: where a block follows no predecessor
+	std::vector<uint8_t> placed(n_, 0), copied(n_, 0); // copied: the block ends in its own copy of its successor's test
+	std::vector<uint32_t> order, starts;               // starts: where a block follows no predecessor
 	order.reserve(n_);
 	uint32_t scan[3] = { 1, 1, 1 };
 	auto conflict = [&](uint32_t b, uint32_t s, uint64_t w) {
@@ -901,6 +901,7 @@ uint32_t Placement::walk()
 						f_.insts.push_back(f_.insts[i]);
 					f_.blocks[b].first = at;
 					f_.blocks[b].count = static_cast<uint32_t>(f_.insts.size()) - at;
+					copied[b] = 1;
 				}
 			}
 		}
@@ -945,6 +946,84 @@ uint32_t Placement::walk()
 				std::rotate(order.begin() + starts[k], order.begin() + end, order.end());
 				break;
 			}
+		}
+	}
+	// A loop's latch that the walk did not leave above the header moves there
+	// when the order then runs more often into the next block (LLVM's
+	// findBestLoopTop): the back edge falls through, and every path of a pass
+	// reaches the latch by one jump. The blocks before the latch that only
+	// lead into it (an arm's last block) move with it. Lost are the runs
+	// into the header from the block above it, into those blocks from the
+	// block above them and out of the latch into the block below it; the
+	// block above them may then run into the one below the latch. (A block
+	// that took a copy of a test runs to the test's targets, and the test
+	// itself that much less.)
+	{
+		std::vector<uint32_t> position(n_, 0), heaviest(n_, kNone);
+		for (uint32_t k = 0; k < n_; ++k)
+			position[order[k]] = k;
+		auto share = [](uint64_t w, uint64_t part, uint64_t all) {
+			return all == 0 ? 0 : static_cast<uint64_t>(static_cast<unsigned __int128>(w) * part / all);
+		};
+		auto slot_edge = [&](uint32_t a, uint32_t b) {
+			uint64_t w = 0;
+			for (uint32_t e = succ_first_[a]; e < succ_first_[a + 1]; ++e)
+				w += succs_[e] == b ? weight[e] : 0;
+			return w;
+		};
+		auto leaving = [&](uint32_t a) {
+			uint64_t w = 0;
+			for (uint32_t e = succ_first_[a]; e < succ_first_[a + 1]; ++e)
+				w += weight[e];
+			return w;
+		};
+		// What still enters `t` of all that its edges weigh: not the blocks
+		// that took a copy of it.
+		auto entering = [&](uint32_t t, uint64_t& kept, uint64_t& all) {
+			kept = all = 0;
+			for (uint32_t i = pred_first_[t]; i < pred_first_[t + 1]; ++i)
+			{
+				all += weight[pred_slot[i]];
+				kept += copied[from[pred_slot[i]]] ? 0 : weight[pred_slot[i]];
+			}
+		};
+		auto edge = [&](uint32_t a, uint32_t b) {
+			if (copied[a])
+			{
+				const uint32_t t = succs_[succ_first_[a]];
+				return share(weight[succ_first_[a]], slot_edge(t, b), leaving(t));
+			}
+			uint64_t kept = 0, all = 0;
+			entering(a, kept, all);
+			return kept == all ? slot_edge(a, b) : share(slot_edge(a, b), kept, all);
+		};
+		for (uint32_t k = 0; k < slots; ++k)
+			if (back_[k] && (heaviest[succs_[k]] == kNone || weight[k] > weight[heaviest[succs_[k]]]))
+				heaviest[succs_[k]] = k;
+		for (uint32_t header = 1; header < n_; ++header)
+		{
+			if (heaviest[header] == kNone || header_[header] != 1)
+				continue;
+			const uint32_t latch = from[heaviest[header]];
+			const uint32_t at = position[header], lp = position[latch];
+			if (latch == header || lp <= at || rank(latch) != 0 || rank(header) != 0 || copied[latch])
+				continue;
+			uint32_t first = lp;
+			while (first - 1 > at && rank(order[first - 1]) == 0 && !copied[order[first - 1]] &&
+				succ_first_[order[first - 1] + 1] - succ_first_[order[first - 1]] == 1 &&
+				succs_[succ_first_[order[first - 1]]] == order[first])
+				--first;
+			const uint32_t above = order[at - 1], before = order[first - 1],
+						   after = lp + 1 < n_ ? order[lp + 1] : kNone;
+			const uint64_t gained = edge(latch, header) + edge(above, order[first]) +
+				(after != kNone ? edge(before, after) : 0);
+			const uint64_t lost = edge(above, header) + edge(before, order[first]) +
+				(after != kNone ? edge(latch, after) : 0);
+			if (gained <= lost)
+				continue;
+			std::rotate(order.begin() + at, order.begin() + first, order.begin() + lp + 1);
+			for (uint32_t k = at; k <= lp; ++k)
+				position[order[k]] = k;
 		}
 	}
 	for (uint32_t k = 1; k < n_; ++k)

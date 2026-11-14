@@ -43,6 +43,13 @@ function @walk
 
   block ^head
     cmp.u32 r13, rdx
+    ja ^body
+    jmp ^done
+
+  block ^next~head
+    store.i64 [rbp-104], r13
+    load.u32 r13, [rbp-128]
+    cmp.u32 r13, [rbp-136]
     jbe ^done
 
   block ^body
@@ -158,12 +165,6 @@ function @walk
     store.i64 [rbp-96], r15
     load.i64 r15, [rbp-8]
     jmp ^inner
-
-  block ^next~head
-    store.i64 [rbp-104], r13
-    load.u32 r13, [rbp-128]
-    cmp.u32 r13, [rbp-136]
-    ja ^body
 
   block ^done
     load.u32 r10, [rbp-104]

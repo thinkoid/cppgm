@@ -36,6 +36,15 @@ function @count
 
   block ^head
     cmp.i64 rax, rsi
+    jl ^body
+    ret
+
+  block ^four
+    add @seen, 1
+
+  block ^next
+    add rax, 1
+    cmp.i64 rax, rsi
     jge ^done
 
   block ^body
@@ -57,15 +66,6 @@ function @count
 
   block ^quarter
     add @seen, 10
-    add rax, 1
-    cmp.i64 rax, rsi
-    jl ^body
-    ret
-
-  block ^four
-    add @seen, 1
-
-  block ^next
     add rax, 1
     cmp.i64 rax, rsi
     jl ^body
