@@ -685,6 +685,12 @@ Shape shape_of(
 				guard = guard_landing(program, body, b);
 			unguarded = unguarded || (catching && !guard);
 			shape.catches = shape.catches || catching;
+			if (inst.op == Opcode::Call && inst.ops[0].is(ValueKind::Symbol))
+			{
+				const auto nonlocal = program.nonlocal_function(inst.ops[0].index);
+				shape.unsafe = shape.unsafe || nonlocal == NonlocalFunction::Setjmp ||
+					nonlocal == NonlocalFunction::ReturnsTwice;
+			}
 			shape.call = shape.call || inst.op == Opcode::Call;
 			shape.calls += inst.op == Opcode::Call ? 1 : 0;
 			if (graph != nullptr && inst.op == Opcode::Call && inst.ops[0].is(ValueKind::Symbol))

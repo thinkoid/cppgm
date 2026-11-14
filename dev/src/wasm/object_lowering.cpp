@@ -5,6 +5,7 @@
 #include "wasm/exceptions.h"
 #include "wasm/selector.h"
 #include "wasm/validation.h"
+#include "wasm/nonlocal_jumps.h"
 
 namespace wasm {
 
@@ -160,7 +161,7 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 			code_labels[labels[i].symbol] = { segment, i };
 	}
 	std::vector<uint32_t> function_symbols(object.functions.size(), lowir::kNoId);
-	std::vector<uint32_t> symbols(program.symbols.size() + (module.tag_types.empty() ? 3 : 4), lowir::kNoId);
+	std::vector<uint32_t> symbols(program.symbols.size() + 3 + module.tag_types.size(), lowir::kNoId);
 	std::vector<uint32_t> groups(program.symbols.size(), lowir::kNoId);
 	for (lowir::SymbolId id : program.order)
 	{
@@ -190,7 +191,10 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 			ObjectFunction& function = object.functions[symbol.index];
 			function.type = module.definition_types[symbol.index];
 			function.name = symbol.name;
-			function.imported = source.kind == lowir::SymbolKind::FunctionDeclaration;
+			function.imported = source.kind == lowir::SymbolKind::FunctionDeclaration &&
+				module.nonlocal_function(id) != lowir::NonlocalFunction::Longjmp;
+			if (source.kind == lowir::SymbolKind::FunctionDeclaration && !function.imported)
+				symbol.flags = 1;
 			if (function.imported)
 			{
 				function.module = "env";
@@ -279,7 +283,7 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 	object.symbols.push_back(imported_symbol(1, 0, "__stack_low"));
 	symbols[module.table_symbol] = static_cast<uint32_t>(object.symbols.size());
 	object.symbols.push_back(imported_symbol(5, 0, "__indirect_function_table"));
-	if (!module.tag_types.empty())
+	if (module.exception_regions)
 	{
 		symbols[module.exception_tag_symbol] = static_cast<uint32_t>(object.symbols.size());
 		const bool cxx = module.exception_abi == lowir::ExceptionAbi::Cxx;
@@ -295,6 +299,7 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 		object.symbols.push_back(std::move(identity));
 		object.tags.push_back(std::move(tag));
 	}
+	append_nonlocal_objects(module, object, symbols);
 	bool uses_simd = false;
 	for (const Signature& type : module.signatures)
 	{

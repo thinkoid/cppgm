@@ -77,6 +77,28 @@ void prepare_module(const lowir::Program& program, Module& module)
 		module.exception_pair_type = static_cast<uint32_t>(module.signatures.size());
 		module.signatures.push_back(std::move(pair));
 	}
+	for (lowir::SymbolId id : program.order)
+	{
+		const auto kind = program.nonlocal_function(id);
+		if (kind != lowir::NonlocalFunction::Setjmp && kind != lowir::NonlocalFunction::Longjmp)
+			continue;
+		if (module.nonlocal_calls.empty())
+			module.nonlocal_calls.resize(program.symbols.size(), lowir::NonlocalFunction::None);
+		module.nonlocal_calls[id] = kind;
+	}
+	if (!module.nonlocal_calls.empty())
+	{
+		module.nonlocal_tag_symbol = module.stack_symbol + 3 + static_cast<uint32_t>(module.tag_types.size());
+		module.nonlocal_tag_index = static_cast<uint32_t>(module.tag_types.size());
+		Signature tag;
+		tag.parameters = { ValueType::I32 };
+		module.tag_types.push_back(static_cast<uint32_t>(module.signatures.size()));
+		module.signatures.push_back(std::move(tag));
+		Signature pair;
+		pair.results = { ValueType::I32, ValueType::ExnRef };
+		module.nonlocal_pair_type = static_cast<uint32_t>(module.signatures.size());
+		module.signatures.push_back(std::move(pair));
+	}
 	// Address-only imports carry a placeholder type until a real definition
 	// supplies the ABI. A direct call's typed boundary is materialized earlier.
 	uint32_t address_type = lowir::kNoId;
@@ -86,6 +108,11 @@ void prepare_module(const lowir::Program& program, Module& module)
 		const auto& symbol = program.symbols[id];
 		if (symbol.kind != lowir::SymbolKind::FunctionDeclaration)
 			continue;
+		if (module.nonlocal_function(id) == lowir::NonlocalFunction::Longjmp)
+		{
+			module.nonlocal_wrappers.push_back(id);
+			continue;
+		}
 		const auto signature = program.functions[symbol.detail].signature;
 		// Source builtins and optimizer-created declarations can denote the
 		// same object function. They share one import and linking identity.
@@ -115,6 +142,17 @@ void prepare_module(const lowir::Program& program, Module& module)
 			module.signatures.push_back(Signature{});
 		}
 		module.definition_types.push_back(signature == lowir::kNoId ? address_type : module.signature_types[signature]);
+	}
+	for (lowir::SymbolId id : module.nonlocal_wrappers)
+	{
+		const auto signature = program.functions[program.symbols[id].detail].signature;
+		if (signature == lowir::kNoId)
+			throw WasmError("a longjmp reference requires its typed C boundary");
+		const auto& type = module.signatures[module.signature_types[signature]];
+		if (type.parameters != std::vector<ValueType>{ ValueType::I32, ValueType::I32 } || !type.results.empty())
+			throw WasmError("longjmp requires the C pointer and int boundary");
+		module.function_indices[id] = static_cast<uint32_t>(module.definition_types.size());
+		module.definition_types.push_back(module.signature_types[signature]);
 	}
 	for (lowir::SymbolId id : program.order)
 	{

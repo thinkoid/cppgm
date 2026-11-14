@@ -56,6 +56,9 @@ private:
 	void instruction(const lowir::Instruction& inst);
 	void atomic_instruction(const lowir::Instruction& inst);
 	void call(const lowir::Instruction& inst);
+	void plan_nonlocal_jumps();
+	bool nonlocal_call(const lowir::Instruction& inst);
+	void nonlocal_dispatch();
 	void call_body(const lowir::Instruction& inst, const lowir::Signature& signature);
 	void exception_call(const lowir::Instruction& inst, const lowir::Signature* signature, uint32_t landing);
 	void exception_select(uint32_t landing);
@@ -178,6 +181,19 @@ private:
 	uint32_t frame_ = lowir::kNoId;
 	uint32_t saved_stack_ = lowir::kNoId;
 	bool keeps_stack_ = false; // the stack pointer stays where the function found it
+	struct NonlocalFragment
+	{
+		uint32_t id;
+		lowir::BlockId block;
+		lowir::InstId first, past, result_call;
+		uint32_t next;
+	};
+	std::vector<NonlocalFragment> nonlocal_fragments_;
+	std::vector<uint32_t> nonlocal_sites_;
+	uint32_t jump_result_ = lowir::kNoId;
+	uint32_t jump_payload_ = lowir::kNoId;
+	uint32_t jump_environment_ = lowir::kNoId;
+	uint32_t jump_reference_ = lowir::kNoId;
 	uint32_t pc_ = lowir::kNoId;
 	uint32_t nesting_ = 0;
 	uint32_t dispatch_depth_ = 0;

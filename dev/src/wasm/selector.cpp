@@ -257,9 +257,12 @@ void Selector::run()
 				add_local(ValueType::I64);
 		}
 	}
+	plan_nonlocal_jumps();
 	prepare_frame();
 	const auto last = body_.instructions[body_.blocks[body_.layout[0]].last].op;
-	if ((exceptions_ == nullptr || !exceptions_->active) && body_.layout.size() == 1 &&
+	if (!nonlocal_fragments_.empty())
+		nonlocal_dispatch();
+	else if ((exceptions_ == nullptr || !exceptions_->active) && body_.layout.size() == 1 &&
 		(last == Opcode::Return || last == Opcode::Unreachable))
 		simple();
 	else if (!structured())

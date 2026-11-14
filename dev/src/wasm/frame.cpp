@@ -79,7 +79,7 @@ const uint32_t kOneTestFrame = uint32_t(1) << 30;
 
 void Selector::prepare_frame()
 {
-	uint64_t bytes = 0;
+	uint64_t bytes = nonlocal_fragments_.empty() ? 0 : 16;
 	uint32_t alignment = 16;
 	bool outgoing = false;
 	auto reserve = [&](Type type) {
@@ -100,7 +100,8 @@ void Selector::prepare_frame()
 	slot_locals_.assign(body_.slots.size(), kNoId);
 	places_ = plan_object_places(program_, body_, signature_, boundary_,
 		exceptions_ != nullptr && exceptions_->active ? &exceptions_->analysis.eh_sites_ : nullptr);
-	const auto owners = machine::sequential_copy_slots(program_, body_);
+	const auto owners = nonlocal_fragments_.empty() ? machine::sequential_copy_slots(program_, body_)
+													: std::vector<uint32_t>{};
 	for (uint32_t i = 0; i < body_.slots.size(); ++i)
 	{
 		// The storage of an incoming object or of the result object is the

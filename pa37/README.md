@@ -71,6 +71,9 @@ Implement the following at `-O0`, `-O1`, `-O2` and `-O3`:
   calls where Wasm has no corresponding value type.
 - Complete control flow, including phi transfers, switches, nested loops and
   irreducible graphs accepted by LowIR. Preserve every defined exit path.
+- C `setjmp` continuations and `longjmp` through direct or indirect calls, with
+  invocation-specific targets, zero-to-one return normalization and restored stack state.
+  Preserve unmodified automatic objects and volatile observations.
 - Direct and indirect calls, recursion, variadic functions, aggregate argument
   and result passing, and separately compiled objects.
 - The portable class/template behavior already required by the course,

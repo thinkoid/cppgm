@@ -44,6 +44,15 @@ struct Module
 	uint32_t exception_context = lowir::kNoId;
 	uint32_t exception_tag_symbol = lowir::kNoId;
 	uint32_t exception_pair_type = lowir::kNoId;
+	std::vector<lowir::NonlocalFunction> nonlocal_calls;
+	std::vector<lowir::SymbolId> nonlocal_wrappers;
+	uint32_t nonlocal_tag_symbol = lowir::kNoId;
+	uint32_t nonlocal_tag_index = lowir::kNoId;
+	uint32_t nonlocal_pair_type = lowir::kNoId;
+	lowir::NonlocalFunction nonlocal_function(lowir::SymbolId id) const
+	{
+		return nonlocal_calls.empty() ? lowir::NonlocalFunction::None : nonlocal_calls[id];
+	}
 };
 
 void prepare_module(const lowir::Program& program, Module& module);

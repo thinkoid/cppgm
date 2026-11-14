@@ -229,6 +229,25 @@ MathFunction Program::math_function(SymbolId symbol) const
 	return MathFunction::None;
 }
 
+NonlocalFunction Program::nonlocal_function(SymbolId symbol) const
+{
+	const Symbol& callee = symbols[symbol];
+	if (!is_function_kind(callee.kind) || callee.metadata.linkage != ir_model::LLM_C ||
+		callee.metadata.binding == ir_model::SBM_INTERNAL)
+		return NonlocalFunction::None;
+	const char* name = spelling(callee.metadata.object != 0 ? callee.metadata.object : callee.name);
+	for (const char* candidate : { "setjmp", "_setjmp", "sigsetjmp", "__sigsetjmp" })
+		if (std::strcmp(name, candidate) == 0)
+			return NonlocalFunction::Setjmp;
+	for (const char* candidate : { "longjmp", "_longjmp", "siglongjmp", "__longjmp_chk", "__wasm_longjmp" })
+		if (std::strcmp(name, candidate) == 0)
+			return NonlocalFunction::Longjmp;
+	for (const char* candidate : { "savectx", "getcontext", "vfork" })
+		if (std::strcmp(name, candidate) == 0)
+			return NonlocalFunction::ReturnsTwice;
+	return NonlocalFunction::None;
+}
+
 SignatureId Program::add_signature(const Signature& signature)
 {
 	signatures.push_back(signature);

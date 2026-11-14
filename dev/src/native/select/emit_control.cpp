@@ -2,7 +2,6 @@
 #include "native/select/for_each_inst.h"
 
 #include <algorithm>
-#include <cstring>
 
 #include "native/backend_error.h"
 #include "native/runtime/eh_record.h"
@@ -40,14 +39,10 @@ bool conditional(const Instruction& term)
 // whatever the paths from the first return say.
 bool returns_twice(const lowir::Program& program, Value callee)
 {
-	if (callee.kind != ValueKind::Symbol || program.symbols[callee.index].metadata.linkage != ir_model::LLM_C)
+	if (callee.kind != ValueKind::Symbol)
 		return false;
-	const lowir::Symbol& symbol = program.symbols[callee.index];
-	const char* name = program.spelling(symbol.metadata.object != 0 ? symbol.metadata.object : symbol.name);
-	for (const char* twice : { "setjmp", "_setjmp", "sigsetjmp", "__sigsetjmp", "savectx", "getcontext", "vfork" })
-		if (std::strcmp(name, twice) == 0)
-			return true;
-	return false;
+	const auto kind = program.nonlocal_function(callee.index);
+	return kind == lowir::NonlocalFunction::Setjmp || kind == lowir::NonlocalFunction::ReturnsTwice;
 }
 
 } // namespace

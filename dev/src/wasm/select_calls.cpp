@@ -12,7 +12,7 @@ void Selector::call(const lowir::Instruction& inst)
 		(signature->boundary.arity == ir_model::CAM_FIXED ? signature->parameter_count != inst.extra_count
 														  : signature->parameter_count > inst.extra_count))
 		throw WasmError("Wasm call requires a matching typed boundary");
-	if (builtin_call(inst, *signature))
+	if (nonlocal_call(inst) || builtin_call(inst, *signature))
 		return;
 	const uint32_t site = exceptions_ != nullptr && exceptions_->active ? exceptions_->analysis.eh_sites_[current_inst_]
 																		: 0;

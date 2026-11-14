@@ -54,6 +54,16 @@ enum class MathFunction : uint8_t
 	Cos   // cos, cosf
 };
 
+// Hosted C non-local control functions. Other return-twice services need
+// conservative frame/inlining treatment but do not use the setjmp ABI.
+enum class NonlocalFunction : uint8_t
+{
+	None,
+	Setjmp,
+	Longjmp,
+	ReturnsTwice
+};
+
 // Instructions of a block form a list through Instruction::next. A block
 // of a kind other than Plain prints its kind's name (an inlined copy's
 // derives from the name of the block it copies).
@@ -379,6 +389,7 @@ struct Program
 	bool memcmp_function(SymbolId symbol) const; // C 7.24.4.1
 	// The C library math function `symbol` declares (not defines).
 	MathFunction math_function(SymbolId symbol) const;
+	NonlocalFunction nonlocal_function(SymbolId symbol) const;
 	// Whether `symbol` is the runtime's trap (`object=cppgm_builtin_trap`,
 	// __builtin_trap), which the back end encodes as a trap instruction.
 	bool trap_function(SymbolId symbol) const;
