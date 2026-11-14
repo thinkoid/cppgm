@@ -136,10 +136,9 @@ function @narrow(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
   block ^body:
     %i = phi i64 [^loop_preheader_4: %t16, ^body: %next]
     %p = index i32 %x, %i
-    %v = load typed i32 %p
-    %w = convert trunc i16 i32 %v
+    %t19 = load i16 %p
     %o = index i16 %d, %i
-    store typed i16 %w, %o
+    store typed i16 %t19, %o
     %next = binary add nowrap i64 %i, 1
     %c = cmp lt i64 %next, %n
     branch %c, ^body, ^done
@@ -418,10 +417,9 @@ function @long_to_short(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
   block ^body:
     %i = phi i64 [^loop_preheader_4: %t17, ^body: %next]
     %p = index i64 %x, %i
-    %v = load typed i64 %p
-    %w = convert trunc i16 i64 %v
+    %t20 = load i16 %p
     %o = index i16 %d, %i
-    store typed i16 %w, %o
+    store typed i16 %t20, %o
     %next = binary add nowrap i64 %i, 1
     %c = cmp lt i64 %next, %n
     branch %c, ^body, ^done
@@ -481,10 +479,9 @@ function @long_to_byte(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
   block ^body:
     %i = phi i64 [^loop_preheader_5: %t29, ^body: %next]
     %p = index i64 %x, %i
-    %v = load typed i64 %p
-    %w = convert trunc u8 i64 %v
+    %t32 = load u8 %p
     %o = index u8 %d, %i
-    store u8 %w, %o
+    store u8 %t32, %o
     %next = binary add nowrap i64 %i, 1
     %c = cmp lt i64 %next, %n
     branch %c, ^body, ^done

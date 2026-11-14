@@ -13,6 +13,8 @@ namespace {
 
 // Producers followed for the bits a value may have set.
 const unsigned kFieldDepth = 6;
+// The most inputs of a phi that a field is cut through.
+const uint32_t kFieldPhiInputs = 8;
 
 // O1+, once memory forwarding is done: a field of a loaded or stored word
 // (a bit-field's storage unit, a flags word) is read, tested and written
@@ -108,7 +110,20 @@ private:
 	{
 		return Type::scalar(bits == 8 ? TypeKind::U8 : bits == 16 ? TypeKind::U16 : TypeKind::U32);
 	}
+	// The readers of a temporary as the pass began (counted at the first
+	// question; a temporary the pass made has the one reader it was made for).
+	uint32_t readers(Value v)
+	{
+		if (uses_.empty())
+			count_uses(body_, uses_);
+		return v.index < uses_.size() ? uses_[v.index] : 1;
+	}
+	// A truncation to a field of whole bytes of a word of `bits`, the word
+	// shifted right by `count` first where that shift has no other reader.
+	bool cut_of(const Instruction& cut, unsigned& bits, unsigned& width, uint64_t& count, Value& word);
 	uint64_t possible_ones(Value v, Type type, unsigned depth) const;
+	bool field_of_phi(InstId id);
+	bool field_cut(InstId id);
 	bool field_load(InstId id);
 	bool shifted_test(BlockId block, InstId& prev, Value& tested, uint32_t location);
 	bool shifted_compare(BlockId block, InstId& prev, InstId id);
@@ -152,6 +167,157 @@ uint64_t FieldAccess::possible_ones(Value v, Type type, unsigned depth) const
 	if (op == BinaryOp::UShr || (op == BinaryOp::Shr && !!lowir::is_unsigned(type.kind())))
 		return possible_ones(d->ops[0], type, depth - 1) >> k;
 	return all;
+}
+
+bool FieldAccess::cut_of(const Instruction& cut, unsigned& bits, unsigned& width, uint64_t& count, Value& word)
+{
+	if (cut.op != Opcode::Convert || static_cast<ConvertOp>(cut.sub) != ConvertOp::Trunc || cut.result == kNoId ||
+		!cut.type.is_integer())
+		return false;
+	const Type wide = convert_source_type(cut);
+	bits = word_bits(wide);
+	width = lowir::integer_bits(cut.type.kind());
+	if (bits == 0 || width >= bits || (width != 8 && width != 16 && width != 32))
+		return false;
+	word = cut.ops[0];
+	count = 0;
+	bool arithmetic = false;
+	if (const Instruction* shift = right_shift(word, wide, count, arithmetic))
+	{
+		if (count % 8 != 0 || count + width > bits || readers(word) != 1)
+			return false;
+		word = shift->ops[0];
+	}
+	return word.is(ValueKind::Temp);
+}
+
+// `trunc (phi ...)`, or `trunc (shr (phi ...), 8 * b)`, of a phi nothing
+// else reads, where each input is a small literal or a word the phi alone
+// reads that is loaded, or joined from parts: each predecessor cuts the
+// field from its own word, and a phi of the fields takes the truncation's
+// place. A word joined from parts then gives the part alone (the others
+// lose their reader), and a loaded one its field's own load.
+bool FieldAccess::field_of_phi(InstId id)
+{
+	const Instruction cut = body_.instructions[id];
+	unsigned bits = 0, width = 0;
+	uint64_t count = 0;
+	Value word;
+	if (!cut_of(cut, bits, width, count, word) || producer(word) == nullptr || producer(word)->op != Opcode::Phi ||
+		readers(word) != 1)
+		return false;
+	const Type wide = convert_source_type(cut);
+	const InstId phi_id = body_.temps[word.index].def;
+	const Instruction phi = body_.instructions[phi_id];
+	if (phi.type != wide || phi.extra_count == 0 || phi.extra_count > 2 * kFieldPhiInputs)
+		return false;
+	for (uint32_t k = 0; k + 1 < phi.extra_count; k += 2)
+	{
+		const Opcode end = body_.instructions[body_.blocks[body_.operands[phi.extra_first + k].index].last].op;
+		const Value v = body_.operands[phi.extra_first + k + 1];
+		uint64_t value;
+		if (end != Opcode::Jump && end != Opcode::Branch && end != Opcode::Switch)
+			return false;
+		if (literal(v, bits, value))
+			continue;
+		const Instruction* d = producer(v);
+		if (d == nullptr || readers(v) != 1)
+			return false;
+		const bool joined = d->op == Opcode::Binary && d->type == wide &&
+			(static_cast<BinaryOp>(d->sub) == BinaryOp::Or || static_cast<BinaryOp>(d->sub) == BinaryOp::Shl);
+		const bool extended = d->op == Opcode::Convert && static_cast<ConvertOp>(d->sub) == ConvertOp::ZExt;
+		if (!joined && !extended && word_load(v, bits) == nullptr)
+			return false;
+	}
+	std::vector<Value> pairs;
+	for (uint32_t k = 0; k + 1 < phi.extra_count; k += 2)
+	{
+		const BlockId pred = body_.operands[phi.extra_first + k].index;
+		const Value v = body_.operands[phi.extra_first + k + 1];
+		uint64_t value;
+		pairs.push_back(Value::block(pred));
+		if (literal(v, bits, value))
+		{
+			pairs.push_back(
+				integer_value(body_, normalize_integer(cut.type, Literal{ (value >> count) & ones(width), 0 })));
+			continue;
+		}
+		// Before the predecessor's branch, and the compare it tests.
+		const InstId last = body_.blocks[pred].last;
+		InstId before = kNoId, prev = kNoId;
+		for (InstId i = body_.blocks[pred].first; i != last; i = body_.instructions[i].next)
+		{
+			before = prev;
+			prev = i;
+		}
+		if (prev != kNoId && body_.instructions[last].op == Opcode::Branch &&
+			body_.instructions[last].ops[0].is(ValueKind::Temp) &&
+			body_.instructions[prev].result == body_.instructions[last].ops[0].index &&
+			body_.instructions[prev].op != Opcode::Phi)
+			prev = before;
+		Value from = v;
+		if (count != 0)
+		{
+			Instruction shift = make_instruction(Opcode::Binary, wide);
+			shift.sub = static_cast<uint8_t>(BinaryOp::UShr);
+			shift.ops[0] = from;
+			shift.ops[1] = integer_value(body_, Literal{ count, 0 });
+			shift.location = cut.location;
+			from = Value::temp(body_.instructions[emit(pred, prev, shift)].result);
+		}
+		Instruction field = make_instruction(Opcode::Convert, cut.type);
+		field.sub = static_cast<uint8_t>(ConvertOp::Trunc);
+		field.ops[0] = from;
+		field.location = cut.location;
+		set_convert_source_type(field, wide);
+		pairs.push_back(Value::temp(body_.instructions[emit(pred, prev, field)].result));
+	}
+	Instruction narrow = make_instruction(Opcode::Phi, cut.type);
+	narrow.location = phi.location;
+	narrow.extra_first = append_operands(body_, pairs.data(), static_cast<uint32_t>(pairs.size()));
+	narrow.extra_count = static_cast<uint32_t>(pairs.size());
+	InstId at = phi_id;
+	const InstId made = emit(block_of_[phi_id], at, narrow);
+	Instruction copy = make_instruction(Opcode::Copy, cut.type);
+	copy.result = cut.result;
+	copy.ops[0] = Value::temp(body_.instructions[made].result);
+	copy.location = cut.location;
+	// (The link as it is now: an instruction made above may follow the cut.)
+	copy.next = body_.instructions[id].next;
+	body_.instructions[id] = copy;
+	return true;
+}
+
+// `trunc (shr (load word p), 8 * b)`, the shift optional, of a word that
+// nothing else reads: the field's own load, where the word's was.
+bool FieldAccess::field_cut(InstId id)
+{
+	const Instruction cut = body_.instructions[id];
+	unsigned bits = 0, width = 0;
+	uint64_t count = 0;
+	Value word;
+	if (!cut_of(cut, bits, width, count, word))
+		return false;
+	const Instruction* loaded = word_load(word, bits);
+	if (loaded == nullptr || readers(word) != 1)
+		return false;
+	const Value address = loaded->ops[0];
+	const uint32_t location = loaded->location;
+	const InstId at = body_.temps[word.index].def;
+	const BlockId block = block_of_[at];
+	InstId prev = at;
+	Instruction load = make_instruction(Opcode::Load, cut.type);
+	load.ops[0] = displaced(block, prev, address, count / 8, location);
+	load.location = location;
+	const Value narrow = Value::temp(body_.instructions[emit(block, prev, load)].result);
+	Instruction copy = make_instruction(Opcode::Copy, cut.type);
+	copy.result = cut.result;
+	copy.ops[0] = narrow;
+	copy.location = cut.location;
+	// (The link as it is now: an instruction made above may follow the cut.)
+	copy.next = body_.instructions[id].next;
+	body_.instructions[id] = copy;
+	return true;
 }
 
 // `and (shr (load word p), 8 * b), ones(8 | 16 | 32)`, the shift optional:
@@ -389,6 +555,13 @@ bool FieldAccess::run(bool loads)
 						++uses_[v.index];
 				});
 	}
+	// The fields cut through phis first: their predecessors' cuts are then
+	// read with the rest.
+	if (loads)
+		for (BlockId b : body_.layout)
+			for (InstId id = body_.blocks[b].first; id != kNoId; id = body_.instructions[id].next)
+				if (body_.instructions[id].op == Opcode::Convert)
+					changed = field_of_phi(id) || changed;
 	for (BlockId b : body_.layout)
 	{
 		InstId prev = kNoId;
@@ -400,6 +573,8 @@ bool FieldAccess::run(bool loads)
 			{
 				if (seen.op == Opcode::Binary)
 					changed = field_load(id) || whole_shift(id) || changed;
+				else if (seen.op == Opcode::Convert)
+					changed = field_cut(id) || changed;
 				continue;
 			}
 			const bool equality = seen.op == Opcode::Compare && seen.type.is_integer() &&
