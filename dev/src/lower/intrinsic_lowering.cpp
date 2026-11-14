@@ -62,11 +62,6 @@ RValue FunctionLowering::wasm_float_minmax(const syntax::CallExpr& expr)
 	const RValue first = operand(*expr.arguments[0], ConversionContext::Argument);
 	const RValue second = operand(*expr.arguments[1], ConversionContext::Argument);
 	const bool maximum = (expr.facts->value >> 8 & 1) != 0;
-	const sema::Type* bits = lowering_.graph().types.fundamental(first.type.kind() == lowir::TypeKind::F32
-			? FundamentalType::UnsignedInt
-			: FundamentalType::UnsignedLongLongInt);
-	const RValue a = reinterpret_bytes(first, bits);
-	const RValue b = reinterpret_bytes(second, bits);
 	const auto choose = [&](const RValue& test, const RValue& yes, const RValue& no) {
 		lowir::Instruction select = lowir::make_instruction(lowir::Opcode::Select, yes.type);
 		select.ops[0] = test.value;
@@ -78,18 +73,21 @@ RValue FunctionLowering::wasm_float_minmax(const syntax::CallExpr& expr)
 	};
 	const RValue better = compare(
 		maximum ? lowir::ComparePredicate::Gt : lowir::ComparePredicate::Lt, first.type, first, second);
-	const RValue ordered = choose(better, a, b);
-	// Equal values have identical bits except for the sign of zero. AND
-	// selects +0 for max and OR selects -0 for min, in either argument order.
-	const RValue tied = binary(maximum ? lowir::BinaryOp::And : lowir::BinaryOp::Or, a.type, a, b);
+	const RValue ordered = choose(better, first, second);
+	// Equal nonzero values have the same representation. For opposite
+	// zeros, min selects the negative operand and max the positive one.
+	const sema::Type* bits = lowering_.graph().types.fundamental(
+		first.type.kind() == lowir::TypeKind::F32 ? FundamentalType::Int : FundamentalType::LongLongInt);
+	const RValue word = reinterpret_bytes(first, bits);
+	const RValue negative = compare(lowir::ComparePredicate::Lt, word.type, word, integer(word.type, 0));
+	const RValue tied = choose(negative, maximum ? second : first, maximum ? first : second);
 	const RValue finite = choose(compare(lowir::ComparePredicate::Eq, first.type, first, second), tied, ordered);
 	const RValue unordered = binary(lowir::BinaryOp::Or, lowir::Type::scalar(lowir::TypeKind::I64),
 		compare(lowir::ComparePredicate::Ne, first.type, first, first),
 		compare(lowir::ComparePredicate::Ne, second.type, second, second));
 	// Arithmetic propagates and quiets a NaN. Wasm has no observable floating
 	// exception flags, so computing the unselected sum has no side effects.
-	const RValue nan = reinterpret_bytes(binary(lowir::BinaryOp::Add, first.type, first, second), bits);
-	return reinterpret_bytes(choose(unordered, nan, finite), expr.facts->type);
+	return choose(unordered, binary(lowir::BinaryOp::Add, first.type, first, second), finite);
 }
 
 RValue FunctionLowering::intrinsic(const syntax::CallExpr& expr)

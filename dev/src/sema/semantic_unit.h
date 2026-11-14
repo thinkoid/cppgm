@@ -97,6 +97,13 @@ struct SemanticGraph
 	}
 	PointerMap closure_index;
 	std::vector<ClosureFacts*> closures;
+	const Type* const* c_parameter_objects(const syntax::ParameterClause* clause) const
+	{
+		const auto index = c_parameter_index.find(clause);
+		return index == PointerMap::kMissing ? nullptr : c_parameter_types[index];
+	}
+	PointerMap c_parameter_index;
+	std::vector<const Type* const*> c_parameter_types;
 	// The constructors (not trivial ones) a namespace-scope or static data
 	// member initializer names, which the variable's constant initialization
 	// may run uncalled: the lowering emits them with the variable (the

@@ -7,6 +7,7 @@
 #include "lex/number_literal.h"
 #include "lex/text_literal.h"
 #include "sema/pretty_function.h"
+#include "support/internal_error.h"
 
 namespace sema {
 
@@ -82,12 +83,18 @@ bool Analyzer::function_body(FunctionEntity* function, const Type* type, const s
 		}
 		else
 			all_dependent = names_.limit() != NameLookup::kNoLimit;
+		const Type* const* declared_types = parameters->c_identifier_list ? graph_.c_parameter_objects(parameters)
+																		  : nullptr;
+		if (parameters->c_identifier_list && declared_types == nullptr)
+			throw InternalError("missing C identifier-list parameter facts");
 		for (uint32_t i = 0; i < type->param_count; ++i)
 		{
+			const Type* object_type = declared_types != nullptr ? parameter_object_type(declared_types[i])
+																: type->params[i];
 			const syntax::Name* id = DeclaratorId(parameters->parameters[i]->declarator);
 			const Identifier* name = id != nullptr ? id->last().identifier : nullptr;
-			Entity* parameter = new_entity<Entity>(EntityKind::Parameter, name, scope, type->params[i]);
-			Binding* binding = new_binding(BindingKind::Parameter, name, parameter, type->params[i]);
+			Entity* parameter = new_entity<Entity>(EntityKind::Parameter, name, scope, object_type);
+			Binding* binding = new_binding(BindingKind::Parameter, name, parameter, object_type);
 			scope->has_parameter_packs = scope->has_parameter_packs || type->params[i]->kind == TypeKind::Expansion;
 			binding->dependent = all_dependent ||
 				(pattern != nullptr ? dependent_type(pattern->params[i])

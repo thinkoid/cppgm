@@ -130,7 +130,16 @@ DeclaredName Analyzer::declared_name(const syntax::Name& name, Scope* target)
 	const syntax::NameComponent& last = name.last();
 	DeclaredName result = DeclaredName{ nullptr, nullptr, last.kind };
 	if (last.has_arguments)
-		error(name.location, "template-ids are not supported here");
+	{
+		if (last.kind != syntax::NameComponentKind::Destructor || target->kind != ScopeKind::Class)
+			error(name.location, "template-ids are not supported here");
+		if (last.identifier != target->entity->name)
+			error(last.location, "destructor must use the enclosing class name");
+		const LookupResult found = names_.qualified(target, last.identifier, LookupFilter::Elaborated);
+		const Binding* named = found.found() ? template_id_binding(found.binding, last, target) : nullptr;
+		if (named == nullptr || binding_type(named, last.location)->unqualified != target->entity->type->unqualified)
+			error(last.location, "destructor template-id does not name the enclosing class");
+	}
 	switch (last.kind)
 	{
 	case syntax::NameComponentKind::Identifier:
@@ -215,6 +224,8 @@ void Analyzer::check_parameter_redeclaration(const Identifier* name, Scope* scop
 
 void Analyzer::check_type_name_conflict(Scope* target, const Identifier* name, const Entity* entity, uint32_t location)
 {
+	if (c_source_)
+		return;
 	// A class or enumeration name may share its scope with one variable,
 	// function or enumerator (which hides it, 3.3.10p2) but not with a
 	// typedef-name for another type, a namespace or a template parameter.
@@ -1127,7 +1138,12 @@ Binding* Analyzer::declare_typedef(const DeclaredName& name, const Type* type, S
 	{
 		if (entry->value != nullptr && !entry->value->invisible)
 			error(location, "typedef-name conflicts with an earlier declaration");
-		if (const Binding* existing = entry->type)
+		const Binding* existing = entry->type;
+		// C tags have their own namespace; an ordinary typedef can reuse
+		// the spelling while naming an unrelated type.
+		if (c_source_ && existing == entry->tag)
+			existing = nullptr;
+		if (existing != nullptr)
 		{
 			// A typedef may redefine a name in a non-class scope to the type it
 			// already denotes (7.1.3p3), or a class name in a class (7.1.3p4).
@@ -1266,7 +1282,7 @@ Binding* Analyzer::declare_variable(const Specifiers& specifiers, const Declarat
 	// A declaration directly in a linkage-specification is extern (7.5p7).
 	const bool is_extern = specifiers.is_extern || (linkage_extern_ && where->kind == ScopeKind::Namespace);
 	if (specifiers.is_constinit &&
-		(member ||
+		((member && !qualified) ||
 			(where->kind == ScopeKind::Block && !specifiers.is_static && !specifiers.is_thread_local && !is_extern)))
 		error(location, "__constinit requires a variable with static or thread storage duration");
 	// A static data member's declaration in its class is not a definition;
@@ -1815,7 +1831,7 @@ FunctionEntity* Analyzer::c_redeclared_function(FunctionEntity* previous, const 
 		return nullptr;
 	}
 	if (!conversions_.c_function_compatible(earlier->type, type) ||
-		(definition && type->c_unprototyped() && earlier->type->param_count != 0))
+		(definition && type->c_unprototyped() && type->param_count == 0 && earlier->type->param_count != 0))
 		error(location, "conflicting C function declarations");
 	return earlier;
 }
@@ -1825,6 +1841,8 @@ Binding* Analyzer::declare_function(const Specifiers& specifiers, const Declarat
 {
 	if (specifiers.is_constinit)
 		error(location, "__constinit on a function declaration");
+	if (c_source_ && info.parameters != nullptr && info.parameters->c_identifier_list && !definition)
+		error(location, "C identifier-list parameters require a function definition");
 	// 7.1.2p6: explicit is confined to constructor/conversion declarations
 	// inside their own class definition, including no friend declaration.
 	if (specifiers.is_explicit)
@@ -2014,7 +2032,8 @@ Binding* Analyzer::declare_function(const Specifiers& specifiers, const Declarat
 	{
 		redeclare_function(function, specifiers, info, scope, where, definition, deleted,
 			template_depth_ == 0 || pattern_member || templated, location);
-		if (c_source_ && function->type->c_unprototyped() && !info.type->c_unprototyped())
+		if (c_source_ && function->type->c_unprototyped() &&
+			(!info.type->c_unprototyped() || (definition && info.type->param_count != 0)))
 		{
 			function->type = info.type;
 			function->signature = signature;

@@ -49,7 +49,10 @@ The first fixture set covers these parts of the C17 input profile:
 - Procedural scalar and pointer expressions, control flow, prototype-based
   function declarations, calls, callbacks and variadic argument promotions;
   declarations without prototypes use default argument promotions and compatible
-  later prototypes retain their parameter checks.
+  later prototypes retain their parameter checks. C17 identifier-list (K&R)
+  definitions retain each parameter's declared object type while their public
+  signature uses default argument promotions; declarations and earlier/later
+  prototypes must remain compatible.
 - Implicit conversions between object pointers and qualified `void*`, without
   discarding pointee qualifiers; integral initialization of enumeration objects.
 - GNU C pointer extensions used by hosted libraries: implicit conversions
@@ -64,7 +67,9 @@ The first fixture set covers these parts of the C17 input profile:
   types of wide, UTF-16 and UTF-32 literals. Comparisons and logical operators
   produce `int`. Assignment, comma, conditional and prefix increment results
   do not become C++ lvalues.
-- Struct and enum tags, typedefs, aggregate initialization, C member and array
+- Separate tag and ordinary identifier namespaces, including typedefs that
+  reuse a tag spelling for an unrelated type; struct and enum tags, typedefs,
+  aggregate initialization, C member and array
   designators, member access,
   function parameters and results, C object linkage and tentative definitions.
 - C compound literals of scalar, pointer, record and array types, including
@@ -76,7 +81,7 @@ The first fixture set covers these parts of the C17 input profile:
 
 This is an initial profile, not a claim of complete C17 conformance. Use
 `(void)` for a prototype with no parameters; an empty `()` declares a function
-without a prototype. K&R definitions, variable-length arrays and positional
+without a prototype. Variable-length arrays and positional
 continuation after a nested designator remain outside this fixture set. Extend the profile and its tests together. Do not silently
 apply a C++ rule where a supported C construct has a different meaning.
 

@@ -72,6 +72,14 @@ the parsed qualified name for semantic lookup and continue its declarator.
 A following operator with an operand remains an expression; a genuinely
 dependent qualified type still requires `typename`.
 
+### Destructor template-ids
+
+The C++11 destructor spelling `~Value<T>()` may name the enclosing class
+template's current instantiation. Resolve its arguments through the ordinary
+template model and compare class identities, including equivalent aliases in
+arguments. Diagnose a different specialization, template, or argument count;
+do not discard the written template arguments.
+
 ### Dependent qualified types
 
 Within a retained template definition, a qualified member type whose qualifier

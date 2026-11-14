@@ -41,6 +41,9 @@ hosted headers depend on:
 - GNU anonymous structs expose their fields as members of the enclosing class;
   these field names remain values when distinguishing casts from calls
 
+- hosted GNU source may define, expand, paste and undefine `new` and `delete`
+  macros. Alternative operator names such as `and` remain operators, and PA1
+  retains its original preprocessing-token categories
 - hosted source-file comments may contain opaque legacy 8-bit bytes; line
   splicing, trigraphs and comment delimiters retain their usual behavior.
   This does not relax UTF-8 diagnostics for tokens or literals, or the strict

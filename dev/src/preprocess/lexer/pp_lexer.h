@@ -34,6 +34,8 @@ struct PPLexerOptions
 	bool lone_quotes = false;
 	// GNU source accepts escape-character spellings \e and \E.
 	bool gnu_escapes = false;
+	// Hosted GNU source may define and undefine new/delete macros.
+	bool keyword_macros = false;
 	// GNU C conditional escapes keep the character after the backslash.
 	bool conditional_escapes = false;
 	// Hosted GNU headers may use dollar signs in identifiers and macros.
@@ -188,6 +190,7 @@ private:
 	bool legacy_comment_bytes_;
 	bool lone_quotes_;
 	bool gnu_escapes_;
+	bool keyword_macros_;
 	bool conditional_escapes_;
 	bool dollar_identifiers_;
 	DirectiveContext context_;

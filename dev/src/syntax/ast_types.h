@@ -198,6 +198,7 @@ struct FunctionQualifier
 
 struct ParameterClause
 {
+	bool c_identifier_list = false;
 	Slice<ParameterDeclaration*> parameters;
 	// Ends with `...` (C varargs), with or without a preceding comma.
 	bool ellipsis;

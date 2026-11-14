@@ -1018,6 +1018,8 @@ Decl* Parser::finish_simple_declaration(
 						return nullptr;
 					}
 	}
+	if (c_source_ && is_function_declarator(declarator) && !parse_c_parameter_declarations(declarator))
+		return nullptr;
 	if (is_function_declarator(declarator) && at_function_body_start(false))
 	{
 		if (c_source_ && context == DeclContext::Class)

@@ -23,7 +23,7 @@ FRONTEND_PHASE_BASENAMES_preprocess := preprocess/preprocessor_names preprocess/
 
 # Translation phases 7-8 as far as PA5 goes: the parser and its tree, with
 # the dump view.
-FRONTEND_PHASE_BASENAMES_syntax := syntax/parse_token_stream syntax/name_scopes syntax/parser_state syntax/parser syntax/parser_names syntax/parser_declarators syntax/parser_specifiers syntax/parser_declarations syntax/parser_statements syntax/parser_expressions syntax/parser_c_expressions syntax/syntax_unit
+FRONTEND_PHASE_BASENAMES_syntax := syntax/parse_token_stream syntax/name_scopes syntax/parser_state syntax/parser syntax/parser_names syntax/parser_declarators syntax/parser_c_functions syntax/parser_specifiers syntax/parser_declarations syntax/parser_statements syntax/parser_expressions syntax/parser_c_expressions syntax/syntax_unit
 
 # PA6's semantic layer: interned types, scopes and lookup, the declaration
 # analyzer and integral constant evaluation; PA7's expression typing,

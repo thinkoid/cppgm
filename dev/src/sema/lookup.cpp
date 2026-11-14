@@ -252,7 +252,7 @@ void NameLookup::index_default_parameters(Scope* scope, Scope* root)
 	}
 }
 
-void NameLookup::declare(const Scope* scope, Binding* binding)
+void NameLookup::declare(const Scope* scope, Binding* binding, bool tag_only)
 {
 	if (scope->kind == ScopeKind::Class)
 	{
@@ -272,7 +272,7 @@ void NameLookup::declare(const Scope* scope, Binding* binding)
 	case BindingKind::NamespaceAlias:
 		KeepOrdinal(binding, entry->type);
 		KeepOrdinal(binding, entry->tag);
-		if (!binding->invisible || entry->type == nullptr)
+		if (!tag_only && (!binding->invisible || entry->type == nullptr))
 			entry->type = binding;
 		if (binding->kind == BindingKind::Type && binding->entity != nullptr &&
 			(binding->entity->kind == EntityKind::Class || binding->entity->kind == EntityKind::Enum) &&

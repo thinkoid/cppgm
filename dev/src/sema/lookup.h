@@ -81,8 +81,9 @@ public:
 	const NameEntry* find(const Scope* scope, const Identifier* name) const;
 	// Registers a binding in the entry of its name in `scope`. A function
 	// only a friend declaration declared (invisible, 7.3.1.2p3) joins the
-	// entry's overload set at its first visible declaration.
-	void declare(const Scope* scope, Binding* binding);
+	// entry's overload set at its first visible declaration. C tags may
+	// register only in the separate tag namespace.
+	void declare(const Scope* scope, Binding* binding, bool tag_only = false);
 	// Frozen prefixes of one parameter clause share a name index. The
 	// prefix's last binding bounds visibility; lookup skips the other
 	// prefixes instead of walking them for each default argument.

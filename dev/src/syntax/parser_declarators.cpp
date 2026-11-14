@@ -459,6 +459,12 @@ ParameterClause* Parser::parse_parameter_clause(Scope* member_of, bool definite)
 	angle_ = false;
 	pending_template_ = false;
 	ListFrame<ParameterDeclaration*> parameters(params_);
+	if (c_source_ && at_identifier() && (at(TokenKind::OP_COMMA, 1) || at(TokenKind::OP_RPAREN, 1)))
+	{
+		const NameBinding first_name = scopes_.lookup(tok().identifier, false);
+		clause->c_identifier_list = first_name.category != NameCategory::Type &&
+			first_name.category != NameCategory::TypeTemplate;
+	}
 	bool parsed = true;
 	while (!at(TokenKind::OP_RPAREN))
 	{
@@ -469,7 +475,8 @@ ParameterClause* Parser::parse_parameter_clause(Scope* member_of, bool definite)
 		}
 		// After one parameter-declaration the list is a parameter clause, so
 		// an undeclared name in a later one is a type.
-		ParameterDeclaration* parameter = parse_parameter_declaration(definite);
+		ParameterDeclaration* parameter = clause->c_identifier_list ? parse_c_identifier_parameter()
+																	: parse_parameter_declaration(definite);
 		if (parameter == nullptr)
 		{
 			parsed = false;

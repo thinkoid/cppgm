@@ -1505,6 +1505,21 @@ const Type* Analyzer::apply_suffix(const syntax::DeclaratorSuffix& suffix, const
 			? NonThrowingSpecification(&suffix) ? types_.value(types_.fundamental(FundamentalType::Bool), 1) : nullptr
 			: function_exception_type(suffix, scope, parameter_scratch_.data() + base, count)
 																		 : nullptr;
+	if (clause.c_identifier_list)
+	{
+		if (clause.ellipsis)
+			error(location, "C identifier-list definition cannot be variadic");
+		graph_.c_parameter_index.set(&clause, static_cast<uint32_t>(graph_.c_parameter_types.size()));
+		graph_.c_parameter_types.push_back(arena_.copy_array(parameter_scratch_.data() + base, count));
+		for (uint32_t i = 0; i < count; ++i)
+		{
+			const Type* parameter = types_.adjusted_parameter(parameter_scratch_[base + i]);
+			parameter_scratch_[base + i] = (parameter == types_.fundamental(FundamentalType::Float) ||
+											   parameter == types_.fundamental(FundamentalType::StorageHalf))
+				? types_.fundamental(FundamentalType::Double)
+				: promoted(parameter);
+		}
+	}
 	// A shared member-template head can name a pack already bound by
 	// its enclosing class. Its expansion supplies parameters, not one
 	// parameter whose type is an argument pack (14.5.3p4).
@@ -1513,7 +1528,7 @@ const Type* Analyzer::apply_suffix(const syntax::DeclaratorSuffix& suffix, const
 		flattened_arguments(parameter_scratch_.data() + base, count, expanded);
 	const Type* result = types_.function(type, bound_packs ? expanded.data() : parameter_scratch_.data() + base,
 		bound_packs ? static_cast<uint32_t>(expanded.size()) : count, clause.ellipsis, cv, ref, exception);
-	if (c_source_ && clause.parameters.empty() && !clause.ellipsis)
+	if (c_source_ && ((clause.parameters.empty() && !clause.ellipsis) || clause.c_identifier_list))
 		result = types_.c_unprototyped(result);
 	parameter_scratch_.resize(base);
 	return result;
@@ -1583,6 +1598,12 @@ const Type* Analyzer::parameter_type(const syntax::ParameterDeclaration& paramet
 {
 	Specifiers specifiers;
 	this->specifiers(parameter.specifiers, scope, specifiers, false);
+	if (c_source_ && parameter.specifiers.empty())
+		specifiers.type = types_.fundamental(FundamentalType::Int);
+	if (c_source_ &&
+		(specifiers.is_static || specifiers.is_extern || specifiers.is_typedef || specifiers.is_thread_local ||
+			specifiers.is_inline))
+		error(parameter.location, "invalid storage or function specifier in a C parameter");
 	if (specifiers.is_constinit)
 		error(parameter.location, "__constinit in a parameter declaration");
 	if (specifiers.type == nullptr)

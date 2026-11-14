@@ -224,6 +224,8 @@ private:
 	bool parse_ptr_operator(ListFrame<PtrOperator>& pointers);
 	bool parse_declarator_suffixes(DeclaratorMode mode, Declarator* declarator, bool named, Scope* member_of);
 	ParameterClause* parse_parameter_clause(Scope* member_of, bool definite);
+	ParameterDeclaration* parse_c_identifier_parameter();
+	bool parse_c_parameter_declarations(Declarator* declarator);
 	// A scope below the current one whose lookups search `member_of`'s
 	// scope before the enclosing ones (for the names after a qualified
 	// declarator-id); the current scope stays.

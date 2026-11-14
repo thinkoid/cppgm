@@ -11,7 +11,7 @@ PPLexer::PPLexer(const SourceBuffer& source, const PPLexerOptions& options)
 	  base_(options.location_base), dirty_(false), header_names_on_request_(options.header_names_on_request),
 	  c_source_(options.c_source), binary_exponents_(options.binary_exponents),
 	  digit_separators_(options.digit_separators), legacy_comment_bytes_(options.legacy_comment_bytes),
-	  lone_quotes_(options.lone_quotes), gnu_escapes_(options.gnu_escapes),
+	  lone_quotes_(options.lone_quotes), gnu_escapes_(options.gnu_escapes), keyword_macros_(options.keyword_macros),
 	  conditional_escapes_(options.conditional_escapes), dollar_identifiers_(options.dollar_identifiers),
 	  context_(options.header_names_on_request ? DirectiveContext::Other : DirectiveContext::LineStart)
 {}
@@ -522,7 +522,9 @@ const PPToken& PPLexer::lex_identifier_or_prefixed_literal()
 	}
 
 	const uint8_t punctuator = c_source_ ? kNoPunctuator : identifier_like_operator();
-	if (__builtin_expect(punctuator != kNoPunctuator, 0))
+	if (__builtin_expect(punctuator != kNoPunctuator, 0) &&
+		!(keyword_macros_ &&
+			(IsPunctuator(punctuator, TokenKind::KW_NEW) || IsPunctuator(punctuator, TokenKind::KW_DELETE))))
 		return finish(PPTokenKind::PreprocessingOpOrPunc, punctuator);
 	return finish(PPTokenKind::Identifier);
 }

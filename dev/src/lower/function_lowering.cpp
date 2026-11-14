@@ -142,6 +142,7 @@ void FunctionLowering::lower_definition()
 						: EntryVariant::Complete);
 	if (hidden)
 		vtt_param_ = lowir::Value::temp(builder_.parameter(index++));
+	uint32_t parameter_index = 0;
 	for (const sema::Binding* binding = function_->scope != nullptr ? function_->scope->bindings : nullptr;
 		binding != nullptr; binding = binding->next)
 	{
@@ -162,7 +163,7 @@ void FunctionLowering::lower_definition()
 		local.depth = 0;
 		RValue incoming;
 		incoming.value = lowir::Value::temp(builder_.parameter(index));
-		incoming.type = slot_type;
+		incoming.type = builder_.body().temps[incoming.value.index].type;
 		Place place = Place();
 		place.storage = lowir::Value::slot(local.slot);
 		const sema::ClassEntity* cls = local.reference ? nullptr : sema::ClassOf(type);
@@ -181,12 +182,19 @@ void FunctionLowering::lower_definition()
 				copy_object(type, incoming.value, address_of(place), 0);
 		}
 		else
+		{
+			if (incoming.type != slot_type)
+				incoming = fit(convert(incoming, function_->type->canonical->params[parameter_index], type,
+								   ConversionContext::Initialization, false),
+					type);
 			store(slot_type, incoming, place);
+		}
 		local.depth = cleanups_.size();
 		local_index_.set(binding->entity, static_cast<uint32_t>(locals_.size()));
 		locals_.push_back(local);
 		parameter_slots_.push_back(local.slot);
 		++index;
+		++parameter_index;
 	}
 	if (function_->scope == nullptr)
 	{

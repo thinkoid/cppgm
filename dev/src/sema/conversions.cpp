@@ -255,6 +255,16 @@ bool ConversionRules::c_function_compatible(const Type* source, const Type* targ
 		return true;
 	if (source->element != target->element || (!source->c_unprototyped() && !target->c_unprototyped()))
 		return false;
+	const Type* unprototyped = source->c_unprototyped() ? source : target;
+	const Type* other = source->c_unprototyped() ? target : source;
+	if (unprototyped->param_count != 0 && (!other->c_unprototyped() || other->param_count != 0))
+	{
+		if (unprototyped->param_count != other->param_count || other->variadic)
+			return false;
+		for (uint32_t i = 0; i < other->param_count; ++i)
+			if (!c_type_compatible(unprototyped->params[i]->unqualified, other->params[i]->unqualified))
+				return false;
+	}
 	const Type* prototype = source->c_unprototyped() ? target : source;
 	if (prototype->variadic)
 		return false;

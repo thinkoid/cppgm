@@ -96,7 +96,9 @@ void Analyzer::declare_in(Scope* scope, Binding* binding)
 	// declaration decides otherwise (see Binding::dependent).
 	if (scope->kind == ScopeKind::Block)
 		binding->dependent = true;
-	names_.declare(scope, binding);
+	const bool tag_only = c_source_ && binding->kind == BindingKind::Type && binding->entity != nullptr &&
+		(binding->entity->kind == EntityKind::Class || binding->entity->kind == EntityKind::Enum);
+	names_.declare(scope, binding, tag_only);
 }
 
 Access Analyzer::redeclared_access(const Scope* scope, const Binding* binding) const
