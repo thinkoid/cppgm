@@ -469,6 +469,11 @@ void Analyzer::symbol_attributes(Entity* entity, const syntax::Attribute* leadin
 	const auto apply = [&](const syntax::Attribute* list) {
 		for (const syntax::Attribute* attribute = list; attribute != nullptr; attribute = attribute->next)
 		{
+			if (attribute->kind == syntax::AttributeKind::ObjectAlias)
+			{
+				object_alias_attribute(entity, *attribute);
+				continue;
+			}
 			if ((attribute->kind != syntax::AttributeKind::Weak && attribute->kind != syntax::AttributeKind::Section) ||
 				(attribute->standard && attribute->on_type))
 				continue;

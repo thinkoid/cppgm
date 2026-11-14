@@ -1334,6 +1334,8 @@ private:
 	void push_result_parameter(const sema::Type* result, bool named, lowir::Signature& signature);
 	void set_pending(lowir::SymbolId symbol, const PendingDeclaration& pending);
 	void state_pending_signatures(size_t first);
+	void prepare_source_object_aliases(const syntax::TranslationUnit& unit);
+	void emit_source_object_aliases();
 
 	// Polymorphic classes (lower/vtable_lowering.cpp).
 	void define_typeinfo(const sema::ClassEntity* entity, lowir::SymbolId symbol);
@@ -1843,6 +1845,13 @@ private:
 		bool equivalent;
 	};
 	std::vector<EntryAlias> entry_aliases_;
+	struct SourceObjectAlias
+	{
+		const sema::Entity* entity;
+		const sema::Entity* target;
+	};
+	std::vector<SourceObjectAlias> source_object_aliases_;
+
 	// Symbols whose singleton role is secondary (an array allocation or
 	// deallocation function, __builtin_abort): another symbol with the role
 	// owns it (see resolve_singleton_roles). Indexed by SymbolId.

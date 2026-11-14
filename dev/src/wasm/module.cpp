@@ -67,6 +67,8 @@ void prepare_module(const lowir::Program& program, Module& module)
 	}
 	module.function_indices.assign(program.symbols.size(), lowir::kNoId);
 	module.addresses.assign(program.symbols.size(), lowir::kNoId);
+	if (lowir::object_alias_targets(program, module.object_symbols, module.alias_targets) != lowir::kNoId)
+		throw WasmError("invalid or cyclic Wasm object alias");
 	function_types(program, module);
 	// An address-only declaration can borrow the signature of any typed alias.
 	// Compare target ABI boundaries rather than source parameter spellings.
@@ -130,7 +132,8 @@ void prepare_module(const lowir::Program& program, Module& module)
 	for (lowir::SymbolId id : program.order)
 	{
 		const auto& symbol = program.symbols[id];
-		if (symbol.kind != lowir::SymbolKind::FunctionDeclaration || module.object_symbols[id] != id)
+		if (symbol.kind != lowir::SymbolKind::FunctionDeclaration || module.object_symbols[id] != id ||
+			module.alias_targets[id] != lowir::kNoId)
 			continue;
 		if (module.nonlocal_function(id) == lowir::NonlocalFunction::Longjmp)
 		{
@@ -175,6 +178,14 @@ void prepare_module(const lowir::Program& program, Module& module)
 				module.signature_types[program.functions[program.symbols[id].detail].signature]);
 		}
 	}
+	for (lowir::SymbolId id : program.order)
+	{
+		const auto target = module.alias_targets[id];
+		if (target == lowir::kNoId || !lowir::is_function_kind(program.symbols[id].kind))
+			continue;
+		module.function_indices[id] = module.function_indices[target];
+	}
+
 	for (lowir::SymbolId id : program.order)
 		if (lowir::is_function_kind(program.symbols[id].kind))
 			module.function_indices[id] = module.function_indices[module.object_symbols[id]];

@@ -57,12 +57,17 @@ void mark_data_references(const Program& program, Mark mark)
 		for (SymbolId symbol : program.order)
 			if (is_definition(program, symbol))
 				mark(symbol);
-	// An object alias is another name for its target's code: it keeps a
-	// target alive only when the target is kept for its own sake (pruning
-	// drops the aliases of what it removes). A jump thunk
-	// (Program::jump_thunks) keeps its target alive as any function does,
-	// through its body's forwarding call: liveness reads only what LowIR
-	// text carries.
+	// An explicit alias declaration exposes its target under an independently
+	// bound object name. Keep that body/ABI even if no instruction names it;
+	// this compiler root does not require retaining dead code at final linking.
+	if (!program.aliases.empty())
+	{
+		std::vector<SymbolId> targets;
+		if (object_alias_targets(program, {}, targets) == kNoId)
+			for (SymbolId id : program.order)
+				if (targets[id] != kNoId && program.symbols[id].metadata.binding != ir_model::SBM_INTERNAL)
+					mark(targets[id]);
+	}
 }
 
 } // namespace

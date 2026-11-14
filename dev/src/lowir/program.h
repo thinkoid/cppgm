@@ -446,4 +446,10 @@ public:
 	virtual bool reads_jump_thunks() const { return false; }
 };
 
+// Resolve typed alias declarations to definitions; preserve their distinct
+// object names and bindings. An empty canonical table means source identities.
+// Returns a conflicting/cyclic alias declaration, or kNoId.
+SymbolId object_alias_targets(
+	const Program& program, const std::vector<SymbolId>& canonical, std::vector<SymbolId>& targets);
+
 } // namespace lowir

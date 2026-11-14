@@ -373,6 +373,7 @@ uint64_t Analyzer::attribute_alignment(
 			packed = true;
 			break;
 		case syntax::AttributeKind::AsmLabel:
+		case syntax::AttributeKind::ObjectAlias:
 		case syntax::AttributeKind::Weak:
 		case syntax::AttributeKind::Section:
 		case syntax::AttributeKind::AbiTag:

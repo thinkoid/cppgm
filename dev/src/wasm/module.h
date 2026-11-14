@@ -25,6 +25,7 @@ struct Module
 	std::vector<uint32_t> signature_types;
 	std::vector<uint32_t> function_indices;
 	std::vector<lowir::SymbolId> object_symbols;
+	std::vector<lowir::SymbolId> alias_targets;
 	std::vector<uint32_t> definition_types;
 	std::vector<uint32_t> tag_types;
 	std::vector<uint8_t> declared_functions;

@@ -184,7 +184,7 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 		const auto& source = program.symbols[id];
 		if (!lowir::is_function_kind(source.kind) && !lowir::is_global_kind(source.kind))
 			continue;
-		if (module.object_symbols[id] != id)
+		if (module.object_symbols[id] != id || module.alias_targets[id] != lowir::kNoId)
 			continue;
 		ObjectSymbol symbol;
 		const lowir::NameId object_name = source.metadata.object != 0 ? source.metadata.object : source.name;
@@ -259,6 +259,7 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 		if (source.metadata.role == ir_model::SR_INIT)
 			object.initializers.push_back({ 65535, symbols[id] });
 	}
+	append_object_aliases(program, module, object, symbols, groups);
 	bind_object_aliases(program, module.object_symbols, symbols, groups, object);
 	for (const lowir::FunctionBinding& binding : program.function_bindings)
 	{

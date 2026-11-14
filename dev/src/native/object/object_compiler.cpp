@@ -1085,6 +1085,7 @@ uint32_t ObjectCompiler::define_alias(lowir::NameId name, uint32_t target)
 		if (existing.section == object::kUndefinedSection)
 		{
 			alias.name = existing.name;
+			alias.binding = existing.binding;
 			existing = alias;
 		}
 		return by_name_[name];
@@ -1152,6 +1153,20 @@ void ObjectCompiler::add_assembly_symbols()
 
 void ObjectCompiler::add_aliases()
 {
+	// Typed declarations give aliases independent public/weak bindings even
+	// when the target is internal and no instruction references the alias.
+	if (!program_.aliases.empty())
+	{
+		std::vector<uint8_t> names(program_.names.size(), 0);
+		for (const lowir::ObjectAlias& alias : program_.aliases)
+			names[alias.object] = 1;
+		for (lowir::SymbolId id : program_.order)
+			if ((program_.symbols[id].kind == lowir::SymbolKind::FunctionDeclaration ||
+					program_.symbols[id].kind == lowir::SymbolKind::GlobalDeclaration) &&
+				names[object_name(id)])
+				object_symbol(id);
+	}
+
 	// (A function left out has no other name either.)
 	for (const lowir::ObjectAlias& alias : program_.aliases)
 		if (alias.target >= pruned_.size() || !pruned_[alias.target])

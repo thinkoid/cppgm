@@ -176,6 +176,15 @@ struct SemanticGraph
 	}
 	PointerMap symbol_attribute_index;
 	std::vector<SymbolAttributes> symbol_attribute_list;
+	// GNU aliases name ABI objects, resolved after all declarations in the unit.
+	struct ObjectAlias
+	{
+		const Entity* entity;
+		const char* target;
+		uint32_t location;
+	};
+	PointerMap object_alias_index;
+	std::vector<ObjectAlias> object_aliases;
 	// Sparse target function bindings; ordinary function records stay small.
 	struct WasmBinding
 	{

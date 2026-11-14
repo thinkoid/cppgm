@@ -383,12 +383,20 @@ To complete PA30, implement hosted compatibility for:
   `__no_unique_address__`, and `0` for any other name, scoped ones included;
   `__has_attribute` likewise answers nonzero for the GNU and Clang
   attributes the compiler implements (`always_inline`, `noinline`,
-  `noreturn`, `deprecated`, `pure`, `const`, `used`, `weak`, `packed`, `aligned`,
+  `noreturn`, `deprecated`, `pure`, `const`, `used`, `weak`, `alias`, `packed`, `aligned`,
   `section`, `vector_size`, `mode`, `gnu_inline`, `abi_tag`, `may_alias`, `using_if_exists` and
   `exclude_from_explicit_instantiation`, each also spelled `__name__`) and
   `0` for any other.
   PA37 adds the Wasm-specific import/export binding attributes and probes;
   native profiles continue to report no support for those target attributes.
+  GNU `alias("object-name")` declares another name for a function or global
+  defined in the same translation unit. Preserve its address and independent
+  strong or weak binding. Resolve the literal as an ABI object name, including
+  mangled C++ names and asm labels; reject cycles, undefined targets and
+  separate definitions of the alias. A function alias uses its target's actual
+  calling ABI even when its declaration has another prototype; calling through
+  it requires a compatible function pointer type. This hosted extension is
+  supported for ELF and PA37's Wasm objects; Mach-O rejects it.
   GNU `deprecated` / `__deprecated__` is recognized with no argument, an
   empty argument list, or one string-literal message (also as a `gnu::`
   attribute). It does not change program behavior, type, or ABI. Deprecation

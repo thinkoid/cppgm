@@ -190,11 +190,13 @@ bool Parser::gnu_attribute(const char* spelling, Attribute& attribute, bool& kep
 		return attribute.expression != nullptr && expect(TokenKind::OP_RPAREN);
 	}
 	const auto binding = target_model::wasm_function_attribute(spelling, std::strlen(spelling));
-	if (binding != target_model::WasmFunctionAttribute::None)
+	const bool alias = std::strcmp(spelling, "alias") == 0 || std::strcmp(spelling, "__alias__") == 0;
+	if (alias || binding != target_model::WasmFunctionAttribute::None)
 	{
-		attribute.kind = binding == target_model::WasmFunctionAttribute::ImportModule ? AttributeKind::WasmImportModule
-			: binding == target_model::WasmFunctionAttribute::ImportName              ? AttributeKind::WasmImportName
-																					  : AttributeKind::WasmExportName;
+		attribute.kind = alias                                             ? AttributeKind::ObjectAlias
+			: binding == target_model::WasmFunctionAttribute::ImportModule ? AttributeKind::WasmImportModule
+			: binding == target_model::WasmFunctionAttribute::ImportName   ? AttributeKind::WasmImportName
+																		   : AttributeKind::WasmExportName;
 		kept = true;
 		if (!expect(TokenKind::OP_LPAREN))
 			return false;

@@ -254,4 +254,58 @@ SignatureId Program::add_signature(const Signature& signature)
 	return static_cast<SignatureId>(signatures.size() - 1);
 }
 
+SymbolId object_alias_targets(
+	const lowir::Program& program, const std::vector<lowir::SymbolId>& canonical, std::vector<lowir::SymbolId>& targets)
+{
+	using namespace lowir;
+	targets.assign(program.symbols.size(), kNoId);
+	if (program.aliases.empty())
+		return kNoId;
+	std::vector<SymbolId> names(program.names.size(), kNoId);
+	for (const ObjectAlias& alias : program.aliases)
+		names[alias.object] = canonical.empty() ? alias.target : canonical[alias.target];
+	for (SymbolId id : program.order)
+	{
+		const Symbol& symbol = program.symbols[id];
+		if (!is_global_kind(symbol.kind) && !is_function_kind(symbol.kind))
+			continue;
+		const auto target = names[symbol.metadata.object != 0 ? symbol.metadata.object : symbol.name];
+		if (target == kNoId)
+			continue;
+		if (symbol.kind == SymbolKind::FunctionDefinition || symbol.kind == SymbolKind::GlobalDefinition)
+			return id;
+		targets[id] = target;
+	}
+	std::vector<uint8_t> state(program.symbols.size(), 0);
+	std::vector<SymbolId> path;
+	for (SymbolId id : program.order)
+	{
+		if (targets[id] == kNoId || state[id] == 2)
+			continue;
+		SymbolId target = id;
+		path.clear();
+		while (targets[target] != kNoId && state[target] == 0)
+		{
+			state[target] = 1;
+			path.push_back(target);
+			target = targets[target];
+		}
+		if (state[target] == 1)
+			return id;
+		if (state[target] == 2)
+			target = targets[target];
+		const auto kind = program.symbols[target].kind;
+		if (kind != SymbolKind::FunctionDefinition && kind != SymbolKind::GlobalDefinition)
+			return id;
+		for (SymbolId source : path)
+		{
+			if (is_function_kind(program.symbols[source].kind) != is_function_kind(kind))
+				return source;
+			targets[source] = target;
+			state[source] = 2;
+		}
+	}
+	return kNoId;
+}
+
 } // namespace lowir

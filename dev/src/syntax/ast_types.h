@@ -112,7 +112,9 @@ enum class AttributeKind : uint8_t
 	Naked,
 	WasmImportModule,
 	WasmImportName,
-	WasmExportName
+	WasmExportName,
+	// GNU alias("object_name"): another linking identity for a definition.
+	ObjectAlias
 };
 
 struct TypeId;

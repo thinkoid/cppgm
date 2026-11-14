@@ -939,6 +939,7 @@ void optimize_program(Program& program, const OptimizerOptions& options, Optimiz
 	count_program(program, stats.instructions_in, stats.blocks_in);
 	if (options.level > 0)
 	{
+		canonicalize_object_aliases(program);
 		program.read_only_functions.clear();
 		program.function_writes.clear();
 		program.unkept_parameters.clear();

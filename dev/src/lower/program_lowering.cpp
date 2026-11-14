@@ -96,6 +96,7 @@ void ProgramLowering::lower_unit(
 	debug_file_.clear();
 	debug_file_name_ = 0;
 	symbols_.clear();
+	source_object_aliases_.clear();
 	identities_.clear();
 	queued_.clear();
 	queued_base_.clear();
@@ -216,12 +217,16 @@ void ProgramLowering::lower_unit(
 	assembly_environment_base_ = program_.assembly ? static_cast<uint32_t>(program_.assembly->globals.size()) : 0;
 	if (unit.assembly_declarations != 0)
 		assembly_declarations(unit.declarations);
+	if (!graph.object_aliases.empty())
+		prepare_source_object_aliases(unit);
 	for (const syntax::Decl* decl : unit.declarations)
 	{
 		declaration(*decl);
 		if (graph.unnamed_member_definitions)
 			name_deferred_members(*decl);
 	}
+	if (!source_object_aliases_.empty())
+		emit_source_object_aliases();
 	// A delegating constructor namespace-scope code odr-uses is emitted,
 	// with the target its body calls (the course's form).
 	for (const sema::DemandList* node = graph.root_demands; node != nullptr; node = node->next)

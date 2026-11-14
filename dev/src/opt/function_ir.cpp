@@ -1028,6 +1028,11 @@ void find_unwritten_globals(
 			? 1
 			: 0;
 	}
+	// An object alias exposes its target to other translation units, even
+	// when that target's own object binding is internal.
+	for (const ObjectAlias& alias : program.aliases)
+		unwritten[alias.target] = 0;
+
 	// Another global's data holding the address.
 	for (SymbolId s = 0; s < symbols; ++s)
 	{
