@@ -376,9 +376,8 @@ bool CopyCoalescing::zero_fill_slots()
 		for (InstId i = body_.blocks[b].first; i != kNoId; i = body_.instructions[i].next)
 		{
 			const Instruction& inst = body_.instructions[i];
-			if (inst.op == Opcode::Addr ||
-				((inst.op == Opcode::Index || inst.op == Opcode::Copy) && inst.result != kNoId &&
-					uses_[inst.result] == 0))
+			if ((inst.op == Opcode::Addr || inst.op == Opcode::Index || inst.op == Opcode::Copy) &&
+				inst.result != kNoId && uses_[inst.result] == 0)
 				continue;
 			unsigned position = 0;
 			for_each_operand(body_, inst, [&](const Value& v) {
@@ -393,7 +392,14 @@ bool CopyCoalescing::zero_fill_slots()
 				const bool copy_source = inst.op == Opcode::CopyObject && at == 0;
 				const bool zeroing = inst.op == Opcode::ZeroInit && at == 0;
 				const bool returned = inst.op == Opcode::Return && v.is(ValueKind::Slot);
-				const bool step = inst.op == Opcode::Index && at == 0; // a field address, checked at its uses
+				// A derived address is checked at its uses only if rooted can
+				// still follow it. Variable indices and overlong chains must
+				// disqualify the slot here, before those uses become invisible.
+				Rooted derived;
+				const bool step = at == 0 && inst.result != kNoId &&
+					(inst.op == Opcode::Addr || inst.op == Opcode::Index ||
+						(inst.op == Opcode::Copy && inst.type.is_pointer())) &&
+					rooted(body_, Value::temp(inst.result), derived);
 				if (!(address_of_load || zero_store || copy_source || zeroing || returned || step))
 					ok[slot] = 0;
 			});
