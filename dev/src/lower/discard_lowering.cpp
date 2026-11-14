@@ -148,7 +148,8 @@ void FunctionLowering::discard(const syntax::Expr& expr)
 	}
 	const bool bitfield_glvalue = facts != nullptr && (facts->flags & sema::kBitField) != 0 &&
 		facts->category != sema::ValueCategory::PRValue;
-	if (bitfield_glvalue && (e->kind == syntax::ExprKind::Assign || e->kind == syntax::ExprKind::Unary))
+	if (facts != nullptr && (facts->flags & sema::kBitField) != 0 &&
+		(e->kind == syntax::ExprKind::Assign || e->kind == syntax::ExprKind::Unary))
 	{
 		bit_field_value(*e);
 		return;

@@ -22,8 +22,8 @@ const Type* Analyzer::declaration_mode_type(
 const Type* Analyzer::mode_type(const Type* type, const Identifier& mode, uint32_t location)
 {
 	// A machine mode changes the complete declared type, not a pointer's
-	// pointee or an array's element. The target is System V AMD64: word,
-	// pointer and unwind_word are DI, whose canonical integer type is long.
+	// pointee or an array's element. Named widths stay fixed even when
+	// the target's long and pointer are narrower than the host's.
 	if (type == nullptr)
 		return type;
 	const char* spelling = mode.spelling;
@@ -50,6 +50,7 @@ const Type* Analyzer::mode_type(const Type* type, const Identifier& mode, uint32
 		{ "word", FundamentalType::LongInt, FundamentalType::UnsignedLongInt, false },
 		{ "pointer", FundamentalType::LongInt, FundamentalType::UnsignedLongInt, false },
 		{ "unwind_word", FundamentalType::LongInt, FundamentalType::UnsignedLongInt, false },
+		{ "libgcc_cmp_return", FundamentalType::LongInt, FundamentalType::LongInt, false },
 		{ "HF", FundamentalType::Float16, FundamentalType::Float16, false },
 		{ "SF", FundamentalType::Float, FundamentalType::Float, false },
 		{ "DF", FundamentalType::Double, FundamentalType::Double, false },
@@ -70,7 +71,15 @@ const Type* Analyzer::mode_type(const Type* type, const Identifier& mode, uint32
 	}
 	if (selected == nullptr)
 		error(location, "an unknown or unsupported scalar machine mode");
-	return apply_mode(type, selected->signed_type, location, selected->complex);
+	FundamentalType representation = selected->signed_type;
+	if (target_model::data_layout(types_.target()).long_bytes == 4)
+	{
+		if (length == 2 && std::memcmp(spelling, "DI", 2) == 0)
+			representation = FundamentalType::LongLongInt;
+		else if (length == 17 && std::memcmp(spelling, "libgcc_cmp_return", 17) == 0)
+			representation = FundamentalType::Int;
+	}
+	return apply_mode(type, representation, location, selected->complex);
 }
 
 void Analyzer::filter_mode_alias(Specifiers& specifiers)

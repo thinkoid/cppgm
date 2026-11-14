@@ -365,6 +365,8 @@ private:
 		const Specifiers& specifiers, const DeclaratorInfo& info, Scope* scope, uint32_t location);
 	FunctionEntity* earlier_function(const DeclaredName& name, Scope* where, const Type* signature, bool templated,
 		bool& invisible, uint32_t location);
+	FunctionEntity* c_redeclared_function(FunctionEntity* previous, const Identifier* name, Scope* where,
+		const Type* type, bool definition, uint32_t location);
 	void redeclare_function(FunctionEntity* function, const Specifiers& specifiers, const DeclaratorInfo& info,
 		Scope* scope, const Scope* where, bool definition, bool deleted, bool exceptions, uint32_t location);
 	FunctionEntity* new_function(const Specifiers& specifiers, const DeclaratorInfo& info, const DeclaredName& name,
@@ -379,6 +381,7 @@ private:
 	bool aggregate_accepts(const syntax::BracedInitList& list, const ClassEntity* cls);
 	bool designated_list(
 		const syntax::BracedInitList& list, const ClassEntity* cls, syntax::BracedInitList& out, Scope* scope);
+	void c_designated_list(const syntax::BracedInitList& list, const Type* type, Scope* scope);
 	bool members_accept(const syntax::BracedInitList& list, uint32_t& next, const ClassEntity* cls);
 	bool elements_accept(const syntax::BracedInitList& list, uint32_t& next, const Type* array);
 	bool element_accepts(const syntax::BracedInitList& list, uint32_t& next, const Type* type);
@@ -1193,6 +1196,7 @@ private:
 	ExprFacts* invoke_call(
 		const syntax::CallExpr& rewritten, const syntax::Expr* callable, const syntax::Expr* object, Scope* scope);
 	ExprFacts* indirect_call(const syntax::CallExpr& expr, ExprFacts* callee);
+	ExprFacts* c_unprototyped_call(const syntax::CallExpr& expr, ExprFacts* callee, const Type* function);
 	ExprFacts* resolved_call(const syntax::CallExpr& expr, const FunctionList* functions, ExprFacts* object,
 		bool implicit_this, const ClassEntity* naming, bool operator_object = false);
 	ExprFacts* call_operator(const syntax::CallExpr& expr, ExprFacts* callee);

@@ -139,6 +139,9 @@ void SyntaxRenderer::specifier(const DeclSpecifier& specifier)
 	case DeclSpecKind::Constinit:
 		text("__constinit ");
 		break;
+	case DeclSpecKind::AtomicQualifier:
+		text("_Atomic ");
+		break;
 	case DeclSpecKind::Decltype:
 		text("decltype(");
 		expression(*specifier.operand);
@@ -271,6 +274,8 @@ void SyntaxRenderer::declarator(const Declarator& declarator)
 			text(TokenKindSpelling(cv));
 			text(" ");
 		}
+		if (pointer.atomic)
+			text("_Atomic ");
 	}
 	if (declarator.pack == PackPosition::BeforeName)
 		text("...");
@@ -287,6 +292,12 @@ void SyntaxRenderer::declarator(const Declarator& declarator)
 		if (suffix.kind == DeclaratorSuffixKind::Array)
 		{
 			text("[");
+			if (suffix.array_static)
+				text("static ");
+			if ((suffix.array_cv & 1) != 0)
+				text("const ");
+			if ((suffix.array_cv & 2) != 0)
+				text("volatile ");
 			if (suffix.bound != nullptr)
 				expression(*suffix.bound);
 			text("]");
@@ -663,7 +674,24 @@ void SyntaxRenderer::operand(const Expr& expr)
 	{
 		const BracedInitList& list = static_cast<const BracedInitList&>(expr);
 		text("{");
-		expression_list(list.elements);
+		for (uint32_t i = 0; i < list.elements.size; ++i)
+		{
+			if (i != 0)
+				text(",");
+			if (list.designators != nullptr && list.designators[i] != nullptr)
+			{
+				text(".");
+				identifier(list.designators[i]);
+				text("=");
+			}
+			if (list.array_designators != nullptr && list.array_designators[i] != nullptr)
+			{
+				text("[");
+				expression(*list.array_designators[i]);
+				text("]=");
+			}
+			expression(*list.elements[i]);
+		}
 		if (list.trailing_comma)
 			text(",");
 		text("}");

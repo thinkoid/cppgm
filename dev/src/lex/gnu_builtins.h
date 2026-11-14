@@ -421,6 +421,7 @@ enum class GnuTrait : uint8_t
 	Offsetof,
 	// Two type-ids.
 	IsSame,
+	TypesCompatible,
 	IsBaseOf,
 	IsAssignable,
 	IsNothrowAssignable,

@@ -13,6 +13,8 @@ enum class DeclSpecKind : uint8_t
 	Keyword,
 	// GCC's __constinit declaration specifier, independent of the type.
 	Constinit,
+	// C11's _Atomic qualifier; _Atomic(type-name) uses the shared transform.
+	AtomicQualifier,
 	// A named type: type-name, qualified type name or typename-specifier.
 	Name,
 	Decltype,
@@ -160,6 +162,7 @@ struct PtrOperator
 	Name* class_name;
 	// The cv-qualifier-seq in source order.
 	Slice<TokenKind> cv;
+	bool atomic;
 };
 
 enum class FunctionQualifierKind : uint8_t
@@ -221,6 +224,10 @@ struct DeclaratorSuffix
 	Slice<FunctionQualifier> qualifiers;
 	// Array: the bound, null for `[]`.
 	Expr* bound;
+	// C's outermost array parameter adjusts to a pointer with these cv
+	// qualifiers. `static` states a minimum bound supplied by every call.
+	uint8_t array_cv;
+	bool array_static;
 };
 
 // A declarator's pack ellipsis, which precedes its name (8p4).

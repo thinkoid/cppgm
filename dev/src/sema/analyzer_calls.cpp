@@ -356,6 +356,13 @@ ExprFacts* Analyzer::call(const syntax::CallExpr& expr, Scope* scope)
 	// depend on template parameters is a dependent name too (C++20
 	// [temp.dep.general]p2.3, which GCC and Clang apply in C++11 mode:
 	// `any_cast<T>(&a)` finds an overload declared after the template).
+	if (c_source_ && callee != nullptr && callee->type != nullptr)
+	{
+		const Type* type = callee->type->unqualified;
+		const Type* function = type->kind == TypeKind::Pointer ? type->element : type;
+		if (function->c_unprototyped())
+			return c_unprototyped_call(expr, callee, function);
+	}
 	const bool bound = names_.dependent_uses() == (template_call ? callee_uses : uses);
 	expression_scope_ = scope;
 	adl_functions_.clear();
@@ -632,6 +639,31 @@ void Analyzer::argument_dependent(const syntax::Slice<syntax::Expr*>& arguments,
 		for (; node != nullptr; node = node->next)
 			adl_functions_.push_back(static_cast<FunctionEntity*>(node->binding->entity));
 	}
+}
+
+ExprFacts* Analyzer::c_unprototyped_call(const syntax::CallExpr& expr, ExprFacts* callee, const Type* function)
+{
+	// Default argument promotions choose this call's fixed ABI boundary.
+	// This is not a variadic call: no vararg buffer is passed on Wasm.
+	const Type* promotions = types_.function(function->element, nullptr, 0, true, 0, RefQualifier::None);
+	convert_arguments(expr.arguments, promotions, nullptr, 0);
+	if (failed())
+		return nullptr;
+	TypeList parameters;
+	for (const syntax::Expr* argument : expr.arguments)
+	{
+		const ExprFacts* facts = facts_of(*argument);
+		parameters.push_back(facts->conversion != nullptr ? facts->conversion->result : facts->type);
+	}
+	if ((callee->flags & kOverloadSet) != 0)
+		resolve_overloaded(*expr.callee, static_cast<FunctionEntity*>(callee->functions->binding->entity));
+	potential_use(*expr.callee, nullptr);
+	if (callee->entity != nullptr && callee->entity->kind == EntityKind::Function)
+		odr_use(const_cast<FunctionEntity*>(static_cast<const FunctionEntity*>(callee->entity)), true);
+	ExprFacts* result = new_facts(expr, function->element->unqualified, ValueCategory::PRValue);
+	result->target = types_.function(
+		function->element, parameters.data(), static_cast<uint32_t>(parameters.size()), false, 0, RefQualifier::None);
+	return result;
 }
 
 ExprFacts* Analyzer::indirect_call(const syntax::CallExpr& expr, ExprFacts* callee)

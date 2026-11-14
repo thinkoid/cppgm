@@ -12,6 +12,7 @@ PPLexer::PPLexer(const SourceBuffer& source, const PPLexerOptions& options)
 	  c_source_(options.c_source), binary_exponents_(options.binary_exponents),
 	  digit_separators_(options.digit_separators), legacy_comment_bytes_(options.legacy_comment_bytes),
 	  lone_quotes_(options.lone_quotes), gnu_escapes_(options.gnu_escapes),
+	  dollar_identifiers_(options.dollar_identifiers),
 	  context_(options.header_names_on_request ? DirectiveContext::Other : DirectiveContext::LineStart)
 {}
 
@@ -33,7 +34,7 @@ const PPToken& PPLexer::next()
 	if (__builtin_expect(context_ == DirectiveContext::AfterInclude, 0) && (c == '<' || c == '"') &&
 		try_lex_header_name())
 		return finish(PPTokenKind::HeaderName);
-	if (IsIdentifierStart(c))
+	if (IsIdentifierStart(c) || (c == '$' && dollar_identifiers_))
 		return lex_identifier_or_prefixed_literal();
 	if (IsAsciiDigit(c) || (c == '.' && IsAsciiDigit(peek_after(cur_).code_point)))
 		return lex_pp_number();
@@ -450,7 +451,7 @@ bool PPLexer::take_identifier_start()
 		take(c);
 		return true;
 	}
-	if (!IsIdentifierStart(cur_.code_point))
+	if (!IsIdentifierStart(cur_.code_point) && !(cur_.code_point == '$' && dollar_identifiers_))
 		return false;
 	take(cur_);
 	return true;
@@ -469,7 +470,7 @@ bool PPLexer::take_identifier_continue()
 		take(c);
 		return true;
 	}
-	if (!IsIdentifierContinue(cur_.code_point))
+	if (!IsIdentifierContinue(cur_.code_point) && !(cur_.code_point == '$' && dollar_identifiers_))
 		return false;
 	take(cur_);
 	return true;
@@ -493,7 +494,7 @@ bool PPLexer::take_identifier_bytes()
 		token_end_ = end;
 		cur_ = reader_.logical(end);
 	}
-	return kByteClasses[text[end]] != 0;
+	return kByteClasses[text[end]] != 0 && !(text[end] == '$' && dollar_identifiers_);
 }
 
 const PPToken& PPLexer::lex_identifier_or_prefixed_literal()

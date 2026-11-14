@@ -19,8 +19,9 @@ namespace syntax {
 class SyntaxUnit
 {
 public:
-	// Throws PreprocessError if the source cannot be opened.
-	SyntaxUnit(const PreprocessorOptions& options, const std::string& path);
+	// Throws PreprocessError if the source cannot be opened. Only syntax-only
+	// exercises use lexical hints for undeclared names.
+	SyntaxUnit(const PreprocessorOptions& options, const std::string& path, bool syntax_only = false);
 
 	// Parses the unit; false after a preprocessing, lexical or syntax error,
 	// described by error().

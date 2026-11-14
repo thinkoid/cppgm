@@ -94,6 +94,8 @@ Entity* Analyzer::class_specifier(const syntax::ClassSpecifier& specifier, Scope
 		error(specifier.location, "an unqualified class declaration has extra template parameter lists");
 	const syntax::Name* name = specifier.name;
 	Scope* where = declaration_scope(scope);
+	while (c_source_ && where->kind == ScopeKind::Class)
+		where = where->parent;
 	Scope* print = scope;
 	Scope* parent = scope;
 	ClassEntity* entity = nullptr;
@@ -441,7 +443,7 @@ void Analyzer::class_body(ClassEntity* entity, const syntax::ClassSpecifier& spe
 	entity->packed = packed;
 	if (has_may_alias(specifier.attributes))
 		entity->may_alias = true;
-	if (entity->name != nullptr)
+	if (entity->name != nullptr && !c_source_)
 	{
 		// The injected-class-name (9p2).
 		Binding* injected = new_binding(BindingKind::Type, entity->name, entity, entity->type);
@@ -1155,6 +1157,8 @@ Entity* Analyzer::enum_specifier(
 			error(specifier.location, "enumeration underlying type is not integral");
 	}
 	Scope* where = declaration_scope(scope);
+	while (c_source_ && where->kind == ScopeKind::Class)
+		where = where->parent;
 	const syntax::Name* name = specifier.name;
 	if (lone_declaration && scope == template_scope_ && (name == nullptr || !name->qualified()))
 		error(specifier.location, "an enumeration cannot be declared as a template");

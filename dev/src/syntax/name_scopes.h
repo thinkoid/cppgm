@@ -164,6 +164,7 @@ class NameScopes
 {
 public:
 	explicit NameScopes(Arena& arena);
+	void set_c_source(bool on) { c_source_ = on; }
 
 	Scope* global() const { return global_; }
 	Scope* current() const { return current_; }
@@ -356,6 +357,7 @@ private:
 	Scope* global_;
 	Scope* current_;
 	telemetry::Counter lookups_;
+	bool c_source_;
 	uint64_t environment_;
 	uint64_t epoch_;
 	// Using-directives met on the current unqualified lookup's way out,

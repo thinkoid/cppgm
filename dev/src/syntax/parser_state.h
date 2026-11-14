@@ -50,7 +50,7 @@ public:
 	// `hosted`: a hosted compilation's contextual coroutine operators.
 	// `cxx14`/`cxx17`: standard syntax in the selected language mode.
 	ParserState(ParseTokenStream& tokens, IdentifierTable& identifiers, Arena& arena, bool hosted = false,
-		bool cxx14 = false, bool cxx17 = false, bool c_source = false);
+		bool cxx14 = false, bool cxx17 = false, bool c_source = false, bool lexical_hints = true);
 
 	// The furthest location where a parse failed (for the diagnostic).
 	uint32_t error_location() const { return error_location_; }
@@ -388,6 +388,7 @@ protected:
 	telemetry::Counter rewinds_;
 	telemetry::Counter deferred_count_;
 	const bool c_source_;
+	const bool lexical_hints_;
 	const bool hosted_;
 	const bool cxx14_;
 	const bool cxx17_;
@@ -410,6 +411,8 @@ protected:
 	bool at_name_identifier(uint32_t ahead = 0)
 	{
 		const uint8_t name = tok(ahead).is_identifier() ? gnu_names_.kind(tok(ahead).identifier) : GnuNames::kTypeof;
+		if (c_source_ && name == static_cast<uint8_t>(GnuTrait::AddAtomic) + 1)
+			return false;
 		return name == 0 || name == GnuNames::kComplex ||
 			(name < GnuNames::kFirstSpecial && !at(TokenKind::OP_LPAREN, ahead + 1));
 	}

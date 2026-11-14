@@ -953,6 +953,14 @@ bool wasm_input(const Input& input, const Invocation& invocation, const backend:
 		if (!lower_source(input.name, invocation, lowering, work, front_ms, start))
 			return false;
 		lowering.finish();
+#if CPPGM_TELEMETRY_ENABLED
+		if (invocation.stats)
+			std::cerr << "cppgm++ wasm frontend stats " << input.name << ": front_ms=" << front_ms
+					  << " lower_ms=" << milliseconds_since(start) - front_ms
+					  << " specializations=" << work.specializations
+					  << " instantiated_functions=" << work.instantiated_functions
+					  << " resolutions=" << work.resolutions << " candidates=" << work.candidates << std::endl;
+#endif
 	}
 	std::string dump = "machine_ir wasm32 1\n";
 	wasm::Object object;
@@ -970,6 +978,7 @@ int wasm_mode(const Invocation& invocation)
 	options.target = invocation.target;
 	options.output = invocation.output.empty() ? "a.wasm" : invocation.output;
 	options.optimization_level = invocation.optimizer.level;
+	options.stats = invocation.stats;
 	options.exports = invocation.exports;
 	options.sysroot = invocation.sysroot;
 	options.resource_directory = invocation.resource_directory;

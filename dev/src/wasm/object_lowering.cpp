@@ -141,6 +141,24 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 	object.memory_count = 1;
 	object.types = module.signatures;
 	object.functions.resize(module.definition_types.size());
+	// Contiguous byte tokens make a function's code labels an indexed
+	// branch table while retaining ordinary relocatable pointer identities.
+	std::vector<std::pair<uint32_t, uint32_t>> code_labels;
+	for (lowir::SymbolId id : module.definitions)
+	{
+		const auto& labels = program.functions[program.symbols[id].detail].body->code_labels;
+		if (labels.empty())
+			continue;
+		if (code_labels.empty())
+			code_labels.resize(program.symbols.size(), { lowir::kNoId, 0 });
+		const uint32_t segment = static_cast<uint32_t>(object.data.size());
+		ObjectData tokens;
+		tokens.name = std::string(program.spelling(program.symbols[id].name)) + ".code_labels";
+		tokens.contents.bytes.data.resize(labels.size(), 0);
+		object.data.push_back(std::move(tokens));
+		for (uint32_t i = 0; i < labels.size(); ++i)
+			code_labels[labels[i].symbol] = { segment, i };
+	}
 	std::vector<uint32_t> function_symbols(object.functions.size(), lowir::kNoId);
 	std::vector<uint32_t> symbols(program.symbols.size() + (module.tag_types.empty() ? 3 : 4), lowir::kNoId);
 	std::vector<uint32_t> groups(program.symbols.size(), lowir::kNoId);
@@ -182,7 +200,14 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 		else
 		{
 			symbol.kind = 1;
-			if (source.kind == lowir::SymbolKind::GlobalDeclaration)
+			const bool code_label = !code_labels.empty() && code_labels[id].first != lowir::kNoId;
+			if (code_label)
+			{
+				symbol.index = code_labels[id].first;
+				symbol.offset = code_labels[id].second;
+				symbol.size = 1;
+			}
+			else if (source.kind == lowir::SymbolKind::GlobalDeclaration)
 				symbol.flags |= 0x10;
 			else
 			{

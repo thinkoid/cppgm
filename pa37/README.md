@@ -60,6 +60,11 @@ remove header search paths.
 
 Implement the following at `-O0`, `-O1`, `-O2` and `-O3`:
 
+- GNU label addresses and computed goto within one function, preserving label
+  pointer identity and retaining every addressed entry through optimization.
+- Empty GNU assembly used as a compiler barrier, including evaluated inputs
+  and scalar read/write register operands. Preserve its memory effects and
+  captured input values; reject output-only operands and machine instructions.
 - Scalar arithmetic and conversions, narrow integer behavior, pointers,
   aggregates, globals, volatile memory, alignment and address-taken locals.
   Preserve wide integer and floating types through valid legalization/helper

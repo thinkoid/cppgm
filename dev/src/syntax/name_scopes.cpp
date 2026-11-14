@@ -70,8 +70,19 @@ NameBinding Merge(const NameBinding& previous, const NameBinding& binding)
 	if (previous.category == NameCategory::Value && IsTypeCategory(binding.category) && binding.scope != nullptr)
 		return NameBinding{ NameCategory::Value, false, binding.scope };
 	if (binding.category == previous.category && binding.scope == nullptr)
-		return previous;
-	return binding;
+	{
+		NameBinding merged = previous;
+		// A C typedef introduces an ordinary name even when it names its
+		// same-spelled tag. Keep the known scope, but not the tag-only hint.
+		merged.flags &= binding.flags | ~NameBinding::kTag;
+		return merged;
+	}
+	NameBinding merged = binding;
+	// A later definition of that tag must not hide the typedef again.
+	if ((binding.flags & NameBinding::kTag) != 0 && previous.category == NameCategory::Type &&
+		(previous.flags & NameBinding::kTag) == 0)
+		merged.flags &= ~NameBinding::kTag;
+	return merged;
 }
 
 } // namespace
@@ -79,7 +90,7 @@ NameBinding Merge(const NameBinding& previous, const NameBinding& binding)
 NameScopes::NameScopes(Arena& arena)
 	: arena_(arena), slots_(kInitialSlots, Slot{ kEmptyKey, NameBinding{ NameCategory::None, false, nullptr } }),
 	  slot_mask_(kInitialSlots - 1), count_(0), next_scope_id_(0), next_visit_(0), logging_(0), global_(nullptr),
-	  current_(nullptr), lookups_(0), environment_(0), epoch_(0), memo_count_(0), edge_epoch_(0)
+	  current_(nullptr), lookups_(0), c_source_(false), environment_(0), epoch_(0), memo_count_(0), edge_epoch_(0)
 {
 	global_ = push(ScopeKind::Namespace, nullptr);
 }
@@ -689,6 +700,10 @@ NameBinding NameScopes::lookup(const Identifier* name, bool prefix_only, bool na
 	Scope* home = nullptr;
 	for (Scope* scope = current_; scope != nullptr; scope = scope->parent)
 	{
+		// C record members have a separate name space. Neither their names
+		// nor the parser's injected tag hint hide enclosing typedefs.
+		if (c_source_ && scope->kind == ScopeKind::Class)
+			continue;
 		NameBinding binding;
 		if (home != nullptr && scope->kind == ScopeKind::Namespace)
 		{

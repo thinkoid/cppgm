@@ -267,6 +267,10 @@ struct BracedInitList : Expr
 	// list in member order (see Analyzer::designated_list), recording a
 	// union's designated member.
 	const Identifier** designators = nullptr;
+	// C array designators, parallel to elements. Nested designations are
+	// retained as single-element lists until typed aggregate initialization.
+	Expr** array_designators = nullptr;
+	bool c_designation_path = false;
 	mutable const sema::DataMember* union_member = nullptr;
 	// A same-class prvalue selected to initialize this list's result object.
 	mutable const Expr* result_source = nullptr;

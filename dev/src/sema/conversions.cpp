@@ -238,9 +238,79 @@ bool ConversionRules::reference_related(const Type* a, const Type* b)
 
 bool ConversionRules::function_conversion(const Type* source, const Type* target)
 {
+	if (c_source_ && c_function_compatible(source, target))
+		return true;
 	return source->is_nothrow_function() && target->kind == TypeKind::Function && target->owner == nullptr &&
 		types_.function(source->element, source->params, source->param_count, source->variadic, source->function_cv,
 			source->ref) == target;
+}
+
+bool ConversionRules::c_function_compatible(const Type* source, const Type* target)
+{
+	source = source->canonical;
+	target = target->canonical;
+	if (source->kind != TypeKind::Function || target->kind != TypeKind::Function)
+		return false;
+	if (source == target)
+		return true;
+	if (source->element != target->element || (!source->c_unprototyped() && !target->c_unprototyped()))
+		return false;
+	const Type* prototype = source->c_unprototyped() ? target : source;
+	if (prototype->variadic)
+		return false;
+	for (uint32_t i = 0; i < prototype->param_count; ++i)
+	{
+		const Type* parameter = prototype->params[i]->unqualified;
+		IntegralKind kind;
+		if (IsFundamental(parameter, FundamentalType::Float) || IsBool(parameter) ||
+			parameter->kind == TypeKind::Enum || (IntegralKindOf(parameter, kind) && kind.bits < 32))
+			return false;
+	}
+	return true;
+}
+
+bool ConversionRules::c_type_compatible(const Type* source, const Type* target, bool ignore_cv)
+{
+	if (source == nullptr || target == nullptr)
+		return false;
+	if (ignore_cv && source->kind == TypeKind::Array && target->kind == TypeKind::Array)
+		return (source->bound == target->bound || source->bound == 0 || target->bound == 0) &&
+			c_type_compatible(source->element, target->element, true);
+	if (ignore_cv)
+	{
+		if ((source->cv & kAtomic) != (target->cv & kAtomic))
+			return false;
+		source = source->unqualified;
+		target = target->unqualified;
+	}
+	source = source->canonical;
+	target = target->canonical;
+	if (source == target)
+		return true;
+	if (source->cv != target->cv)
+		return false;
+	if (source->kind == TypeKind::Enum && target->kind != TypeKind::Enum)
+		return c_type_compatible(static_cast<const EnumEntity*>(source->entity)->underlying, target);
+	if (target->kind == TypeKind::Enum && source->kind != TypeKind::Enum)
+		return c_type_compatible(source, static_cast<const EnumEntity*>(target->entity)->underlying);
+	if (source->kind != target->kind)
+		return false;
+	if (source->kind == TypeKind::Pointer)
+		return c_type_compatible(source->element, target->element);
+	if (source->kind == TypeKind::Array)
+		return (source->bound == target->bound || source->bound == 0 || target->bound == 0) &&
+			c_type_compatible(source->element, target->element);
+	if (source->kind != TypeKind::Function)
+		return false;
+	if (source->c_unprototyped() || target->c_unprototyped())
+		return c_function_compatible(source, target);
+	if (source->variadic != target->variadic || source->param_count != target->param_count ||
+		!c_type_compatible(source->element, target->element))
+		return false;
+	for (uint32_t i = 0; i < source->param_count; ++i)
+		if (!c_type_compatible(source->params[i]->unqualified, target->params[i]->unqualified))
+			return false;
+	return true;
 }
 
 bool ConversionRules::qualification_convertible(const Type* from, const Type* to)

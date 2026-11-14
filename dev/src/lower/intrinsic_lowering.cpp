@@ -1273,8 +1273,10 @@ bool FunctionLowering::atomic_bits(lowir::Type storage, lowir::Type& bits)
 		size = 4;
 		break;
 	case lowir::TypeKind::F64:
-	case lowir::TypeKind::Ptr:
 		size = 8;
+		break;
+	case lowir::TypeKind::Ptr:
+		size = storage.pointer_bytes();
 		break;
 	case lowir::TypeKind::F80:
 		size = 16;

@@ -496,6 +496,8 @@ bool Parser::parse_decl_specifiers(ListFrame<DeclSpecifier>& list, SpecifierInfo
 			next();
 			continue;
 		}
+		if (parse_c_atomic_qualifier(list))
+			continue;
 		if (token.kind == ParseTokenKind::Simple)
 		{
 			const TokenKind kind = token.simple;
@@ -651,6 +653,8 @@ bool Parser::continue_type_specifier_seq(ListFrame<DeclSpecifier>& list, Specifi
 		if (attributes != nullptr)
 			type_attributes(attributes, list);
 		const ParseToken token = tok();
+		if (parse_c_atomic_qualifier(list))
+			continue;
 		if (token.kind == ParseTokenKind::Simple)
 		{
 			const TokenKind kind = token.simple;
@@ -707,6 +711,20 @@ bool Parser::continue_type_specifier_seq(ListFrame<DeclSpecifier>& list, Specifi
 		return false;
 	if (!info.has_type)
 		return fail();
+	return true;
+}
+
+bool Parser::parse_c_atomic_qualifier(ListFrame<DeclSpecifier>& list)
+{
+	if (!c_source_ || !tok().is_identifier() ||
+		gnu_names_.kind(tok().identifier) != static_cast<uint8_t>(GnuTrait::AddAtomic) + 1 ||
+		at(TokenKind::OP_LPAREN, 1))
+		return false;
+	DeclSpecifier specifier = DeclSpecifier();
+	specifier.kind = DeclSpecKind::AtomicQualifier;
+	specifier.location = location();
+	list.push(specifier);
+	next();
 	return true;
 }
 
@@ -1168,6 +1186,8 @@ void Parser::declare_class(const Identifier* name, bool is_template, Scope* scop
 	// the one they were linked to holds its members, keeps theirs reachable
 	// through an edge.
 	Scope* where = declaration_scope();
+	while (c_source_ && where->kind == ScopeKind::Class)
+		where = where->parent;
 	const NameBinding existing = scopes_.own(where, name);
 	if (existing.scope != nullptr && existing.scope != scope &&
 		(existing.category == NameCategory::TypeTemplate || existing.category == NameCategory::Type))

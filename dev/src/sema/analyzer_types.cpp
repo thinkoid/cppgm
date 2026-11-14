@@ -160,6 +160,11 @@ void Analyzer::specifiers(const syntax::Slice<syntax::DeclSpecifier>& list, Scop
 	out.uses = names_.dependent_uses();
 	for (const syntax::DeclSpecifier& specifier : list)
 	{
+		if (specifier.kind == syntax::DeclSpecKind::AtomicQualifier)
+		{
+			cv |= kAtomic;
+			continue;
+		}
 		if (specifier.kind == syntax::DeclSpecKind::Constinit)
 		{
 			if (out.is_constinit)
@@ -241,6 +246,7 @@ void Analyzer::specifiers(const syntax::Slice<syntax::DeclSpecifier>& list, Scop
 			continue;
 		case syntax::DeclSpecKind::Keyword:
 		case syntax::DeclSpecKind::Constinit:
+		case syntax::DeclSpecKind::AtomicQualifier:
 		case syntax::DeclSpecKind::Vector:
 			continue;
 		case syntax::DeclSpecKind::Name:
@@ -350,6 +356,8 @@ void Analyzer::specifiers(const syntax::Slice<syntax::DeclSpecifier>& list, Scop
 	}
 	if (type == decltype_auto_placeholder_ && cv != 0)
 		error(out.location, "decltype(auto) cannot be cv-qualified");
+	if ((cv & kAtomic) != 0 && (type->kind == TypeKind::Array || type->kind == TypeKind::Function || IsVoid(type)))
+		error(out.location, "_Atomic qualifier requires an object type other than an array");
 	out.type = type == auto_placeholder_ || type == decltype_auto_placeholder_ ? type : types_.qualified(type, cv);
 	out.cv = cv;
 	for (const syntax::DeclSpecifier& specifier : list)
@@ -1018,6 +1026,7 @@ DeclaratorInfo Analyzer::declarator(const syntax::Declarator* declarator, const 
 	const syntax::DeclaratorSuffix* function = nullptr;
 	// The last array suffix applied, unless a ptr-operator followed.
 	const syntax::DeclaratorSuffix* array = nullptr;
+	const syntax::DeclaratorSuffix* c_parameter_array = nullptr;
 	// 9.2, 9.2p9: virt-specifiers only after the whole declarator (the
 	// outermost declarator's last suffix) of a function.
 	const syntax::DeclaratorSuffix* last = declarator != nullptr && declarator->suffixes.size != 0
@@ -1057,6 +1066,12 @@ DeclaratorInfo Analyzer::declarator(const syntax::Declarator* declarator, const 
 		for (uint32_t i = current->suffixes.size; i-- > 0;)
 		{
 			const syntax::DeclaratorSuffix& suffix = current->suffixes[i];
+			if (suffix.array_cv != 0 || suffix.array_static)
+			{
+				if (use != DeclaratorUse::Parameter || c_parameter_array != nullptr)
+					error(current->location, "C array qualifiers require the outermost parameter array");
+				c_parameter_array = &suffix;
+			}
 			if (&suffix != last && HasVirtSpecifier(suffix))
 				error(current->location, "a virt-specifier inside a declarator");
 			type = apply_suffix(suffix, type, after, current->location, &suffix == member_suffix ? member : nullptr);
@@ -1094,6 +1109,12 @@ DeclaratorInfo Analyzer::declarator(const syntax::Declarator* declarator, const 
 	// pack, whose type is a pack expansion of its pattern.
 	if (declarator != nullptr && declarator->pack != syntax::PackPosition::None)
 		type = pack_expansion_type(type, declarator->location);
+	if (c_parameter_array != nullptr)
+	{
+		if (type->kind != TypeKind::Array || array != c_parameter_array)
+			error(location, "C array qualifiers require the outermost parameter array");
+		type = types_.qualified(types_.pointer(type->element), c_parameter_array->array_cv);
+	}
 	info.type = type;
 	if (declarator != nullptr)
 		for (const syntax::Attribute* attribute = declarator->attributes; attribute != nullptr;
@@ -1208,7 +1229,7 @@ const Type* Analyzer::ptr_operator(
 		error(location, "decltype(auto) must be the entire declared type");
 	if (type == auto_placeholder_ && !auto_declarator_)
 		error(location, "auto with a declarator operator is not supported here");
-	const uint8_t cv = CvBits(pointer.cv);
+	const uint8_t cv = CvBits(pointer.cv) | (pointer.atomic ? kAtomic : 0);
 	switch (pointer.kind)
 	{
 	case TokenKind::OP_STAR:
@@ -1313,8 +1334,6 @@ const Type* Analyzer::apply_suffix(const syntax::DeclaratorSuffix& suffix, const
 		return array;
 	}
 	const syntax::ParameterClause& clause = *suffix.parameters;
-	if (c_source_ && clause.parameters.empty() && !clause.ellipsis)
-		error(location, "the optional C profile requires function prototypes; use (void) for no parameters");
 	const size_t base = parameter_scratch_.size();
 	const bool void_list = clause.parameters.size == 1 && !clause.ellipsis &&
 		clause.parameters[0]->default_argument == nullptr && DeclaratorId(clause.parameters[0]->declarator) == nullptr;
@@ -1494,6 +1513,8 @@ const Type* Analyzer::apply_suffix(const syntax::DeclaratorSuffix& suffix, const
 		flattened_arguments(parameter_scratch_.data() + base, count, expanded);
 	const Type* result = types_.function(type, bound_packs ? expanded.data() : parameter_scratch_.data() + base,
 		bound_packs ? static_cast<uint32_t>(expanded.size()) : count, clause.ellipsis, cv, ref, exception);
+	if (c_source_ && clause.parameters.empty() && !clause.ellipsis)
+		result = types_.c_unprototyped(result);
 	parameter_scratch_.resize(base);
 	return result;
 }

@@ -10,7 +10,7 @@
 namespace syntax {
 
 ParserState::ParserState(ParseTokenStream& tokens, IdentifierTable& identifiers, Arena& arena, bool hosted, bool cxx14,
-	bool cxx17, bool c_source)
+	bool cxx17, bool c_source, bool lexical_hints)
 	: tokens_(tokens), identifiers_(identifiers), arena_(arena), scopes_(arena), deferred_lambdas_(0),
 	  deferred_tokens_(0), peak_run_bytes_(0), function_scope_(nullptr), parameter_scope_(nullptr),
 	  declarator_member_of_(nullptr), type_id_scope_(nullptr), angle_(false), definite_type_(false),
@@ -19,9 +19,10 @@ ParserState::ParserState(ParseTokenStream& tokens, IdentifierTable& identifiers,
 	  leading_attributes_(nullptr), tentative_depth_(0), speculation_(0), open_lists_base_(0), abandoning_lists_(false),
 	  abandoned_error_position_(0), abandoned_error_location_(0), nesting_(0), peak_nesting_(0), stack_base_(0),
 	  stack_budget_(stack_budget_bytes()), error_position_(0), error_location_(0), checkpoints_(0), rewinds_(0),
-	  deferred_count_(0), c_source_(c_source), hosted_(hosted), cxx14_(cxx14 || cxx17), cxx17_(cxx17),
-	  gnu_names_(identifiers)
+	  deferred_count_(0), c_source_(c_source), lexical_hints_(lexical_hints && !c_source), hosted_(hosted),
+	  cxx14_(cxx14 || cxx17), cxx17_(cxx17), gnu_names_(identifiers)
 {
+	scopes_.set_c_source(c_source_);
 	if (c_source_)
 		tokens_.ignore(identifiers.intern("restrict", 8));
 	final_ = identifiers.intern("final", 5);

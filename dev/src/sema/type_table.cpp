@@ -332,6 +332,13 @@ const Type* TypeTable::function(const Type* result, const Type* const* params, u
 	return intern(key);
 }
 
+const Type* TypeTable::c_unprototyped(const Type* function)
+{
+	Type key = *function;
+	key.bound = 1;
+	return intern(key);
+}
+
 const Type* TypeTable::find_function(
 	const Type* result, const Type* const* params, uint32_t count, bool variadic, uint8_t cv, RefQualifier ref) const
 {

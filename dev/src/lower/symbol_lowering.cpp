@@ -1062,7 +1062,7 @@ void ProgramLowering::state_pending_signatures(size_t first)
 				complete = parameter->kind != sema::TypeKind::Class ||
 					static_cast<const sema::ClassEntity*>(parameter->entity)->complete;
 			}
-			if (complete)
+			if (complete && !type->c_unprototyped())
 				pending_[i].signature = function_signature(pending_[i].entity, false, pending_[i].variant);
 		}
 		pending_[i].entity = nullptr;

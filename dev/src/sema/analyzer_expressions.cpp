@@ -1180,7 +1180,8 @@ FunctionEntity* Analyzer::select_overloaded(const ExprFacts* facts, const Type* 
 			found_template = true;
 			continue;
 		}
-		if (function->type->canonical != wanted->canonical)
+		if (function->type->canonical != wanted->canonical &&
+			!(c_source_ && conversions_.c_function_compatible(function->type, wanted)))
 			continue;
 		if (found != nullptr && found != function)
 			return nullptr;
@@ -1338,7 +1339,8 @@ ExprFacts* Analyzer::combine(const syntax::BinaryExpr& expr, Scope* scope)
 		if (c_source_)
 		{
 			const Type* result = decayed(right);
-			convert_operand(*expr.right, result);
+			if (!IsVoid(result))
+				convert_operand(*expr.right, result);
 			return new_facts(expr, result, ValueCategory::PRValue);
 		}
 		ExprFacts* facts = new_facts(expr, right->type, right->category);
@@ -1907,7 +1909,8 @@ ExprFacts* Analyzer::assignment(const syntax::BinaryExpr& expr, Scope* scope)
 	{
 		const bool integral_only = op == TokenKind::OP_MOD || op == TokenKind::OP_LSHIFT ||
 			op == TokenKind::OP_RSHIFT || op == TokenKind::OP_AMP || op == TokenKind::OP_BOR || op == TokenKind::OP_XOR;
-		const bool lok = integral_only ? IsIntegralType(lt) : IsArithmetic(lt);
+		const bool lok = (c_source_ && lt->kind == TypeKind::Enum) ||
+			(integral_only ? IsIntegralType(lt) : IsArithmetic(lt));
 		const bool rok = integral_only ? IsIntegralOrUnscopedEnum(rt)
 									   : (IsArithmetic(rt) || IsIntegralOrUnscopedEnum(rt));
 		if (!lok || !rok)
@@ -2234,7 +2237,8 @@ ExprFacts* Analyzer::increment(const syntax::UnaryExpr& expr, Scope* scope)
 	const bool decrement = expr.op == TokenKind::OP_DEC;
 	// GNU: a complex operand's real part is stepped.
 	if (IsBoolType(type) ? (!c_source_ && decrement)
-						 : !(IsArithmetic(type) || IsObjectPointer(type) || IsComplex(type)))
+						 : !(IsArithmetic(type) || IsObjectPointer(type) || IsComplex(type) ||
+							   (c_source_ && type->unqualified->kind == TypeKind::Enum)))
 	{
 		substitution_error(expr.location, "invalid operand of increment or decrement");
 		return nullptr;
@@ -2842,6 +2846,15 @@ ExprFacts* Analyzer::cast_expression(const syntax::CastExpr& expr, Scope* scope)
 	ExprFacts* facts = target != nullptr ? explicit_conversion(expr, target, expr.operand, expr.cast, scope) : nullptr;
 	if (facts == nullptr)
 		return nullptr;
+	if (c_source_ && target->unqualified->kind == TypeKind::Pointer && IsVoid(target->unqualified->element))
+	{
+		// C17 6.3.2.3: an integer constant zero cast to void* is also a
+		// null pointer constant, including when the destination is a
+		// function pointer. An arbitrary void* value is not one.
+		Constant value;
+		if (integral_constant(*expr.operand, scope, value) && value.bits == 0)
+			facts->flags |= kNullLiteral;
+	}
 	if (expr.cast == TokenKind::KW_DYNAMIC_CAST && semantic())
 	{
 		// 5.2.7p3, p5: to the operand's own class or a base, a dynamic_cast

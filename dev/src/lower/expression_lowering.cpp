@@ -2445,6 +2445,8 @@ RValue FunctionLowering::call(const syntax::CallExpr& expr, lowir::Value destina
 		const sema::Type* function = callee_facts->type->kind == sema::TypeKind::Function
 			? callee_facts->type
 			: callee_facts->type->unqualified->element;
+		if (function->c_unprototyped())
+			function = facts->target;
 		const sema::Type* returned = function->canonical->element;
 		begin_call(throws);
 		if (lowering_.indirect_result(returned, function))

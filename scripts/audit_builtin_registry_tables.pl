@@ -78,6 +78,7 @@ for my $name (sort keys %sorted)
 my %trait_alias = (
 	'__is_nullptr' => 'IsNullPointer',
 	'__builtin_offsetof' => 'Offsetof',
+	'__builtin_types_compatible_p' => 'TypesCompatible',
 	'__remove_reference_t' => 'RemoveReference',
 	'__remove_reference' => 'RemoveReferenceGnu',
 	'_Atomic' => 'AddAtomic',

@@ -2,12 +2,12 @@
 
 namespace syntax {
 
-SyntaxUnit::SyntaxUnit(const PreprocessorOptions& options, const std::string& path)
+SyntaxUnit::SyntaxUnit(const PreprocessorOptions& options, const std::string& path, bool syntax_only)
 	: preprocessor_(options, path),
 	  post_tokens_(preprocessor_, &preprocessor_.identifiers(), options.literals, options.target),
 	  tokens_(post_tokens_, spellings_),
 	  parser_(tokens_, preprocessor_.identifiers(), arena_, options.hosted, options.cplusplus != "201103L",
-		  options.cplusplus == "201703L", options.language == SourceLanguage::C),
+		  options.cplusplus == "201703L", options.language == SourceLanguage::C, syntax_only),
 	  tree_(nullptr)
 {
 	tokens_.observe_pack(preprocessor_.pack_state());

@@ -461,6 +461,9 @@ void AstDumper::owned_specifier(const DeclSpecifier& specifier)
 	case DeclSpecKind::Constinit:
 		line("decl-specifier", "__constinit");
 		break;
+	case DeclSpecKind::AtomicQualifier:
+		line("cv-qualifier", "_Atomic");
+		break;
 	case DeclSpecKind::Class:
 		class_specifier(*specifier.class_specifier);
 		break;
@@ -551,6 +554,8 @@ void AstDumper::declarator(const Declarator& declarator, bool trailing_pack)
 			line("ptr-operator", TokenText(pointer.kind, TokenKindSpelling(pointer.kind, pointer.alternative)));
 		for (TokenKind cv : pointer.cv)
 			line("cv-qualifier", TokenText(cv));
+		if (pointer.atomic)
+			line("cv-qualifier", "_Atomic");
 	}
 	if (declarator.pack == PackPosition::BeforeName)
 		line("parameter-pack", "...");
@@ -574,6 +579,12 @@ void AstDumper::declarator_suffix(const DeclaratorSuffix& suffix)
 	if (suffix.kind == DeclaratorSuffixKind::Array)
 	{
 		open("array-suffix");
+		if (suffix.array_static)
+			line("minimum-bound");
+		if ((suffix.array_cv & 1) != 0)
+			line("cv-qualifier", "const");
+		if ((suffix.array_cv & 2) != 0)
+			line("cv-qualifier", "volatile");
 		if (suffix.bound != nullptr)
 			expression(*suffix.bound);
 		close();

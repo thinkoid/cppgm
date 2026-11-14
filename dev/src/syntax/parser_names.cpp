@@ -87,6 +87,8 @@ bool MemberTemplateSuffix(const ParseToken& token)
 
 bool Parser::names_type_hint(const Identifier* identifier) const
 {
+	if (!lexical_hints_)
+		return false;
 	// parsing.md's lexical fallback for names no declaration classifies: an
 	// identifier containing C, Y or E can stand for a type, and T marks a
 	// potential template or type name.

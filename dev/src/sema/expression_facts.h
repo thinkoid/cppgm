@@ -138,7 +138,7 @@ struct Conversion
 enum : uint32_t
 {
 	// An integer literal with value zero: a null pointer constant (4.10p1 as
-	// CWG 903 resolved it).
+	// CWG 903 resolved it). In C, also an integer constant zero cast to void*.
 	kNullLiteral = 1,
 	// Names a set of overloaded functions, resolved by its context (13.4).
 	kOverloadSet = 2,
@@ -305,6 +305,7 @@ struct ExprFacts
 		// compound assignment: the type its operation is performed in
 		// (5.17p7: E1 op E2 after the usual arithmetic conversions, a
 		// shift's promoted E1, or E1's pointer type).
+		// A C call without a prototype: its promoted, fixed call boundary.
 		const Type* target;
 		// kUserConverted: the converted operand's own facts.
 		const ExprFacts* original;

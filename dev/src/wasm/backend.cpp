@@ -1,9 +1,12 @@
 #include "wasm/backend.h"
 
 #include <cstdio>
+#include <chrono>
+#include <iostream>
 
 #include "lowir/assembly.h"
 #include "opt/optimizer.h"
+#include "support/telemetry.h"
 #include "wasm/object_reader.h"
 
 namespace wasm {
@@ -18,9 +21,20 @@ bool only_empty_assembly(const lowir::Program& program)
 	if (!assembly.functions.empty() || !assembly.globals.empty())
 		return false;
 	for (const auto& definition : assembly.templates)
-		if (definition.operand_count != 0 || definition.argument_count != 0 || definition.clobber_count != 0 ||
-			definition.piece_count != 0)
+	{
+		if (definition.clobber_count != 0 || definition.piece_count != 0 ||
+			(definition.properties & asm_model::AP_NORETURN) != 0)
 			return false;
+		for (uint32_t i = 0; i < definition.operand_count; ++i)
+		{
+			const auto& operand = assembly.operands[definition.first_operand + i];
+			if (operand.output != asm_model::kNoId &&
+				(operand.input == asm_model::kNoId || operand.input_storage ||
+					(operand.flags & (asm_model::AO_FLAG | asm_model::AO_EXIT_TAG)) != 0 ||
+					storage_bytes(operand.type) > 8))
+				return false;
+		}
+	}
 	return true;
 }
 
@@ -67,9 +81,22 @@ bool compile_object(
 		optimization.has_gnu_sincos = target_model::has_gnu_sincos(program.target);
 		opt::OptimizerStats stats;
 		opt::optimize_program(program, optimization, &stats);
+#if CPPGM_TELEMETRY_ENABLED
+		const auto object_start = std::chrono::steady_clock::now();
+#endif
 		prepare_finalizers(program);
 		legalize_wide_helpers(program);
 		make_object(program, options, object, dump);
+#if CPPGM_TELEMETRY_ENABLED
+		if (options.stats)
+		{
+			std::cerr << opt::describe_stats(stats) << std::endl;
+			const double object_ms =
+				std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - object_start).count();
+			std::cerr << "cppgm++ wasm object stats: functions=" << object.functions.size()
+					  << " optimize_ms=" << stats.optimize_ms << " object_ms=" << object_ms << std::endl;
+		}
+#endif
 		return options.machine_ir.empty() || write_file(options.machine_ir, dump.data(), dump.size(), error);
 	}
 	catch (const WasmError& failure)

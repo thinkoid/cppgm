@@ -22,7 +22,7 @@ class Parser : public ParserState
 {
 public:
 	Parser(ParseTokenStream& tokens, IdentifierTable& identifiers, Arena& arena, bool hosted = false,
-		bool cxx14 = false, bool cxx17 = false, bool c_source = false);
+		bool cxx14 = false, bool cxx17 = false, bool c_source = false, bool lexical_hints = true);
 
 	// The translation unit, or null after a syntax error.
 	TranslationUnit* parse_translation_unit();
@@ -188,6 +188,7 @@ private:
 	// GNU `__typeof__ ( type-id )` or `__typeof__ unary-expression` as a
 	// decltype-specifier of a TypeofOperand (parse_typeof_operand).
 	bool parse_typeof_specifier(ListFrame<DeclSpecifier>& list, SpecifierInfo& info);
+	bool parse_c_atomic_qualifier(ListFrame<DeclSpecifier>& list);
 	bool parse_type_specifier_seq(
 		ListFrame<DeclSpecifier>& list, SpecifierInfo& info, TypeIdContext context = TypeIdContext::General);
 	bool parse_named_type_specifier(ListFrame<DeclSpecifier>& list, SpecifierInfo& info);
@@ -401,6 +402,7 @@ private:
 	Expr* parse_lambda();
 	void invent_lambda_parameters(LambdaExpr& lambda);
 	BracedInitList* parse_braced_init_list();
+	Expr* parse_c_designated_initializer(const Identifier*& member, Expr*& index);
 	bool parse_expression_list(ListFrame<Expr*>& list, TokenKind close);
 	bool at_cast_operand_start();
 	int binary_precedence(TokenKind& op, uint32_t& width);

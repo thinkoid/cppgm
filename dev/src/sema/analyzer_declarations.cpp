@@ -1413,7 +1413,7 @@ Binding* Analyzer::declare_variable(const Specifiers& specifiers, const Declarat
 	// goto out of a statement expression in the initializer bypasses it
 	// not.
 	const bool pattern_body = body_ != nullptr && body_->pattern;
-	const bool counted = (typed_initialization || pattern_body) && body_ != nullptr &&
+	const bool counted = !c_source_ && (typed_initialization || pattern_body) && body_ != nullptr &&
 		where->kind == ScopeKind::Block && !specifiers.is_static && !specifiers.is_extern &&
 		!specifiers.is_thread_local;
 	if (counted && initializer != nullptr)
@@ -1792,6 +1792,29 @@ void Analyzer::note_user_provided(const FunctionEntity* function, const syntax::
 	entity->not_aggregate = entity->not_aggregate || function->constructor;
 }
 
+FunctionEntity* Analyzer::c_redeclared_function(FunctionEntity* previous, const Identifier* name, Scope* where,
+	const Type* type, bool definition, uint32_t location)
+{
+	if (!c_source_ || where->kind == ScopeKind::Class)
+		return previous;
+	const NameEntry* entry = names_.find(where, name);
+	if (entry == nullptr || entry->functions == nullptr)
+		return previous;
+	FunctionEntity* earlier = static_cast<FunctionEntity*>(entry->functions->binding->entity);
+	if (definition && earlier->builtin != BuiltinFunction::None &&
+		!conversions_.c_function_compatible(earlier->type, type))
+	{
+		// A hosted C header can supply its own implementation of a reserved
+		// builtin. Subsequent lookup uses its ordinary declaration.
+		const_cast<Binding*>(entry->functions->binding)->invisible = true;
+		return nullptr;
+	}
+	if (!conversions_.c_function_compatible(earlier->type, type) ||
+		(definition && type->c_unprototyped() && earlier->type->param_count != 0))
+		error(location, "conflicting C function declarations");
+	return earlier;
+}
+
 Binding* Analyzer::declare_function(const Specifiers& specifiers, const DeclaratorInfo& info, Scope* scope,
 	bool definition, uint32_t location, bool deleted)
 {
@@ -1946,13 +1969,16 @@ Binding* Analyzer::declare_function(const Specifiers& specifiers, const Declarat
 	FunctionEntity* function = pattern_friend
 		? nullptr
 		: earlier_function(name, where, signature, templated, invisible, location);
+	function = c_redeclared_function(function, name.key, where, info.type, definition, location);
 	if (c_language_ && !templated && !specifiers.is_static && where->kind == ScopeKind::Namespace)
 	{
 		const uint32_t index = c_function_index_.find(name.key);
 		if (index != PointerMap::kMissing)
 		{
 			FunctionEntity* earlier = c_functions_[index];
-			if (signature_of(earlier->type) != signature || (function != nullptr && function != earlier))
+			if ((signature_of(earlier->type) != signature &&
+					!(c_source_ && conversions_.c_function_compatible(earlier->type, info.type))) ||
+				(function != nullptr && function != earlier))
 				error(location, "conflicting declaration of a C-linkage function");
 			function = earlier;
 		}
@@ -1980,8 +2006,15 @@ Binding* Analyzer::declare_function(const Specifiers& specifiers, const Declarat
 		std::strcmp(name.key->spelling, "main") == 0)
 		error(location, "main declared inline, static or constexpr");
 	if (function != nullptr)
+	{
 		redeclare_function(function, specifiers, info, scope, where, definition, deleted,
 			template_depth_ == 0 || pattern_member || templated, location);
+		if (c_source_ && function->type->c_unprototyped() && !info.type->c_unprototyped())
+		{
+			function->type = info.type;
+			function->signature = signature;
+		}
+	}
 	else
 	{
 		function = new_function(specifiers, info, name, scope, where, signature, templated, location);
@@ -2036,6 +2069,8 @@ Binding* Analyzer::declare_function(const Specifiers& specifiers, const Declarat
 	if (semantic() && (template_depth_ == 0 || templated))
 		check_operator_declaration(function, location);
 	Binding* binding = new_binding(BindingKind::Function, name.key, function, info.type);
+	if (c_source_)
+		binding->type = function->type;
 	binding->label = name.label;
 	binding->invisible = invisible;
 	print_in(print, binding);

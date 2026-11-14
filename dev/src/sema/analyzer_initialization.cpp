@@ -361,7 +361,7 @@ void Analyzer::check_character_array(
 	if (inner->kind != syntax::ExprKind::Literal || (facts->flags & kUserLiteral) != 0 ||
 		facts->type->kind != TypeKind::Array || !InitializesCharacterArray(facts->type->element, type->element))
 		error(location, "array initialized from an expression");
-	if (type->bound != 0 && facts->type->bound > type->bound)
+	if (type->bound != 0 && facts->type->bound > type->bound + (c_source_ ? 1 : 0))
 		error(location, "string literal too long for the array");
 }
 
@@ -406,6 +406,8 @@ bool Analyzer::direct_enum_list(const syntax::BracedInitList& list, const Type* 
 
 void Analyzer::list_initialize(const syntax::BracedInitList& list, const Type* type, Scope* scope)
 {
+	if (c_source_ && (list.designators != nullptr || list.array_designators != nullptr))
+		c_designated_list(list, type, scope);
 	// 8.5.4 for the slice: arrays element by element, scalars from at most
 	// one element without narrowing; an empty list value-initializes. A
 	// reference binds a single element of a reference-related type, else
@@ -488,7 +490,7 @@ void Analyzer::list_initialize(const syntax::BracedInitList& list, const Type* t
 					substitution_error(list.location, "array initialized from a string literal of another kind");
 					return;
 				}
-				if (type->bound != 0 && facts->type->bound > type->bound)
+				if (type->bound != 0 && facts->type->bound > type->bound + (c_source_ ? 1 : 0))
 				{
 					substitution_error(list.location, "string literal too long for the array");
 					return;
@@ -541,6 +543,8 @@ void Analyzer::aggregate_initialize(const syntax::BracedInitList& list, ClassEnt
 	// from an empty initializer list (p7).
 	if (!require_complete(entity) || !IsAggregateClass(entity))
 		error(list.location, "list-initialization of a class that is not an aggregate");
+	if (c_source_ && (list.designators != nullptr || list.array_designators != nullptr))
+		c_designated_list(list, entity->type, scope);
 	if (list.designators != nullptr)
 	{
 		// The list becomes the one in member order it stands for (the walks
@@ -805,6 +809,10 @@ void Analyzer::initialize_element(const syntax::Expr& element, const Type* type,
 bool Analyzer::check_narrowing(
 	const syntax::Expr& element, const Conversion* conversion, const Type* type, Scope* scope)
 {
+	// C aggregate and scalar initialization use ordinary arithmetic
+	// conversions, including truncation, rather than C++ list narrowing.
+	if (c_source_)
+		return true;
 	// 8.5.4p7: no narrowing conversion, unless from a constant that fits;
 	// false for a substitution's failure (14.8.2p8). After a conversion
 	// function its second standard conversion is checked, from the

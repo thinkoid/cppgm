@@ -135,6 +135,7 @@ struct Type
 	uint32_t hash;
 	// Array: the bound, 0 when unknown (or dependent, see `owner`).
 	// Mode: 1 for a complex machine mode, 0 for a scalar one.
+	// Function: 1 for a C declaration without a prototype, 0 otherwise.
 	uint64_t bound;
 	const Type* canonical;
 	// The type without its top-level cv-qualifiers.
@@ -157,6 +158,7 @@ struct Type
 	bool is(TypeKind k) const { return kind == k; }
 	bool extended_vector() const { return kind == TypeKind::Vector && function_cv != 0; }
 	bool is_reference() const { return kind == TypeKind::LValueReference || kind == TypeKind::RValueReference; }
+	bool c_unprototyped() const { return kind == TypeKind::Function && bound != 0; }
 	bool is_nothrow_function() const
 	{
 		return kind == TypeKind::Function && owner != nullptr && owner->kind == TypeKind::Value && owner->bound != 0;

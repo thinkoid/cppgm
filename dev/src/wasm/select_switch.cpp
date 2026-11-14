@@ -174,10 +174,40 @@ void Selector::switch_table(const std::vector<std::pair<int64_t, uint32_t>>& cas
 	std::vector<uint32_t> table(span + 2, count);
 	for (size_t i = cases.size(); i-- > 0;)
 		table[static_cast<uint64_t>(cases[i].first) - low] = depths[cases[i].second];
+	branch_table(targets, table, selector, value_type(type) != ValueType::I32, fallback);
+}
+
+void Selector::indirect_jump(const lowir::Instruction& inst)
+{
+	const uint32_t count = inst.extra_count;
+	std::vector<BlockId> targets;
+	std::vector<uint32_t> depths(body_.blocks.size(), count);
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		const BlockId target = body_.operands[inst.extra_first + i].index;
+		targets.push_back(target);
+		depths[target] = i;
+	}
+	std::vector<uint32_t> table;
+	for (const CodeLabel& label : body_.code_labels)
+		table.push_back(depths[label.block]);
+	table.push_back(count);
+	value(inst.ops[0], program_.pointer_type());
+	value(Value::symbol(body_.code_labels.front().symbol), program_.pointer_type());
+	out_.emit(Op::I32Sub);
+	const uint32_t selector = add_local(ValueType::I32);
+	out_.emit(Op::LocalSet, { selector });
+	branch_table(targets, table, selector, false, kNoId);
+}
+
+void Selector::branch_table(const std::vector<BlockId>& targets, const std::vector<uint32_t>& table, uint32_t selector,
+	bool wide, BlockId fallback)
+{
+	const uint32_t count = static_cast<uint32_t>(targets.size());
 	for (uint32_t i = 0; i <= count; ++i)
 		open_label(Op::Block, kNoId);
 	out_.emit(Op::LocalGet, { selector });
-	if (value_type(type) != ValueType::I32)
+	if (wide)
 		out_.emit(Op::I32WrapI64);
 	out_.emit(Op::BrTable);
 	for (uint32_t depth : table)
@@ -189,7 +219,10 @@ void Selector::switch_table(const std::vector<std::pair<int64_t, uint32_t>>& cas
 		edge(current_block_, target);
 	}
 	close_label();
-	edge(current_block_, fallback);
+	if (fallback == kNoId)
+		out_.emit(Op::Unreachable);
+	else
+		edge(current_block_, fallback);
 }
 
 } // namespace wasm

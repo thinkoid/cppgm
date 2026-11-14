@@ -1507,6 +1507,7 @@ BracedInitList* Parser::parse_braced_init_list()
 	angle_ = false;
 	ListFrame<Expr*> elements(exprs_);
 	std::vector<const Identifier*> designators;
+	std::vector<Expr*> array_designators;
 	bool parsed = true;
 	while (!at(TokenKind::OP_RBRACE))
 	{
@@ -1514,20 +1515,36 @@ BracedInitList* Parser::parse_braced_init_list()
 		// A designator `.member =` or `.member {` (C99's and C++20's
 		// designated initializers; hosted compilations).
 		const Identifier* designator = nullptr;
-		if (hosted_ && at(TokenKind::OP_DOT) && at_identifier(1) &&
+		Expr* index = nullptr;
+		Expr* element = nullptr;
+		if (c_source_ && (at(TokenKind::OP_DOT) || at(TokenKind::OP_LSQUARE)))
+			element = parse_c_designated_initializer(designator, index);
+		else if (hosted_ && at(TokenKind::OP_DOT) && at_identifier(1) &&
 			(at(TokenKind::OP_ASS, 2) || at(TokenKind::OP_LBRACE, 2)))
 		{
 			designator = tok(1).identifier;
 			next();
 			next();
 			accept(TokenKind::OP_ASS);
+		}
+		if (designator != nullptr)
+		{
 			designators.resize(elements.size(), nullptr);
 			designators.push_back(designator);
 		}
 		else if (!designators.empty())
 			designators.push_back(nullptr);
-		Expr* element = designator != nullptr && at(TokenKind::OP_LBRACE) ? parse_braced_init_list()
-																		  : parse_initializer_clause();
+		if (index != nullptr)
+		{
+			array_designators.resize(elements.size(), nullptr);
+			array_designators.push_back(index);
+		}
+		else if (!array_designators.empty())
+			array_designators.push_back(nullptr);
+		if (element == nullptr && designator == nullptr && index == nullptr)
+			element = parse_initializer_clause();
+		else if (element == nullptr && !c_source_)
+			element = at(TokenKind::OP_LBRACE) ? parse_braced_init_list() : parse_initializer_clause();
 		if (element == nullptr)
 		{
 			parsed = false;
@@ -1553,7 +1570,57 @@ BracedInitList* Parser::parse_braced_init_list()
 	list->elements = elements.take(arena_);
 	if (!designators.empty())
 		list->designators = arena_.copy_array(designators.data(), designators.size());
+	if (!array_designators.empty())
+		list->array_designators = arena_.copy_array(array_designators.data(), array_designators.size());
 	return list;
+}
+
+Expr* Parser::parse_c_designated_initializer(const Identifier*& member, Expr*& index)
+{
+	struct Designator
+	{
+		const Identifier* member;
+		Expr* index;
+	};
+	std::vector<Designator> path;
+	do
+	{
+		Designator step = {};
+		if (accept(TokenKind::OP_DOT))
+		{
+			if (!at_identifier())
+				return fail(), nullptr;
+			step.member = tok().identifier;
+			next();
+		}
+		else
+		{
+			next();
+			step.index = parse_assignment_expression();
+			if (step.index == nullptr || !expect(TokenKind::OP_RSQUARE))
+				return nullptr;
+		}
+		path.push_back(step);
+	} while (at(TokenKind::OP_DOT) || at(TokenKind::OP_LSQUARE));
+	member = path[0].member;
+	index = path[0].index;
+	if (!expect(TokenKind::OP_ASS))
+		return nullptr;
+	Expr* value = parse_initializer_clause();
+	if (value == nullptr)
+		return nullptr;
+	for (size_t i = path.size(); i-- > 1;)
+	{
+		BracedInitList* nested = make<BracedInitList>(ExprKind::BracedInit, value->location);
+		nested->elements = { arena_.copy_array(&value, 1), 1 };
+		nested->c_designation_path = true;
+		if (path[i].member != nullptr)
+			nested->designators = arena_.copy_array(&path[i].member, 1);
+		else
+			nested->array_designators = arena_.copy_array(&path[i].index, 1);
+		value = nested;
+	}
+	return value;
 }
 
 bool Parser::parse_expression_list(ListFrame<Expr*>& list, TokenKind close)

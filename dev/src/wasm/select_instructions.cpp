@@ -1,5 +1,7 @@
 #include "wasm/selector.h"
 
+#include "lowir/assembly.h"
+
 namespace wasm {
 
 using namespace lowir;
@@ -248,9 +250,22 @@ void Selector::instruction(const lowir::Instruction& inst)
 	switch (inst.op)
 	{
 	case Opcode::Asm:
-		// Nonempty templates and operand/register effects are rejected before
-		// selection. Empty compiler barriers retain their LowIR memory effects.
+	{
+		// The optimizer retains this opaque boundary. At runtime an empty
+		// read/write register constraint preserves its captured input bits.
+		const auto& assembly = *program_.assembly;
+		const auto& definition = assembly.templates[inst.immediate];
+		for (uint32_t i = 0; i < definition.operand_count; ++i)
+		{
+			const auto& operand = assembly.operands[definition.first_operand + i];
+			if (operand.output == asm_model::kNoId)
+				continue;
+			const Access place = memory_access(body_.operands[inst.extra_first + operand.output]);
+			value(body_.operands[inst.extra_first + operand.input], operand.type);
+			access(memory_op(operand.type, true), place);
+		}
 		return;
+	}
 	case Opcode::Const:
 	case Opcode::Copy:
 	{
@@ -399,6 +414,9 @@ void Selector::instruction(const lowir::Instruction& inst)
 		edge(current_block_, inst.ops[1].index);
 		return;
 	}
+	case Opcode::IndirectJump:
+		indirect_jump(inst);
+		return;
 	case Opcode::Return:
 		return_value(inst);
 		return;

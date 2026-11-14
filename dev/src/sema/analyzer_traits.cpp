@@ -246,8 +246,10 @@ ExprFacts* Analyzer::builtin_trait(const syntax::BuiltinTraitExpr& expr, Scope* 
 
 const Type* Analyzer::trait_result_type(GnuTrait trait)
 {
-	// bool, but std::size_t for __array_rank.
-	return types_.fundamental(trait == GnuTrait::ArrayRank ? FundamentalType::UnsignedLongInt : FundamentalType::Bool);
+	// GNU C compatibility is int; the C++ predicates are bool.
+	return types_.fundamental(trait == GnuTrait::ArrayRank ? FundamentalType::UnsignedLongInt
+			: trait == GnuTrait::TypesCompatible           ? FundamentalType::Int
+														   : FundamentalType::Bool);
 }
 
 namespace {
@@ -550,6 +552,9 @@ bool Analyzer::trait_value(
 	case GnuTrait::IsSame:
 		// The same type, cv-qualifiers included (types are interned).
 		value = type->canonical == types[1]->canonical;
+		break;
+	case GnuTrait::TypesCompatible:
+		value = conversions_.c_type_compatible(type, types[1], true);
 		break;
 	case GnuTrait::IsBaseOf:
 	{

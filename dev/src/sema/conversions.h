@@ -71,6 +71,8 @@ public:
 	bool reference_related(const Type* a, const Type* b);
 	// C++17 function pointer conversion: discard a non-throwing specification.
 	bool function_conversion(const Type* source, const Type* target);
+	bool c_function_compatible(const Type* source, const Type* target);
+	bool c_type_compatible(const Type* source, const Type* target, bool ignore_cv = false);
 	// A type without its cv-qualifiers (an array's are its elements').
 	const Type* without_cv(const Type* type);
 

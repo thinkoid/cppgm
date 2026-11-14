@@ -741,6 +741,7 @@ bool SyntaxCloner::specifier(const DeclSpecifier& in, DeclSpecifier& out)
 	switch (in.kind)
 	{
 	case DeclSpecKind::Constinit:
+	case DeclSpecKind::AtomicQualifier:
 	case DeclSpecKind::DecltypeAuto:
 	case DeclSpecKind::Mode:
 		return false;
@@ -1119,6 +1120,8 @@ Expr* SyntaxCloner::call_like(const Expr* expr)
 	{
 		BracedInitList* result = copy(static_cast<const BracedInitList*>(expr));
 		result->elements = exprs(result->elements);
+		if (result->array_designators != nullptr)
+			result->array_designators = exprs({ result->array_designators, result->elements.size }).data;
 		result->union_member = nullptr;
 		result->result_source = nullptr;
 		return result;

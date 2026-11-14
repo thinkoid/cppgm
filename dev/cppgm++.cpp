@@ -815,7 +815,7 @@ int run_emit_ast_mode(vector<string> args)
 		try
 		{
 			const chrono::steady_clock::time_point parse_start = chrono::steady_clock::now();
-			syntax::SyntaxUnit unit(options, invocation.inputs[i]);
+			syntax::SyntaxUnit unit(options, invocation.inputs[i], true);
 			if (!unit.parse())
 			{
 				cerr << "ERROR: " << unit.error() << endl;

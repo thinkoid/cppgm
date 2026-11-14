@@ -165,6 +165,13 @@ bool Parser::parse_ptr_operator(ListFrame<PtrOperator>& pointers)
 		{
 			if (!skip_attributes())
 				return false;
+			if (c_source_ && tok().is_identifier() &&
+				gnu_names_.kind(tok().identifier) == static_cast<uint8_t>(GnuTrait::AddAtomic) + 1)
+			{
+				pointer.atomic = true;
+				next();
+				continue;
+			}
 			// Clang's nullability qualifiers (_Nonnull, _Nullable,
 			// _Null_unspecified, _Nullable_result) promise nothing here.
 			if (at_identifier() && tok().identifier->length >= 8 && tok().identifier->spelling[0] == '_' &&
@@ -329,6 +336,19 @@ bool Parser::parse_declarator_suffixes(DeclaratorMode mode, Declarator* declarat
 			DeclaratorSuffix suffix = DeclaratorSuffix();
 			suffix.kind = DeclaratorSuffixKind::Array;
 			next();
+			if (c_source_ && mode == DeclaratorMode::Parameter && suffixes.size() == 0)
+			{
+				suffix.array_static = accept(TokenKind::KW_STATIC);
+				while (at(TokenKind::KW_CONST) || at(TokenKind::KW_VOLATILE))
+				{
+					suffix.array_cv |= at(TokenKind::KW_CONST) ? 1 : 2;
+					next();
+				}
+				if (!suffix.array_static)
+					suffix.array_static = accept(TokenKind::KW_STATIC);
+			}
+			if (suffix.array_static && at(TokenKind::OP_RSQUARE))
+				return fail();
 			if (!at(TokenKind::OP_RSQUARE))
 			{
 				const bool saved_angle = angle_;

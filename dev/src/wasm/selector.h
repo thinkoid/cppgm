@@ -122,6 +122,9 @@ private:
 	void block(lowir::BlockId block);
 	void restore_stack();
 	bool select_switch(const lowir::Instruction& inst);
+	void indirect_jump(const lowir::Instruction& inst);
+	void branch_table(const std::vector<lowir::BlockId>& targets, const std::vector<uint32_t>& table, uint32_t selector,
+		bool wide, lowir::BlockId fallback);
 	bool narrow_selector(const lowir::Instruction& inst, lowir::Value& operand, lowir::Type& type) const;
 	void switch_tree(const std::vector<machine::CaseCluster>& clusters, uint32_t first, uint32_t past,
 		uint32_t selector, lowir::Type type, lowir::BlockId fallback);
