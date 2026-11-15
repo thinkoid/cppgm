@@ -420,12 +420,18 @@ void Analyzer::declaration(const syntax::Decl& decl, Scope* scope)
 	case syntax::DeclKind::StaticAssert:
 		return static_assertion(static_cast<const syntax::StaticAssertDecl&>(decl), scope);
 	case syntax::DeclKind::SpecialMember:
+		if (cxx20_ && abbreviated_declaration(decl, scope))
+			return;
 		return special_member(static_cast<const syntax::SpecialMemberDecl&>(decl), scope);
 	case syntax::DeclKind::Function:
+		if (cxx20_ && abbreviated_declaration(decl, scope))
+			return;
 		return function_definition(static_cast<const syntax::FunctionDecl&>(decl), scope);
 	case syntax::DeclKind::DeductionGuide:
 		return deduction_guide_declaration(static_cast<const syntax::DeductionGuideDecl&>(decl), scope);
 	case syntax::DeclKind::Simple:
+		if (cxx20_ && abbreviated_declaration(decl, scope))
+			return;
 		return simple_declaration(static_cast<const syntax::SimpleDecl&>(decl), scope);
 	case syntax::DeclKind::Linkage:
 	{
@@ -887,6 +893,8 @@ void Analyzer::template_declaration(const syntax::TemplateDecl& decl, Scope* sco
 	if (decl.declaration->kind == syntax::DeclKind::Simple &&
 		static_cast<const syntax::SimpleDecl*>(decl.declaration)->declarators.size > 1)
 		error(decl.location, "a template declaration must declare a single entity");
+	if (cxx20_ && abbreviated_declaration(*decl.declaration, scope, &decl))
+		return;
 	if (decl.parameters->parameters.empty())
 	{
 		if (syntax::TemplateConstraint(decl) != nullptr)

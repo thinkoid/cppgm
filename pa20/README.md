@@ -348,3 +348,13 @@ defaults, constraints and signatures. Inner template parameters own their
 names and packs, including names that shadow an outer function parameter pack;
 only the lambda's own call specializations expand them. Captures retain the
 same storage, lifetime and constexpr rules as the other closure forms here.
+
+### C++20 abbreviated function templates
+
+A function or constructor parameter written with `auto` introduces an invented
+type parameter. A constrained `C auto` parameter introduces a constrained type
+parameter. Append invented parameters to a function's explicit template head
+in parameter order, including packs, without adding a template nesting level.
+Use the same invention for generic lambdas. Keep the written syntax available;
+only the normalized signature needs a copy, and the body remains shared.
+Abbreviated function names are template names for later explicit template calls.

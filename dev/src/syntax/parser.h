@@ -409,7 +409,7 @@ private:
 	Expr* parse_new();
 	Expr* parse_delete();
 	Expr* parse_lambda();
-	void invent_lambda_parameters(LambdaExpr& lambda);
+	bool invent_lambda_parameters(LambdaExpr& lambda);
 	BracedInitList* parse_braced_init_list();
 	Expr* parse_c_designated_initializer(const Identifier*& member, Expr*& index);
 	bool parse_expression_list(ListFrame<Expr*>& list, TokenKind close);

@@ -1,4 +1,5 @@
 #include "sema/analyzer.h"
+#include "syntax/generic_parameters.h"
 #include "sema/template_packs.h"
 
 #include <algorithm>
@@ -50,22 +51,6 @@ const syntax::Name* DeclaratorId(const syntax::Declarator* declarator)
 			return declarator->name;
 	}
 	return nullptr;
-}
-
-// The function declarator whose type is the declaration's: the one
-// Analyzer::declarator applies last (each level's ptr-operators, then its
-// suffixes from the last), or null when that is no function suffix.
-const syntax::DeclaratorSuffix* OwnFunctionSuffix(const syntax::Declarator* declarator)
-{
-	const syntax::DeclaratorSuffix* own = nullptr;
-	for (; declarator != nullptr; declarator = declarator->nested)
-	{
-		if (declarator->suffixes.size != 0)
-			own = &declarator->suffixes[0];
-		else if (!declarator->pointers.empty())
-			own = nullptr;
-	}
-	return own != nullptr && own->kind == syntax::DeclaratorSuffixKind::Function ? own : nullptr;
 }
 
 // The first alignment-specifier (7.6.2) of an attribute list, GNU aligned
@@ -833,7 +818,7 @@ void Analyzer::declare_declarator(
 	// it, see function_definition).
 	auto_declarator_ = (specifiers.type == auto_placeholder_ || specifiers.type == decltype_auto_placeholder_) &&
 		!specifiers.is_typedef;
-	placeholder_suffix_ = !specifiers.is_typedef ? OwnFunctionSuffix(init.declarator) : nullptr;
+	placeholder_suffix_ = !specifiers.is_typedef ? syntax::OwnFunctionSuffix(init.declarator) : nullptr;
 	const Type* base_type = specifiers.deduction != nullptr
 		? deduce_class_declaration(specifiers, init, scope, location)
 		: specifiers.type;
@@ -2627,7 +2612,7 @@ void Analyzer::function_definition(const syntax::FunctionDecl& decl, Scope* scop
 		: specifiers.type;
 	auto_declarator_ = (specifiers.type == auto_placeholder_ || specifiers.type == decltype_auto_placeholder_) &&
 		!specifiers.is_typedef;
-	placeholder_suffix_ = !specifiers.is_typedef ? OwnFunctionSuffix(decl.declarator) : nullptr;
+	placeholder_suffix_ = !specifiers.is_typedef ? syntax::OwnFunctionSuffix(decl.declarator) : nullptr;
 	const DeclaratorInfo info = declarator(decl.declarator, declared, scope, decl.location, &specifiers);
 	auto_declarator_ = false;
 	placeholder_suffix_ = nullptr;
@@ -2679,7 +2664,7 @@ void Analyzer::special_member(const syntax::SpecialMemberDecl& decl, Scope* scop
 	else if (last.kind == syntax::NameComponentKind::Destructor &&
 		(last.destructor_decltype || last.identifier != owner->entity->name))
 		error(decl.location, "destructor name does not match its class");
-	placeholder_suffix_ = OwnFunctionSuffix(decl.declarator);
+	placeholder_suffix_ = syntax::OwnFunctionSuffix(decl.declarator);
 	const DeclaratorInfo info = declarator(decl.declarator, result, scope, decl.location);
 	placeholder_suffix_ = nullptr;
 	// 12.3.2p1: a conversion function has no parameters.

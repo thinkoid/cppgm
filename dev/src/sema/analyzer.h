@@ -268,6 +268,7 @@ private:
 	void check_template_parameter_name(Scope* scope, const Identifier* name, uint32_t location);
 	void alias_declaration(const syntax::AliasDecl& decl, Scope* scope);
 	void template_declaration(const syntax::TemplateDecl& decl, Scope* scope);
+	bool abbreviated_declaration(const syntax::Decl& decl, Scope* scope, const syntax::TemplateDecl* written = nullptr);
 	void explicit_instantiation(const syntax::ExplicitInstantiationDecl& decl, Scope* scope);
 	static bool FriendDeclaration(const syntax::Decl& decl);
 	void template_parameters(const syntax::TemplateParameterList& list, Scope* scope, bool declare,

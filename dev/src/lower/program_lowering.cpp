@@ -761,7 +761,9 @@ bool ProgramLowering::emitted_at_definition(const sema::FunctionEntity* function
 	// GCC and Clang emit an internal function: Clang's AMX intrinsics are
 	// static always_inline functions, not inline, of builtins this
 	// compiler lacks); every other definition is emitted.
-	return !function->is_inline &&
+	// A template pattern has no emitted body; its specializations are
+	// demanded independently, including templates written with auto parameters.
+	return !function->templated && !function->is_inline &&
 		!(function->internal_linkage && (function->unanalyzed_body || function->always_inline));
 }
 

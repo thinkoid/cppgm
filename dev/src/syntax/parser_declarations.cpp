@@ -1,4 +1,5 @@
 #include "syntax/parser.h"
+#include "syntax/generic_parameters.h"
 
 #include <string>
 #include <vector>
@@ -944,7 +945,9 @@ void Parser::declare_declarator(const Declarator* declarator, const SpecifierInf
 					info.type_name, info.type_name_info.scope, info.type_name_info.category, info.type_mentions);
 		}
 	}
-	else if (pending_template_)
+	else if (pending_template_ ||
+		(cxx20_ && OwnFunctionSuffix(declarator) != nullptr &&
+			HasInventedFunctionParameters(OwnFunctionSuffix(declarator)->parameters)))
 	{
 		// A function template or a variable template: its template-id is a
 		// value.
