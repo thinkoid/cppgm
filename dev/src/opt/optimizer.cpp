@@ -950,10 +950,10 @@ void optimize_program(Program& program, const OptimizerOptions& options, Optimiz
 		// mostly small accessors: past the budget each stays a call, and a
 		// unit that runs out spends five times the instructions).
 		InlineBudgets budgets;
-		budgets.once_unit = stats.instructions_in > 10240 ? stats.instructions_in : 10240;
-		budgets.force_unit = budgets.once_unit;
-		budgets.growth_unit = 2 * budgets.once_unit;
-		run_inline_wave(program, options, stats, InlineWave::Ordinary, budgets, original, nounwind, simplify);
+		budgets.force_unit = stats.instructions_in > 10240 ? stats.instructions_in : 10240;
+		budgets.growth_unit = 2 * budgets.force_unit;
+		budgets.once_unit = 2 * budgets.force_unit;
+		run_inline_wave(program, options, stats, InlineWave::Ordinary, budgets, original, unrolled, nounwind, simplify);
 		prune_unreachable(program, stats);
 		if (level >= 2)
 			speculate_virtual_calls(program, stats);
