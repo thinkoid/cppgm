@@ -37,6 +37,25 @@ class AuditPAFeaturePlacementTests(unittest.TestCase):
         source += " template<class T> constexpr bool value = C<T>;"
         self.assertIn("template.variable", audit.detect_features(source))
 
+    def test_cxx20_features_have_owners(self):
+        features = audit.load_feature_table(REPO_ROOT / audit.DEFAULT_TRACKER)
+        cases = (("expr.three_way", "struct V { int n; }; int f(V a, V b) { return (a.n <=> b.n) < 0; }", "pa11", 300,
+                  "pa12", 400),
+                 ("template.concept", "template<class T> concept C = requires(T v) { v + v; };", "pa13", 100,
+                  "pa14", 100),
+                 ("template.concept", "template<class T> requires true void f(T);", "pa13", 100, "pa14", 100),
+                 ("constexpr.immediate", "consteval int f() { return 1; }", "pa15", 100, "pa16", 100))
+        for feature, source, early, early_cluster, owner, cluster in cases:
+            with self.subTest(source=source):
+                self.assertIn(feature, audit.detect_features(source))
+                self.assertEqual(audit.placement_for(features[feature], early, early_cluster)[0], "violation")
+                self.assertEqual(audit.placement_for(features[feature], owner, cluster)[0], "ok")
+                # The parser's output records the syntax before its owner.
+                self.assertEqual(audit.placement_for(features[feature], "pa5", 100)[0], "semantic-surface")
+        plain = "template<class T> void f(T a, T b) { a <= b; a >= b; } int consteval_name;"
+        for feature in ("expr.three_way", "template.concept", "constexpr.immediate"):
+            self.assertNotIn(feature, audit.detect_features(plain))
+
     def test_digit_separators_do_not_hide_later_source_features(self):
         source = "int n=1'000; double x=0xA'B.C'Dp+0'2; template<auto N> struct Value {}; auto lambda=[](auto x){return x;};"
         stripped = audit.strip_string_literals(audit.strip_comments(source))

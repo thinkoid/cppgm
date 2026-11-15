@@ -8,6 +8,9 @@ refer to `../../doc/n3485.txt`.
 
 | Feature Family | Canonical Owner PA | Owner Cluster | Versioned Reference | Auditor Status | Required Detections |
 | --- | --- | ---: | --- | --- | --- |
+| `expr.three_way` | `pa12` | 400 | N4861 `[expr.spaceship]`, `[class.compare]`, `[over.match.oper]` | covered | `<=>` expressions and operators, rewritten candidates and defaulted comparisons. |
+| `template.concept` | `pa14` | 100 | N4861 `[temp.concept]`, `[expr.prim.req]`, `[temp.constr]` | covered | Concept definitions, requires-expressions and requires-clauses. |
+| `constexpr.immediate` | `pa16` | 100 | N4861 `[dcl.constexpr]`, `[expr.const]` | covered | `consteval` functions, constructors and lambdas. |
 | `source.target_macro` | `pa25` | 100 | Target driver contract | covered | Target platform selection macros for object-format/ABI source branches; full hosted macro import remains PA30. |
 | `function.inline_attribute` | `pa11` | 400 | Function annotation vocabulary | covered | Accept inline annotations with the function's typed facts; mandatory hosted forced-inline substitution remains PA30. |
 | `source.assembly_attribute` | `pa29` | 100 | GNU assembly source adapter | covered | Naked declarations and annotation compatibility; vector_size payload types and target annotations. Broader vector operations and forced-inline codegen remain hosted consumers. |
