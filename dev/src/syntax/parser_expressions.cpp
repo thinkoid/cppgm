@@ -1068,6 +1068,8 @@ Expr* Parser::parse_primary_expression()
 	}
 	switch (token.simple)
 	{
+	case TokenKind::KW_REQUIRES:
+		return parse_requires_expression();
 	case TokenKind::OP_LAND:
 	{
 		next();

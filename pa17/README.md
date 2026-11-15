@@ -358,3 +358,16 @@ During partial ordering, a direct array-bound parameter retains its synthesized
 non-type value in the transformed type. Deduction relates those typed values,
 including repeated bounds and arrays nested under pointers or references; a
 compound bound expression remains a non-deduced context.
+
+### C++20 requires-expressions
+
+In C++20 mode, retain requires-expressions as parsed requirements. Simple
+requirements check an unevaluated expression, type requirements name a type
+without demanding its definition, compound requirements can require `noexcept`,
+and nested requirements check boolean constant constraints. Local parameters
+use function-parameter adjustment, with no default arguments or terminal
+varargs ellipsis. Invalid immediate substitution makes a template requirement
+false; an invalid requirement outside a templated declaration is an error.
+Check in source order and stop once satisfaction is known. Constraint `&&` and
+`||` short-circuit substitution as well as evaluation. Later template and
+constant-evaluation assignments apply these rules to their added source forms.

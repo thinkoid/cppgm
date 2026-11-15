@@ -823,6 +823,13 @@ bool Analyzer::deduce_call_pack(const Type* pattern, const syntax::Slice<syntax:
 Scope* Analyzer::function_pack_scope(Scope* parent, const syntax::ParameterClause& clause,
 	const std::pair<const Identifier*, uint32_t>* packs, size_t count, const Type* type)
 {
+	return parameter_pack_scope(parent, clause, packs, count, type->params, type->param_count);
+}
+
+Scope* Analyzer::parameter_pack_scope(Scope* parent, const syntax::ParameterClause& clause,
+	const std::pair<const Identifier*, uint32_t>* packs, size_t count, const Type* const* parameters,
+	uint32_t parameter_count)
+{
 	// Each named function parameter pack of an instantiated definition's
 	// (or lambda's) clause, whose copy has one parameter per element, bound
 	// to the pack of those parameters' types (sizeof... counts it), in a
@@ -842,10 +849,10 @@ Scope* Analyzer::function_pack_scope(Scope* parent, const syntax::ParameterClaus
 			continue;
 		}
 		const std::pair<const Identifier*, uint32_t> pack = packs[next++];
-		if (pack.first != nullptr && position + pack.second <= type->param_count)
+		if (pack.first != nullptr && position + pack.second <= parameter_count)
 		{
 			Binding* binding = new_binding(
-				BindingKind::TypeAlias, pack.first, nullptr, types_.pack(type->params + position, pack.second));
+				BindingKind::TypeAlias, pack.first, nullptr, types_.pack(parameters + position, pack.second));
 			scope->has_parameter_packs = true;
 			binding->hidden = true;
 			declare_in(scope, binding);

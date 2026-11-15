@@ -159,6 +159,9 @@ const SimpleSpelling kSimpleSpellings[] = {
 	{ ",", TokenKind::OP_COMMA },
 	{ "->*", TokenKind::OP_ARROWSTAR },
 	{ "->", TokenKind::OP_ARROW },
+	// Append later-mode spellings so earlier spellings keep their index
+	// and their probe position in the shared read-only table.
+	{ "requires", TokenKind::KW_REQUIRES },
 };
 
 // "reinterpret_cast" is the longest simple spelling.
@@ -224,7 +227,7 @@ private:
 	Slot slots_[kSlots];
 };
 
-static_assert(sizeof(kTokenKindNames) / sizeof(kTokenKindNames[0]) == static_cast<unsigned>(TokenKind::OP_ARROW) + 1,
+static_assert(sizeof(kTokenKindNames) / sizeof(kTokenKindNames[0]) == static_cast<unsigned>(TokenKind::Count),
 	"one name per token kind");
 static_assert(
 	kSimpleSpellingCount * 2 <= 512 && kSimpleSpellingCount < 0xFF, "SimpleSpellingIndex needs a larger table");

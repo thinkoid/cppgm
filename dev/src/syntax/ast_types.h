@@ -261,6 +261,15 @@ struct Declarator
 	Attribute* attributes;
 };
 
+// The written declarator-id, through any parenthesized declarators.
+inline const Name* NameOfDeclarator(const Declarator* declarator)
+{
+	for (; declarator != nullptr; declarator = declarator->nested)
+		if (declarator->name != nullptr)
+			return declarator->name;
+	return nullptr;
+}
+
 enum class InitializerKind : uint8_t
 {
 	// `=` initializer-clause (an expression or braced-init-list).

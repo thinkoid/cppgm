@@ -546,6 +546,43 @@ void SyntaxRenderer::operand(const Expr& expr)
 		expression(*static_cast<const ParenExpr&>(expr).inner);
 		text(")");
 		break;
+	case ExprKind::Requires:
+	{
+		const RequiresExpr& required = static_cast<const RequiresExpr&>(expr);
+		text("requires");
+		if (required.parameters != nullptr)
+			parameters(*required.parameters);
+		text("{");
+		for (const Requirement& requirement : required.requirements)
+		{
+			if (requirement.type != nullptr)
+			{
+				if (!requirement.type->specifiers[0].name->typename_keyword)
+					text("typename ");
+				type_id(*requirement.type);
+			}
+			else
+			{
+				if (requirement.kind == RequirementKind::Nested)
+					text("requires ");
+				if (requirement.kind == RequirementKind::Compound)
+					text("{");
+				expression(*requirement.expression);
+				if (requirement.kind == RequirementKind::Compound)
+					text("}");
+				if (requirement.is_noexcept)
+					text("noexcept");
+				if (requirement.return_constraint != nullptr)
+				{
+					text("->");
+					name(*requirement.return_constraint, true);
+				}
+			}
+			text(";");
+		}
+		text("}");
+		break;
+	}
 	case ExprKind::Generic:
 	{
 		const GenericExpr& generic = static_cast<const GenericExpr&>(expr);

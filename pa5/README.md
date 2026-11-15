@@ -491,3 +491,16 @@ The mode-tagged [modern syntax example](tests/spec/100-required-modern-syntax.t)
 and its [AST reference](tests/spec/100-required-modern-syntax.ref) show the
 required later forms together. The dump preserves their syntax before the
 owning semantic lessons perform deduction, capture analysis or instantiation.
+
+### C++20 requires-expressions
+
+In C++20 mode, retain requires-expressions as parsed requirements. Simple
+requirements check an unevaluated expression, type requirements name a type
+without demanding its definition, compound requirements can require `noexcept`,
+and nested requirements check boolean constant constraints. Local parameters
+use function-parameter adjustment, with no default arguments or terminal
+varargs ellipsis. Invalid immediate substitution makes a template requirement
+false; an invalid requirement outside a templated declaration is an error.
+Check in source order and stop once satisfaction is known. Constraint `&&` and
+`||` short-circuit substitution as well as evaluation. Later template and
+constant-evaluation assignments apply these rules to their added source forms.

@@ -171,8 +171,9 @@ int32_t SyntaxCloner::length(const Identifier* name) const
 		if (shadows_[i].first == name)
 			return shadows_[i].second;
 	}
-	for (const std::pair<const Identifier*, uint32_t>& pack : parameter_packs_)
+	for (size_t i = parameter_packs_.size(); i-- > 0;)
 	{
+		const std::pair<const Identifier*, uint32_t>& pack = parameter_packs_[i];
 		if (pack.first == name)
 			return static_cast<int32_t>(pack.second);
 	}
@@ -562,7 +563,12 @@ Slice<ParameterDeclaration*> SyntaxCloner::expanded_parameters(const Slice<Param
 		const int32_t count = pattern_packs(
 			[&]() {
 				specifiers(parameter->specifiers);
+				// The declarator declares this name; it does not use a
+				// same-named parameter pack of an enclosing scope.
+				const size_t shadows = shadows_.size();
+				shadow(declarator, -1);
 				this->declarator(declarator);
+				shadows_.resize(shadows);
 			},
 			packs, parameter->location);
 		if (count < 0)
@@ -591,6 +597,16 @@ Slice<ParameterDeclaration*> SyntaxCloner::expanded_parameters(const Slice<Param
 	if (out.empty())
 		return Slice<ParameterDeclaration*>{ nullptr, 0 };
 	return Slice<ParameterDeclaration*>{ arena_.copy_array(out.data(), out.size()), static_cast<uint32_t>(out.size()) };
+}
+
+Slice<const std::pair<const Identifier*, uint32_t>> SyntaxCloner::copied_parameter_packs(size_t first)
+{
+	typedef std::pair<const Identifier*, uint32_t> Pack;
+	const size_t count = parameter_packs_.size() - first;
+	Pack* copied = static_cast<Pack*>(arena_.allocate(sizeof(Pack) * count, alignof(Pack)));
+	for (size_t i = 0; i < count; ++i)
+		new (&copied[i]) Pack(parameter_packs_[first + i]);
+	return { copied, static_cast<uint32_t>(count) };
 }
 
 Slice<BaseSpecifier> SyntaxCloner::bases(const Slice<BaseSpecifier>& list)
@@ -1091,13 +1107,8 @@ Expr* SyntaxCloner::call_like(const Expr* expr)
 		result->generic_parameters = parameter_clause(result->generic_parameters);
 		if (parameter_packs_.size() > packs)
 		{
-			typedef std::pair<const Identifier*, uint32_t> Pack;
-			const size_t count = parameter_packs_.size() - packs;
-			Pack* copied = static_cast<Pack*>(arena_.allocate(sizeof(Pack) * count, alignof(Pack)));
-			for (size_t i = 0; i < count; ++i)
-				new (&copied[i]) Pack(parameter_packs_[packs + i]);
 			result->pattern_parameters = lambda->parameters;
-			result->parameter_packs = Slice<const Pack>{ copied, static_cast<uint32_t>(count) };
+			result->parameter_packs = copied_parameter_packs(packs);
 		}
 		result->noexcept_operand = this->expr(result->noexcept_operand);
 		result->throw_types = pointers(lambda->throw_types, &SyntaxCloner::type_id);
@@ -1168,6 +1179,75 @@ Expr* SyntaxCloner::expr(const Expr* expr)
 		ParenExpr* paren = copy(static_cast<const ParenExpr*>(expr));
 		paren->inner = this->expr(paren->inner);
 		result = paren;
+		break;
+	}
+	case ExprKind::Requires:
+	{
+		if (collecting_ != nullptr)
+		{
+			const RequiresExpr& required = *static_cast<const RequiresExpr*>(expr);
+			const size_t shadows = shadows_.size();
+			if (required.parameters != nullptr)
+			{
+				for (const ParameterDeclaration* parameter : required.parameters->parameters)
+				{
+					const Name* id = NameOfDeclarator(parameter->declarator);
+					const Identifier* local = id != nullptr && id->last().kind == NameComponentKind::Identifier
+						? id->last().identifier
+						: nullptr;
+					const bool pack = parameter->declarator != nullptr &&
+						parameter->declarator->pack != PackPosition::None;
+					const auto pattern = [&]() {
+						specifiers(parameter->specifiers);
+						const size_t before = shadows_.size();
+						if (local != nullptr)
+							shadows_.push_back(std::make_pair(local, pack ? -2 : -1));
+						declarator(parameter->declarator);
+						shadows_.resize(before);
+					};
+					if (pack)
+						nested_expansion(pattern);
+					else
+						pattern();
+					// A declaration masks an outer name even for collectors
+					// whose name callback returns no known pack length.
+					if (local != nullptr)
+						shadows_.push_back(std::make_pair(local, pack ? -2 : -1));
+				}
+			}
+			for (const Requirement& requirement : required.requirements)
+			{
+				type_id(requirement.type);
+				this->expr(requirement.expression);
+				name(requirement.return_constraint);
+			}
+			shadows_.resize(shadows);
+			return const_cast<Expr*>(expr);
+		}
+		RequiresExpr* required = copy(static_cast<const RequiresExpr*>(expr));
+		const size_t packs = parameter_packs_.size();
+		const size_t shadows = shadows_.size();
+		required->parameters = parameter_clause(required->parameters);
+		if (parameter_packs_.size() > packs)
+		{
+			required->pattern_parameters = static_cast<const RequiresExpr*>(expr)->parameters;
+			required->parameter_packs = copied_parameter_packs(packs);
+		}
+		if (required->parameters != nullptr)
+			for (const ParameterDeclaration* parameter : required->parameters->parameters)
+				if (parameter->declarator == nullptr || parameter->declarator->pack == PackPosition::None)
+					shadow(parameter->declarator, -1);
+		Requirement* requirements = arena_.copy_array(required->requirements.data, required->requirements.size);
+		for (uint32_t i = 0; i < required->requirements.size; ++i)
+		{
+			requirements[i].type = type_id(requirements[i].type);
+			requirements[i].expression = this->expr(requirements[i].expression);
+			requirements[i].return_constraint = name(requirements[i].return_constraint);
+		}
+		required->requirements.data = requirements;
+		parameter_packs_.resize(packs);
+		shadows_.resize(shadows);
+		result = required;
 		break;
 	}
 	case ExprKind::Generic:

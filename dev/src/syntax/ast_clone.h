@@ -119,6 +119,7 @@ private:
 	Slice<TypeId*> expanded_type_ids(const Slice<TypeId*>& list);
 	ParameterDeclaration* parameter_element(const ParameterDeclaration* parameter);
 	Slice<ParameterDeclaration*> expanded_parameters(const Slice<ParameterDeclaration*>& list);
+	Slice<const std::pair<const Identifier*, uint32_t>> copied_parameter_packs(size_t first);
 	Slice<BaseSpecifier> bases(const Slice<BaseSpecifier>& list);
 	UsingDecl* using_declaration(const UsingDecl* declaration);
 	Slice<LambdaCapture> captures(const Slice<LambdaCapture>& list);

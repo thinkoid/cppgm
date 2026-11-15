@@ -371,6 +371,9 @@ bool ConstantInterpreter::rvalue(const syntax::Expr& expr, ConstValue& out)
 		out = PointerTo(self, facts->type->unqualified);
 		return true;
 	}
+	case syntax::ExprKind::Requires:
+		out = IntegerValue(facts->type->unqualified, facts->value);
+		return true;
 	case syntax::ExprKind::Generic:
 		return rvalue(*static_cast<const syntax::GenericExpr&>(*e).selected, out);
 	case syntax::ExprKind::Binary:

@@ -1159,6 +1159,10 @@ void Printer::node(const Item& item, std::vector<Item>& stack)
 		push(stack, binary.left, depth + 1);
 		return;
 	}
+	case syntax::ExprKind::Requires:
+		header("requires-expression", category, type);
+		end();
+		return;
 	case syntax::ExprKind::Generic:
 		header("generic-selection", category, type);
 		end();

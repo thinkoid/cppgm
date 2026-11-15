@@ -1082,6 +1082,32 @@ void AstDumper::operand(const Expr& expr)
 		expression(*static_cast<const ParenExpr&>(expr).inner);
 		close();
 		break;
+	case ExprKind::Requires:
+	{
+		const RequiresExpr& required = static_cast<const RequiresExpr&>(expr);
+		open("requires-expression");
+		if (required.parameters != nullptr)
+			parameter_clause(*required.parameters);
+		for (const Requirement& requirement : required.requirements)
+		{
+			const char* kind = requirement.kind == RequirementKind::Type ? "type-requirement"
+				: requirement.kind == RequirementKind::Nested            ? "nested-requirement"
+				: requirement.kind == RequirementKind::Compound          ? "compound-requirement"
+																		 : "simple-requirement";
+			open(kind);
+			if (requirement.type != nullptr)
+				type_id(*requirement.type);
+			if (requirement.expression != nullptr)
+				expression(*requirement.expression);
+			if (requirement.is_noexcept)
+				line("noexcept");
+			if (requirement.return_constraint != nullptr)
+				line("return-constraint", RenderName(*requirement.return_constraint));
+			close();
+		}
+		close();
+		break;
+	}
 	case ExprKind::Generic:
 	{
 		const GenericExpr& generic = static_cast<const GenericExpr&>(expr);

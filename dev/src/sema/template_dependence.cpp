@@ -32,6 +32,7 @@ bool Analyzer::type_dependent(const syntax::Expr* expr, Scope* scope)
 	{
 	case syntax::ExprKind::Id:
 		return dependent_name_expression(*static_cast<const syntax::IdExpr*>(expr)->name, scope);
+	case syntax::ExprKind::Requires:
 	case syntax::ExprKind::Literal:
 	case syntax::ExprKind::SizeofPack:
 	case syntax::ExprKind::Sizeof:

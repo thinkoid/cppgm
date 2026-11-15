@@ -620,6 +620,11 @@ private:
 	ExprFacts* cast_expression(const syntax::CastExpr& expr, Scope* scope);
 	ExprFacts* functional_cast(const syntax::FunctionalCastExpr& expr, Scope* scope);
 	ExprFacts* generic_selection(const syntax::GenericExpr& expr, Scope* scope);
+	ExprFacts* requires_expression(const syntax::RequiresExpr& expr, Scope* scope);
+	bool requirement_parameters(const syntax::RequiresExpr& expr, Scope*& scope);
+	bool requirements_satisfied(const syntax::RequiresExpr& expr, Scope* scope);
+	bool constraint_satisfied(const syntax::Expr& expr, Scope* scope);
+	bool atomic_constraint_satisfied(const syntax::Expr& expr, Scope* scope);
 	ClassEntity* deduction_template(const syntax::Slice<syntax::DeclSpecifier>& type, Scope* scope);
 	const Type* deduce_class_type(ClassEntity* templ, const syntax::Slice<syntax::Expr*>& arguments, Scope* scope,
 		uint32_t location, bool copy_initialization = false, const syntax::BracedInitList* list = nullptr);
@@ -957,6 +962,9 @@ private:
 	bool pack_size(const Identifier* pack, Scope* scope, uint64_t& count);
 	Scope* function_pack_scope(Scope* parent, const syntax::ParameterClause& clause,
 		const std::pair<const Identifier*, uint32_t>* packs, size_t count, const Type* type);
+	Scope* parameter_pack_scope(Scope* parent, const syntax::ParameterClause& clause,
+		const std::pair<const Identifier*, uint32_t>* packs, size_t count, const Type* const* parameters,
+		uint32_t parameter_count);
 	bool deduce_call_pack(const Type* pattern, const syntax::Slice<syntax::Expr*>& call_arguments, uint32_t first,
 		uint32_t depth, TypeList& arguments, const TypeList* prefixes = nullptr);
 	void bind_pack(Scope* frame, const TemplateParameterEntity* parameter, const Type* argument, int32_t element = -1);

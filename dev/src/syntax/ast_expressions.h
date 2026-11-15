@@ -41,7 +41,8 @@ enum class ExprKind : uint8_t
 	// C++17's fold-expression (a hosted-header extension in C++11 mode).
 	Fold,
 	// C11 generic selection; its controlling expression is unevaluated.
-	Generic
+	Generic,
+	Requires
 };
 
 struct Expr
@@ -99,6 +100,34 @@ struct GenericExpr : Expr
 	Expr* control;
 	Slice<GenericAssociation> associations;
 	mutable const Expr* selected = nullptr;
+};
+
+enum class RequirementKind : uint8_t
+{
+	Simple,
+	Type,
+	Compound,
+	Nested
+};
+
+struct Requirement
+{
+	RequirementKind kind;
+	bool is_noexcept;
+	uint32_t location;
+	TypeId* type;
+	Expr* expression;
+	Name* return_constraint;
+};
+
+// Requirements retain their parsed operands; checking an instantiation
+// substitutes syntax and consumes semantic facts, never source tokens.
+struct RequiresExpr : Expr
+{
+	ParameterClause* parameters;
+	Slice<Requirement> requirements;
+	const ParameterClause* pattern_parameters = nullptr;
+	Slice<const std::pair<const Identifier*, uint32_t>> parameter_packs = {};
 };
 
 // Binary operators including `,`, `.*` and `->*`; Assign uses it too.

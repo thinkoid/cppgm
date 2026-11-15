@@ -330,6 +330,8 @@ ExprFacts* Analyzer::typed_form(const syntax::Expr& expr, Scope* scope)
 	}
 	case syntax::ExprKind::Generic:
 		return generic_selection(static_cast<const syntax::GenericExpr&>(expr), scope);
+	case syntax::ExprKind::Requires:
+		return requires_expression(static_cast<const syntax::RequiresExpr&>(expr), scope);
 	case syntax::ExprKind::Binary:
 		return binary_chain(static_cast<const syntax::BinaryExpr&>(expr), scope);
 	case syntax::ExprKind::Assign:

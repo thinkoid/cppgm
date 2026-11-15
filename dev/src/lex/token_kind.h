@@ -133,7 +133,8 @@
 	X(OP_DEC) \
 	X(OP_COMMA) \
 	X(OP_ARROWSTAR) \
-	X(OP_ARROW)
+	X(OP_ARROW) \
+	X(KW_REQUIRES)
 // clang-format on
 
 enum class TokenKind : uint8_t
@@ -141,7 +142,13 @@ enum class TokenKind : uint8_t
 #define CPPGM_TOKEN_KIND_ENUMERATOR(name) name,
 	CPPGM_TOKEN_KINDS(CPPGM_TOKEN_KIND_ENUMERATOR)
 #undef CPPGM_TOKEN_KIND_ENUMERATOR
+		Count
 };
+
+inline bool IsCxx20Keyword(TokenKind kind)
+{
+	return kind == TokenKind::KW_CHAR8_T || kind == TokenKind::KW_REQUIRES;
+}
 
 // The course's term name, e.g. "KW_AUTO" or "OP_LAND".
 const char* TokenKindName(TokenKind kind);

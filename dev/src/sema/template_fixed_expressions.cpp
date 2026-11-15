@@ -96,6 +96,7 @@ bool Opaque(syntax::ExprKind kind)
 {
 	switch (kind)
 	{
+	case syntax::ExprKind::Requires:
 	case syntax::ExprKind::Id:
 	case syntax::ExprKind::SizeofPack:
 	case syntax::ExprKind::TypeTrait:

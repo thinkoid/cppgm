@@ -74,7 +74,7 @@ Identifier* IdentifierTable::intern(const char* spelling, uint32_t length)
 	TokenKind kind;
 	const bool keyword = language_ == SourceLanguage::C ? FindCKeyword(spelling, length, kind)
 														: FindSimpleToken(spelling, length, kind);
-	identifier->keyword = keyword && (kind != TokenKind::KW_CHAR8_T || cxx20_)
+	identifier->keyword = keyword && (!IsCxx20Keyword(kind) || cxx20_)
 		? static_cast<uint8_t>(static_cast<uint8_t>(kind) + 1)
 		: 0;
 

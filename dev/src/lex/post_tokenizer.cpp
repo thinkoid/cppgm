@@ -111,7 +111,7 @@ void PostTokenizer::convert_identifier(const Identifier* identifier)
 		// The compiler's interned identifiers already carry the selected
 		// dialect's keyword fact. Only the standalone lexer needs this gate.
 		keyword = FindSimpleToken(token_.source.text, token_.source.length, kind);
-		if (keyword && kind == TokenKind::KW_CHAR8_T && !cxx20_)
+		if (keyword && IsCxx20Keyword(kind) && !cxx20_)
 			keyword = false;
 	}
 	if (keyword)

@@ -377,6 +377,8 @@ private:
 	Expr* parse_postfix_expression();
 	Expr* parse_postfix_suffixes(Expr* expr);
 	Expr* parse_primary_expression();
+	Expr* parse_requires_expression();
+	bool parse_requirement(Requirement& requirement);
 	Expr* parse_generic_selection();
 	Expr* parse_parenthesized_or_cast();
 	bool at_compound_literal(const TypeId* type);

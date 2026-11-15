@@ -531,6 +531,8 @@ RValue FunctionLowering::rvalue(const syntax::Expr& expr)
 	case syntax::ExprKind::SizeofPack:
 	case syntax::ExprKind::TypeTrait:
 		return size_query(*e);
+	case syntax::ExprKind::Requires:
+		return integer(facts->type, facts->value);
 	case syntax::ExprKind::BuiltinTrait:
 		return builtin_trait_value(static_cast<const syntax::BuiltinTraitExpr&>(*e));
 	case syntax::ExprKind::Id:

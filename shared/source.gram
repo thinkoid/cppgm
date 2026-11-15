@@ -615,6 +615,7 @@ primary-expression:
 	OP_LPAREN expression OP_RPAREN
 	lambda-expression
 	fold-expression
+	requires-expression
 	braced-init-list
 
 braced-init-list:
@@ -819,3 +820,17 @@ asm-clobber-list:
 
 asm-string-literal:
 	TT_LITERAL
+
+# C++20 requirements retain each parsed operand for substitution.
+requires-expression:
+	KW_REQUIRES parameter-clause? OP_LBRACE requirement+ OP_RBRACE
+
+requirement:
+	expression OP_SEMICOLON
+	KW_TYPENAME nested-name-specifier? simple-template-id OP_SEMICOLON
+	KW_TYPENAME nested-name-specifier? TT_IDENTIFIER OP_SEMICOLON
+	OP_LBRACE expression OP_RBRACE KW_NOEXCEPT? return-type-requirement? OP_SEMICOLON
+	KW_REQUIRES logical-or-expression OP_SEMICOLON
+
+return-type-requirement:
+	OP_ARROW id-expression
