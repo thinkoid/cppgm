@@ -151,7 +151,7 @@ void Parser::parse_deferred_lambdas(size_t first)
 	const uint8_t type_id_record = type_id_record_;
 	const bool angle = angle_;
 	const bool pending_template = pending_template_;
-	const bool definite_type = definite_type_;
+	const uint8_t definite_type = definite_type_;
 	const bool special_member_clause = special_member_clause_;
 	const uint32_t base = lambdas_[first].log;
 	std::vector<NameScopes::Change> later;

@@ -391,8 +391,11 @@ bool Parser::parse_declarator_suffixes(DeclaratorMode mode, Declarator* declarat
 			const bool definite = mode != DeclaratorMode::Named || special_member_clause_ ||
 				declaration_scope()->kind == ScopeKind::Class ||
 				(declarator->name != nullptr && declarator->name->last().kind != NameComponentKind::Identifier);
+			// C++20 [temp.res]p4: a qualified declarator-id's parameters are
+			// type-only contexts.
+			const bool type_only = declarator->name != nullptr && declarator->name->qualified();
 			Tentative tentative(*this);
-			suffix.parameters = parse_parameter_clause(suffixes.size() == 0 ? member_of : nullptr, definite);
+			suffix.parameters = parse_parameter_clause(suffixes.size() == 0 ? member_of : nullptr, definite, type_only);
 			if (suffix.parameters == nullptr && abandoning_lists_)
 				return false;
 			if (suffix.parameters == nullptr)
@@ -442,7 +445,7 @@ bool Parser::parse_declarator_suffixes(DeclaratorMode mode, Declarator* declarat
 	return true;
 }
 
-ParameterClause* Parser::parse_parameter_clause(Scope* member_of, bool definite)
+ParameterClause* Parser::parse_parameter_clause(Scope* member_of, bool definite, bool type_only)
 {
 	NestingGuard nesting(*this);
 	ParameterClause* clause = make<ParameterClause>();
@@ -476,7 +479,7 @@ ParameterClause* Parser::parse_parameter_clause(Scope* member_of, bool definite)
 		// After one parameter-declaration the list is a parameter clause, so
 		// an undeclared name in a later one is a type.
 		ParameterDeclaration* parameter = clause->c_identifier_list ? parse_c_identifier_parameter()
-																	: parse_parameter_declaration(definite);
+																	: parse_parameter_declaration(definite, type_only);
 		if (parameter == nullptr)
 		{
 			parsed = false;
@@ -505,7 +508,7 @@ ParameterClause* Parser::parse_parameter_clause(Scope* member_of, bool definite)
 	return clause;
 }
 
-ParameterDeclaration* Parser::parse_parameter_declaration(bool definite)
+ParameterDeclaration* Parser::parse_parameter_declaration(bool definite, bool type_only)
 {
 	ParameterDeclaration* parameter = make<ParameterDeclaration>();
 	*parameter = ParameterDeclaration();
@@ -520,7 +523,7 @@ ParameterDeclaration* Parser::parse_parameter_declaration(bool definite)
 		ListFrame<DeclSpecifier> specifiers(specs_);
 		SpecifierInfo info;
 		leading_type_attributes(leading, specifiers);
-		if (!parse_decl_specifier_seq(specifiers, info, definite))
+		if (!parse_decl_specifier_seq(specifiers, info, definite, type_only))
 			return nullptr;
 		if (specifiers.size() == 0)
 		{
@@ -696,8 +699,8 @@ TypeId* Parser::parse_type_id(DeclaratorMode mode, bool definite, SpecifierInfo*
 	SpecifierInfo info;
 	{
 		ListFrame<DeclSpecifier> specifiers(specs_);
-		const bool saved_definite = definite_type_;
-		definite_type_ = definite;
+		const uint8_t saved_definite = definite_type_;
+		definite_type_ = definite ? kDefiniteType : 0;
 		const bool parsed = parse_type_specifier_seq(specifiers, info, context);
 		definite_type_ = saved_definite;
 		if (!parsed)
@@ -733,8 +736,8 @@ TypeId* Parser::parse_type_id_from_name(Name* name, const NameInfo& name_info, u
 		}
 		specifiers.push(specifier);
 		info.has_type = true;
-		const bool saved_definite = definite_type_;
-		definite_type_ = false;
+		const uint8_t saved_definite = definite_type_;
+		definite_type_ = 0;
 		const bool parsed = continue_type_specifier_seq(specifiers, info);
 		definite_type_ = saved_definite;
 		if (!parsed)

@@ -112,11 +112,12 @@ DeclSpecifier KeywordSpecifier(TokenKind kind, uint32_t location)
 
 } // namespace
 
-bool Parser::parse_decl_specifier_seq(ListFrame<DeclSpecifier>& list, SpecifierInfo& info, bool definite)
+bool Parser::parse_decl_specifier_seq(
+	ListFrame<DeclSpecifier>& list, SpecifierInfo& info, bool definite, bool type_only)
 {
 	info = SpecifierInfo();
-	const bool saved_definite = definite_type_;
-	definite_type_ = definite;
+	const uint8_t saved_definite = definite_type_;
+	definite_type_ = definite ? kDefiniteType : type_only && cxx20_ ? kTypeOnly : 0;
 	const bool parsed = parse_decl_specifiers(list, info);
 	definite_type_ = saved_definite;
 	return parsed;
@@ -852,7 +853,7 @@ bool Parser::parse_named_type_specifier(ListFrame<DeclSpecifier>& list, Specifie
 		const bool dependent = name_info.prefix != PrefixState::Unqualified &&
 			template_parameter_mentions_ != parameters;
 		if (!type && name_info.category == NameCategory::None &&
-			((definite_type_ && (!dependent || name_info.prefix_uncertain)) ||
+			((definite_type_ == kDefiniteType && (!dependent || name_info.prefix_uncertain)) ||
 				(at_identifier() && !at_identifier(final_) && !at_identifier(override_)) || at(TokenKind::KW_OPERATOR)))
 		{
 			const uint8_t gnu = !name->global && name->components.size == 1 &&
@@ -872,6 +873,19 @@ bool Parser::parse_named_type_specifier(ListFrame<DeclSpecifier>& list, Specifie
 				name_info.prefix_scope, name->last().identifier, false, name_info.prefix_specialization);
 			type = found.conflicted &&
 				(found.alternatives & (CategoryBit(NameCategory::Type) | CategoryBit(NameCategory::TypeTemplate))) != 0;
+		}
+		// C++20 [temp.res]p4: in a type-only context a qualified name is
+		// assumed to name a type. Where the parser cannot know the member
+		// (a dependent or unknown prefix), the name is a typename-specifier
+		// in all but its spelling; other names keep the ordinary rules.
+		if (definite_type_ != 0 && cxx20_ && !typename_keyword && name_info.prefix != PrefixState::Unqualified &&
+			name->last().kind == NameComponentKind::Identifier &&
+			(type ? name_info.prefix != PrefixState::Known || name_info.prefix_dependent
+				  : name_info.category == NameCategory::None))
+		{
+			type = true;
+			name->typename_keyword = true;
+			name->typename_implied = true;
 		}
 		if (!type)
 			return false;

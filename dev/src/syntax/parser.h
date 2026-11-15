@@ -172,7 +172,9 @@ private:
 	Decl* finish_simple_declaration(
 		DeclContext context, Slice<DeclSpecifier> specifiers, const SpecifierInfo& info, uint32_t start);
 	Decl* parse_bit_field_rest(Slice<DeclSpecifier> specifiers, Declarator* first, uint32_t start);
-	bool parse_decl_specifier_seq(ListFrame<DeclSpecifier>& list, SpecifierInfo& info, bool definite = false);
+	// `type_only`: the specifiers of a C++20 type-only context (kTypeOnly).
+	bool parse_decl_specifier_seq(
+		ListFrame<DeclSpecifier>& list, SpecifierInfo& info, bool definite = false, bool type_only = false);
 	bool parse_decl_specifiers(ListFrame<DeclSpecifier>& list, SpecifierInfo& info);
 	bool at_constinit_specifier();
 	void type_attributes(Attribute*& attributes, ListFrame<DeclSpecifier>& list);
@@ -223,14 +225,14 @@ private:
 	bool parse_declarator_into(DeclaratorMode mode, Declarator* declarator);
 	bool parse_ptr_operator(ListFrame<PtrOperator>& pointers);
 	bool parse_declarator_suffixes(DeclaratorMode mode, Declarator* declarator, bool named, Scope* member_of);
-	ParameterClause* parse_parameter_clause(Scope* member_of, bool definite);
+	ParameterClause* parse_parameter_clause(Scope* member_of, bool definite, bool type_only = false);
 	ParameterDeclaration* parse_c_identifier_parameter();
 	bool parse_c_parameter_declarations(Declarator* declarator);
 	// A scope below the current one whose lookups search `member_of`'s
 	// scope before the enclosing ones (for the names after a qualified
 	// declarator-id); the current scope stays.
 	Scope* member_lookup_scope(Scope* member_of);
-	ParameterDeclaration* parse_parameter_declaration(bool definite);
+	ParameterDeclaration* parse_parameter_declaration(bool definite, bool type_only = false);
 	bool parse_function_qualifiers(ListFrame<FunctionQualifier>& qualifiers, Attribute** attributes);
 	bool parse_throw_types(Slice<TypeId*>& out);
 	// In a definite type context (an alias, a cast's target, a trailing

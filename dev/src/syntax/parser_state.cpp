@@ -13,7 +13,7 @@ ParserState::ParserState(ParseTokenStream& tokens, IdentifierTable& identifiers,
 	bool cxx17, bool c_source, bool lexical_hints, bool cxx20)
 	: tokens_(tokens), identifiers_(identifiers), arena_(arena), scopes_(arena), deferred_lambdas_(0),
 	  deferred_tokens_(0), peak_run_bytes_(0), function_scope_(nullptr), parameter_scope_(nullptr),
-	  declarator_member_of_(nullptr), type_id_scope_(nullptr), angle_(false), definite_type_(false),
+	  declarator_member_of_(nullptr), type_id_scope_(nullptr), angle_(false), definite_type_(0),
 	  special_member_clause_(false), friend_declarator_(false), naming_declared_(false), pack_mentions_(0),
 	  parameter_mentions_(0), template_parameter_mentions_(0), pending_template_(false), pending_attributes_(nullptr),
 	  leading_attributes_(nullptr), tentative_depth_(0), speculation_(0), open_lists_base_(0), abandoning_lists_(false),

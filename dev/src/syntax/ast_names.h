@@ -123,6 +123,8 @@ struct Name
 	// name no type (14.6p2); an instantiation where it names one is
 	// ill-formed (14.6p6). A copy of the name keeps the fact.
 	mutable bool dependent_qualifier = false;
+	// `typename_keyword` was set by a C++20 type-only context, not written.
+	bool typename_implied = false;
 
 	const NameComponent& last() const { return components[components.size - 1]; }
 	bool qualified() const { return global || components.size > 1; }

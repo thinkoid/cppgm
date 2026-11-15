@@ -77,7 +77,7 @@ protected:
 		Scope* function_scope;
 		bool angle;
 		bool pending_template;
-		bool definite_type;
+		uint8_t definite_type;
 		bool special_member_clause;
 		uint32_t assembly_environment;
 		uint32_t pack_mentions;
@@ -104,7 +104,7 @@ protected:
 		uint32_t end;
 		Scope* scope;
 		uint32_t log;
-		bool definite_type;
+		uint8_t definite_type;
 		bool special_member_clause;
 	};
 
@@ -339,8 +339,19 @@ protected:
 	std::vector<Slice<TemplateArgument>> specialization_records_;
 	// Inside a template argument list: `>` ends the list (14.2p3).
 	bool angle_;
-	// Parsing the type specifiers of a definite type-id.
-	bool definite_type_;
+	// What the type specifiers being parsed may assume of a name; zero
+	// where a type competes with a value.
+	enum : uint8_t
+	{
+		// A definite type-id (an alias, a cast's target ...): an undeclared
+		// name is a type.
+		kDefiniteType = 1,
+		// A C++20 type-only context that is not definite (a declaration's own
+		// specifiers at namespace or class scope): only a qualified name that
+		// depends on a template parameter is assumed to name a type.
+		kTypeOnly = 2
+	};
+	uint8_t definite_type_;
 	// Parsing a special member's parameter clause (no initializer can
 	// follow its name).
 	bool special_member_clause_;

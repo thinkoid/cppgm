@@ -655,7 +655,7 @@ TemplateParameter* Parser::parse_template_parameter()
 	SpecifierInfo info;
 	{
 		ListFrame<DeclSpecifier> specifiers(specs_);
-		if (!parse_decl_specifier_seq(specifiers, info))
+		if (!parse_decl_specifier_seq(specifiers, info, false, true))
 			return nullptr;
 		if (specifiers.size() == 0)
 		{
@@ -912,7 +912,7 @@ Decl* Parser::parse_simple_or_function(DeclContext context)
 	ListFrame<DeclSpecifier> list(specs_);
 	pending_attributes_ = leading_attributes_;
 	leading_type_attributes(leading_attributes_, list);
-	if (!parse_decl_specifier_seq(list, info))
+	if (!parse_decl_specifier_seq(list, info, false, context != DeclContext::Block))
 		return nullptr;
 	if (list.size() == 0)
 	{

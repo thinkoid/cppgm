@@ -27,7 +27,7 @@ void SyntaxRenderer::identifier(const Identifier* identifier)
 
 void SyntaxRenderer::name(const Name& name, bool typename_keyword)
 {
-	if (typename_keyword && name.typename_keyword)
+	if (typename_keyword && name.typename_keyword && !name.typename_implied)
 		text("typename ");
 	if (name.global)
 		text("::");
