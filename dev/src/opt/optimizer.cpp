@@ -537,7 +537,11 @@ bool finish_loops(FunctionContext& context, int level)
 		RUN_PASS(promote_slots);
 		RUN_PASS(cleanup_cfg);
 		RUN_PASS(simplify_values);
-		RUN_PASS(forward_memory);
+		// (As after rotation: a load a copy's preheader now makes leaves a
+		// phi of itself at the header. Folded, the copy is a loop the lanes
+		// can read.)
+		if (RUN_PASS(forward_memory))
+			RUN_PASS(simplify_values);
 		RUN_PASS(remove_dead_code);
 		RUN_PASS(cleanup_cfg);
 		RUN_PASS(hoist_loop_invariants);
