@@ -1,6 +1,6 @@
 # simdjson benchmarks
 
-Compiler: `116052803d2981c33ce1fab0c2a17d640d831a91` · CPU: Intel(R) Xeon(R) 6975P-C
+Compiler: `d9ff17ff1c4afc36d90ba4a6551b659323cc65ec` · CPU: Intel(R) Xeon(R) 6975P-C
 
 Unmodified simdjson v5.1.1 (`40a686ab89dc5ee58ec10d0514dd5c99abbc472b`), C++17 `-O3 -g0 -DNDEBUG`. Each backend is compiled separately; the SSE profile enables `-mpopcnt` for all three compilers. Compile times cover `src/simdjson.cpp` to an object; runtime covers repeated DOM parsing of hot input with a reused parser. One GCC-built driver per backend isolates library code generation. All three libraries produce identical canonical JSON for both inputs.
 
@@ -8,12 +8,12 @@ Ratios are reference time / cppgm time: **higher is better**. Medians of paired 
 
 | Backend | Measurement | vs GCC CPU | vs Clang CPU | vs GCC wall | vs Clang wall |
 |---|---|---:|---:|---:|---:|
-| scalar | Compile | 3.667× | 1.690× | 3.592× | 1.673× |
-| scalar | twitter.json | 1.105× | 0.990× | 1.105× | 0.990× |
-| scalar | citm_catalog.json | 1.092× | 1.072× | 1.092× | 1.072× |
-| sse | Compile | 3.833× | 1.826× | 3.716× | 1.785× |
-| sse | twitter.json | 0.996× | 0.973× | 0.996× | 0.973× |
-| sse | citm_catalog.json | 0.977× | 1.013× | 0.977× | 1.013× |
+| scalar | Compile | 3.623× | 1.711× | 3.573× | 1.712× |
+| scalar | twitter.json | 1.107× | 0.993× | 1.107× | 0.993× |
+| scalar | citm_catalog.json | 1.089× | 1.076× | 1.089× | 1.076× |
+| sse | Compile | 3.874× | 1.812× | 3.783× | 1.813× |
+| sse | twitter.json | 0.997× | 0.970× | 0.997× | 0.970× |
+| sse | citm_catalog.json | 0.978× | 1.020× | 0.978× | 1.020× |
 
 Calibration variation above 2%: none. No observations are dropped.
 
@@ -25,4 +25,4 @@ Calibration variation above 2%: none. No observations are dropped.
 
 [Results and per-block ratios](results.json) · [Provenance and header hashes](metadata.json) · [Compile observations](compile-observations.jsonl) · [Runtime observations](runtime-observations.jsonl)
 
-[CI run and complete artifacts](https://github.com/vishvananda/cppgm-extended/actions/runs/43666517577)
+[CI run and complete artifacts](https://github.com/vishvananda/cppgm-extended/actions/runs/43670794110)
