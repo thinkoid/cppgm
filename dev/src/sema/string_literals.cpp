@@ -21,6 +21,7 @@ bool IsCharacterArrayElement(const Type* type)
 	case FundamentalType::Char:
 	case FundamentalType::SignedChar:
 	case FundamentalType::UnsignedChar:
+	case FundamentalType::Char8T:
 	case FundamentalType::Char16T:
 	case FundamentalType::Char32T:
 	case FundamentalType::WcharT:
@@ -83,11 +84,12 @@ uint64_t UnitsOf(uint64_t code_point, EncodingPrefix prefix)
 
 } // namespace
 
-bool DecodeStringLiteral(const TokenSpelling& spelling, StringLiteralFacts& out, std::vector<uint64_t>* values);
+bool DecodeStringLiteral(
+	const TokenSpelling& spelling, StringLiteralFacts& out, std::vector<uint64_t>* values, bool cxx20 = false);
 
-bool AnalyzeStringLiteral(const TokenSpelling& spelling, StringLiteralFacts& out)
+bool AnalyzeStringLiteral(const TokenSpelling& spelling, StringLiteralFacts& out, bool cxx20)
 {
-	return DecodeStringLiteral(spelling, out, nullptr);
+	return DecodeStringLiteral(spelling, out, nullptr, cxx20);
 }
 
 bool StringLiteralUnits(const TokenSpelling& spelling, StringLiteralFacts& out, std::vector<uint64_t>& units)
@@ -190,7 +192,8 @@ bool BuiltinNanText(const syntax::Expr& text, uint64_t& payload)
 	return true;
 }
 
-bool DecodeStringLiteral(const TokenSpelling& spelling, StringLiteralFacts& out, std::vector<uint64_t>* values)
+bool DecodeStringLiteral(
+	const TokenSpelling& spelling, StringLiteralFacts& out, std::vector<uint64_t>* values, bool cxx20)
 {
 	out.numeric_escapes = false;
 	const char* text = spelling.text;
@@ -273,7 +276,7 @@ bool DecodeStringLiteral(const TokenSpelling& spelling, StringLiteralFacts& out,
 			}
 		}
 	}
-	out.element = StringElementType(prefix);
+	out.element = cxx20 && prefix == EncodingPrefix::Utf8 ? FundamentalType::Char8T : StringElementType(prefix);
 	out.units = units;
 	if (values != nullptr)
 		values->push_back(0);

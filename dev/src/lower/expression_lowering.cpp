@@ -1347,19 +1347,14 @@ RValue FunctionLowering::literal(const syntax::LiteralExpr& expr, lowir::Value d
 		if ((expr.facts->value & 255) == sema::kLiteralCallString)
 		{
 			// 2.14.8p5: the literal operator called with the literal's array
-			// (its first code unit's address) and its length (an int constant
-			// converted to std::size_t, the course's form).
-			sema::StringLiteralFacts string;
-			std::vector<uint64_t> units;
-			if (!sema::StringLiteralUnits(expr.spelling, string, units))
-				throw LoweringError(expr.location, "an invalid string literal");
-			const sema::Type* unit = lowering_.graph().types.fundamental(string.element);
+			// (its first code unit's address) and the recorded length in the
+			// selected operator's size_t parameter type.
+			const sema::Type* signature = function->type->canonical;
+			const sema::Type* unit = signature->params[0]->unqualified->element;
 			Place array = Place();
 			array.storage = lowir::Value::symbol(lowering_.string_literal(expr, unit));
 			arguments_.push_back(address_of(array));
-			arguments_.push_back(convert_op(lowir::ConvertOp::SExt, lowir::Type::scalar(lowir::TypeKind::I64),
-				integer(lowir::Type::scalar(lowir::TypeKind::I32), string.units - 1))
-					.value);
+			arguments_.push_back(integer(signature->params[1], expr.facts->value >> 8).value);
 		}
 		else if ((expr.facts->value & 255) == sema::kLiteralCallRaw)
 		{
@@ -1374,11 +1369,8 @@ RValue FunctionLowering::literal(const syntax::LiteralExpr& expr, lowir::Value d
 		{
 			// 2.14.8p6: the character's value converted to the parameter of
 			// the literal operator the call selected.
-			const CharacterLiteralValue character = EvaluateCharacterLiteral(expr.spelling.text, expr.spelling.length);
-			const sema::Type* type = lowering_.graph().types.fundamental(character.type);
-			arguments_.push_back(convert(integer(lowering_.storage_type(type), character.code_point), type,
-				function->type->canonical->params[0], ConversionContext::Initialization, false)
-					.value);
+			const sema::Type* parameter = function->type->canonical->params[0];
+			arguments_.push_back(integer(parameter, expr.facts->value >> 8).value);
 		}
 		else if ((expr.facts->value & 255) == sema::kLiteralCallCooked)
 		{

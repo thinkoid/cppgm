@@ -113,7 +113,7 @@ bool Opaque(syntax::ExprKind kind)
 
 // 2.14.2, 2.14.3, 2.14.4: an integer, character or floating literal
 // without a ud-suffix (a string literal is left unknown).
-FixedFacts FixedLiteral(const TokenSpelling& spelling, TypeTable& types)
+FixedFacts FixedLiteral(const TokenSpelling& spelling, TypeTable& types, bool cxx20)
 {
 	TextLiteralParts parts;
 	if (SplitTextLiteral(spelling.text, spelling.length, parts))
@@ -121,7 +121,7 @@ FixedFacts FixedLiteral(const TokenSpelling& spelling, TypeTable& types)
 		if (parts.quote != '\'')
 			return Unknown();
 		const CharacterLiteralValue character = EvaluateCharacterLiteral(
-			spelling.text, spelling.length, CharacterDialect::Gnu, true);
+			spelling.text, spelling.length, CharacterDialect::Gnu, true, cxx20);
 		if (!character.valid || character.suffix_begin != spelling.length)
 			return Unknown();
 		FixedFacts out = Value(types.fundamental(character.type), true);
@@ -263,7 +263,7 @@ void Analyzer::fixed_expression(const syntax::Expr& expr, Scope* scope, uint32_t
 	switch (e->kind)
 	{
 	case syntax::ExprKind::Literal:
-		out = FixedLiteral(static_cast<const syntax::LiteralExpr*>(e)->spelling, types_);
+		out = FixedLiteral(static_cast<const syntax::LiteralExpr*>(e)->spelling, types_, cxx20_);
 		return;
 	case syntax::ExprKind::KeywordLiteral:
 	{

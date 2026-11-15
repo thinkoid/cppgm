@@ -54,6 +54,7 @@ bool IsTypeKeyword(TokenKind kind)
 	case TokenKind::KW_VOID:
 	case TokenKind::KW_BOOL:
 	case TokenKind::KW_CHAR:
+	case TokenKind::KW_CHAR8_T:
 	case TokenKind::KW_CHAR16_T:
 	case TokenKind::KW_CHAR32_T:
 	case TokenKind::KW_WCHAR_T:
@@ -469,6 +470,10 @@ const Type* Analyzer::keyword_type(const syntax::Slice<syntax::DeclSpecifier>& l
 		case TokenKind::KW_BOOL:
 			++other_count;
 			other = FundamentalType::Bool;
+			break;
+		case TokenKind::KW_CHAR8_T:
+			++other_count;
+			other = FundamentalType::Char8T;
 			break;
 		case TokenKind::KW_CHAR16_T:
 			++other_count;

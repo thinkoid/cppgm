@@ -115,7 +115,7 @@ const Scope* ClauseParent(const Scope* scope)
 // A literal's type and value: an integer or character literal's value
 // (`integral`), a float or double literal's IEEE bits; false for another
 // (a string, long double or user-defined literal).
-bool LiteralValue(const TokenSpelling& spelling, FundamentalType& type, uint64_t& bits, bool& integral)
+bool LiteralValue(const TokenSpelling& spelling, FundamentalType& type, uint64_t& bits, bool& integral, bool cxx20)
 {
 	TextLiteralParts parts;
 	integral = true;
@@ -124,7 +124,7 @@ bool LiteralValue(const TokenSpelling& spelling, FundamentalType& type, uint64_t
 		if (parts.quote != '\'')
 			return false;
 		const CharacterLiteralValue character = EvaluateCharacterLiteral(
-			spelling.text, spelling.length, CharacterDialect::Gnu, true);
+			spelling.text, spelling.length, CharacterDialect::Gnu, true, cxx20);
 		if (!character.valid || character.multicharacter || character.suffix_begin != spelling.length)
 			return false;
 		type = character.type;
@@ -576,7 +576,7 @@ bool Analyzer::decltype_words(const syntax::Expr* expr, Scope* scope)
 		FundamentalType type = FundamentalType::Int;
 		uint64_t bits = 0;
 		bool integral = false;
-		const bool typed = LiteralValue(spelling, type, bits, integral);
+		const bool typed = LiteralValue(spelling, type, bits, integral, cxx20_);
 		if (typed && integral)
 		{
 			const Type* literal_type = types_.fundamental(type);

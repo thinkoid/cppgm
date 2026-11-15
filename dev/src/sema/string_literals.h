@@ -51,7 +51,7 @@ struct StringLiteralFacts
 // conditional escapes accepted there without repeating dialect checks.
 // False for a malformed literal, pieces with different encoding prefixes
 // or different ud-suffixes.
-bool AnalyzeStringLiteral(const TokenSpelling& spelling, StringLiteralFacts& out);
+bool AnalyzeStringLiteral(const TokenSpelling& spelling, StringLiteralFacts& out, bool cxx20 = false);
 
 // Also the code units' values, the terminating null included.
 bool StringLiteralUnits(const TokenSpelling& spelling, StringLiteralFacts& out, std::vector<uint64_t>& units);

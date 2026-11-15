@@ -28,6 +28,8 @@ const char* FundamentalTypeName(FundamentalType type)
 		return "wchar_t";
 	case FundamentalType::Char:
 		return "char";
+	case FundamentalType::Char8T:
+		return "char8_t";
 	case FundamentalType::Char16T:
 		return "char16_t";
 	case FundamentalType::Char32T:
@@ -76,6 +78,7 @@ unsigned FundamentalTypeSize(FundamentalType type)
 	{
 	case FundamentalType::SignedChar:
 	case FundamentalType::UnsignedChar:
+	case FundamentalType::Char8T:
 	case FundamentalType::Char:
 	case FundamentalType::Bool:
 		return 1;

@@ -31,7 +31,8 @@ Type Key(TypeKind kind)
 TypeTable::TypeTable(Arena& arena, bool plain_char_unsigned, target_model::Target target)
 	: arena_(arena), target_(target), slots_(256), count_(0)
 {
-	for (unsigned i = 0; i < kFundamentalTypeCount; ++i)
+	fundamentals_[static_cast<unsigned>(FundamentalType::Char8T)] = nullptr;
+	for (unsigned i = 0; i < static_cast<unsigned>(FundamentalType::Char8T); ++i)
 	{
 		Type key = Key(TypeKind::Fundamental);
 		key.fundamental = static_cast<FundamentalType>(i);
@@ -44,6 +45,17 @@ TypeTable::TypeTable(Arena& arena, bool plain_char_unsigned, target_model::Targe
 				target_model::data_layout(target_).long_double_format == target_model::ExtendedFloat::Binary128);
 		fundamentals_[i] = intern(key);
 	}
+}
+
+void TypeTable::enable_char8()
+{
+	const unsigned index = static_cast<unsigned>(FundamentalType::Char8T);
+	if (fundamentals_[index] != nullptr)
+		return;
+	Type key = Key(TypeKind::Fundamental);
+	key.fundamental = FundamentalType::Char8T;
+	key.dependence = 1;
+	fundamentals_[index] = intern(key);
 }
 
 uint32_t TypeTable::hash_of(const Type& type)

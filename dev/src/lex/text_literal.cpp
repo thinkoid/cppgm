@@ -293,11 +293,12 @@ CharacterLiteralValue EvaluateMulticharacterLiteral(const char* text, const Text
 } // namespace
 
 CharacterLiteralValue EvaluateCharacterLiteral(
-	const char* text, uint32_t length, CharacterDialect dialect, bool conditional_escapes)
+	const char* text, uint32_t length, CharacterDialect dialect, bool conditional_escapes, bool cxx20)
 {
 	CharacterLiteralValue result = { false, false, FundamentalType::Int, 0, length };
 	TextLiteralParts parts;
-	if (!SplitTextLiteral(text, length, parts) || parts.quote != '\'' || parts.prefix == EncodingPrefix::Utf8)
+	if (!SplitTextLiteral(text, length, parts) || parts.quote != '\'' ||
+		(parts.prefix == EncodingPrefix::Utf8 && !cxx20))
 		return result;
 	result.suffix_begin = parts.suffix_begin;
 	if (parts.suffix_begin != length && !IsUserDefinedSuffix(text + parts.suffix_begin, length - parts.suffix_begin))
@@ -318,6 +319,11 @@ CharacterLiteralValue EvaluateCharacterLiteral(
 	result.code_point = static_cast<uint32_t>(c.value);
 	switch (parts.prefix)
 	{
+	case EncodingPrefix::Utf8:
+		if (result.code_point > (c.numeric ? 0xFFu : 0x7Fu))
+			return result;
+		result.type = FundamentalType::Char8T;
+		break;
 	case EncodingPrefix::None:
 		result.type = result.code_point <= 0x7F ||
 				(dialect == CharacterDialect::Gnu && c.numeric && result.code_point <= 0xFF)

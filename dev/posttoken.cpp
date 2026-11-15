@@ -51,7 +51,8 @@ int main(int argc, char** argv)
 		const LanguageMode mode = ReadTokenToolMode(argc, argv);
 		SourceBuffer source = SourceBuffer::ReadFrom(cin);
 		PPLexer lexer(source, mode.lexer_options());
-		PostTokenizer tokens(lexer, nullptr, mode.literals);
+		PostTokenizer tokens(lexer, nullptr, mode.literals, target_model::Target::Linux, false,
+			std::string(mode.cplusplus) == "202002L");
 		PostTokenWriter output(cout);
 		try
 		{

@@ -71,6 +71,12 @@ public:
 	// is not implicitly const (7.1.5p8 in C++11) and may return void (N3652).
 	void set_cxx14(bool on) { cxx14_ = on; }
 	void set_cxx17(bool on) { cxx17_ = on; }
+	void set_cxx20(bool on)
+	{
+		cxx20_ = on;
+		if (on)
+			types_.enable_char8();
+	}
 	// -fno-exceptions (hosted -c): allocation and deallocation functions'
 	// redeclarations are not compared (check_redeclared_exceptions).
 	void set_exceptions(bool on) { exceptions_ = on; }
@@ -1771,6 +1777,7 @@ private:
 	bool hosted_ = false;
 	bool cxx14_ = false;
 	bool cxx17_ = false;
+	bool cxx20_ = false;
 	PointerMap class_deduction_index_;
 	struct ClassDeductionSet
 	{

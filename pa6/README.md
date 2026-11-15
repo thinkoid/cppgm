@@ -34,6 +34,12 @@ target. Type identity and conversion rank are distinct from storage width:
 current exercises use the native layout; PA37 reuses these semantic facts
 with wasm32 layout. Do not derive source object sizes from host `sizeof`.
 
+C++20 mode adds the distinct fundamental type `char8_t`. It has unsigned
+eight-bit storage and one-byte alignment, but its canonical identity differs
+from `char` and `unsigned char`. Preserve that identity in declarations,
+pointers, references and overload signatures. It is not a keyword in earlier
+modes.
+
 ### Starter Kit
 
 The PA6 starter kit contains:

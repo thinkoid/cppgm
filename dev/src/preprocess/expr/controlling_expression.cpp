@@ -20,6 +20,7 @@ bool IsUnsignedLiteralType(FundamentalType type)
 	case FundamentalType::UnsignedLongInt:
 	case FundamentalType::UnsignedLongLongInt:
 	case FundamentalType::Char16T:
+	case FundamentalType::Char8T:
 	case FundamentalType::Char32T:
 		return true;
 	default:
@@ -238,7 +239,7 @@ void ControllingExpressionEvaluator::classify_character(const PPToken& pp)
 	const CharacterLiteralValue character = EvaluateCharacterLiteral(pp.spelling, pp.length,
 		(literals_ == NumberDialect::Gnu || literals_ == NumberDialect::GnuStream) ? CharacterDialect::Gnu
 																				   : CharacterDialect::Course,
-		conditional_escapes_);
+		conditional_escapes_, cxx20_);
 	if (!character.valid || character.multicharacter || character.suffix_begin != pp.length)
 		return;
 	token_.kind = TokenClass::Operand;

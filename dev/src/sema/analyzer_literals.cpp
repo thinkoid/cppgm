@@ -18,8 +18,9 @@ namespace {
 bool LiteralCharacter(const Type* type)
 {
 	return type->kind == TypeKind::Fundamental &&
-		(type->fundamental == FundamentalType::Char || type->fundamental == FundamentalType::WcharT ||
-			type->fundamental == FundamentalType::Char16T || type->fundamental == FundamentalType::Char32T);
+		(type->fundamental == FundamentalType::Char || type->fundamental == FundamentalType::Char8T ||
+			type->fundamental == FundamentalType::WcharT || type->fundamental == FundamentalType::Char16T ||
+			type->fundamental == FundamentalType::Char32T);
 }
 
 } // namespace
@@ -69,7 +70,7 @@ ExprFacts* Analyzer::literal(const syntax::LiteralExpr& expr)
 		{
 			// Lexing has already validated escapes for the source dialect.
 			const CharacterLiteralValue character = EvaluateCharacterLiteral(
-				spelling.text, spelling.length, CharacterDialect::Gnu, true);
+				spelling.text, spelling.length, CharacterDialect::Gnu, true, cxx20_);
 			if (character.valid && character.suffix_begin != spelling.length)
 				return user_character_literal(expr, character);
 			if (!character.valid || character.suffix_begin != spelling.length)
@@ -85,7 +86,7 @@ ExprFacts* Analyzer::literal(const syntax::LiteralExpr& expr)
 		}
 		// 2.14.5p8: an lvalue array of const code units with the null.
 		StringLiteralFacts string;
-		if (!AnalyzeStringLiteral(spelling, string))
+		if (!AnalyzeStringLiteral(spelling, string, cxx20_))
 			error(expr.location, "invalid string literal");
 		const Type* element = types_.qualified(
 			types_.fundamental(c_source_ ? CCharacterType(string.element) : string.element), c_source_ ? 0 : kConst);
@@ -238,7 +239,11 @@ ExprFacts* Analyzer::user_character_literal(const syntax::LiteralExpr& expr, con
 			set.push_back(static_cast<FunctionEntity*>(node->binding->entity));
 	}
 	const Candidate chosen = best_viable(call_arguments, expr.location, set, nullptr);
-	return literal_call(expr, chosen.function, kLiteralCallCharacter);
+	IntegralKind parameter;
+	IntegralKindOf(chosen.function->type->canonical->params[0], parameter);
+	const uint64_t argument = ConvertIntegral(ConvertIntegral(character.code_point, kind), parameter);
+	// Every cooked character parameter is at most 32 bits on these targets.
+	return literal_call(expr, chosen.function, kLiteralCallCharacter | uint64_t(static_cast<uint32_t>(argument)) << 8);
 }
 
 ExprFacts* Analyzer::user_string_literal(
@@ -290,6 +295,7 @@ ExprFacts* Analyzer::user_string_literal(
 	ExprFacts* facts = new_facts(expr, result, category);
 	facts->entity = function;
 	facts->flags |= kDirectCall | kUserLiteral;
+	facts->value = kLiteralCallString | uint64_t(string.units - 1) << 8;
 	return facts;
 }
 

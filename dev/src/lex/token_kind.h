@@ -20,6 +20,7 @@
 	X(KW_CASE) \
 	X(KW_CATCH) \
 	X(KW_CHAR) \
+	X(KW_CHAR8_T) \
 	X(KW_CHAR16_T) \
 	X(KW_CHAR32_T) \
 	X(KW_CLASS) \

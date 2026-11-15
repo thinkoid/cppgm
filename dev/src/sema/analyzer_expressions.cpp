@@ -1535,6 +1535,7 @@ unsigned IntegerRank(FundamentalType type)
 	case FundamentalType::Char:
 	case FundamentalType::SignedChar:
 	case FundamentalType::UnsignedChar:
+	case FundamentalType::Char8T:
 		return 2;
 	case FundamentalType::ShortInt:
 	case FundamentalType::UnsignedShortInt:

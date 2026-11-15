@@ -57,6 +57,8 @@ abi_mangle::AbiBuiltinTypeKind BuiltinKind(FundamentalType type)
 		return abi_mangle::ABI_BUILTIN_TYPE_CHAR;
 	case FundamentalType::Char16T:
 		return abi_mangle::ABI_BUILTIN_TYPE_CHAR16;
+	case FundamentalType::Char8T:
+		return abi_mangle::ABI_BUILTIN_TYPE_CHAR8;
 	case FundamentalType::Char32T:
 		return abi_mangle::ABI_BUILTIN_TYPE_CHAR32;
 	case FundamentalType::Bool:

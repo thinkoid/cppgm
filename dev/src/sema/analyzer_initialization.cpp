@@ -71,6 +71,9 @@ bool InitializesCharacterArray(const Type* literal, const Type* element)
 	literal = literal->unqualified;
 	return IsCharacterArrayElement(element) &&
 		(literal == element->unqualified ||
+			(literal->fundamental == FundamentalType::Char8T && element->unqualified->kind == TypeKind::Fundamental &&
+				(element->unqualified->fundamental == FundamentalType::Char ||
+					element->unqualified->fundamental == FundamentalType::UnsignedChar)) ||
 			(literal->fundamental == FundamentalType::Char && element->unqualified->kind == TypeKind::Fundamental &&
 				(element->unqualified->fundamental == FundamentalType::SignedChar ||
 					element->unqualified->fundamental == FundamentalType::UnsignedChar)));

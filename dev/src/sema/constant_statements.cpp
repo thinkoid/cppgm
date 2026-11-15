@@ -308,14 +308,10 @@ bool ConstantInterpreter::user_literal(const syntax::LiteralExpr& expr, Result& 
 	else if ((expr.facts->value & 255) == kLiteralCallCharacter)
 	{
 		// p6: the character's value converted to the parameter.
-		const CharacterLiteralValue character = EvaluateCharacterLiteral(
-			expr.spelling.text, expr.spelling.length, CharacterDialect::Gnu, true);
-		const Type* type = analyzer_.types_.fundamental(character.type);
+		const Type* type = parameters[0]->unqualified;
 		IntegralKind kind;
 		IntegralKindOf(type, kind);
-		argument.value = IntegerValue(type, ConvertIntegral(character.code_point, kind));
-		if (!convert_scalar(argument.value, parameters[0], expr.location))
-			return false;
+		argument.value = IntegerValue(type, ConvertIntegral(expr.facts->value >> 8, kind));
 		arguments.push_back(argument);
 	}
 	else if ((expr.facts->value & 255) == kLiteralCallCooked)

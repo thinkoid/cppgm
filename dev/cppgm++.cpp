@@ -911,7 +911,8 @@ int run_emit_types_mode(vector<string> args)
 				analyzer.set_source_language(options.language, options.gnu_c());
 				analyzer.set_hosted(options.hosted);
 				analyzer.set_cxx14(options.language != SourceLanguage::C && options.cplusplus != "201103L");
-				analyzer.set_cxx17(options.cplusplus == "201703L");
+				analyzer.set_cxx17(options.cplusplus >= "201703L");
+				analyzer.set_cxx20(options.cplusplus == "202002L");
 				analyzer.set_exceptions(options.modes.exceptions);
 				analyzer.set_source_positions(&unit.positions());
 				analyzer.analyze(unit.tree());
@@ -995,7 +996,8 @@ int run_emit_semantics_mode(vector<string> args)
 				analyzer.set_source_language(options.language, options.gnu_c());
 				analyzer.set_hosted(options.hosted);
 				analyzer.set_cxx14(options.language != SourceLanguage::C && options.cplusplus != "201103L");
-				analyzer.set_cxx17(options.cplusplus == "201703L");
+				analyzer.set_cxx17(options.cplusplus >= "201703L");
+				analyzer.set_cxx20(options.cplusplus == "202002L");
 				analyzer.set_exceptions(options.modes.exceptions);
 				analyzer.set_source_positions(&unit.positions());
 				analyzer.analyze(unit.tree());
@@ -1145,7 +1147,8 @@ int run_emit_lowir_mode(vector<string> args)
 			analyzer.set_source_language(options.language, options.gnu_c());
 			analyzer.set_hosted(options.hosted);
 			analyzer.set_cxx14(options.language != SourceLanguage::C && options.cplusplus != "201103L");
-			analyzer.set_cxx17(options.cplusplus == "201703L");
+			analyzer.set_cxx17(options.cplusplus >= "201703L");
+			analyzer.set_cxx20(options.cplusplus == "202002L");
 			analyzer.set_exceptions(options.modes.exceptions);
 			analyzer.set_source_positions(&unit.positions());
 			try

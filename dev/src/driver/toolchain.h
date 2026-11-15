@@ -21,7 +21,7 @@
 // -nostdinc, -x c++, --target <target> (or =),
 // --sysroot <dir>, -resource-dir <dir>, -nostartfiles, -nodefaultlibs and
 // -nostdlib (Wasm target headers and supplied runtime selection),
-// -std=<c++11, c++14 or c++17, and their gnu and draft names> (__cplusplus;
+// -std=<c++11, c++14, c++17 or c++20, and their gnu and draft names> (__cplusplus;
 // c++NN the strict ISO dialect's host macros, __STRICT_ANSI__),
 // -stdlib=<the build's selection>, -f(no-)exceptions and -f(no-)rtti (the
 // hosted predefined macros and feature probes), -fPIC/-fpic (host objects),

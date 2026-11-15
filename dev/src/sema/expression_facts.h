@@ -255,7 +255,8 @@ enum : uint32_t
 };
 
 // The call a user-defined literal makes (2.14.8; ExprFacts::value of a
-// kUserLiteral expression, low byte; numeric digit length is value >> 8): a string literal's (the array and its length,
+// kUserLiteral expression, low byte; value >> 8 holds a numeric digit length,
+// string code-unit length, or converted character argument): a string literal's (the array and its length,
 // p5), a number's value converted to the literal operator's parameter
 // (p3-p4: unsigned long long or long double), a literal operator
 // template's specialization of the number's characters, without arguments,

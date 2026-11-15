@@ -68,10 +68,13 @@ enum class FundamentalType : uint8_t
 
 	// Clang's binary16 storage type. Arithmetic promotes it to float;
 	// its identity and Itanium spelling differ from _Float16.
-	StorageHalf
+	StorageHalf,
+
+	// C++20's distinct unsigned UTF-8 code-unit type.
+	Char8T
 };
 
-const unsigned kFundamentalTypeCount = static_cast<unsigned>(FundamentalType::StorageHalf) + 1;
+const unsigned kFundamentalTypeCount = static_cast<unsigned>(FundamentalType::Char8T) + 1;
 
 // The type's spelling as a simple-type-specifier sequence, e.g. "unsigned long int".
 const char* FundamentalTypeName(FundamentalType type);

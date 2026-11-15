@@ -50,7 +50,10 @@ std::string PredefinedText(const PreprocessorOptions& options)
 	AppendQuoted(text, options.time);
 	text += "\n";
 	if (options.language != SourceLanguage::C)
-		text += LanguageFeatureMacros(options.cplusplus == "201703L" ? 17 : options.cplusplus == "201402L" ? 14 : 11);
+		text += LanguageFeatureMacros(options.cplusplus == "202002L" ? 20
+				: options.cplusplus == "201703L"                     ? 17
+				: options.cplusplus == "201402L"                     ? 14
+																	 : 11);
 	if (options.plain_char_unsigned)
 		text += "#define __CHAR_UNSIGNED__ 1\n";
 	if (options.popcnt)
@@ -60,7 +63,7 @@ std::string PredefinedText(const PreprocessorOptions& options)
 	const char* features[] = { "__SSE3__", "__SSSE3__", "__SSE4_1__", "__SSE4_2__" };
 	for (unsigned i = 0; i < options.sse_level; ++i)
 		text += std::string("#define ") + features[i] + " 1\n";
-	if (options.cplusplus == "201703L")
+	if (options.cplusplus >= "201703L")
 		text += "#define __STDCPP_DEFAULT_NEW_ALIGNMENT__ " +
 			std::to_string(target_model::default_new_alignment(options.target)) +
 			"UL\n#define __cpp_aligned_new 201606L\n"
@@ -104,7 +107,7 @@ bool Preprocessor::MacroQuery::is_defined(const char* spelling, uint32_t length)
 }
 
 Preprocessor::Preprocessor(const PreprocessorOptions& options, const std::string& path)
-	: identifiers_(arena_, options.language), names_(identifiers_),
+	: identifiers_(arena_, options.language, options.cplusplus == "202002L"), names_(identifiers_),
 	  source_(files_, identifiers_, arena_, names_, *this),
 	  expander_(arena_, identifiers_, names_, *this, macro_state_), directive_expander_(&expander_),
 	  macro_query_(identifiers_), evaluator_(macro_query_, options.literals, options.plain_char_unsigned),
@@ -115,14 +118,18 @@ Preprocessor::Preprocessor(const PreprocessorOptions& options, const std::string
 	  guarded_skips_(0), finished_(false), pack_(0)
 {
 	modes_.language = options.language == SourceLanguage::C ? 0
+		: options.cplusplus == "202002L"                    ? 20
 		: options.cplusplus == "201703L"                    ? 17
 		: options.cplusplus == "201402L"                    ? 14
 															: 11;
 	expander_.set_input(&source_);
 	source_.set_hosted(hosted_);
 	source_.set_conditional_escapes(options.gnu_c());
+	source_.set_utf8_characters(options.cplusplus == "202002L");
 	expander_.set_conditional_escapes(options.gnu_c());
+	expander_.set_utf8_characters(options.cplusplus == "202002L");
 	evaluator_.set_conditional_escapes(options.gnu_c());
+	evaluator_.set_cxx20(options.cplusplus == "202002L");
 	const bool separators = hosted_ || options.literals != NumberDialect::Cxx11;
 	const bool exponents = hosted_ || options.literals == NumberDialect::Cxx17;
 	source_.set_number_syntax(separators, exponents);

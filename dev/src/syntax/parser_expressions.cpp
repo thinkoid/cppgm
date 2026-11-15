@@ -32,6 +32,7 @@ bool IsSimpleTypeKeyword(TokenKind kind)
 	{
 	case TokenKind::KW_BOOL:
 	case TokenKind::KW_CHAR:
+	case TokenKind::KW_CHAR8_T:
 	case TokenKind::KW_CHAR16_T:
 	case TokenKind::KW_CHAR32_T:
 	case TokenKind::KW_DOUBLE:

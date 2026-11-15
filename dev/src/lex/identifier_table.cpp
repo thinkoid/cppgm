@@ -42,8 +42,8 @@ uint32_t HashSpelling(const char* spelling, uint32_t length)
 
 } // namespace
 
-IdentifierTable::IdentifierTable(Arena& arena, SourceLanguage language)
-	: arena_(arena), language_(language), slots_(kInitialSlots, nullptr), count_(0)
+IdentifierTable::IdentifierTable(Arena& arena, SourceLanguage language, bool cxx20)
+	: arena_(arena), language_(language), cxx20_(cxx20), slots_(kInitialSlots, nullptr), count_(0)
 {}
 
 Identifier* IdentifierTable::intern(const char* spelling, uint32_t length)
@@ -74,7 +74,9 @@ Identifier* IdentifierTable::intern(const char* spelling, uint32_t length)
 	TokenKind kind;
 	const bool keyword = language_ == SourceLanguage::C ? FindCKeyword(spelling, length, kind)
 														: FindSimpleToken(spelling, length, kind);
-	identifier->keyword = keyword ? static_cast<uint8_t>(static_cast<uint8_t>(kind) + 1) : 0;
+	identifier->keyword = keyword && (kind != TokenKind::KW_CHAR8_T || cxx20_)
+		? static_cast<uint8_t>(static_cast<uint8_t>(kind) + 1)
+		: 0;
 
 	if (2 * (count_ + 1) > slots_.size())
 		grow();

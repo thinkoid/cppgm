@@ -60,6 +60,7 @@ public:
 		NumberDialect literals = NumberDialect::Cxx11, bool plain_char_unsigned = false);
 
 	void set_conditional_escapes(bool on) { conditional_escapes_ = on; }
+	void set_cxx20(bool on) { cxx20_ = on; }
 
 	// Evaluates the pp-tokens from `tokens` up to and including the next
 	// new-line or end-of-file. Propagates the cursor's exceptions.
@@ -128,6 +129,7 @@ private:
 	const MacroDefinitionQuery& macros_;
 	NumberDialect literals_;
 	bool conditional_escapes_ = false;
+	bool cxx20_ = false;
 	bool plain_char_unsigned_;
 	PPTokenCursor* tokens_;
 	Token token_;

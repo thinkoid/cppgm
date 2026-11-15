@@ -544,8 +544,9 @@ ExprFacts* Analyzer::gnu_intrinsic(const syntax::CallExpr& expr, GnuBuiltin buil
 		const FundamentalType fundamental = type->kind == TypeKind::Fundamental ? type->fundamental
 																				: FundamentalType::Bool;
 		if (!IsIntegralType(type) || !IntegralKindOf(type, kind) || kind.is_signed ||
-			fundamental == FundamentalType::Bool || fundamental == FundamentalType::Char16T ||
-			fundamental == FundamentalType::Char32T || fundamental == FundamentalType::WcharT)
+			fundamental == FundamentalType::Bool || fundamental == FundamentalType::Char8T ||
+			fundamental == FundamentalType::Char16T || fundamental == FundamentalType::Char32T ||
+			fundamental == FundamentalType::WcharT)
 			return substitution_error(
 					   expr.location, "a generic bit builtin of a type that is no unsigned integer type"),
 				   nullptr;

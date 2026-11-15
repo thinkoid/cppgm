@@ -30,6 +30,7 @@ const SimpleSpelling kSimpleSpellings[] = {
 	{ "catch", TokenKind::KW_CATCH },
 	{ "char", TokenKind::KW_CHAR },
 	{ "char16_t", TokenKind::KW_CHAR16_T },
+	{ "char8_t", TokenKind::KW_CHAR8_T },
 	{ "char32_t", TokenKind::KW_CHAR32_T },
 	{ "class", TokenKind::KW_CLASS },
 	{ "const", TokenKind::KW_CONST },

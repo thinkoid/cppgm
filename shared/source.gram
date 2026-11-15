@@ -227,6 +227,7 @@ decl-specifier:
 simple-type-specifier:
 	KW_BOOL
 	KW_CHAR
+	KW_CHAR8_T
 	KW_CHAR16_T
 	KW_CHAR32_T
 	KW_DOUBLE

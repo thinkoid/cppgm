@@ -658,7 +658,8 @@ bool lower_source(const std::string& path, const Invocation& invocation, lower::
 		analyzer.set_hosted(invocation.preprocessor.hosted);
 		analyzer.set_cxx14(
 			invocation.preprocessor.language != SourceLanguage::C && invocation.preprocessor.cplusplus != "201103L");
-		analyzer.set_cxx17(invocation.preprocessor.cplusplus == "201703L");
+		analyzer.set_cxx17(invocation.preprocessor.cplusplus >= "201703L");
+		analyzer.set_cxx20(invocation.preprocessor.cplusplus == "202002L");
 		analyzer.set_exceptions(invocation.preprocessor.modes.exceptions);
 		analyzer.set_ignore_narrowing(invocation.ignore_narrowing);
 		analyzer.set_source_positions(&unit.positions());

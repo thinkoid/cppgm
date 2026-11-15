@@ -19,6 +19,7 @@ bool FundamentalKind(FundamentalType type, IntegralKind& kind)
 		kind = IntegralKind{ 8, true };
 		return true;
 	case FundamentalType::UnsignedChar:
+	case FundamentalType::Char8T:
 		kind = IntegralKind{ 8, false };
 		return true;
 	case FundamentalType::ShortInt:
@@ -416,6 +417,7 @@ const Type* PromotedType(TypeTable& types, const Type* type)
 	case FundamentalType::Char:
 	case FundamentalType::SignedChar:
 	case FundamentalType::UnsignedChar:
+	case FundamentalType::Char8T:
 	case FundamentalType::ShortInt:
 	case FundamentalType::UnsignedShortInt:
 	case FundamentalType::Char16T:

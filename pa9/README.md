@@ -58,6 +58,10 @@ fact reader kept at the `abimangle` tool boundary, is the direct way to keep
 them equal; converting semantic state to fact text and parsing it back is a
 slow path to avoid.
 
+The builtin fact word `char8` denotes C++20's distinct `char8_t` type and
+encodes as `Du`. It is not the `uchar` builtin, even though both store an
+unsigned byte.
+
 The code tables in `abi_mangle.h` cover builtin types, standard substitutions,
 terminals and operators. Substitution, the structure of each encoding,
 compiler semantic lowering and other implementation logic are your work,

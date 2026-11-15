@@ -5,10 +5,10 @@
 #include "lex/text_literal.h"
 
 PostTokenizer::PostTokenizer(PPTokenCursor& input, IdentifierTable* identifiers, NumberDialect literals,
-	target_model::Target target, bool conditional_escapes)
+	target_model::Target target, bool conditional_escapes, bool cxx20)
 	: input_(input), identifiers_(identifiers), literals_(literals), conditional_escapes_(conditional_escapes),
-	  target_(target), lookahead_(nullptr), token_(), split_suffix_(), split_suffix_begin_(0), split_suffix_end_(0),
-	  after_operator_(false), scalar_()
+	  cxx20_(cxx20), target_(target), lookahead_(nullptr), token_(), split_suffix_(), split_suffix_begin_(0),
+	  split_suffix_end_(0), after_operator_(false), scalar_()
 {
 	strings_.set_reserved_suffixes(literals == NumberDialect::Gnu);
 	strings_.set_conditional_escapes(conditional_escapes);
@@ -103,8 +103,17 @@ void PostTokenizer::start_token(PostTokenKind kind, const TokenSpelling& spellin
 void PostTokenizer::convert_identifier(const Identifier* identifier)
 {
 	TokenKind kind;
-	const bool keyword = identifier != nullptr ? identifier->simple_token(kind)
-											   : FindSimpleToken(token_.source.text, token_.source.length, kind);
+	bool keyword;
+	if (identifier != nullptr)
+		keyword = identifier->simple_token(kind);
+	else
+	{
+		// The compiler's interned identifiers already carry the selected
+		// dialect's keyword fact. Only the standalone lexer needs this gate.
+		keyword = FindSimpleToken(token_.source.text, token_.source.length, kind);
+		if (keyword && kind == TokenKind::KW_CHAR8_T && !cxx20_)
+			keyword = false;
+	}
 	if (keyword)
 	{
 		token_.kind = PostTokenKind::Simple;
@@ -168,7 +177,7 @@ void PostTokenizer::convert_character(const PPToken& pp)
 	const CharacterLiteralValue value = EvaluateCharacterLiteral(pp.spelling, pp.length,
 		(literals_ == NumberDialect::Gnu || literals_ == NumberDialect::GnuStream) ? CharacterDialect::Gnu
 																				   : CharacterDialect::Course,
-		conditional_escapes_);
+		conditional_escapes_, cxx20_);
 	if (!value.valid)
 		return;
 	set_scalar(LiteralForm::Character, value.type, value.code_point);
@@ -237,7 +246,8 @@ void PostTokenizer::finish_string_sequence(uint32_t begin, uint32_t end)
 	const TokenSpelling suffix = strings_.ud_suffix();
 	token_.kind = suffix.length == 0 ? PostTokenKind::Literal : PostTokenKind::UserDefinedLiteral;
 	token_.form = LiteralForm::String;
-	token_.type = strings_.element_type();
+	token_.type = cxx20_ && strings_.encoding_prefix() == EncodingPrefix::Utf8 ? FundamentalType::Char8T
+																			   : strings_.element_type();
 	token_.ud_suffix = suffix;
 	token_.data = strings_.data();
 	token_.size = strings_.size();

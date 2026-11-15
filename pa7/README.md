@@ -31,6 +31,12 @@ procedural, non-template, non-class-aware subset. Class-aware calls,
 constructors, user-defined conversions, overloaded operators, and template
 functions are assigned later.
 
+In C++20 mode, a UTF-8 character literal has type `char8_t` and promotes to
+`int`. UTF-8 string literals are lvalue arrays of `const char8_t`, including
+their terminating zero. Ordinary overload and pointer-conversion rules use
+the distinct element type: a UTF-8 string does not convert to `const char*`
+or `const unsigned char*`.
+
 ### Starter Kit
 
 The PA7 starter kit contains:

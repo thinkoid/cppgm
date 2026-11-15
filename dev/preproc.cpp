@@ -89,7 +89,8 @@ bool PreprocessSource(const PreprocessorOptions& options, const string& path, Po
 		Preprocessor preprocessor(options, path);
 		try
 		{
-			PostTokenizer tokens(preprocessor, nullptr, options.literals);
+			PostTokenizer tokens(preprocessor, nullptr, options.literals, options.target, options.gnu_c(),
+				options.cplusplus == "202002L");
 			for (;;)
 			{
 				const PostToken& token = tokens.next();

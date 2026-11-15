@@ -212,12 +212,14 @@ void AppendValue(const Type* type, uint64_t bits, std::string& out)
 		return;
 	case FundamentalType::Char:
 	case FundamentalType::Char16T:
+	case FundamentalType::Char8T:
 	case FundamentalType::Char32T:
 	case FundamentalType::WcharT:
-		out += type->fundamental == FundamentalType::Char16T ? "u'"
-			: type->fundamental == FundamentalType::Char32T  ? "U'"
-			: type->fundamental == FundamentalType::WcharT   ? "L'"
-															 : "'";
+		out += type->fundamental == FundamentalType::Char8T ? "u8'"
+			: type->fundamental == FundamentalType::Char16T ? "u'"
+			: type->fundamental == FundamentalType::Char32T ? "U'"
+			: type->fundamental == FundamentalType::WcharT  ? "L'"
+															: "'";
 		AppendCharacter(bits, out);
 		out += '\'';
 		return;

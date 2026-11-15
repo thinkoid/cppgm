@@ -294,7 +294,8 @@ const ConstValue* ConstantInterpreter::literal_object(const syntax::LiteralExpr*
 	}
 	const Type* array = user
 		? analyzer_.types_.array(
-			  analyzer_.types_.qualified(analyzer_.types_.fundamental(facts.element), kConst), units.size())
+			  static_cast<const FunctionEntity*>(expr->entity)->type->canonical->params[0]->unqualified->element,
+			  units.size())
 		: expr->type;
 	const Type* element = array->element->unqualified;
 	IntegralKind kind;

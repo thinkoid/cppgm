@@ -27,6 +27,9 @@ public:
 	unsigned fundamental_size(FundamentalType type) const { return FundamentalTypeSize(type, target_); }
 
 	const Type* fundamental(FundamentalType type) const { return fundamentals_[static_cast<unsigned>(type)]; }
+	// Add the C++20-only type before analysis; earlier modes keep their
+	// original allocation order and do not intern an unused char8_t.
+	void enable_char8();
 	// (Adding no qualifier it lacks is the type itself, without a call.)
 	const Type* qualified(const Type* type, uint8_t cv)
 	{

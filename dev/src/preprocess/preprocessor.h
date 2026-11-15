@@ -60,7 +60,7 @@ struct PreprocessorOptions
 	// macros: part of what is compiled, not of what -E writes.
 	std::string builtin_declarations;
 	FeatureModes modes;
-	// __cplusplus's value (-std=c++14 and c++17 select 201402L and 201703L).
+	// __cplusplus's value (201103L, 201402L, 201703L or 202002L).
 	std::string cplusplus = "201103L";
 	// The strict ISO dialect (-std=c++11, c++14, c++17): the host's
 	// predefined macros for it (__STRICT_ANSI__) instead of the GNU

@@ -222,6 +222,8 @@ during parsing rather than being preserved as opaque placeholder nodes.
 The source driver accepts `-std=c++11`, `-std=c++14` and `-std=c++17`;
 the default stays C++11. Parse the forms in the
 [required language profile](../LANGUAGE_PROFILE.md) into structured nodes.
+The C++20 mode recognizes `char8_t` as a simple-type-specifier; its type
+identity and conversions are taught in PA6 and PA7.
 These include nested namespace definitions and attribute using-prefixes,
 placeholder declarations, folds, deduction guides, initializer statements,
 `if constexpr`, structured bindings, generic/initialized lambda captures and

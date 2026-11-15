@@ -2725,7 +2725,9 @@ lowir::SymbolId ProgramLowering::string_literal(const syntax::LiteralExpr& liter
 	// A user-defined string literal's array is its literal operator's
 	// argument (2.14.8p5): of its own code units.
 	if (element == nullptr && (literal.facts->flags & sema::kUserLiteral) != 0)
-		element = graph_->types.fundamental(facts.element);
+		element = static_cast<const sema::FunctionEntity*>(literal.facts->entity)
+					  ->type->canonical->params[0]
+					  ->unqualified->element;
 	const lowir::Type unit = storage_type(element != nullptr ? element : literal.facts->type->element);
 	return string_object(unit, units);
 }

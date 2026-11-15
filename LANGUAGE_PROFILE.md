@@ -1,11 +1,13 @@
 # Required source-language profile
 
-Build a C++ compiler with the following C++11/14/17 profile. This is a bounded
-course contract, not complete conformance to all three standards. Later hosted
+Build a C++ compiler with the following C++11/14/17 and selected C++20 profile.
+This is a bounded course contract, not complete conformance to these standards. Later hosted
 lessons consume these features rather than making them optional.
 
-The driver default remains GNU C++11. `-std=c++11`, `-std=c++14`, `-std=c++17`
-and their `gnu++` counterparts select the documented mode. A required later
+The driver default remains GNU C++11. `-std=c++11`, `-std=c++14`, `-std=c++17`,
+`-std=c++20` and their `gnu++` counterparts select the documented mode. The
+C++20 profile is bounded to the features listed here; it does not claim full
+conformance to that standard. A required later
 feature need only work in its stated mode; earlier-mode negative checks remain
 required. The existing variable-template, relaxed constexpr and visible-body
 return-deduction extensions remain available in the course's C++11 mode.
@@ -14,6 +16,7 @@ return-deduction extensions remain available in the course's C++11 mode.
 | --- | --- | --- |
 | Binary literals, digit separators | C++14+ | PA1–PA4 token/value/macro boundaries |
 | Hexadecimal floating literals | C++17 | PA1–PA4; GNU compiler modes also retain existing extensions |
+| Distinct `char8_t`, UTF-8 code-unit literals, narrow-array initialization from UTF-8 strings | C++20 | PA1–PA4 token/value/macro boundaries; PA6/PA7 types and conversions; PA9 ABI; PA11 initialization and literal operators |
 | Nested namespaces, attribute using-prefixes | C++17 | PA5 syntax, PA6 lookup; vendor effects PA30 |
 | Contextual conversions, aggregate member defaults | C++14+ | PA11/PA12; constexpr PA16 |
 | Public aggregate bases, direct prvalue result objects, inline variables, aligned allocation | C++17 | PA11/PA12; constexpr PA16; multi-TU PA25; host ABI PA32 |

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <cstring>
 
 #include "lex/number_literal.h"
 #include "preprocess/lexer/pp_lexer.h"
@@ -18,6 +19,7 @@ struct LanguageMode
 		PPLexerOptions options;
 		options.digit_separators = literals != NumberDialect::Cxx11;
 		options.binary_exponents = literals == NumberDialect::Cxx17;
+		options.utf8_characters = std::strcmp(cplusplus, "202002L") == 0;
 		return options;
 	}
 };
@@ -31,7 +33,8 @@ inline LanguageMode ReadLanguageMode(const std::string& standard)
 		NumberDialect literals;
 	} modes[] = { { { "c++11", "gnu++11", "c++0x", "gnu++0x" }, "201103L", NumberDialect::Cxx11 },
 		{ { "c++14", "gnu++14", "c++1y", "gnu++1y" }, "201402L", NumberDialect::Cxx14 },
-		{ { "c++17", "gnu++17", "c++1z", "gnu++1z" }, "201703L", NumberDialect::Cxx17 } };
+		{ { "c++17", "gnu++17", "c++1z", "gnu++1z" }, "201703L", NumberDialect::Cxx17 },
+		{ { "c++20", "gnu++20", "c++2a", "gnu++2a" }, "202002L", NumberDialect::Cxx17 } };
 	for (const auto& mode : modes)
 		for (const char* name : mode.names)
 			if (standard == name)

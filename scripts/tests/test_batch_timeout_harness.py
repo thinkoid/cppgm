@@ -79,7 +79,7 @@ class BatchTimeoutHarnessTests(unittest.TestCase):
                     emit(base)
                 '''))
             tool.chmod(0o755)
-            for name, mode in [('first', 'c++14'), ('second', 'c++17'), ('fourth', 'gnu17'), ('third', None)]:
+            for name, mode in [('first', 'c++14'), ('second', 'c++17'), ('fifth', 'c++20'), ('fourth', 'gnu17'), ('third', None)]:
                 (tests / (name + '.t')).write_text('int value;\n')
                 if mode:
                     (tests / (name + ('.c-standard' if mode == 'gnu17' else '.cxx-standard'))).write_text(mode + '\n')
@@ -91,7 +91,7 @@ class BatchTimeoutHarnessTests(unittest.TestCase):
                      'text_t', str(tool), 'my', str(tests)],
                     cwd=root, env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                for name, mode in [('first', 'c++14'), ('second', 'c++17'), ('fourth', 'gnu17'), ('third', 'c++11')]:
+                for name, mode in [('first', 'c++14'), ('second', 'c++17'), ('fifth', 'c++20'), ('fourth', 'gnu17'), ('third', 'c++11')]:
                     self.assertEqual((tests / (name + '.my')).read_text(), '-std=' + mode + '\n')
 
     def test_companion_prefixes_preserve_literal_names_and_sorted_groups(self):
