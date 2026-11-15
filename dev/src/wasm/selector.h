@@ -121,6 +121,7 @@ private:
 	bool branch_if_target(lowir::BlockId to, lowir::BlockId other, uint32_t& depth, bool& moves);
 	void number_blocks(uint32_t region, uint32_t& next);
 	void find_carried();
+	bool read_after_leaving(lowir::BlockId header, lowir::BlockId other);
 	void phi_copies(lowir::BlockId from, lowir::BlockId to);
 	void block(lowir::BlockId block);
 	void restore_stack();
@@ -211,6 +212,16 @@ private:
 	std::vector<uint32_t> position_, loop_first_, loop_last_;
 	// Per loop header: one of its phis is read outside the loop (0 or 1; empty before the scan).
 	std::vector<uint8_t> escaped_;
+	// Each such read: by an instruction of `at` (`from` is then `at`), or by
+	// a phi of `at` on its edge from `from`.
+	struct CarriedRead
+	{
+		lowir::BlockId header, from, at;
+	};
+	std::vector<CarriedRead> carried_reads_;
+	// The edges that the reads are followed over (built at the first question).
+	opt::Cfg leaving_;
+	std::vector<lowir::BlockId> leaving_seen_, leaving_work_;
 	std::vector<Label> labels_;
 	std::vector<Label> dispatch_labels_;
 	std::vector<uint32_t> region_locals_;

@@ -4,6 +4,8 @@
   "exports": [
     "mixed",
     "find",
+    "before_limit",
+    "match",
     "larger"
   ],
   "commands": [
@@ -20,13 +22,19 @@
     ],
     "functions": {
       "mixed": {
-        "instructions": 141
+        "instructions": 139
       },
       "find": {
-        "instructions": 47
+        "instructions": 46
+      },
+      "before_limit": {
+        "instructions": 24
+      },
+      "match": {
+        "instructions": 63
       },
       "larger": {
-        "instructions": 19
+        "instructions": 18
       }
     }
   },

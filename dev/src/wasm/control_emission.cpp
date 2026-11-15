@@ -2,6 +2,8 @@
 
 #include "wasm/exceptions.h"
 
+#include <algorithm>
+
 namespace wasm {
 
 using namespace lowir;
@@ -149,8 +151,10 @@ void Selector::find_carried()
 		if (!v.is(ValueKind::Temp) || home[v.index] == kNoId)
 			return;
 		const BlockId header = home[v.index];
-		if (loop_first_[header] == kNoId || !inside(header, from) || !inside(header, at))
-			escaped_[header] = 1;
+		if (loop_first_[header] != kNoId && inside(header, from) && inside(header, at))
+			return;
+		escaped_[header] = 1;
+		carried_reads_.push_back(CarriedRead{ header, from, at });
 	};
 	// A use may read again what a copy, a step or a conversion that made its
 	// operand read (an access computes its address from the step's operands).
@@ -191,10 +195,55 @@ void Selector::find_carried()
 		}
 }
 
+// Whether a phi of the loop header `header` is read after the edge from the
+// current block to `other`, which leaves the loop, and before the header runs
+// again. (A read that only another exit reaches sees the moves of no pass
+// that left by this edge.)
+bool Selector::read_after_leaving(BlockId header, BlockId other)
+{
+	const unsigned kMostReaders = 8, kMostBlocks = 48;
+	BlockId readers[kMostReaders];
+	unsigned count = 0;
+	for (const CarriedRead& read : carried_reads_)
+	{
+		if (read.header != header)
+			continue;
+		const bool leaves = read.from != read.at && position_[read.from] != kNoId &&
+			position_[read.from] >= loop_first_[header] && position_[read.from] <= loop_last_[header];
+		if (leaves && (read.from != current_block_ || read.at != other))
+			continue;
+		if (leaves || count == kMostReaders)
+			return true;
+		readers[count++] = read.from;
+	}
+	const bool planned = exceptions_ != nullptr && exceptions_->active;
+	if (!planned && leaving_.block_count == 0)
+		opt::build_cfg_light(program_, body_, leaving_);
+	const opt::Cfg& cfg = planned ? exceptions_->control : leaving_;
+	leaving_seen_.clear();
+	leaving_work_.assign(1, other);
+	while (!leaving_work_.empty())
+	{
+		const BlockId block = leaving_work_.back();
+		leaving_work_.pop_back();
+		if (block == header || std::find(leaving_seen_.begin(), leaving_seen_.end(), block) != leaving_seen_.end())
+			continue;
+		if (leaving_seen_.size() == kMostBlocks || std::find(readers, readers + count, block) != readers + count)
+			return true;
+		leaving_seen_.push_back(block);
+		for (uint32_t k = cfg.succ_first[block]; k < cfg.succ_first[block + 1]; ++k)
+			leaving_work_.push_back(cfg.succs[k]);
+		if (block + 1 < cfg.handler_first.size())
+			for (uint32_t k = cfg.handler_first[block]; k < cfg.handler_first[block + 1]; ++k)
+				leaving_work_.push_back(cfg.handlers[k]);
+	}
+	return false;
+}
+
 // Whether a `br_if` may go to `to` where the branch otherwise goes to `other`:
 // `to` has an open label and takes no moves, or it is the header of a loop
-// that `other` leaves and whose phis are read only inside it, so their moves
-// may run before the test's outcome is known.
+// that `other` leaves and whose phis no read follows over that edge, so their
+// moves may run before the test's outcome is known.
 bool Selector::branch_if_target(BlockId to, BlockId other, uint32_t& depth, bool& moves)
 {
 	if (exceptions_ != nullptr && exceptions_->active && exceptions_->entry_selectors[to] != 0)
@@ -215,7 +264,7 @@ bool Selector::branch_if_target(BlockId to, BlockId other, uint32_t& depth, bool
 		return false;
 	if (escaped_.empty())
 		find_carried();
-	return escaped_[to] == 0;
+	return escaped_[to] == 0 || !read_after_leaving(to, other);
 }
 
 // `branch c, T, F` as the test, the moves of a loop's back edge, `br_if` and
@@ -233,6 +282,43 @@ bool Selector::conditional_branch(const lowir::Instruction& inst)
 	for (unsigned k = 0; k < 2 && pick == 2; ++k)
 		if (usable[k] && loop_first_[inst.ops[1 + k].index] != kNoId && moves[k])
 			pick = k;
+	// Then the edge that leaves the innermost open loop where the other one
+	// stays in it: an engine places what follows a branch next, and that is
+	// then the loop's own code. (A dispatch loop has no header and no range.)
+	const Label* loop = nullptr;
+	for (auto label = labels_.rbegin(); label != labels_.rend() && loop == nullptr; ++label)
+		if (label->loop)
+			loop = &*label;
+	if (loop != nullptr && (loop->target == kNoId || loop_first_[loop->target] == kNoId))
+		loop = nullptr;
+	if (pick == 2 && loop != nullptr)
+	{
+		bool leaves[2];
+		for (unsigned k = 0; k < 2; ++k)
+		{
+			const uint32_t at = position_[inst.ops[1 + k].index];
+			leaves[k] = at == kNoId || at < loop_first_[loop->target] || at > loop_last_[loop->target];
+		}
+		if (leaves[0] != leaves[1])
+		{
+			const unsigned out = leaves[0] ? 0 : 1;
+			if (!usable[out])
+			{
+				// (Its moves run on that edge alone.)
+				condition(inst.ops[0]);
+				if (out == 1)
+					out_.emit(Op::I32Eqz);
+				out_.emit(Op::If, { block_type(ValueType::Void) });
+				++nesting_;
+				edge(current_block_, inst.ops[1 + out].index);
+				--nesting_;
+				out_.emit(Op::End);
+				edge(current_block_, inst.ops[2 - out].index);
+				return true;
+			}
+			pick = out;
+		}
+	}
 	for (unsigned k = 0; k < 2 && pick == 2; ++k)
 		if (usable[k])
 			pick = k;

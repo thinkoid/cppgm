@@ -128,6 +128,28 @@ void fold_truth_tests(Function& function)
 	function.instructions.resize(kept);
 }
 
+// A `br 0` goes where the `end` of its own block or `if` follows it: control
+// reaches that `end` in any case. (A loop's `br 0` is its back edge.)
+void drop_branches_to_next(Function& function)
+{
+	std::vector<Op> open;
+	size_t kept = 0;
+	for (size_t i = 0; i < function.instructions.size(); ++i)
+	{
+		const Instruction& inst = function.instructions[i];
+		if (inst.op == Op::Block || inst.op == Op::Loop || inst.op == Op::If || inst.op == Op::TryTable)
+			open.push_back(inst.op);
+		else if (inst.op == Op::End && !open.empty())
+			open.pop_back();
+		else if (inst.op == Op::Br && function.operands[inst.operands.first] == 0 && !open.empty() &&
+			(open.back() == Op::Block || open.back() == Op::If) && i + 1 < function.instructions.size() &&
+			function.instructions[i + 1].op == Op::End)
+			continue;
+		function.instructions[kept++] = inst;
+	}
+	function.instructions.resize(kept);
+}
+
 } // namespace
 
 void cleanup_locals(Function& function, bool optimize)
@@ -156,6 +178,7 @@ void cleanup_locals(Function& function, bool optimize)
 		}
 		function.instructions.resize(kept);
 		fold_truth_tests(function);
+		drop_branches_to_next(function);
 		// A value that no instruction reads is not stored, and not computed
 		// when its operations have no effect: a step whose uses all went into
 		// memory offsets. Removing one may leave the values it read unread.
