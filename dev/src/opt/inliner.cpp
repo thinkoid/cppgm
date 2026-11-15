@@ -156,7 +156,7 @@ const uint32_t kHighProductCost = 2;
 
 // Conservative scalar estimate. Unknown operations are unpriced rather than
 // silently treated as one scalar instruction.
-uint32_t native_inline_instruction_cost(const Instruction& inst)
+uint32_t native_inline_instruction_cost(const FunctionBody& body, const Instruction& inst)
 {
 	switch (inst.op)
 	{
@@ -176,7 +176,7 @@ uint32_t native_inline_instruction_cost(const Instruction& inst)
 		return inst.ops[1].is(ValueKind::Integer) || n == 1 || n == 2 || n == 4 || n == 8 ? 1 : 3;
 	}
 	case Opcode::Switch:
-		return 2 + inst.extra_count;
+		return 2 + 2 * switch_runs(body, inst);
 	case Opcode::Vector:
 		switch (lowir::shape_of(static_cast<VectorOp>(inst.sub)))
 		{
@@ -612,8 +612,8 @@ Shape shape_of(
 	std::vector<TempId> address_candidates;
 	std::vector<InstId> high_products;
 	const bool wasm = target_model::is_wasm(program.target);
-	auto inline_instruction_cost = [wasm](const Instruction& inst) {
-		return wasm ? wasm_inline_instruction_cost(inst) : native_inline_instruction_cost(inst);
+	auto inline_instruction_cost = [wasm, &body](const Instruction& inst) {
+		return wasm ? wasm_inline_instruction_cost(body, inst) : native_inline_instruction_cost(body, inst);
 	};
 	for (BlockId b : body.layout)
 	{

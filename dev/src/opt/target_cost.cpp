@@ -1,5 +1,9 @@
 #include "opt/target_cost.h"
 
+#include <algorithm>
+#include <utility>
+#include <vector>
+
 namespace opt {
 
 using namespace lowir;
@@ -89,7 +93,33 @@ uint32_t wide_cost(const Instruction& inst)
 
 } // namespace
 
-uint32_t wasm_inline_instruction_cost(const Instruction& inst)
+uint32_t switch_runs(const FunctionBody& body, const Instruction& inst)
+{
+	const uint32_t count = inst.extra_count / 2;
+	std::vector<std::pair<int64_t, uint32_t>> cases;
+	cases.reserve(count);
+	bool rising = true;
+	for (uint32_t k = 0; k + 1 < inst.extra_count; k += 2)
+	{
+		const Value value = body.operands[inst.extra_first + k];
+		if (!value.is(ValueKind::Integer))
+			return count;
+		const int64_t v = static_cast<int64_t>(body.literals[value.index].low);
+		rising = rising && (cases.empty() || cases.back().first < v);
+		cases.push_back(std::make_pair(v, body.operands[inst.extra_first + k + 1].index));
+	}
+	if (!rising)
+		std::stable_sort(cases.begin(), cases.end(),
+			[](const std::pair<int64_t, uint32_t>& a, const std::pair<int64_t, uint32_t>& b) {
+				return a.first < b.first;
+			});
+	uint32_t runs = 0;
+	for (size_t k = 0; k < cases.size(); ++k)
+		runs += k == 0 || cases[k].second != cases[k - 1].second || cases[k].first - 1 != cases[k - 1].first;
+	return runs;
+}
+
+uint32_t wasm_inline_instruction_cost(const FunctionBody& body, const Instruction& inst)
 {
 	switch (inst.op)
 	{
@@ -102,7 +132,7 @@ uint32_t wasm_inline_instruction_cost(const Instruction& inst)
 	case Opcode::Index:
 		return 2; // explicit scale multiply and pointer addition
 	case Opcode::Switch:
-		return 2 + inst.extra_count;
+		return 2 + 2 * switch_runs(body, inst);
 	case Opcode::Vector:
 		return vector_cost(static_cast<VectorOp>(inst.sub));
 	case Opcode::CopyObject:
