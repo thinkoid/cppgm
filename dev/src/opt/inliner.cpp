@@ -28,6 +28,9 @@ const uint32_t kOutsideLoopBudget = 40;
 // bounded partial copies.
 const uint32_t kLoopSiteScale = 4;
 const uint32_t kTrivialLeaf = 4;
+// A leaf this small goes inline at a cold site too when the call passes the
+// address of a caller's slot (InlineWaveRunner::pins_slot).
+const uint32_t kSlotLeaf = 8;
 // Single-call (definition-removing) inlining; from O2 a callee twice that
 // size and its caller twice the budget (a lambda's instantiation of a
 // large dispatcher called once: pa33's O1 fixtures pin the O1 caps).
@@ -1672,6 +1675,7 @@ public:
 private:
 	bool compatible(const Instruction& call, SymbolId callee) const;
 	bool non_growing(const Shape& shape, const Instruction& call) const;
+	bool pins_slot(const FunctionBody& body, const Shape& shape, const Instruction& call) const;
 	// The charge of inlining `callee` here, or false when the policy keeps
 	// the call.
 	bool cleanup_welcome(const Shape& shape, bool handler_code, bool loop_site) const;
@@ -1736,6 +1740,26 @@ bool InlineWaveRunner::non_growing(const Shape& shape, const Instruction& call) 
 		if ((mask & 1) != 0 && (p >= call.extra_count || !body.operands[call.extra_first + p].is_literal()))
 			return false;
 	return true;
+}
+
+// A small callee that gets the address of one of the caller's slots: while
+// it is a call, the slot stays in memory on every path, the hot ones too.
+bool InlineWaveRunner::pins_slot(const FunctionBody& body, const Shape& shape, const Instruction& call) const
+{
+	if (shape.size > kSlotLeaf || shape.loop || shape.eh)
+		return false;
+	for (uint32_t p = 0; p < call.extra_count; ++p)
+	{
+		const Value v = body.operands[call.extra_first + p];
+		if (v.is(ValueKind::Slot))
+			return true;
+		if (!v.is(ValueKind::Temp) || v.index < body.parameter_count || body.temps[v.index].def == kNoId)
+			continue;
+		const Instruction& def = body.instructions[body.temps[v.index].def];
+		if (def.op == Opcode::Addr && def.ops[0].is(ValueKind::Slot))
+			return true;
+	}
+	return false;
 }
 
 bool InlineWaveRunner::compatible(const Instruction& call, SymbolId callee) const
@@ -2286,7 +2310,7 @@ bool InlineWaveRunner::process(SymbolId caller)
 			PartialCut partial;
 			bool partly = false, fully = false;
 			const bool cold_site = !source_required_ && cold[b] != 0 && shapes_[g].size > kTrivialLeaf &&
-				!non_growing(shapes_[g], body.instructions[i]) &&
+				!non_growing(shapes_[g], body.instructions[i]) && !pins_slot(body, shapes_[g], body.instructions[i]) &&
 				(program_.symbols[callee].metadata.flags & SF_FORCE_INLINE) == 0;
 			if (cold_site ||
 				!admit(g, body.instructions[i], !source_required_ && handler[b] != 0,

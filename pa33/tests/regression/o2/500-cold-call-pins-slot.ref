@@ -1,0 +1,25 @@
+declare function @release(%p : ptr) -> void
+declare function @make(%n : i64) -> ptr
+
+function @parse(%n : i64, %text : ptr) -> i64 [binding=strong] {
+  block ^entry:
+    %short = cmp ult i64 %n, 64
+    branch unlikely %short, ^padded, ^read
+
+  block ^padded:
+    %made = call ptr @make(%n)
+    jump ^read
+
+  block ^read:
+    %t3 = phi ptr [^entry: 0, ^padded: %made]
+    %from = phi ptr [^entry: %text, ^padded: %made]
+    %value = load typed i64 %from
+    branch %t3, ^free, ^out
+
+  block ^free:
+    call void @release(%t3)
+    jump ^out
+
+  block ^out:
+    return i64 %value
+}
