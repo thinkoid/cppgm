@@ -448,6 +448,14 @@ bool read_readonly_scalar(const lowir::Program& program, lowir::SymbolId symbol,
 void find_unwritten_globals(const lowir::Program& program, std::vector<uint8_t>& unwritten,
 	lowir::SymbolId skip_function = lowir::kNoId, const std::vector<uint8_t>* skip = nullptr);
 
+// Per symbol: an internal global definition that only its own name reaches
+// (`sealed`): each use of its address in the unit is the address of a load,
+// a store, a copyobj or a zeroinit, or a step by a literal to such an
+// address, and no global's data holds it. A pointer that a body loads,
+// receives or is returned is then in no such global. The table is empty
+// when the unit has none. O(instructions).
+void find_sealed_globals(const lowir::Program& program, std::vector<uint8_t>& sealed);
+
 // The address a pointer-sized load at `offset` into constant global
 // `symbol` reads: an address item there, its symbol in `target`; with no
 // `addend`, only one without an addend, else its addend there too

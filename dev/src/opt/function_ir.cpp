@@ -1186,6 +1186,128 @@ void find_unwritten_globals(
 	}
 }
 
+void find_sealed_globals(const Program& program, std::vector<uint8_t>& sealed)
+{
+	const SymbolId symbols = static_cast<SymbolId>(program.symbols.size());
+	sealed.assign(symbols, 0);
+	bool any = false;
+	for (SymbolId s = 0; s < symbols; ++s)
+	{
+		const Symbol& symbol = program.symbols[s];
+		const SymbolMetadata& m = symbol.metadata;
+		sealed[s] = symbol.kind == SymbolKind::GlobalDefinition && m.binding == ir_model::SBM_INTERNAL &&
+				m.storage == ir_model::GSM_DEFAULT && m.role == ir_model::SR_NONE &&
+				(m.flags & (SF_KEEP_ALIAS | SF_OBJECT_ROOT | SF_REPLACEABLE)) == 0 && m.section == 0 &&
+				m.tls_for == kNoId
+			? 1
+			: 0;
+		any = any || sealed[s] != 0;
+	}
+	if (!any)
+	{
+		sealed.clear();
+		return;
+	}
+	for (const ObjectAlias& alias : program.aliases)
+		if (alias.target < symbols)
+			sealed[alias.target] = 0;
+	// A global's data holding the address (its own too: a load reads it).
+	for (SymbolId s = 0; s < symbols; ++s)
+	{
+		const Symbol& symbol = program.symbols[s];
+		if (symbol.kind != SymbolKind::GlobalDefinition)
+			continue;
+		const Global& g = program.globals[symbol.detail];
+		if (g.init == GlobalInit::Address && g.address < symbols)
+			sealed[g.address] = 0;
+		if (g.init == GlobalInit::Data)
+			for (uint32_t k = 0; k < g.item_count; ++k)
+			{
+				const DataItem& item = program.data_items[g.first_item + k];
+				if (item.kind == DataItemKind::Address && item.address < symbols)
+					sealed[item.address] = 0;
+			}
+	}
+	// Each body: every use of a candidate's name. Where the body makes such an
+	// address a temporary at a literal distance (`addr`, a pointer copy, an
+	// index by a literal), every use of those temporaries too.
+	std::vector<SymbolId> carried;
+	for (SymbolId f = 0; f < symbols; ++f)
+	{
+		const Symbol& symbol = program.symbols[f];
+		if (symbol.kind != SymbolKind::FunctionDefinition || program.functions[symbol.detail].body == nullptr)
+			continue;
+		const FunctionBody& body = *program.functions[symbol.detail].body;
+		const auto carrier = [&](const Instruction& inst) {
+			return inst.result != kNoId &&
+				(inst.op == Opcode::Addr || (inst.op == Opcode::Copy && inst.type.is_pointer()) ||
+					(inst.op == Opcode::Index && inst.ops[1].is(ValueKind::Integer)));
+		};
+		const auto accessed = [](const Instruction& inst, uint32_t at) {
+			return (inst.op == Opcode::Load && at == 0) || (inst.op == Opcode::Store && at == 1) ||
+				(inst.op == Opcode::CopyObject && at < 2) || (inst.op == Opcode::ZeroInit && at == 0);
+		};
+		bool carries = false;
+		for (BlockId b : body.layout)
+			for (InstId i = body.blocks[b].first; i != kNoId; i = body.instructions[i].next)
+			{
+				const Instruction& inst = body.instructions[i];
+				uint32_t position = 0;
+				for_each_operand(body, inst, [&](const Value& v) {
+					const uint32_t at = position++;
+					if (!v.is(ValueKind::Symbol) || v.index >= symbols || sealed[v.index] == 0 || accessed(inst, at))
+						return;
+					if (at == 0 && carrier(inst))
+						carries = true;
+					else
+						sealed[v.index] = 0;
+				});
+			}
+		if (!carries)
+			continue;
+		carried.assign(body.temps.size(), kNoId);
+		const auto named = [&](Value v) -> SymbolId {
+			if (v.is(ValueKind::Symbol))
+				return v.index < symbols && sealed[v.index] != 0 ? v.index : kNoId;
+			return v.is(ValueKind::Temp) && v.index < carried.size() ? carried[v.index] : kNoId;
+		};
+		// (A definition may follow its use in layout: until no round adds one.)
+		for (bool changed = true; changed;)
+		{
+			changed = false;
+			for (BlockId b : body.layout)
+				for (InstId i = body.blocks[b].first; i != kNoId; i = body.instructions[i].next)
+				{
+					const Instruction& inst = body.instructions[i];
+					if (!carrier(inst) || carried[inst.result] != kNoId)
+						continue;
+					const SymbolId s = named(inst.ops[0]);
+					if (s == kNoId)
+						continue;
+					carried[inst.result] = s;
+					changed = true;
+				}
+		}
+		for (BlockId b : body.layout)
+			for (InstId i = body.blocks[b].first; i != kNoId; i = body.instructions[i].next)
+			{
+				const Instruction& inst = body.instructions[i];
+				const bool carries_on = carrier(inst);
+				uint32_t position = 0;
+				for_each_operand(body, inst, [&](const Value& v) {
+					const uint32_t at = position++;
+					if (!v.is(ValueKind::Temp) || v.index >= carried.size() || carried[v.index] == kNoId)
+						return;
+					if (!accessed(inst, at) && !(carries_on && at == 0))
+						sealed[carried[v.index]] = 0;
+				});
+			}
+	}
+	// (No entry: the unit has no sealed global.)
+	if (std::find(sealed.begin(), sealed.end(), 1) == sealed.end())
+		sealed.clear();
+}
+
 bool read_readonly_address(const Program& program, SymbolId symbol, int64_t offset,
 	const std::vector<uint8_t>* unwritten, SymbolId& target, int64_t* addend)
 {

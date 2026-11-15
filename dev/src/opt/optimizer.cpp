@@ -283,8 +283,8 @@ bool copies_code(const FunctionContext& context)
 // scalar rounds again over what promotion exposed; the body is then
 // compacted so a caller copies only live code.
 void simplify_function(Program& program, SymbolId symbol, OptimizerStats& stats, const OptimizerOptions& options,
-	std::vector<uint8_t>& nounwind, const std::vector<uint8_t>& unwritten, uint32_t& return_table_names,
-	std::vector<uint32_t>& unrolled)
+	std::vector<uint8_t>& nounwind, const std::vector<uint8_t>& unwritten, const std::vector<uint8_t>& sealed,
+	uint32_t& return_table_names, std::vector<uint32_t>& unrolled)
 {
 	const int level = options.level;
 	const bool addressed = !program.functions[program.symbols[symbol].detail].body->code_labels.empty();
@@ -292,6 +292,7 @@ void simplify_function(Program& program, SymbolId symbol, OptimizerStats& stats,
 	const PooledContext pooled(context, context_pool());
 	context.nounwind = &nounwind;
 	context.unwritten = &unwritten;
+	context.sealed = &sealed;
 	context.return_table_names = &return_table_names;
 	enable_verify(context, options);
 	verify(context, "inlining");
@@ -632,8 +633,8 @@ bool names_symbol(const FunctionBody& body, const std::vector<uint8_t>& marked)
 }
 
 void finish_function(Program& program, SymbolId symbol, OptimizerStats& stats, const OptimizerOptions& options,
-	std::vector<uint8_t>& nounwind, std::vector<uint8_t>& unwritten, const std::vector<uint8_t>* moved,
-	BitTablePool& bit_tables)
+	std::vector<uint8_t>& nounwind, std::vector<uint8_t>& unwritten, const std::vector<uint8_t>& sealed,
+	const std::vector<uint8_t>* moved, BitTablePool& bit_tables)
 {
 	if (!program.functions[program.symbols[symbol].detail].body->code_labels.empty())
 		return;
@@ -641,6 +642,7 @@ void finish_function(Program& program, SymbolId symbol, OptimizerStats& stats, c
 	const PooledContext pooled(context, context_pool());
 	context.nounwind = &nounwind;
 	context.unwritten = &unwritten;
+	context.sealed = &sealed;
 	context.bit_tables = options.level >= 3 ? &bit_tables : nullptr;
 	context.float_selects = options.level >= 3;
 	enable_verify(context, options);
@@ -955,12 +957,13 @@ void optimize_program(Program& program, const OptimizerOptions& options, Optimiz
 		materialize_storage_arguments(program);
 		const int level = options.level;
 		std::vector<uint8_t> nounwind(program.symbols.size(), 0);
-		std::vector<uint8_t> unwritten, moved;
+		std::vector<uint8_t> unwritten, moved, sealed;
 		initialize_statically(program, unwritten);
+		find_sealed_globals(program, sealed);
 		uint32_t return_table_names = 0;
 		std::vector<uint32_t> unrolled;
 		const std::function<void(SymbolId)> simplify = [&](SymbolId s) {
-			simplify_function(program, s, stats, options, nounwind, unwritten, return_table_names, unrolled);
+			simplify_function(program, s, stats, options, nounwind, unwritten, sealed, return_table_names, unrolled);
 		};
 		// Pipeline-wide growth: forced inlining copies at most the unit's
 		// input size (at least 10,240 instructions) in total, the ordinary
@@ -1001,12 +1004,15 @@ void optimize_program(Program& program, const OptimizerOptions& options, Optimiz
 		// The waves inlined the constructors the init function calls: what
 		// they store is now stores the final pass's loads can read.
 		const bool moved_late = level >= 2 && initialize_statically(program, unwritten, &moved);
+		// (Inlined and specialized bodies name what their callers passed.)
+		if (level >= 2)
+			find_sealed_globals(program, sealed);
 		BitTablePool bit_tables;
 		for (SymbolId s = 0; level >= 2 && s < program.symbols.size(); ++s)
 			if (program.symbols[s].kind == SymbolKind::FunctionDefinition &&
 				program.functions[program.symbols[s].detail].body != nullptr)
 				finish_function(
-					program, s, stats, options, nounwind, unwritten, moved_late ? &moved : nullptr, bit_tables);
+					program, s, stats, options, nounwind, unwritten, sealed, moved_late ? &moved : nullptr, bit_tables);
 	}
 
 	if (options.level == 1)

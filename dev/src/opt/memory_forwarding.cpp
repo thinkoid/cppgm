@@ -156,6 +156,9 @@ private:
 		return true;
 	}
 	bool pointer_may_alias(const AddressFacts& a, uint64_t a_bytes, const AddressFacts& b, uint64_t b_bytes) const;
+	bool sealed_global(const AddressFacts& f) const;
+	void open_global(const AddressFacts& f);
+	void open_operand(const Value& v);
 	bool fields_apart(const AddressFacts& a, uint64_t a_bytes, const AddressFacts& b, uint64_t b_bytes) const;
 	Value object_of(const AddressFacts& f) const;
 	TempId allocation_of(const AddressFacts& f) const;
@@ -247,6 +250,7 @@ private:
 	mutable std::vector<Value> object_;                   // per temp once asked: the slot or global it stays in
 	mutable std::vector<uint8_t> object_asked_;           // per temp: object_ holds the answer
 	std::vector<uint8_t> escaped_;                        // per slot: address leaves the analysis
+	std::vector<SymbolId> opened_;                        // sealed globals whose address this body reads as a value
 	std::vector<uint8_t> passed_;                         // per slot: address an unkept call argument (empty: none)
 	bool any_passed_ = false;                             // some slot is passed_
 	std::vector<std::pair<BlockId, InstId>> self_stores_; // stores of a slot's address into itself
@@ -418,14 +422,46 @@ Value MemoryForwarding::object_of(const AddressFacts& f) const
 	return object_[f.index];
 }
 
+// Whether the address is in a global that only its name reaches, in this
+// body too: a sealed global (find_sealed_globals) whose address no
+// instruction here reads as a value (a later pass may have made one: a
+// choice between two addresses, an index by a variable).
+bool MemoryForwarding::sealed_global(const AddressFacts& f) const
+{
+	return f.base == ValueKind::Symbol && c_.sealed != nullptr && f.index < c_.sealed->size() &&
+		(*c_.sealed)[f.index] != 0 && std::find(opened_.begin(), opened_.end(), f.index) == opened_.end();
+}
+
+void MemoryForwarding::open_global(const AddressFacts& f)
+{
+	if (sealed_global(f))
+		opened_.push_back(f.index);
+}
+
+// The same for an operand that an instruction reads as a value.
+void MemoryForwarding::open_operand(const Value& v)
+{
+	SymbolId s;
+	if (v.is(ValueKind::Symbol))
+		s = v.index;
+	else if (v.is(ValueKind::Temp) && address_[v.index].base == ValueKind::Symbol)
+		s = address_[v.index].index;
+	else
+		return;
+	if (s < c_.sealed->size() && (*c_.sealed)[s] != 0 && std::find(opened_.begin(), opened_.end(), s) == opened_.end())
+		opened_.push_back(s);
+}
+
 // may_alias for two known addresses of different objects, at least one
 // stepped from a pointer temporary: a pointer base may point anywhere but
-// into a private slot, and one that stays in a slot or global is in no
-// other.
+// into a private slot or a sealed global, and one that stays in a slot or
+// global is in no other.
 bool MemoryForwarding::pointer_may_alias(
 	const AddressFacts& a, uint64_t a_bytes, const AddressFacts& b, uint64_t b_bytes) const
 {
 	if ((a.base == ValueKind::Slot && !escaped_[a.index]) || (b.base == ValueKind::Slot && !escaped_[b.index]))
+		return false;
+	if ((b.base == ValueKind::Temp && sealed_global(a)) || (a.base == ValueKind::Temp && sealed_global(b)))
 		return false;
 	const Value in_a = object_of(a);
 	if (!in_a.is(ValueKind::None))
@@ -630,6 +666,9 @@ void MemoryForwarding::remember_at(const AddressFacts& f, const Key& key, Type t
 void MemoryForwarding::escapes()
 {
 	escaped_.assign(body_.slots.size(), 0);
+	opened_.clear();
+	// (An empty table: the unit has no sealed global.)
+	const bool watched = c_.sealed != nullptr && !c_.sealed->empty();
 	passed_.clear();
 	any_passed_ = false;
 	self_stores_.clear();
@@ -668,6 +707,7 @@ void MemoryForwarding::escapes()
 				}
 				if (f.base == ValueKind::Slot)
 					escaped_[f.index] = 1;
+				open_global(f);
 				continue;
 			}
 			// A phi may name an address defined later in layout: phis
@@ -684,6 +724,8 @@ void MemoryForwarding::escapes()
 					inst.op == Opcode::ZeroInit || (release && at == 3);
 				if (address_use)
 					return;
+				if (watched)
+					open_operand(v);
 				// Only a known local address or tracked allocation can escape
 				// here. Scalar temporaries and literal operands need no facts.
 				if (!v.is(ValueKind::Slot) &&
@@ -728,6 +770,8 @@ void MemoryForwarding::escapes()
 		for (InstId i = body_.blocks[b].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
 			i = body_.instructions[i].next)
 			for_each_operand(body_, body_.instructions[i], [&](const Value& v) {
+				if (watched)
+					open_operand(v);
 				if (!v.is(ValueKind::Slot) &&
 					(!v.is(ValueKind::Temp) ||
 						(address_[v.index].base != ValueKind::Slot &&

@@ -1,0 +1,130 @@
+# An internal global that only its own name reaches is written by no store
+# through a pointer that a function receives or loads: `@sealed` and
+# `@sealed_field` read the global once. A global whose address is passed
+# (`@passed`), held by another global's data (`@held`), chosen as a value
+# (`@chosen`) or stepped by a variable (`@stepped`) keeps its second load.
+
+global @count : i64 [binding=internal] = 0
+
+global @record [binding=internal] = {
+  i64 3
+  i64 7
+}
+
+global @shared : i64 [binding=internal] = 7
+
+global @target : i64 [binding=internal] = 7
+
+global @holder : ptr [binding=internal] = addr @target
+
+global @left : i64 [binding=internal] = 7
+
+global @right : i64 [binding=internal] = 9
+
+global @table [binding=internal] = {
+  i64 7
+  i64 5
+}
+
+function @set(%value : i64) -> void [no_inline=yes] {
+  block ^entry:
+    store i64 %value, @count
+    return void
+}
+
+function @sealed(%p : ptr) -> i64 [no_inline=yes] {
+  block ^entry:
+    %a = load i64 @count
+    store i64 1, %p
+    %b = load i64 @count
+    %r = binary add i64 %a, %b
+    return i64 %r
+}
+
+function @sealed_field(%p : ptr) -> i64 [no_inline=yes] {
+  block ^entry:
+    %field = index i64 @record, 1
+    %a = load i64 %field
+    store i64 1, %p
+    %b = load i64 %field
+    store i64 %a, %field
+    %r = binary add i64 %a, %b
+    return i64 %r
+}
+
+function @passed(%p : ptr) -> i64 [no_inline=yes] {
+  block ^entry:
+    %a = load i64 @shared
+    store i64 1, %p
+    %b = load i64 @shared
+    %r = binary add i64 %a, %b
+    return i64 %r
+}
+
+function @held() -> i64 [no_inline=yes] {
+  block ^entry:
+    %a = load i64 @target
+    %p = load ptr @holder
+    store i64 1, %p
+    %b = load i64 @target
+    %r = binary add i64 %a, %b
+    return i64 %r
+}
+
+function @chosen(%first : i64, %p : ptr) -> i64 [no_inline=yes] {
+  block ^entry:
+    %a = load i64 @left
+    %to = select ptr %first, @left, @right
+    store ptr %to, %p
+    %q = load ptr %p
+    store i64 1, %q
+    %b = load i64 @left
+    %r = binary add i64 %a, %b
+    return i64 %r
+}
+
+function @stepped(%i : i64, %p : ptr) -> i64 [no_inline=yes] {
+  block ^entry:
+    %a = load i64 @table
+    %element = index i64 @table, %i
+    store ptr %element, %p
+    %q = load ptr %p
+    store i64 1, %q
+    %b = load i64 @table
+    %r = binary add i64 %a, %b
+    return i64 %r
+}
+
+function @main() -> i32 [role=entry] {
+  slot $cell : i64
+  slot $place : ptr
+
+  block ^entry:
+    %cell = addr $cell
+    %place = addr $place
+    call void @set(7)
+    %a = call i64 @sealed(%cell)
+    %b = call i64 @sealed_field(%cell)
+    %c = call i64 @passed(@shared)
+    %d = call i64 @held()
+    %e = call i64 @chosen(1, %place)
+    %f = call i64 @stepped(0, %place)
+    %a_ok = cmp eq i64 %a, 14
+    %a_bit = select i32 %a_ok, 0, 1
+    %b_ok = cmp eq i64 %b, 14
+    %b_bit = select i32 %b_ok, 0, 2
+    %c_ok = cmp eq i64 %c, 8
+    %c_bit = select i32 %c_ok, 0, 4
+    %d_ok = cmp eq i64 %d, 8
+    %d_bit = select i32 %d_ok, 0, 8
+    %e_ok = cmp eq i64 %e, 8
+    %e_bit = select i32 %e_ok, 0, 16
+    %f_ok = cmp eq i64 %f, 8
+    %f_bit = select i32 %f_ok, 0, 32
+    %ab = binary or i32 %a_bit, %b_bit
+    %cd = binary or i32 %c_bit, %d_bit
+    %ef = binary or i32 %e_bit, %f_bit
+    %abcd = binary or i32 %ab, %cd
+    %status = binary or i32 %ef, %abcd
+    return i32 %status
+}

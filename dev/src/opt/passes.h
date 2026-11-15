@@ -105,6 +105,8 @@ struct FunctionContext
 	const std::vector<uint8_t>* nounwind = nullptr;
 	// Per symbol: an internal global the unit never writes (find_unwritten_globals).
 	const std::vector<uint8_t>* unwritten = nullptr;
+	// Per symbol: an internal global that only its name reaches (find_sealed_globals).
+	const std::vector<uint8_t>* sealed = nullptr;
 	// The body's version: bumped by every pass that reports a change (and
 	// by any other edit the driver makes), so a pass that left the body as
 	// it was at this version is not run again until something changes,
