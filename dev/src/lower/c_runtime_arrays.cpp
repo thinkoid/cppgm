@@ -1,0 +1,71 @@
+#include "lower/function_lowering.h"
+
+#include "sema/conversions.h"
+
+namespace lower {
+
+RValue FunctionLowering::runtime_array_size(const sema::Type* type)
+{
+	const auto slot = runtime_sizes_.find(type->runtime_bound);
+	if (slot == PointerMap::kMissing)
+		throw LoweringError(type->runtime_bound->location, "a runtime array extent without an evaluated declaration");
+	Place place = Place();
+	place.storage = lowir::Value::slot(slot);
+	return load(lowering_.storage_type(lowering_.graph().types.fundamental(FundamentalType::UnsignedLongInt)), place);
+}
+
+void FunctionLowering::local_runtime_array(const sema::VariableEntity* variable, uint32_t location)
+{
+	const sema::Type* type = variable->type;
+	const syntax::Expr& bound = *type->runtime_bound;
+	sema::TypeTable& types = lowering_.graph().types;
+	const sema::Type* size_type = types.fundamental(FundamentalType::UnsignedLongInt);
+	const sema::Type* pointer_type = types.pointer(types.fundamental(FundamentalType::Void));
+	const lowir::Type size = lowering_.storage_type(size_type);
+	const lowir::Type pointer = program_.pointer_type();
+	// The bound is evaluated exactly once on each entry to the declaration.
+	RValue bytes = convert(rvalue(bound), bound.facts->type, size_type, ConversionContext::Initialization);
+	bytes = binary(lowir::BinaryOp::Mul, size, bytes, integer(size, lowering_.size_of(type->element, location)));
+	auto slot = runtime_sizes_.find(&bound);
+	if (slot == PointerMap::kMissing)
+	{
+		slot = generated_slot(lowir::SlotKind::Tmpobj, size);
+		runtime_sizes_.set(&bound, slot);
+	}
+	Place saved_size = Place();
+	saved_size.storage = lowir::Value::slot(slot);
+	store(size, bytes, saved_size);
+	const uint64_t natural = lowering_.alignment_of(type->element, location);
+	const uint64_t alignment = variable->alignment_request > natural ? variable->alignment_request : natural;
+	// StackAlloc guarantees sixteen-byte alignment. Stronger alignments
+	// reserve padding and round the returned address, retaining the original
+	// mark for all exits from this declaration's scope.
+	lowir::Instruction save = lowir::make_instruction(lowir::Opcode::StackSave, pointer);
+	const lowir::Value mark = emit_value(save, pointer);
+	lowir::Instruction allocate = lowir::make_instruction(lowir::Opcode::StackAlloc, pointer);
+	allocate.ops[0] = alignment > 16 ? binary(lowir::BinaryOp::Add, size, bytes, integer(size, alignment - 1)).value
+									 : bytes.value;
+	RValue address{ emit_value(allocate, pointer), pointer };
+	if (alignment > 16)
+	{
+		RValue bits = convert(address, pointer_type, size_type, ConversionContext::Cast);
+		bits = binary(lowir::BinaryOp::Add, size, bits, integer(size, alignment - 1));
+		bits = binary(lowir::BinaryOp::And, size, bits, integer(size, 0 - alignment));
+		address = convert(bits, size_type, pointer_type, ConversionContext::Cast);
+	}
+	Cleanup cleanup = Cleanup();
+	cleanup.storage = mark;
+	cleanup.type = type;
+	cleanup.variable = variable;
+	cleanup.unwind = cleanup.shared_return = cleanup.conditional = lowir::kNoId;
+	cleanup.restores_stack = true;
+	cleanups_.push_back(cleanup);
+	Local local = Local();
+	local.slot = lowir::kNoId;
+	local.address = address.value;
+	local.depth = cleanups_.size();
+	local_index_.set(variable, static_cast<uint32_t>(locals_.size()));
+	locals_.push_back(local);
+}
+
+} // namespace lower

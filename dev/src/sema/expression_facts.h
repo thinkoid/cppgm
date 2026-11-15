@@ -224,6 +224,9 @@ enum : uint32_t
 	// A dynamic_cast checked at run time (5.2.7p8): to a class derived
 	// from the operand's, or unrelated to it.
 	kRuntimeCheck = 16777216,
+	// Kind-specific use of the same bit: sizeof a C runtime array, whose
+	// type is retained in `target` rather than a folded integer `value`.
+	kRuntimeSize = kRuntimeCheck,
 	// A braced-init-list initializing std::initializer_list<E>: the array
 	// `const E[N]` (`target`) its elements initialize, and the object
 	// referring to it (8.5.4p5).

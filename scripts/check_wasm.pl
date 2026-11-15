@@ -10,7 +10,7 @@ use FindBin;
 use JSON::PP qw(decode_json);
 use lib $FindBin::Bin;
 use CppgmBatchWorker qw(collect_tests run_command_capture);
-use CppgmWasmModule qw(export_signatures export_tag_signatures sequence_module redirect_wasi_exit);
+use CppgmWasmModule qw(export_signatures export_tag_signatures export_global_types sequence_module redirect_wasi_exit);
 use CppgmWasmFixture qw(mutate_object);
 use CppgmWasmQuality qw(check_quality);
 use CppgmWasmGlobals qw(initialize_globals metadata_first group_object);
@@ -468,6 +468,16 @@ for my $level (@{$expect->{levels} // [0, 1, 2, 3]}) {
                    join("\0", sort keys %$actual) ne join("\0", sort @{$expect->{export_names}});
         }
         check_quality($run_module, $expect->{quality}, $level) if $expect->{quality};
+        if ($expect->{global_abi}) {
+            my $actual = export_global_types($run_module);
+            for my $name (sort keys %{$expect->{global_abi}}) {
+                die "$test: missing exported global $name\n" unless $actual->{$name};
+                for my $part ('type', 'mutable') {
+                    die "$test: global $name ABI $part differs\n"
+                        if "$actual->{$name}{$part}" ne "$expect->{global_abi}{$name}{$part}";
+                }
+            }
+        }
         if ($expect->{tag_abi}) {
             my $actual = export_tag_signatures($run_module);
             for my $name (sort keys %{$expect->{tag_abi}}) {

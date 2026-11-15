@@ -2,6 +2,7 @@
 """WASI assertion hosts must preserve the guest's code and public interfaces."""
 
 from pathlib import Path
+import json
 import subprocess
 import tempfile
 import unittest
@@ -47,6 +48,28 @@ class WasmExitHost(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('Expected exactly one WASI proc_exit import', result.stderr)
                 self.assertIsNone(output)
+
+
+class WasmGlobalInterface(unittest.TestCase):
+    def test_imported_and_defined_globals_keep_types_and_mutability(self):
+        prefix = b'\0asm\1\0\0\0' + section(1, bytes.fromhex('01600000'))
+        imports = b'\2\3env\4call\0\0\3env\5state\3\x7f\1'
+        globals_ = bytes.fromhex('037f0041000b7c014400000000000000000b7b00fd0c') + bytes(16) + b'\x0b'
+        exports = b'\4\5state\3\0\7address\3\1\5float\3\2\6vector\3\3'
+        data = prefix + section(2, imports) + section(6, globals_) + section(7, exports)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'globals.wasm'
+            source.write_bytes(data)
+            result = subprocess.run(
+                ['perl', '-I', str(ROOT / 'scripts'), '-MCppgmWasmModule', '-MJSON::PP', '-e',
+                 'print JSON::PP::encode_json(CppgmWasmModule::export_global_types($ARGV[0]));',
+                 str(source)], capture_output=True, text=True, check=True)
+        self.assertEqual(json.loads(result.stdout), {
+            'state': {'type': 'i32', 'mutable': 1},
+            'address': {'type': 'i32', 'mutable': 0},
+            'float': {'type': 'f64', 'mutable': 1},
+            'vector': {'type': 'v128', 'mutable': 0},
+        })
 
 
 if __name__ == '__main__':

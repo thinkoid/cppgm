@@ -1510,7 +1510,9 @@ bool Analyzer::complete_pointee(const Type* pointer, uint32_t location)
 	// defined object type (not void, an array of unknown bound or an
 	// incomplete class, whose completion may come later: not memoized).
 	const Type* element = pointer->unqualified->element;
-	if (IsVoid(element) || (element->kind == TypeKind::Array && element->bound == 0 && element->owner == nullptr))
+	if (IsVoid(element) ||
+		(element->kind == TypeKind::Array && element->bound == 0 && element->owner == nullptr &&
+			!element->runtime_array()))
 		return substitution_error(location, "arithmetic on a pointer to an incomplete type");
 	const ClassEntity* cls = ClassOf(element);
 	if (cls != nullptr && !require_complete(cls))
@@ -3353,6 +3355,14 @@ ExprFacts* Analyzer::size_of(const syntax::SizeofExpr& expr, Scope* scope)
 	// 5.3.3p1: nor of an incomplete type, an array of unknown bound among
 	// them (3.9p5).
 	uint64_t size = 0, alignment = 0;
+	if (type->runtime_array())
+	{
+		ExprFacts* facts = new_facts(
+			expr, types_.fundamental(FundamentalType::UnsignedLongInt), ValueCategory::PRValue);
+		facts->flags |= kRuntimeSize;
+		facts->target = type;
+		return facts;
+	}
 	if (type->kind == TypeKind::Function || IsVoid(type) ||
 		(type->kind == TypeKind::Array && type->bound == 0 && type->owner == nullptr && template_depth_ == 0) ||
 		!type_size(type, size, alignment, expr.location))

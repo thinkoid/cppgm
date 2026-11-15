@@ -220,7 +220,9 @@ lowir::Type ComparisonType(lowir::Type operand, lowir::Type common)
 bool IsSizeQuery(const syntax::Expr& expr)
 {
 	const syntax::Expr* e = WithoutParentheses(&expr);
-	if (e->facts != nullptr && (e->facts->flags & sema::kSpecializationQuery) != 0)
+	if (e->facts != nullptr &&
+		((e->facts->flags & sema::kSpecializationQuery) != 0 ||
+			(e->kind == syntax::ExprKind::Sizeof && (e->facts->flags & sema::kRuntimeSize) != 0)))
 		return false;
 	return e->kind == syntax::ExprKind::Sizeof || e->kind == syntax::ExprKind::SizeofPack ||
 		(e->kind == syntax::ExprKind::TypeTrait &&
@@ -1530,6 +1532,12 @@ RValue FunctionLowering::keyword_literal(const syntax::KeywordLiteralExpr& expr)
 
 RValue FunctionLowering::size_query(const syntax::Expr& expr)
 {
+	if (expr.kind == syntax::ExprKind::Sizeof && (expr.facts->flags & sema::kRuntimeSize) != 0)
+	{
+		// A VLA operand is evaluated; its extent was saved at declaration.
+		glvalue(*static_cast<const syntax::SizeofExpr&>(expr).operand);
+		return runtime_array_size(expr.facts->target);
+	}
 	// 5.3.3: sizeof (and alignof, 5.3.6) is its folded size_t value,
 	// materialized as a constant.
 	return constant(lowering_.storage_type(expr.facts->type), expr.facts->value);
@@ -1719,8 +1727,14 @@ RValue FunctionLowering::pointer_offset(const RValue& pointer, const RValue& off
 	// element needs no scaling), negated for subtraction.
 	const lowir::Type i64 = lowir::Type::scalar(lowir::TypeKind::I64);
 	RValue count = convert_integer(offset, index_type, i64, ConversionContext::Additive, true, literal);
-	const uint64_t size = lowering_.size_of(pointer_type->unqualified->element, location);
-	if (size != 1)
+	const sema::Type* pointee = pointer_type->unqualified->element;
+	const uint64_t size = pointee->runtime_array() ? 0 : lowering_.size_of(pointee, location);
+	if (pointee->runtime_array())
+		count = binary(lowir::BinaryOp::Mul, i64, count,
+			convert_integer(runtime_array_size(pointee),
+				lowering_.graph().types.fundamental(FundamentalType::UnsignedLongInt), i64, ConversionContext::Operand,
+				true, false));
+	else if (size != 1)
 		count = binary(lowir::BinaryOp::Mul, i64, count, integer(i64, size));
 	if (subtract)
 	{
@@ -1748,7 +1762,14 @@ RValue FunctionLowering::pointer_difference(
 		program_.pointer_type().pointer_bytes() == 4 ? lowir::TypeKind::I32 : lowir::TypeKind::I64);
 	RValue bytes = binary(lowir::BinaryOp::Sub, program_.pointer_type(), left, right);
 	bytes.type = i64;
-	const uint64_t size = lowering_.size_of(pointer_type->unqualified->element, location);
+	const sema::Type* pointee = pointer_type->unqualified->element;
+	if (pointee->runtime_array())
+	{
+		RValue size = runtime_array_size(pointee);
+		size.type = i64;
+		return binary(lowir::BinaryOp::Div, i64, bytes, size, lowir::IF_EXACT);
+	}
+	const uint64_t size = lowering_.size_of(pointee, location);
 	if (size == 1)
 		return bytes;
 	if ((size & (size - 1)) == 0)

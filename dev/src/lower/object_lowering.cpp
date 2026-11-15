@@ -1315,6 +1315,13 @@ void FunctionLowering::destroy(const sema::Type* type, lowir::Value object, uint
 
 void FunctionLowering::destroy_local(const Cleanup& cleanup, lowir::BlockId below, bool unwinding)
 {
+	if (cleanup.restores_stack)
+	{
+		lowir::Instruction restore = lowir::make_instruction(lowir::Opcode::StackRestore, program_.pointer_type());
+		restore.ops[0] = cleanup.storage;
+		emit(restore);
+		return;
+	}
 	// A static's initialization an exception leaves (Itanium 3.3.2).
 	if (cleanup.aborts_guard)
 	{

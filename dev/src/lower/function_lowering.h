@@ -278,6 +278,8 @@ private:
 		// tracked one's address where it was made.
 		bool branched;
 		lowir::Value made_at;
+		// A C runtime array's scope exit restores its saved stack mark.
+		bool restores_stack;
 	};
 
 	// The array aggregate_array_object (or aggregate_elements) is making
@@ -741,6 +743,8 @@ private:
 	void declaration_statement(const syntax::Decl& decl);
 	void local_variable(const syntax::InitDeclarator& init);
 	void local_object_variable(const sema::VariableEntity* variable, const syntax::InitDeclarator& init);
+	void local_runtime_array(const sema::VariableEntity* variable, uint32_t location);
+	RValue runtime_array_size(const sema::Type* type);
 	// A function-local static object (lower/local_static_lowering.cpp).
 	struct StaticInitialization;
 	void complete_static_initialization(const StaticInitialization& initialization, size_t& first);
@@ -1635,6 +1639,8 @@ private:
 	lowir::Value object_address(const syntax::Expr& expr);
 	Place compound_literal(const syntax::FunctionalCastExpr& expr);
 	PointerMap compound_slots_;
+	// Bound-expression identity -> fixed slot holding its evaluated byte size.
+	PointerMap runtime_sizes_;
 	// A class prvalue materialized in a temporary object of the frame,
 	// destroyed at the end of its full-expression (12.2p3).
 	lowir::Value temporary_object(

@@ -451,6 +451,9 @@ bool ConstantInterpreter::rvalue(const syntax::Expr& expr, ConstValue& out)
 		return true;
 	}
 	case syntax::ExprKind::Sizeof:
+		if ((facts->flags & kRuntimeSize) != 0)
+			return fail(e->location, "sizeof a variable-length array is not constant");
+		// Fall through: fixed sizeof and other type queries are constants.
 	case syntax::ExprKind::SizeofPack:
 	case syntax::ExprKind::TypeTrait:
 		out = IntegerValue(facts->type->unqualified, facts->value);

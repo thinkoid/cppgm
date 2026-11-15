@@ -33,6 +33,9 @@ private:
 	ObjectRef indexed_symbol(uint32_t object, uint8_t kind, uint32_t index) const;
 	uint32_t symbol_value(ObjectRef ref) const;
 	bool synthetic_data(const std::string& name, uint32_t& value) const;
+	bool request_section_boundary(const std::string& name);
+	void group_named_sections();
+	void prepare_data_exports();
 	Bytes relocated(uint32_t object, const ObjectChunk& chunk, bool constant = false) const;
 	void emit(Bytes& output);
 	void data_section(Bytes& output) const;
@@ -57,6 +60,11 @@ private:
 	std::set<ObjectRef> weak_functions_;
 	std::map<ObjectRef, uint32_t> functions_, data_, tags_, globals_;
 	std::map<ObjectRef, uint32_t> address_globals_;
+	// Requested GNU named-section boundaries; no scans/grouping for links
+	// that do not name them. Ranges are filled by final data placement.
+	std::map<std::string, std::pair<uint32_t, uint32_t>> named_sections_;
+	// Exported data addresses are immutable i32 globals (index, address).
+	std::map<std::string, std::pair<uint32_t, uint32_t>> data_exports_;
 	std::vector<ObjectRef> ordered_functions_, ordered_data_, ordered_tags_;
 	std::vector<ObjectRef> ordered_globals_, imported_globals_;
 	std::vector<std::pair<uint32_t, ObjectRef>> initializers_;

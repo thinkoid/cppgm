@@ -76,13 +76,22 @@ The first fixture set covers these parts of the C17 input profile:
   array-bound deduction and designators. Each occurrence denotes an lvalue;
   block-scope objects survive the full expression and file-scope objects have
   static storage with constant initialization.
+- One-dimensional block-scope variable-length arrays with automatic or
+  register storage. Evaluate each bound once at its declaration, retain that
+  extent for `sizeof`, and release the storage on every scope exit, including
+  `break`, `continue`, `return` and `goto`. A jump or switch case must not enter
+  a runtime array's scope past its declaration. Preserve element alignment and
+  explicit alignment requests. Array decay and pointers formed by `&array`
+  use the actual saved extent.
 - Hosted C header declarations and their builtin operations through the
   existing hosted environment.
 
 This is an initial profile, not a claim of complete C17 conformance. Use
 `(void)` for a prototype with no parameters; an empty `()` declares a function
-without a prototype. Variable-length arrays and positional
-continuation after a nested designator remain outside this fixture set. Extend the profile and its tests together. Do not silently
+without a prototype. Variably modified typedefs, pointer declarations,
+parameters and type-ids, multidimensional runtime arrays, and positional
+continuation after a nested designator remain outside this fixture set. Diagnose
+these unsupported forms. Extend the profile and its tests together. Do not silently
 apply a C++ rule where a supported C construct has a different meaning.
 
 Share preprocessing, declarator parsing, type storage, ABI classification,

@@ -1045,6 +1045,8 @@ DeclaratorInfo Analyzer::declarator(const syntax::Declarator* declarator, const 
 		check_stack(current->location);
 		for (const syntax::PtrOperator& pointer : current->pointers)
 		{
+			if (type->runtime_array())
+				error(current->location, "a variably modified pointer declaration is outside the C profile");
 			// 8.3.2p5/p6: collapsing applies to a reference supplied by
 			// an alias, decltype or template parameter, not another
 			// reference formed directly in this declarator.
@@ -1322,7 +1324,17 @@ const Type* Analyzer::apply_suffix(const syntax::DeclaratorSuffix& suffix, const
 {
 	if (suffix.kind == syntax::DeclaratorSuffixKind::Array)
 	{
-		const uint64_t bound = suffix.bound != nullptr ? array_bound(*suffix.bound, scope) : 0;
+		bool runtime = false;
+		const uint64_t bound = suffix.bound != nullptr ? array_bound(*suffix.bound, scope, &runtime) : 0;
+		if (runtime)
+		{
+			if (scope->kind != ScopeKind::Block || type->kind == TypeKind::Array)
+				error(location, "a runtime array bound requires a one-dimensional block-scope object");
+			checked_array(type, 1, location);
+			return types_.array(type, 0, nullptr, suffix.bound);
+		}
+		if (type->runtime_array())
+			error(location, "multidimensional variable-length arrays are outside the C profile");
 		const Type* array = checked_array(type, bound, location);
 		if (array == nullptr)
 			return type;
@@ -1656,6 +1668,8 @@ const Type* Analyzer::type_id(const syntax::TypeId& type, Scope* scope, bool all
 		error(type.location, "auto in a type-id");
 	if (info.virt_suffix != nullptr)
 		error(type.location, "a virt-specifier in a type-id");
+	if (info.type->runtime_array())
+		error(type.location, "a variable-length array type-id is outside the C profile");
 	type_id_alignment_ = info.type == specifiers.type ? specifiers.alias_alignment : 0;
 	return info.type;
 }
@@ -1678,7 +1692,7 @@ void Analyzer::default_template_argument_names(const syntax::TypeId& type, Scope
 		unbound_defaults_.insert(key, bound);
 }
 
-uint64_t Analyzer::array_bound(const syntax::Expr& bound, Scope* scope)
+uint64_t Analyzer::array_bound(const syntax::Expr& bound, Scope* scope, bool* runtime)
 {
 	// 8.3.4p1: an integral constant expression converted to std::size_t,
 	// greater than zero.
@@ -1691,14 +1705,25 @@ uint64_t Analyzer::array_bound(const syntax::Expr& bound, Scope* scope)
 		validate_fixed_expression(bound, scope);
 	if (failed())
 		return 1;
+	const bool c_runtime = c_source_ && runtime != nullptr && semantic();
+	if (c_runtime && !IsIntegralOrUnscopedEnum(bound.facts->type))
+	{
+		error(bound.location, "a C array bound must have integer type");
+		return 1;
+	}
 	// The bound has a fixed integral type, but its value can depend on the
 	// template. Keep that provenance in the declaration's type dependence.
 	if (bound.facts != nullptr && (bound.facts->flags & kValueDependentUse) != 0)
 		names_.note_dependent_use();
 	// A bound in a template may depend on its parameters: evaluated when
 	// it can be, otherwise left unknown for instantiation.
-	if (!constant_value(bound, scope, value, template_depth_ == 0 && soft_substitution_ == 0))
+	if (!constant_value(bound, scope, value, !c_runtime && template_depth_ == 0 && soft_substitution_ == 0))
 	{
+		if (c_runtime)
+		{
+			*runtime = true;
+			return 0;
+		}
 		if (template_depth_ == 0)
 			substitution_error(bound.location, "an array bound that is not an integral constant expression");
 		return 0;

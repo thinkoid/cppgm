@@ -108,18 +108,30 @@ void Linker::emit(Bytes& output)
 	std::map<std::string, std::pair<uint8_t, uint32_t>> exported;
 	const auto add_export = [&](const std::string& name, ObjectRef ref) {
 		const uint8_t kind = symbol(ref).kind;
-		if ((kind != 0 && kind != 2 && kind != 4 && kind != 5) || name == "memory")
-			throw WasmError("Wasm export is not a function/tag or conflicts with memory: " + name);
+		if ((kind != 0 && kind != 1 && kind != 2 && kind != 4 && kind != 5) || name == "memory")
+			throw WasmError("Wasm export has an unsupported kind or conflicts with memory: " + name);
 		const auto entry = std::make_pair(kind == 5 ? uint8_t(1)
-				: kind == 2                         ? uint8_t(3)
+				: kind == 1 || kind == 2            ? uint8_t(3)
 													: kind,
-			kind == 0 ? function_index(ref) : symbol_value(ref));
+			kind == 1       ? data_exports_.at(name).first
+				: kind == 0 ? function_index(ref)
+							: symbol_value(ref));
 		const auto inserted = exported.emplace(name, entry);
 		if (!inserted.second && inserted.first->second != entry)
 			throw WasmError("conflicting Wasm export: " + name);
 	};
 	for (const std::string& name : options_.exports)
-		add_export(name, definitions_.at(name));
+	{
+		const auto address = data_exports_.find(name);
+		if (address != data_exports_.end())
+		{
+			if (name == "memory")
+				throw WasmError("Wasm data export conflicts with memory: " + name);
+			exported.emplace(name, std::make_pair(uint8_t(3), address->second.first));
+		}
+		else
+			add_export(name, definitions_.at(name));
+	}
 	if (options_.target == target_model::Target::Wasi && !options_.no_startfiles)
 		add_export("_start", definitions_.at("_start"));
 	std::set<ObjectRef> explicitly_named;
@@ -226,12 +238,17 @@ void Linker::emit(Bytes& output)
 void Linker::data_section(Bytes& output) const
 {
 	std::vector<std::pair<uint32_t, Bytes>> segments;
+	std::string previous_section;
 	for (ObjectRef ref : ordered_data_)
 	{
-		Bytes contents = relocated(ref.first, objects_[ref.first].data[ref.second].contents);
+		const ObjectData& source = objects_[ref.first].data[ref.second];
+		const bool complete_section = named_sections_.count(source.name) != 0;
+		Bytes contents = relocated(ref.first, source.contents);
 		// Defined linear memory starts at zero. Preserve the full layout,
 		// but omit trailing zero initialization after applying relocations.
-		while (!contents.data.empty() && contents.data.back() == 0)
+		// Requested named sections retain a complete contiguous file image:
+		// SDK metadata readers consume their bytes before instantiation.
+		while (!complete_section && !contents.data.empty() && contents.data.back() == 0)
 			contents.data.pop_back();
 		if (contents.data.empty())
 			continue;
@@ -242,14 +259,16 @@ void Linker::data_section(Bytes& output) const
 			const uint64_t end = uint64_t(previous.first) + previous.second.data.size();
 			// Small zero-filled gaps cost less than another active segment.
 			// Keep addresses fixed and avoid materializing large BSS holes.
-			if (end <= address && address - end <= 8)
+			if (end <= address && (address - end <= 8 || (complete_section && previous_section == source.name)))
 			{
 				previous.second.data.resize(address - previous.first, 0);
 				previous.second.append(contents);
+				previous_section = complete_section ? source.name : "";
 				continue;
 			}
 		}
 		segments.push_back({ address, std::move(contents) });
+		previous_section = complete_section ? source.name : "";
 	}
 	if (segments.empty())
 		return;

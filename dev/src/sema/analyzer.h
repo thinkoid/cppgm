@@ -350,6 +350,9 @@ private:
 	bool predeclared_extended_float(const Binding* existing, const Scope* where) const;
 	Binding* declare_variable(const Specifiers& specifiers, const DeclaratorInfo& info,
 		const syntax::Initializer* initializer, Scope* scope, uint32_t location, bool structured_binding = false);
+	bool check_variable_object(const Specifiers& specifiers, const Type* type, Scope* where,
+		const syntax::Initializer* initializer, bool member, bool definition, bool typed_initialization,
+		uint32_t location);
 	void check_variable_specifiers(const Specifiers& specifiers, const Type* type, const Scope* where, bool qualified,
 		bool member, bool definition, bool initialized, uint32_t location);
 	VariableEntity* earlier_variable(const Specifiers& specifiers, const DeclaredName& name, Scope* where,
@@ -463,7 +466,7 @@ private:
 	const Type* type_id(const syntax::TypeId& type, Scope* scope, bool allow_placeholder = false);
 	const Type* decltype_type(const syntax::Expr& operand, Scope* scope);
 	const Type* decltype_result(const syntax::Expr& operand, const ExprFacts& facts);
-	uint64_t array_bound(const syntax::Expr& bound, Scope* scope);
+	uint64_t array_bound(const syntax::Expr& bound, Scope* scope, bool* runtime = nullptr);
 	const Type* checked_pointer(const Type* pointee, uint32_t location);
 	const Type* checked_array(const Type* element, uint64_t bound, uint32_t location);
 

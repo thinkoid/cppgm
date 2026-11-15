@@ -227,7 +227,7 @@ void Linker::visit(ObjectRef ref)
 			return;
 		}
 		uint32_t value = 0;
-		if (source.kind == 1 && synthetic_data(source.name, value))
+		if (source.kind == 1 && (synthetic_data(source.name, value) || request_section_boundary(source.name)))
 			return;
 		if (!source.weak() || source.kind == 4)
 			throw WasmError("undefined Wasm symbol: " + source.name);
@@ -281,6 +281,7 @@ void Linker::collect()
 		ordered_functions_.clear();
 		ordered_data_.clear();
 		ordered_tags_.clear();
+		named_sections_.clear();
 		if (options_.target == target_model::Target::Wasi && !options_.no_startfiles)
 		{
 			const ObjectRef entry = lookup("_start");
@@ -296,8 +297,13 @@ void Linker::collect()
 		{
 			const ObjectRef ref = lookup(name);
 			if (ref.first == kAbsent)
-				throw WasmError("undefined Wasm export: " + name);
-			visit(ref);
+			{
+				uint32_t value = 0;
+				if (!request_section_boundary(name) && !synthetic_data(name, value))
+					throw WasmError("undefined Wasm export: " + name);
+			}
+			else
+				visit(ref);
 		}
 		size_t next_root = 0, next_function = 0, next_data = 0, next_global = 0;
 		while (next_root < roots_.size() || next_function < ordered_functions_.size() ||
@@ -355,6 +361,7 @@ void Linker::collect()
 	stack_top_ = (options_.wasm_stack_size + 15) & ~uint32_t(15);
 	data_base_ = std::max<uint32_t>(1024, stack_top_);
 	uint64_t end = data_base_;
+	group_named_sections();
 	for (ObjectRef ref : ordered_data_)
 	{
 		const ObjectData& data = objects_[ref.first].data[ref.second];
@@ -363,6 +370,13 @@ void Linker::collect()
 		if (end + data.contents.bytes.data.size() > 0x7fd00000u)
 			throw WasmError("Wasm linked data exceeds the supported memory range");
 		data_[ref] = static_cast<uint32_t>(end);
+		const auto section = named_sections_.find(data.name);
+		if (section != named_sections_.end())
+		{
+			if (section->second.first == kAbsent)
+				section->second.first = static_cast<uint32_t>(end);
+			section->second.second = static_cast<uint32_t>(end + data.contents.bytes.data.size());
+		}
 		end += data.contents.bytes.data.size();
 	}
 	heap_base_ = static_cast<uint32_t>((end + 15) & ~uint64_t(15));
@@ -383,6 +397,7 @@ void Linker::run(Bytes& output)
 						throw WasmError("Wasm atomic objects require -matomics");
 	validate_link_features(objects_, active_);
 	prepare_address_globals();
+	prepare_data_exports();
 	prepare_globals();
 	for (uint32_t object_index = 0; object_index < objects_.size(); ++object_index)
 	{

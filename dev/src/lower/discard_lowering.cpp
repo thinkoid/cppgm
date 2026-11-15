@@ -248,6 +248,9 @@ void FunctionLowering::discard(const syntax::Expr& expr)
 		}
 		return;
 	case syntax::ExprKind::Sizeof:
+		if ((facts->flags & sema::kRuntimeSize) != 0)
+			size_query(*e);
+		return;
 	case syntax::ExprKind::SizeofPack:
 		// Its folded result is unused; its operand is unevaluated (5.3.3).
 		return;

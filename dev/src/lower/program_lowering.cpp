@@ -1451,6 +1451,8 @@ lowir::Type ProgramLowering::storage_type(const sema::Type* type)
 
 uint64_t ProgramLowering::size_of(const sema::Type* type, uint32_t location)
 {
+	if (type->runtime_array())
+		throw LoweringError(location, "a runtime array has no fixed storage size");
 	uint64_t size = 0, alignment = 0;
 	if (type->is_reference())
 		return 8;

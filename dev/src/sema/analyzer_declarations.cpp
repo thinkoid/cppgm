@@ -872,6 +872,8 @@ void Analyzer::declare_declarator(
 		error(info.location, "mutable in a typedef or function declaration");
 	if (specifiers.is_typedef)
 	{
+		if (info.type->runtime_array())
+			error(info.location, "a variably modified typedef is outside the C profile");
 		if (info.name->qualified() || init.initializer != nullptr || info.virt_suffix != nullptr)
 			error(info.location, "invalid typedef declarator");
 		// 7.1.5p1: a typedef declaration declares no variable or function.
@@ -1353,26 +1355,8 @@ Binding* Analyzer::declare_variable(const Specifiers& specifiers, const Declarat
 	else
 		variable = new_variable(specifiers, info.asm_label, name, where, type, is_extern, member,
 			initializer != nullptr, location, structured_binding);
-	// A braced list's initialization completes an omitted bound (8.5.1p4).
-	const bool bound_from_list = typed_initialization && type->kind == TypeKind::Array && type->bound == 0 &&
-		initializer != nullptr &&
-		(initializer->kind == syntax::InitializerKind::Assign ||
-			initializer->kind == syntax::InitializerKind::Braced) &&
-		initializer->expression->kind == syntax::ExprKind::BracedInit;
-	if (member || definition)
-	{
-		// An array's bound may depend on template parameters (known in the
-		// instantiations).
-		const Type* object = bound_from_list ? type->element : type;
-		while (object->kind == TypeKind::Array && (object->bound != 0 || object->owner != nullptr || member))
-			object = object->element;
-		if ((object->kind == TypeKind::Array && !specifiers.is_static) ||
-			(object->unqualified->kind == TypeKind::Class && template_depth_ == 0 &&
-				!require_complete(static_cast<ClassEntity*>(object->unqualified->entity))))
-			error(location, "variable of incomplete type");
-		if (semantic() && template_depth_ == 0)
-			check_abstract_object(object, location);
-	}
+	const bool bound_from_list = check_variable_object(
+		specifiers, type, where, initializer, member, definition, typed_initialization, location);
 	// A static data member of a templated class defined out of it: its
 	// instances instantiate this definition when needed (14.7.1p1); one
 	// defined inline in it, a definition whose initializer is each
@@ -1437,6 +1421,12 @@ Binding* Analyzer::declare_variable(const Specifiers& specifiers, const Declarat
 	const bool counted = !c_source_ && (typed_initialization || pattern_body) && body_ != nullptr &&
 		where->kind == ScopeKind::Block && !specifiers.is_static && !specifiers.is_extern &&
 		!specifiers.is_thread_local;
+	if (type->runtime_array() && body_ != nullptr)
+	{
+		++where->initialized;
+		if (body_->switch_statement != nullptr)
+			++body_->switch_statement->initialized;
+	}
 	if (counted && initializer != nullptr)
 	{
 		++where->initialized;
@@ -1553,6 +1543,37 @@ Binding* Analyzer::declare_variable(const Specifiers& specifiers, const Declarat
 	}
 	redeclared_ = redeclaration;
 	return binding;
+}
+
+bool Analyzer::check_variable_object(const Specifiers& specifiers, const Type* type, Scope* where,
+	const syntax::Initializer* initializer, bool member, bool definition, bool typed_initialization, uint32_t location)
+{
+	// A braced list's initialization completes an omitted bound (8.5.1p4).
+	const bool bound_from_list = typed_initialization && type->kind == TypeKind::Array && type->bound == 0 &&
+		initializer != nullptr &&
+		(initializer->kind == syntax::InitializerKind::Assign ||
+			initializer->kind == syntax::InitializerKind::Braced) &&
+		initializer->expression->kind == syntax::ExprKind::BracedInit;
+	if (type->runtime_array() &&
+		(where->kind != ScopeKind::Block || specifiers.is_static || specifiers.is_extern ||
+			specifiers.is_thread_local || initializer != nullptr))
+		error(location, "a variable-length array requires automatic storage and no initializer");
+	if (member || definition)
+	{
+		// An array's bound may depend on template parameters (known in the
+		// instantiations).
+		const Type* object = bound_from_list ? type->element : type;
+		while (object->kind == TypeKind::Array &&
+			(object->bound != 0 || object->owner != nullptr || object->runtime_array() || member))
+			object = object->element;
+		if ((object->kind == TypeKind::Array && !specifiers.is_static) ||
+			(object->unqualified->kind == TypeKind::Class && template_depth_ == 0 &&
+				!require_complete(static_cast<ClassEntity*>(object->unqualified->entity))))
+			error(location, "variable of incomplete type");
+		if (semantic() && template_depth_ == 0)
+			check_abstract_object(object, location);
+	}
+	return bound_from_list;
 }
 
 bool Analyzer::typed_initializer(

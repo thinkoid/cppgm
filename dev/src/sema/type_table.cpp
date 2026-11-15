@@ -59,6 +59,8 @@ uint32_t TypeTable::hash_of(const Type& type)
 	wide = Mix(wide, Bits(type.element));
 	wide = Mix(wide, Bits(type.owner));
 	wide = Mix(wide, Bits(type.entity));
+	if (type.runtime_array())
+		wide = Mix(wide, Bits(type.runtime_bound));
 	for (uint32_t i = 0; i < type.param_count; ++i)
 		wide = Mix(wide, Bits(type.params[i]));
 	// A final avalanche for the low bits the table indexes by.
@@ -76,6 +78,8 @@ bool TypeTable::same(const Type& a, const Type& b)
 		a.variadic != b.variadic || a.fundamental != b.fundamental || a.plain_char_unsigned != b.plain_char_unsigned ||
 		a.bound != b.bound || a.element != b.element || a.owner != b.owner || a.entity != b.entity ||
 		a.param_count != b.param_count)
+		return false;
+	if (a.kind == TypeKind::Array && a.runtime_bound != b.runtime_bound)
 		return false;
 	for (uint32_t i = 0; i < a.param_count; ++i)
 	{
@@ -228,7 +232,7 @@ const Type* TypeTable::qualified_anew(const Type* type, uint8_t cv)
 	switch (type->kind)
 	{
 	case TypeKind::Array:
-		return array(qualified(type->element, cv), type->bound, type->owner);
+		return array(qualified(type->element, cv), type->bound, type->owner, type->runtime_bound);
 	case TypeKind::LValueReference:
 	case TypeKind::RValueReference:
 	case TypeKind::Function:
@@ -271,12 +275,14 @@ const Type* TypeTable::member_pointer(const Type* owner, const Type* member)
 	return intern(key);
 }
 
-const Type* TypeTable::array(const Type* element, uint64_t bound, const Type* dependent_bound)
+const Type* TypeTable::array(
+	const Type* element, uint64_t bound, const Type* dependent_bound, const syntax::Expr* runtime_bound)
 {
 	Type key = Key(TypeKind::Array);
 	key.element = element;
 	key.bound = bound;
 	key.owner = dependent_bound;
+	key.runtime_bound = runtime_bound;
 	return intern(key);
 }
 

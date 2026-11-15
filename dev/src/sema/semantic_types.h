@@ -4,6 +4,10 @@
 
 #include "types/fundamental_type.h"
 
+namespace syntax {
+struct Expr;
+}
+
 // The type model of the semantic graph: interned types and integral
 // constants. sema/type_table.h interns them; entities, scopes and bindings
 // are in sema/semantic_graph.h.
@@ -153,9 +157,16 @@ struct Type
 	const Type* owner;
 	// Class, Enum, TemplateParameter, TemplateTemplateParameter.
 	Entity* entity;
-	const Type* const* params;
+	union
+	{
+		const Type* const* params;
+		// C array: the written, nonconstant bound. Evaluated once when
+		// the automatic object is declared, not a template dependence.
+		const syntax::Expr* runtime_bound;
+	};
 
 	bool is(TypeKind k) const { return kind == k; }
+	bool runtime_array() const { return kind == TypeKind::Array && runtime_bound != nullptr; }
 	bool extended_vector() const { return kind == TypeKind::Vector && function_cv != 0; }
 	bool is_reference() const { return kind == TypeKind::LValueReference || kind == TypeKind::RValueReference; }
 	bool c_unprototyped() const { return kind == TypeKind::Function && bound != 0; }

@@ -584,6 +584,12 @@ void FunctionLowering::local_object_variable(const sema::VariableEntity* variabl
 	if (variable->is_extern || variable->owner->kind == sema::ScopeKind::Namespace)
 		return;
 	const uint32_t location = init.declarator != nullptr ? init.declarator->location : 0;
+	if (variable->type->runtime_array())
+	{
+		if (!unreachable_storage_)
+			local_runtime_array(variable, location);
+		return;
+	}
 	if (variable->is_static || variable->is_thread_local)
 	{
 		local_static_variable(variable, init);
@@ -1965,8 +1971,9 @@ uint32_t FunctionLowering::declared_live(
 		variable->owner->kind == sema::ScopeKind::Namespace)
 		return live;
 	const sema::Type* type = variable->type;
-	bool alive = needs_destruction(type) &&
-		(type->kind == sema::TypeKind::Array || !lowering_.destructor_does_nothing(object_class(type)));
+	bool alive = type->runtime_array() ||
+		(needs_destruction(type) &&
+			(type->kind == sema::TypeKind::Array || !lowering_.destructor_does_nothing(object_class(type))));
 	if (!alive && initializer != nullptr)
 	{
 		const syntax::Expr* single = initializer->kind == syntax::InitializerKind::Parenthesized

@@ -1012,6 +1012,10 @@ bool ConstantInterpreter::read(const ConstPlace& place, ConstValue& out, uint32_
 	// or a variable usable in constant expressions, not volatile.
 	if ((place.type->cv & kVolatile) != 0)
 		return fail(location, "a read of a volatile glvalue");
+	// C17 6.6: a const-qualified object is not an integer constant.
+	// In particular, `const int n = 3; int a[n];` is still a VLA.
+	if (analyzer_.c_source_ && place.root == RootKind::Variable)
+		return fail(location, "a C object's stored value is not a constant expression");
 	const bool aggregate = place.type->kind == TypeKind::Array || place.type->unqualified->kind == TypeKind::Class;
 	if (((place.flags & kMutableSubobject) != 0 || aggregate) &&
 		(!analyzer_.cxx14_ ||

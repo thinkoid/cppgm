@@ -171,6 +171,15 @@ values. Validate element declarations and all supported index spaces. Where
 the pinned linker lacks a required case, the
 [reference notes](../doc/wasm/README.md) identify its independent checks.
 
+Exporting a linear-memory data symbol exposes its address as an immutable
+`i32` Wasm global. Aliases must expose the same address. The public name
+`memory` is reserved for the module's linear memory. A reference or export of
+`__start_NAME` or `__stop_NAME` provides the boundaries of a named data section
+present in active input objects. Retain its contributions and their relocation
+dependencies, preserve input order within it, and place them contiguously with
+their required alignment. A boundary reference alone does not extract an
+otherwise unreferenced archive member. Diagnose absent sections.
+
 ### Machine representation and optimization
 
 Keep a typed machine representation that emission actually consumes. It must
@@ -204,7 +213,8 @@ ordinary `calls` are independent invocations. Native regression tests remain req
 A fixture's `hosts` map names separate supplied host modules. `link_exports`
 selects static linking symbols explicitly; an empty list exercises exports
 declared by the inputs themselves. `export_names` checks the complete public
-function-name set, while `abi` checks parameter/result types. Import/export
+function-name set, while `abi` checks parameter/result types. Exported global
+types and mutability can be checked with `global_abi`. Import/export
 names and signatures are interface requirements, independent of instruction
 selection or optimization strategy.
 An export call with `trap: true` must trap at runtime. `trap: "fuel"`

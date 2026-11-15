@@ -69,7 +69,7 @@ void Linker::prepare_globals()
 	if (ordered.size() != ordered_globals_.size())
 		throw WasmError("Wasm global initializers form a cycle after symbol resolution");
 	ordered_globals_.swap(ordered);
-	const uint64_t base = imported_globals_.size() + 3 + address_globals_.size();
+	const uint64_t base = imported_globals_.size() + 3 + address_globals_.size() + data_exports_.size();
 	if (base + ordered_globals_.size() > UINT32_MAX)
 		throw WasmError("too many Wasm globals");
 	for (uint32_t i = 0; i < imported_globals_.size(); ++i)
@@ -94,7 +94,7 @@ void Linker::global_imports(Bytes& output) const
 void Linker::global_section(Bytes& output) const
 {
 	Bytes globals;
-	globals.unsigned_leb(3 + address_globals_.size() + ordered_globals_.size());
+	globals.unsigned_leb(3 + address_globals_.size() + data_exports_.size() + ordered_globals_.size());
 	for (uint32_t index = 0; index < 3; ++index)
 	{
 		globals.byte(0x7f);
@@ -112,6 +112,14 @@ void Linker::global_section(Bytes& output) const
 		globals.byte(1);
 		globals.byte(0x41);
 		globals.signed_leb(static_cast<int32_t>(symbol_value(address)));
+		globals.byte(0x0b);
+	}
+	for (const auto& address : data_exports_)
+	{
+		globals.byte(0x7f);
+		globals.byte(0);
+		globals.byte(0x41);
+		globals.signed_leb(static_cast<int32_t>(address.second.second));
 		globals.byte(0x0b);
 	}
 	for (ObjectRef ref : ordered_globals_)

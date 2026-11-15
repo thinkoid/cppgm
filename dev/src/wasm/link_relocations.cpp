@@ -17,7 +17,15 @@ bool Linker::synthetic_data(const std::string& name, uint32_t& value) const
 	else if (name == "__heap_end")
 		value = (heap_base_ + 65535) & ~uint32_t(65535);
 	else
-		return false;
+	{
+		const bool start = name.compare(0, 8, "__start_") == 0;
+		if (!start && name.compare(0, 7, "__stop_") != 0)
+			return false;
+		const auto section = named_sections_.find(name.substr(start ? 8 : 7));
+		if (section == named_sections_.end())
+			return false;
+		value = start ? section->second.first : section->second.second;
+	}
 	return true;
 }
 
