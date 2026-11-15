@@ -50,7 +50,7 @@ jobs:
       - name: Trust the mounted checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build compiler
-        run: make -C dev cppgm++ -j "$(nproc)"
+        run: make -C dev cppgm -j "$(nproc)"
       - name: Cache pinned Boost archive
         uses: actions/cache@v4
         with:
@@ -71,7 +71,7 @@ jobs:
         run: |
           python3 scripts/boost_benchmarks.py run \
             --archive "$RUNNER_TEMP/boost_1_92_0.tar.bz2" \
-            --compiler dev/cppgm++ --output obj/boost --jobs "$(nproc)"
+            --compiler dev/cppgm --output obj/boost --jobs "$(nproc)"
       - name: Report
         if: always()
         run: |

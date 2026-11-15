@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The Clang build check compiles C++ with cppgm++ and reports each failed step."""
+"""The Clang build check compiles C++ with cppgm and reports each failed step."""
 import os
 from pathlib import Path
 import re
@@ -25,11 +25,11 @@ End of search list.
 LOG = '''[1/4] Building CXX object lib/Support/CMakeFiles/LLVMSupport.dir/APInt.cpp.o
 [2/4] Building CXX object lib/Support/CMakeFiles/LLVMSupport.dir/Path.cpp.o
 FAILED: lib/Support/CMakeFiles/LLVMSupport.dir/Path.cpp.o
-/work/cppgm++ -DNDEBUG -Ilib/Support -O3 -o lib/Support/CMakeFiles/LLVMSupport.dir/Path.cpp.o -c Path.cpp
+/work/cppgm -DNDEBUG -Ilib/Support -O3 -o lib/Support/CMakeFiles/LLVMSupport.dir/Path.cpp.o -c Path.cpp
 ERROR: Path.cpp:12:3: syntax error
 [3/4] Building CXX object lib/Support/CMakeFiles/LLVMSupport.dir/Regex.cpp.o
 FAILED: lib/Support/CMakeFiles/LLVMSupport.dir/Regex.cpp.o
-/work/cppgm++ -DNDEBUG -Ilib/Support -O3 -o lib/Support/CMakeFiles/LLVMSupport.dir/Regex.cpp.o -c Regex.cpp
+/work/cppgm -DNDEBUG -Ilib/Support -O3 -o lib/Support/CMakeFiles/LLVMSupport.dir/Regex.cpp.o -c Regex.cpp
 ERROR: Regex.cpp:40:9: unknown type
 ninja: build stopped: cannot make progress due to previous errors.
 '''
@@ -65,16 +65,16 @@ class LLVMCITests(unittest.TestCase):
         self.assertIn('set(CMAKE_CXX_COMPILE_OBJECT "<CMAKE_CXX_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -o <OBJECT> '
                       '-c <SOURCE>")', text)
         self.assertIn('"/usr/include/c++/15;/usr/include"', text)
-        command = ci.configure_command(Path('/src'), Path('/build'), Path('/work/cppgm++'), '/usr/bin/cc',
+        command = ci.configure_command(Path('/src'), Path('/build'), Path('/work/cppgm'), '/usr/bin/cc',
                                        Path('/build/cppgm-rules.cmake'), 'O3')
         self.assertEqual(command[:7], ['cmake', '-G', 'Ninja', '-S', '/src/llvm', '-B', '/build'])
-        for option in ('-DCMAKE_CXX_COMPILER=/work/cppgm++', '-DCMAKE_C_COMPILER=/usr/bin/cc',
+        for option in ('-DCMAKE_CXX_COMPILER=/work/cppgm', '-DCMAKE_C_COMPILER=/usr/bin/cc',
                        '-DCMAKE_USER_MAKE_RULES_OVERRIDE_CXX=/build/cppgm-rules.cmake',
                        '-DCMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG', '-DLLVM_ENABLE_PROJECTS=clang',
                        '-DLLVM_TARGETS_TO_BUILD=X86', '-DLLVM_ENABLE_ZLIB=OFF'):
             self.assertIn(option, command)
         with self.assertRaisesRegex(ValueError, 'optimization level'):
-            ci.configure_command(Path('/src'), Path('/build'), Path('/work/cppgm++'), 'cc', Path('/rules'), 'Ofast')
+            ci.configure_command(Path('/src'), Path('/build'), Path('/work/cppgm'), 'cc', Path('/rules'), 'Ofast')
 
     def test_failed_steps_are_counted_and_shown_with_their_diagnostics(self):
         count, shown = ci.failures(LOG, limit=1)
@@ -107,7 +107,7 @@ class LLVMCITests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/llvm.yml').read_text()
         self.assertIn('pull_request:', workflow)
         self.assertIn('branches: [main]', workflow)
-        self.assertLess(workflow.index('make -C dev cppgm++'), workflow.index('scripts/llvm_ci.py run'))
+        self.assertLess(workflow.index('make -C dev cppgm'), workflow.index('scripts/llvm_ci.py run'))
         self.assertRegex(ci.COMMIT, r'\A[0-9a-f]{40}\Z')
         self.assertTrue(re.search(r'persist-credentials: false', workflow))
 

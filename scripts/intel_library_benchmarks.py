@@ -21,10 +21,10 @@ DIRECTORY = Path(__file__).resolve().parent
 
 def run_command(suite, source, jobs):
     if suite == 'wasm':
-        return ['perl', str(DIRECTORY / SCRIPTS[suite]), '--compiler', str(source / 'dev/cppgm++'),
+        return ['perl', str(DIRECTORY / SCRIPTS[suite]), '--compiler', str(source / 'dev/cppgm'),
                 '--repo-root', str(source), '--output', str(source / 'obj' / suite)]
     return [sys.executable, str(DIRECTORY / SCRIPTS[suite]), 'run',
-            '--compiler', str(source / 'dev/cppgm++'), '--repo-root', str(source),
+            '--compiler', str(source / 'dev/cppgm'), '--repo-root', str(source),
             '--output', str(source / 'obj' / suite)] + (
                 ['--jobs', str(jobs)] if suite in ('godot', 'boost', 'internal') else [])
 

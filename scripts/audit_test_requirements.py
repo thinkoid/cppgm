@@ -22,7 +22,7 @@ from check_fixture_lanes import (
 OPTIMIZER_PA = 33
 NATIVE_OPTIMIZER_PA = 34
 POSITIVE_OPT = re.compile(r"(?<![\w/])-O(?:[1-9]\d*|fast|[sgz])?(?![\w-])")
-CANDIDATE = re.compile(r"CPPGM_APP_ARGS|cppgm\+\+|lowiropt|lowir2native|candidate|"
+CANDIDATE = re.compile(r"CPPGM_APP_ARGS|cppgm|lowiropt|lowir2native|candidate|"
                        r"\b(?:\w+_)?(?:app|driver|backend|compiler|command|args|options)\b", re.I)
 HOST = re.compile(r"(?:g\+\+|clang\+\+|\bCXX\b|\bHOST_CXX\b|\$host\w*)")
 SCRIPT = re.compile(r"(?:\.\./)?scripts/[\w.+-]+\.(?:pl|py|sh)")
@@ -36,7 +36,7 @@ def positive_options(text):
 
 
 def candidate_options(text, context=None):
-    tools = re.findall(r'(?:cppgm\+\+|lowiropt|lowir2native)(-ref)?(?![\w+.-])', text)
+    tools = re.findall(r'(?:cppgm|lowiropt|lowir2native)(-ref)?(?![\w+.-])', text)
     if tools and all(tools):
         return []
     app_args = re.search(r'''CPPGM_APP_ARGS=(?:"([^"]*)"|'([^']*)'|(\S+))''', text)

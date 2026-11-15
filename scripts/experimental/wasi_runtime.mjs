@@ -28,7 +28,7 @@ export function lookup(root, path) {
 }
 export function invoke(module, root, args) {
   const log = [];
-  const wasi = new WASI(['cppgm++', ...args], [], [new OpenFile(new File([])),
+  const wasi = new WASI(['cppgm', ...args], [], [new OpenFile(new File([])),
     ConsoleStdout.lineBuffered(s => log.push(s)), ConsoleStdout.lineBuffered(s => log.push(s)),
     new PreopenDirectory('.', root.contents)], {debug: false});
   return WebAssembly.instantiate(module, {wasi_snapshot_preview1: wasi.wasiImport}).then(instance => {

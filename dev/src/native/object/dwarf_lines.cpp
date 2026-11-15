@@ -239,7 +239,7 @@ void LineEncoder::information()
 	// input path: serialized LowIR carries the same source locations as a
 	// direct compilation, even when its input has a different file name.
 	reference(info_, strings_symbol_, 4, strings.text(program_.spelling(files_[0])));
-	reference(info_, strings_symbol_, 4, strings.text("cppgm++"));
+	reference(info_, strings_symbol_, 4, strings.text("cppgm"));
 	out.fixed(4, 2); // DW_LANG_C_plus_plus
 	reference(info_, line_symbol_, 4);
 	reference(info_, ranges_symbol_, 4);

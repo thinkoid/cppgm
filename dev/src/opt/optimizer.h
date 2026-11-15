@@ -7,8 +7,8 @@
 #include "support/telemetry.h"
 
 // The LowIR optimizer: one pipeline over the typed program model,
-// shared by lowiropt, `cppgm++ --emit-lowir -O<n>` and the object path
-// (`cppgm++ -c -O<n>` from source or from LowIR text), so an object
+// shared by lowiropt, `cppgm --emit-lowir -O<n>` and the object path
+// (`cppgm -c -O<n>` from source or from LowIR text), so an object
 // depends only on facts that serialized LowIR carries. Levels select
 // policies (spec section 7): O0 transforms nothing; O1 runs local
 // simplification, propagation, control-flow cleanup, slot promotion,
@@ -41,7 +41,7 @@ struct OptimizerOptions
 	// definition is no longer in the layout, and the run continues.
 	bool verify_passes = false;
 	std::string verify_dump;
-	// Course objects (cppgm++ -c to a .obj, course link mode): the object
+	// Course objects (cppgm -c to a .obj, course link mode): the object
 	// back end compiles a non-variadic this-adjusting thunk as a function
 	// (host objects encode each forwarding thunk as a jump:
 	// native::recover_jump_thunks), so the inliner copies the target into

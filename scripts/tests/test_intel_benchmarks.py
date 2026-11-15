@@ -35,7 +35,7 @@ class IntelBenchmarkTests(unittest.TestCase):
             command = library.run_command(suite, source, 16)
             with self.subTest(suite=suite):
                 self.assertEqual(command[command.index('--repo-root') + 1], str(source))
-                self.assertEqual(command[command.index('--compiler') + 1], str(source / 'dev/cppgm++'))
+                self.assertEqual(command[command.index('--compiler') + 1], str(source / 'dev/cppgm'))
                 self.assertEqual(command[command.index('--output') + 1], str(source / 'obj' / suite))
                 self.assertEqual('--jobs' in command, suite in ('godot', 'boost', 'internal'))
                 self.assertEqual(Path(command[1]).name, library.SCRIPTS[suite])

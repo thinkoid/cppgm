@@ -17,7 +17,7 @@ import sys
 
 
 DEFAULT_COMMAND = [
-    "./dev/cppgm++",
+    "./dev/cppgm",
     "-I",
     "benchmarks/self_compile/stable/include",
     "-c",

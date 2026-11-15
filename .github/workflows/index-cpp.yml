@@ -50,7 +50,7 @@ jobs:
       - name: Trust the mounted checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build compiler
-        run: make -C dev cppgm++ -j "$(nproc)"
+        run: make -C dev cppgm -j "$(nproc)"
       - name: Build, validate and measure all 50 workloads
         run: python3 scripts/index_cpp_ci.py run --output obj/index-cpp
       - name: Report

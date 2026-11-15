@@ -10,7 +10,7 @@ toolchain throughout the build:
 bash scripts/install_macos_llvm.sh 21
 host_cxx="$(brew --prefix cppgm/ci/llvm@21)/bin/clang++"
 make CXX="$host_cxx" CPPGM_HOST_CXX="$host_cxx"
-dev/cppgm++ -O3 -c hello.cpp -o hello.o
+dev/cppgm -O3 -c hello.cpp -o hello.o
 "$host_cxx" hello.o -o hello
 ```
 
@@ -20,13 +20,13 @@ ELF. Automatic header discovery describes the build host. Cross-emission uses
 explicit include directories and does not discover a foreign SDK. A native
 Mac build is needed for normal macOS SDK and libc++ use.
 
-As on Linux, `cppgm++`'s own link mode supplies the standalone course runtime.
+As on Linux, `cppgm`'s own link mode supplies the standalone course runtime.
 Use the host Clang linker for programs needing the system C/C++ libraries.
 Keep Clang in `CPPGM_HOST_CXX` during self-hosting:
 
 ```sh
-make -C pa34 cppgm++-self CXX=../dev/cppgm++ CPPGM_HOST_CXX="$host_cxx"
-make -C pa34 compare-cppgm++-inception CXX=../dev/cppgm++ CPPGM_HOST_CXX="$host_cxx"
+make -C pa34 cppgm-self CXX=../dev/cppgm CPPGM_HOST_CXX="$host_cxx"
+make -C pa34 compare-cppgm-inception CXX=../dev/cppgm CPPGM_HOST_CXX="$host_cxx"
 ```
 
 ## Validation

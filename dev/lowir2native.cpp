@@ -231,7 +231,7 @@ LowIR2NativeInvocation parse_lowir2native_invocation(const vector<string>& args)
 // An executable needing what the standalone runtime lacks (catch clauses,
 // the C++ ABI runtime, RTTI objects, i128 helpers): the program compiled
 // as a course object and linked with link mode's runtime library, as
-// cppgm++ links a LowIR input.
+// cppgm links a LowIR input.
 bool link_with_runtime(lowir::Program& program, const LowIR2NativeInvocation& invocation, string& error)
 {
 	native::recover_jump_thunks(program, native::EhModel::Course);

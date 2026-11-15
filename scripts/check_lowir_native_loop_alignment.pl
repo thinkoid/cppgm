@@ -36,7 +36,7 @@ sub read_file
 if(scalar(@ARGV) != 2)
 {
 	die "Usage: check_lowir_native_loop_alignment.pl " .
-		"<cppgm++> <test-or-directory>\n";
+		"<cppgm> <test-or-directory>\n";
 }
 
 # The output of a tool that must succeed.

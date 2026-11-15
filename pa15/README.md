@@ -1,4 +1,4 @@
-## CPPGM Programming Assignment 15 (`cppgm++ --emit-lowir`)
+## CPPGM Programming Assignment 15 (`cppgm --emit-lowir`)
 
 ### Overview
 
@@ -44,14 +44,14 @@ The intended direction is:
 
 The starter kit contains:
 
-- a `cppgm++.cpp` assignment entry point, linked to the editable compiler source
-  in `../dev/cppgm++.cpp`
+- a `cppgm.cpp` assignment entry point, linked to the editable compiler source
+  in `../dev/cppgm.cpp`
 - the standard assignment `Makefile` and harness scripts
 - the grammar for this assignment called `pa15.gram`
 - an HTML grammar explorer of `pa15.gram` in the sub-directory `grammar/`
 - a checked-in local test suite under `tests/`
 
-Extend the `cppgm++` implementation you built in earlier assignments; the
+Extend the `cppgm` implementation you built in earlier assignments; the
 initial scaffold is not reinstalled at this milestone.
 
 Use the supplied reference tools to inspect example output. Tests compare
@@ -61,7 +61,7 @@ your compiler with the checked-in contract references.
 
 The PA15 invocation is the unoptimized LowIR mode:
 
-    $ cppgm++ --emit-lowir -O0 -o <outfile> <srcfile1> <srcfile2> ... <srcfileN>
+    $ cppgm --emit-lowir -O0 -o <outfile> <srcfile1> <srcfile2> ... <srcfileN>
 
 Behaviour is undefined unless the command-line arguments match that shape, with
 the same source-file ordering and `-o` relaxations as PA14. Preserve the earlier dump modes;
@@ -69,7 +69,7 @@ native driver behavior and optimized LowIR output are not required in PA15.
 
 ### Output Format
 
-On success, `cppgm++` shall write LowIR text to `<outfile>` and exit
+On success, `cppgm` shall write LowIR text to `<outfile>` and exit
 `EXIT_SUCCESS`.
 
 The authoritative LowIR definition is `../pa8/lowir.md`. PA15 extends the PA14 LowIR
@@ -100,14 +100,14 @@ reference's after that canonicalization, in its order.
 ### Error Handling
 
 If an error occurs during preprocessing, tokenization, parsing, semantic analysis, or LowIR
-generation, `cppgm++` shall `EXIT_FAILURE`.
+generation, `cppgm` shall `EXIT_FAILURE`.
 
 The output file is not required to be meaningful on failure.
 Diagnostics are not part of the grading contract.
 
 ### Standard Output / Error
 
-Standard output and standard error are ignored for automated testing of `cppgm++`.
+Standard output and standard error are ignored for automated testing of `cppgm`.
 
 You are free to use them for debugging, tracing, or diagnostic messages.
 
@@ -118,7 +118,7 @@ comparison described in [the format guide](../pa8/lowir.md).
 
 For each test case `x`:
 
-- `cppgm++` is executed to produce `x.my`
+- `cppgm` is executed to produce `x.my`
 - the exit status is recorded in `x.my.exit_status`
 - `x.my` is compared against `x.ref`
 - `x.my.exit_status` is compared against `x.ref.exit_status`
@@ -146,7 +146,7 @@ not the PA15 grading contract.
 Self-checking controls in `tests/controls/` state their expected outcome in
 their leading comment (`expect exit N` or `expect reject`) or in an
 `x.expect` sidecar. `make test` compiles each with your
-`cppgm++ --emit-lowir -O0`, builds the LowIR with the supplied
+`cppgm --emit-lowir -O0`, builds the LowIR with the supplied
 `lowir2native-ref -O0` and requires the stated exit status (and the output in
 `x.stdout`, when present), or requires your frontend to reject the program.
 The LowIR text of a control is not compared. `make test-controls` runs only
@@ -161,13 +161,13 @@ parameter types, and static data member specialization.
 
 ### PA15 Syntax Spec
 
-The authoritative source syntax is the shared `cppgm++` source grammar, exposed
+The authoritative source syntax is the shared `cppgm` source grammar, exposed
 for this assignment as `pa15.gram`. The grammar defines accepted syntax only;
 the PA15 semantic and lowering requirements are defined by the Assignment
 Boundary and Out Of Scope sections below.
 
 As in the earlier assignments, that grammar defines accepted input syntax only. The output
-format for `cppgm++` is specified by this README, PA8 `lowir.md`, and the checked-in
+format for `cppgm` is specified by this README, PA8 `lowir.md`, and the checked-in
 `.ref` files.
 
 PA15 gives the following previously parsed forms semantic/code-generation

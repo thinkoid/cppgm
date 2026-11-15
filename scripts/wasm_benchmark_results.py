@@ -220,8 +220,8 @@ def selfbuild_speedups(document):
 def selfbuild_report(document, run_url):
     producers, phases = document['producers'], document['phases']['AB']
     lines = ['# WASI compiler self-build', '',
-             'cppgm and Clang each build `cppgm++` for WASI. Both WASI compilers then rebuild '
-             f'`cppgm++` from the same {document["metadata"]["sources"]} sources in one pinned engine. '
+             'cppgm and Clang each build `cppgm` for WASI. Both WASI compilers then rebuild '
+             f'`cppgm` from the same {document["metadata"]["sources"]} sources in one pinned engine. '
              'Speedup is Clang time / cppgm time; higher is better.', '',
              '| Measurement | cppgm | Clang | Speedup |', '|---|---:|---:|---:|']
     for name, key in [('Build the WASI compiler, CPU', 'cpu_seconds'), ('Build the WASI compiler, elapsed', 'seconds')]:
@@ -260,7 +260,7 @@ def seed_selfbuild(target):
         document = json.loads(path.read_text()) if path.exists() else None
         values = selfbuild_speedups(document) if document else dict(compile=None, runtime=None)
         for phase, value in values.items():
-            label = 'WASI cppgm++ ' + ('build' if phase == 'compile' else 'rebuild') + ' vs Clang'
+            label = 'WASI cppgm ' + ('build' if phase == 'compile' else 'rebuild') + ' vs Clang'
             if document:
                 label += '; ' + document['metadata']['cpu']
             (directory / f'{host}-{phase}-clang.svg').write_text(svg(label, caption, value))

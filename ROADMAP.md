@@ -14,7 +14,7 @@ under `dev/` and `dev/src/`.
 | PA14-PA19 | templates, metaprogramming, constant evaluation, completion, and integration |
 | PA20-PA23 | language and object-model closure through virtual inheritance and RTTI |
 | PA24 | LowIR-to-native backend (`lowir2native`) |
-| PA25 | separate compilation and the `cppgm++` compile/link driver |
+| PA25 | separate compilation and the `cppgm` compile/link driver |
 | PA26 | host exception metadata and runtime-helper facts |
 | PA27-PA28 | host-linkable objects and host C++ ABI/runtime interoperation |
 | PA29 | shared assembly constraints, integrated encoding and object behavior |

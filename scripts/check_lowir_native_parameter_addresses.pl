@@ -85,7 +85,7 @@ sub stack_size
 if(scalar(@ARGV) != 4)
 {
 	die "Usage: check_lowir_native_parameter_addresses.pl " .
-		"<lowiropt> <lowir2native> <cppgm++> <test-or-directory>\n";
+		"<lowiropt> <lowir2native> <cppgm> <test-or-directory>\n";
 }
 
 my ($optimizer, $native, $driver, $root) = @ARGV;

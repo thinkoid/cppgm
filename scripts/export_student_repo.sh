@@ -12,7 +12,7 @@ Options:
 
 Environment:
   CXX                  Compiler used to build exported reference binaries.
-  CPPGM_HOST_CXX       Host compiler recorded in cppgm++ defaults.
+  CPPGM_HOST_CXX       Host compiler recorded in cppgm defaults.
   CPPGM_STDLIB_FLAGS   Extra standard-library flags for the host compiler.
   CPPGM_REFERENCE_BUNDLE_OUT
                        Path where the reference-binary bundle should be written.
@@ -272,7 +272,7 @@ sanitize_student_makefile_defaults() {
     s/sysctl -n hw\.ncpu 2>\/dev\/null \|\| //g;
     s/LLVM_CXX_LOCAL = \/usr\/local\/opt\/llvm\/bin\/clang\+\+\nLLVM_CXX_HOMEBREW = \/opt\/homebrew\/opt\/llvm\/bin\/clang\+\+\n(?:ifeq \(\$\(HOST_UNAME_S\),Darwin\)\n)?ifeq \(\$\(wildcard \$\(LLVM_CXX_LOCAL\)\),\)\nifneq \(\$\(wildcard \$\(LLVM_CXX_HOMEBREW\)\),\)\nLLVM_CXX_DEFAULT = \$\(LLVM_CXX_HOMEBREW\)\nendif\nelse\nLLVM_CXX_DEFAULT = \$\(LLVM_CXX_LOCAL\)\nendif\n(?:ifdef LLVM_CXX_DEFAULT\nHOST_CXX_DEFAULT = \$\(LLVM_CXX_DEFAULT\)\nelse\nHOST_CXX_DEFAULT = clang\+\+\nendif\nelse\nHOST_CXX_DEFAULT = g\+\+\nendif\n|)//g;
     s/ifeq \(\$\(origin CXX\), default\)\n(?:ifdef LLVM_CXX_DEFAULT\nCXX := \$\(LLVM_CXX_DEFAULT\)\nelse\nCXX := (?:clang|g)\+\+\nendif|CXX := \$\(HOST_CXX_DEFAULT\))\nendif/ifeq (\$(origin CXX), default)\nCXX := g++\nendif/g;
-    s/ifeq \(\$\(origin CPPGM_HOST_CXX\), undefined\)\nifeq \(\$\(abspath \$\(CXX\)\),\$\(abspath \.\.\/dev\/cppgm\+\+\)\)\n(?:ifdef LLVM_CXX_DEFAULT\n\tCPPGM_HOST_CXX := \$\(LLVM_CXX_DEFAULT\)\nelse\n\tCPPGM_HOST_CXX := clang\+\+\nendif|CPPGM_HOST_CXX := \$\(HOST_CXX_DEFAULT\))\nelse\n\t?CPPGM_HOST_CXX := \$\(CXX\)\nendif\nendif/ifeq (\$(origin CPPGM_HOST_CXX), undefined)\nifeq (\$(abspath \$(CXX)),\$(abspath ..\/dev\/cppgm++))\n\tCPPGM_HOST_CXX := g++\nelse\n\tCPPGM_HOST_CXX := \$(CXX)\nendif\nendif/g;
+    s/ifeq \(\$\(origin CPPGM_HOST_CXX\), undefined\)\nifeq \(\$\(abspath \$\(CXX\)\),\$\(abspath \.\.\/dev\/cppgm\)\)\n(?:ifdef LLVM_CXX_DEFAULT\n\tCPPGM_HOST_CXX := \$\(LLVM_CXX_DEFAULT\)\nelse\n\tCPPGM_HOST_CXX := clang\+\+\nendif|CPPGM_HOST_CXX := \$\(HOST_CXX_DEFAULT\))\nelse\n\t?CPPGM_HOST_CXX := \$\(CXX\)\nendif\nendif/ifeq (\$(origin CPPGM_HOST_CXX), undefined)\nifeq (\$(abspath \$(CXX)),\$(abspath ..\/dev\/cppgm))\n\tCPPGM_HOST_CXX := g++\nelse\n\tCPPGM_HOST_CXX := \$(CXX)\nendif\nendif/g;
     s/INCEPTION_LINKER_DETERMINISM_FLAGS =\nifeq \(\$\(HOST_UNAME_S\),Darwin\)\nINCEPTION_LINKER_DETERMINISM_FLAGS \+= -Wl,-reproducible\nendif/INCEPTION_LINKER_DETERMINISM_FLAGS =/g;
   ' "$@"
 }
@@ -510,7 +510,7 @@ scaffold_pairs=(
   posttoken:posttoken-scaffold.cpp
   ppexpr:ppexpr-scaffold.cpp
   preproc:preproc-scaffold.cpp
-  cppgm++:cppgm++-scaffold.cpp
+  cppgm:cppgm-scaffold.cpp
   lowir:lowir-scaffold.cpp
   lowir2native:lowir2native-scaffold.cpp
   lowiropt:lowiropt-scaffold.cpp
@@ -530,7 +530,7 @@ cat > "$dest/dev/frontend_source_sets.mk" <<'EOF'
 # Add dev/src/foo.cpp to the tools that use it by adding `foo` below. For
 # subdirectories, use the path without `.cpp`, such as `parser/foo`.
 
-FRONTEND_SOURCE_SET_TARGETS := abimangle pptoken posttoken ppexpr preproc cppgm++ lowiropt lowir lowir2native
+FRONTEND_SOURCE_SET_TARGETS := abimangle pptoken posttoken ppexpr preproc cppgm lowiropt lowir lowir2native
 FRONTEND_TEST_RUNNER_SOURCE_ID := support/testing/test_runner
 
 FRONTEND_OBJ_BASENAMES_abimangle :=
@@ -538,7 +538,7 @@ FRONTEND_OBJ_BASENAMES_pptoken :=
 FRONTEND_OBJ_BASENAMES_posttoken :=
 FRONTEND_OBJ_BASENAMES_ppexpr :=
 FRONTEND_OBJ_BASENAMES_preproc :=
-FRONTEND_OBJ_BASENAMES_cppgm++ :=
+FRONTEND_OBJ_BASENAMES_cppgm :=
 FRONTEND_OBJ_BASENAMES_lowiropt :=
 FRONTEND_OBJ_BASENAMES_lowir :=
 FRONTEND_OBJ_BASENAMES_lowir2native :=
@@ -576,7 +576,7 @@ TARGETS = \
 	lowir \
 	lowiropt \
 	lowir2native \
-	cppgm++
+	cppgm
 
 CXX ?= g++
 V ?= 0
@@ -700,7 +700,7 @@ reference_targets=(
   posttoken
   ppexpr
   preproc
-  cppgm++
+  cppgm
   lowir
   lowir2native
   lowiropt
@@ -730,37 +730,37 @@ pa_ref_pairs=(
   pa2:posttoken
   pa3:ppexpr
   pa4:preproc
-  pa5:cppgm++
-  pa6:cppgm++
-  pa7:cppgm++
+  pa5:cppgm
+  pa6:cppgm
+  pa7:cppgm
   pa8:lowir
   pa9:abimangle
-  pa10:cppgm++
-  pa11:cppgm++
-  pa12:cppgm++
-  pa13:cppgm++
-  pa14:cppgm++
-  pa15:cppgm++
-  pa16:cppgm++
-  pa17:cppgm++
-  pa18:cppgm++
-  pa19:cppgm++
-  pa20:cppgm++
-  pa21:cppgm++
-  pa22:cppgm++
-  pa23:cppgm++
+  pa10:cppgm
+  pa11:cppgm
+  pa12:cppgm
+  pa13:cppgm
+  pa14:cppgm
+  pa15:cppgm
+  pa16:cppgm
+  pa17:cppgm
+  pa18:cppgm
+  pa19:cppgm
+  pa20:cppgm
+  pa21:cppgm
+  pa22:cppgm
+  pa23:cppgm
   pa24:lowir2native
-  pa25:cppgm++
-  pa26:cppgm++
-  pa27:cppgm++
-  pa28:cppgm++
-  pa29:cppgm++
-  pa30:cppgm++
-  pa31:cppgm++
-  pa32:cppgm++
+  pa25:cppgm
+  pa26:cppgm
+  pa27:cppgm
+  pa28:cppgm
+  pa29:cppgm
+  pa30:cppgm
+  pa31:cppgm
+  pa32:cppgm
   pa33:lowiropt
   pa34:lowir2native
-  pa38:cppgm++
+  pa38:cppgm
 )
 
 source_sha=$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || echo unknown)

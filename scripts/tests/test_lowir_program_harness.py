@@ -171,7 +171,7 @@ class LowirProgramHarnessTests(unittest.TestCase):
         control = "tests/controls/200-static-reference-lifetime.t"
         (self.pa / control).parent.mkdir(parents=True)
         shutil.copy(REPO_ROOT / "pa12" / control, self.pa / control)
-        compiler = REPO_ROOT / "dev/cppgm++"
+        compiler = REPO_ROOT / "dev/cppgm"
         self.producer.write_text(
             "#!/usr/bin/env python3\nimport os, sys\n"
             "assert '--emit-lowir' in sys.argv, 'native driver is not implemented'\n"

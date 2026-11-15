@@ -4,7 +4,7 @@
 
 Measured compiler: [`08bba949b`](https://github.com/vishvananda/cppgm-extended/commit/08bba949b4a0c3f2a728bf52c6e7089a38b44797) · [CI run](https://github.com/vishvananda/cppgm-extended/actions/runs/41781359245) · [Raw program results](https://github.com/vishvananda/cppgm-extended/blob/e150174bec5a0fde19b53e2e76b7d48c4b35c4a9/intel/results.json) · [Raw rebuild results](https://github.com/vishvananda/cppgm-extended/blob/e150174bec5a0fde19b53e2e76b7d48c4b35c4a9/intel/selfhost.json)
 
-81 of 81 programs built with cppgm++ and g++ and agreed. Each number is the reference over cppgm++, so above 1× means cppgm++ is smaller or faster.
+81 of 81 programs built with cppgm and g++ and agreed. Each number is the reference over cppgm, so above 1× means cppgm is smaller or faster.
 
 CPU: Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz.
 
@@ -44,13 +44,13 @@ Self-built / GCC-built compiler CPU: paired ratios 0.988–1.013; A/A calibratio
 
 ## Compile CPU times
 
-Times are CPU seconds, excluding linking. Speed is reference time divided by cppgm++ time; higher is better. Every program is listed. Missing times show a dash. Ratios are omitted for failed programs or when either time is below 10 ms.
+Times are CPU seconds, excluding linking. Speed is reference time divided by cppgm time; higher is better. Every program is listed. Missing times show a dash. Ratios are omitted for failed programs or when either time is below 10 ms.
 
 Compilation is measured once per compiler and level; the ABBA/BAAB repetitions apply to generated-program execution and self-built compiler speed.
 
 ### O0 compilation
 
-| Program | cppgm++ (s) | GCC (s) | Speed vs GCC ↑ | Clang (s) | Speed vs Clang ↑ | Status |
+| Program | cppgm (s) | GCC (s) | Speed vs GCC ↑ | Clang (s) | Speed vs Clang ↑ | Status |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | Adobe-C++/functionobjects | 0.116 | 0.379 | 3.27× | 0.389 | 3.35× | ok |
 | Adobe-C++/loop_unroll | 0.093 | 0.806 | 8.67× | 0.422 | 4.54× | ok |
@@ -136,7 +136,7 @@ Compilation is measured once per compiler and level; the ABBA/BAAB repetitions a
 
 ### O3 compilation
 
-| Program | cppgm++ (s) | GCC (s) | Speed vs GCC ↑ | Clang (s) | Speed vs Clang ↑ | Status |
+| Program | cppgm (s) | GCC (s) | Speed vs GCC ↑ | Clang (s) | Speed vs Clang ↑ | Status |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | Adobe-C++/functionobjects | 0.196 | 1.409 | 7.19× | 0.955 | 4.87× | ok |
 | Adobe-C++/loop_unroll | 0.686 | 9.138 | 13.32× | 7.162 | 10.44× | ok |
@@ -222,7 +222,7 @@ Compilation is measured once per compiler and level; the ABBA/BAAB repetitions a
 
 ### Frontend only: -fsyntax-only
 
-| Program | cppgm++ (s) | GCC (s) | Speed vs GCC ↑ | Clang (s) | Speed vs Clang ↑ | Status |
+| Program | cppgm (s) | GCC (s) | Speed vs GCC ↑ | Clang (s) | Speed vs Clang ↑ | Status |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | Adobe-C++/functionobjects | 0.105 | 0.212 | 2.02× | 0.483 | 4.60× | ok |
 | Adobe-C++/loop_unroll | 0.058 | 0.169 | 2.91× | 0.250 | 4.31× | ok |
@@ -311,14 +311,14 @@ Compilation is measured once per compiler and level; the ABBA/BAAB repetitions a
 | Compiler doing the rebuild | CPU seconds |
 | --- | ---: |
 | GCC | 491.330 |
-| GCC-built cppgm++ | 101.010 |
-| Self-built cppgm++ | 102.860 |
+| GCC-built cppgm | 101.010 |
+| Self-built cppgm | 102.860 |
 
 These are the initial bootstrap builds. The GCC rebuild is measured once.
 
 #### Paired self-built compiler measurements
 
-| Block | GCC-built cppgm++ (s) | Self-built cppgm++ (s) | Self-built speed ↑ |
+| Block | GCC-built cppgm (s) | Self-built cppgm (s) | Self-built speed ↑ |
 | ---: | ---: | ---: | ---: |
 | 1 | 100.620 | 101.939 | 0.99× |
 | 2 | 105.952 | 104.697 | 1.01× |

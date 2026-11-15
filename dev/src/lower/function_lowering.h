@@ -708,7 +708,7 @@ private:
 	void store(lowir::Type type, const RValue& value, const Place& place);
 	// Each emitting helper appends at the insertion point. C++ leaves the
 	// order of a call's arguments unspecified (g++ evaluates them right to
-	// left, cppgm++ left to right), so two emitting operands of one call are
+	// left, cppgm left to right), so two emitting operands of one call are
 	// emitted by separate statements, the last first: the output must not
 	// depend on the compiler that built this one (PA35's inception).
 	RValue binary(lowir::BinaryOp op, lowir::Type type, const RValue& left, const RValue& right, uint8_t flags = 0);

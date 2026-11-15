@@ -3,7 +3,7 @@
 the README's statement of its limits and ladder steps, the progress ladder
 (progress.pl), the release check's margins in both builds (calibrate.pl
 --from), the frozen workload's manifest, and the behavior and generated
-runners driven with the host compiler standing in for cppgm++."""
+runners driven with the host compiler standing in for cppgm."""
 
 from pathlib import Path
 import os

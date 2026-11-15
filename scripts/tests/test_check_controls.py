@@ -62,7 +62,7 @@ class CheckControlsTests(unittest.TestCase):
         self.root = Path(temp.name)
         (self.root / "scripts").symlink_to(REPO_ROOT / "scripts")
         (self.root / "dev").symlink_to(REPO_ROOT / "dev")
-        self.frontend = self.root / "cppgm++"
+        self.frontend = self.root / "cppgm"
         self.frontend.write_text(FRONTEND)
         self.frontend.chmod(0o755)
         self.backend = self.root / "lowir2native-ref"

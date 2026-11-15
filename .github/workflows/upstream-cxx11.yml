@@ -124,7 +124,7 @@ jobs:
       - name: Build cppgm
         run: |
           ulimit -c 0
-          make -C dev -j2 cppgm++ CXX="$CXX" CPPGM_HOST_CXX="$CPPGM_HOST_CXX"
+          make -C dev -j2 cppgm CXX="$CXX" CPPGM_HOST_CXX="$CPPGM_HOST_CXX"
 
       - name: Freeze language test manifest
         run: |
@@ -157,7 +157,7 @@ jobs:
           ulimit -c 0
           python3 scripts/run_cxx11_ci_suite.py \
             --manifest "$RUNNER_TEMP/cxx11/manifest.json" \
-            --source-root upstream-sources --candidate dev/cppgm++ \
+            --source-root upstream-sources --candidate dev/cppgm \
             --upstream '${{ matrix.upstream }}' --upstream-version '${{ matrix.version }}' \
             --workers 2 --output "$RUNNER_TEMP/cxx11/run"
 

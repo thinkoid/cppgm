@@ -591,7 +591,7 @@ void report_unit(const std::string& path, double front_ms, double back_ms, const
 	uint64_t bytes = 0;
 	for (const native::object::Section& section : object.sections)
 		bytes += section.bytes.size();
-	std::cerr << "cppgm++ compile stats " << path << ": functions=" << stats.select.functions
+	std::cerr << "cppgm compile stats " << path << ": functions=" << stats.select.functions
 			  << " lowir_instructions=" << stats.select.lowir_instructions
 			  << " mir_instructions=" << stats.select.mir_instructions << " code_bytes=" << stats.emit.code_bytes
 			  << " sections=" << stats.sections << " symbols=" << stats.symbols << " relocations=" << stats.relocations
@@ -928,7 +928,7 @@ int link_mode(const Invocation& invocation)
 	}
 #if CPPGM_TELEMETRY_ENABLED
 	if (invocation.stats)
-		std::cerr << "cppgm++ link stats: objects=" << stats.objects << " sections=" << stats.sections
+		std::cerr << "cppgm link stats: objects=" << stats.objects << " sections=" << stats.sections
 				  << " discarded_groups=" << stats.discarded_groups << " symbols=" << stats.symbols
 				  << " relocations=" << stats.relocations << " got_slots=" << stats.got_slots
 				  << " runtime_names=" << stats.runtime_members << " text_bytes=" << stats.text_bytes
@@ -1026,7 +1026,7 @@ bool wasm_input(const Input& input, const Invocation& invocation, const backend:
 		lowering.finish();
 #if CPPGM_TELEMETRY_ENABLED
 		if (invocation.stats)
-			std::cerr << "cppgm++ wasm frontend stats " << input.name << ": front_ms=" << front_ms
+			std::cerr << "cppgm wasm frontend stats " << input.name << ": front_ms=" << front_ms
 					  << " lower_ms=" << milliseconds_since(start) - front_ms
 					  << " specializations=" << work.specializations
 					  << " instantiated_functions=" << work.instantiated_functions

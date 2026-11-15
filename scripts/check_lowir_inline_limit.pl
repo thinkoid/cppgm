@@ -46,7 +46,7 @@ sub caller_body
 
 if (scalar(@ARGV) != 3)
 {
-	die "Usage: check_lowir_inline_limit.pl <lowiropt> <cppgm++> <test-or-directory>\n";
+	die "Usage: check_lowir_inline_limit.pl <lowiropt> <cppgm> <test-or-directory>\n";
 }
 
 my ($app, $driver, $root) = @ARGV;

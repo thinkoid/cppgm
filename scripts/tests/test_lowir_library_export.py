@@ -30,7 +30,7 @@ class LibraryExportTests(unittest.TestCase):
             shutil.copy(REPO_ROOT / "dev/lowir_library-scaffold.cpp", dev / "lowir_library.cpp")
             (dev / "frontend_source_sets.mk").write_text("FRONTEND_LIBRARY_SOURCE_IDS_lowir_library :=\n" + "\n".join(
                 "FRONTEND_OBJ_BASENAMES_" + tool + " :=" for tool in
-                ("abimangle", "pptoken", "posttoken", "ppexpr", "preproc", "cppgm++", "lowir", "lowiropt", "lowir2native")))
+                ("abimangle", "pptoken", "posttoken", "ppexpr", "preproc", "cppgm", "lowir", "lowiropt", "lowir2native")))
             subprocess.run(["make", "-s", "-C", dev, "lowir-library", "-j2", "CPPGM_TEST_RUNNER=0", "CXX=g++"], check=True, capture_output=True, text=True)
             source = root / "client.c"
             source.write_text('#include "lowir_interface.h"\n'

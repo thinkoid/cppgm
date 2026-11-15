@@ -91,7 +91,7 @@ self build and the student/plain-flag configuration remain separate checks.
 | Frozen-source build | Text bytes | Text / GCC |
 | --- | ---: | ---: |
 | GCC | 5,596,214 | 1.0000 |
-| Original cppgm++ | 7,143,970 | 1.2766 |
+| Original cppgm | 7,143,970 | 1.2766 |
 | General candidate | 6,333,890 | 1.1318 |
 | General candidate plus exact unrolling cost | 6,334,210 | 1.1319 |
 | Lean guarded-EH candidate | 6,335,970 | 1.1322 |

@@ -181,7 +181,7 @@ class TimingTests(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
         self.context = SimpleNamespace(manifest=dict(levels=['-O0', '-O3']), work=root,
-                                       cache=root, tools=dict(gcc='g++', cppgm='cppgm++'))
+                                       cache=root, tools=dict(gcc='g++', cppgm='cppgm'))
         self.program = dict(name='p', source='s')
         for label in self.context.tools:
             directory = pb.Side(self.context, self.program, label).work / '-O3'
@@ -288,7 +288,7 @@ class RebuildTimingTests(unittest.TestCase):
             objects = build / 'selfhost'
             objects.mkdir(parents=True)
             (objects / 'one.o').write_bytes(self.object)
-            binary = build / 'bin/selfhost/cppgm++-self'
+            binary = build / 'bin/selfhost/cppgm-self'
             binary.parent.mkdir(parents=True, exist_ok=True)
             binary.write_bytes(b'identical compiler')
             return dict(cpu=1.0, code=self.code, timed_out=False)
@@ -516,7 +516,7 @@ class ReportTests(unittest.TestCase):
         self.assertIn('| sample | 2.000 | 6.000 | 3.00× | 4.000 | 2.00× | ok |', text)
         self.assertIn('| sample | 0.250 | 1.000 | 4.00× | 0.500 | 2.00× | ok |', text)
         self.assertIn('| GCC | 100.000 |', text)
-        self.assertIn('| GCC-built cppgm++ | 20.000 |', text)
+        self.assertIn('| GCC-built cppgm | 20.000 |', text)
 
     def test_details_retain_tiny_missing_and_failing_measurements(self):
         records = [outcome('tiny', dict(compile_cpu_O3=1), dict(compile_cpu_O3=0.005)),
@@ -540,7 +540,7 @@ class ReportTests(unittest.TestCase):
         for command in commands.values():
             self.assertIn('-j3', command)
         self.assertIn('INCEPTION_OBJECT_BUILD_JOBS=3', commands['inception'])
-        self.assertEqual(commands['self'][-1], 'cppgm++-self')
+        self.assertEqual(commands['self'][-1], 'cppgm-self')
         self.assertIn('CXX=clang++', commands['clang'])
         self.assertIn('CXX=g++', commands['gcc'])
         self.assertIn('CPPGM_HOST_CXX=g++', commands['clang'])
@@ -551,7 +551,7 @@ class ReportTests(unittest.TestCase):
         output = self.root / 'selfhost.json'
         arguments = SimpleNamespace(work=self.root, output=output, jobs=1)
         (self.root / 'dev').mkdir()
-        (self.root / 'dev/cppgm++').write_bytes(b'seed')
+        (self.root / 'dev/cppgm').write_bytes(b'seed')
         with mock.patch.object(pb, 'build_cpu', side_effect=[3.0, None]), \
                 mock.patch.object(pb, 'ROOT', self.root):
             self.assertEqual(pb.selfhost(arguments), 0)
@@ -561,7 +561,7 @@ class ReportTests(unittest.TestCase):
     def test_selfhost_measures_the_selected_checkout(self):
         source = self.root / 'measured-source'
         (source / 'dev').mkdir(parents=True)
-        (source / 'dev/cppgm++').write_bytes(b'compiler')
+        (source / 'dev/cppgm').write_bytes(b'compiler')
         (source / 'dev/example.cpp').write_text('int main() {}\n')
         output = self.root / 'selfhost.json'
         arguments = SimpleNamespace(work=self.root / 'work', output=output,
@@ -590,7 +590,7 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(arguments.summary.read_bytes(), arguments.details.read_bytes())
         text = arguments.details.read_text()
-        self.assertIn('| Building cppgm++ | 5.00× | 4.00× |', text)
+        self.assertIn('| Building cppgm | 5.00× | 4.00× |', text)
         self.assertIn('| Self-built compiler speed | 1.25× | 1.25× |', text)
         self.assertIn('| 1 | 20.000 | 16.000 | 1.25× |', text)
         self.assertIn('A/A CPU ratio: 1.001', text)

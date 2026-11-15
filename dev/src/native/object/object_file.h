@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-// A relocatable object: what `cppgm++ -c` writes and link mode reads, for
+// A relocatable object: what `cppgm -c` writes and link mode reads, for
 // this compiler's objects and host-compiled helper objects alike. It keeps
 // the ELF64 x86-64 relocatable vocabulary (sections, symbols, RELA
 // relocations, COMDAT groups) restricted to the facts linking consumes:

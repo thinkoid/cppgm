@@ -1,6 +1,6 @@
 # Public benchmarks
 
-The benchmarks build third-party programs with `cppgm++`, `g++` and `clang++`
+The benchmarks build third-party programs with `cppgm`, `g++` and `clang++`
 and compare the results. **Public benchmarks** and **Self-build benchmarks**
 run independently on each push to `main` and each pull request, with separate time
 budgets, reports and artifacts.
@@ -40,7 +40,7 @@ All programs, at `-O0` and `-O3`:
 All programs, once: frontend CPU time, from `-fsyntax-only`.
 
 The `-O3` timing pass reuses the built executables, one program at a time.
-For each reference compiler, A is its executable and B is `cppgm++`'s.
+For each reference compiler, A is its executable and B is `cppgm`'s.
 The pass alternates four-run ABBA and BAAB blocks and takes the median of
 the blocks' CPU ratios; each block uses the mean of its two runs per side.
 Programs whose initial `g++` run takes at least 1 second get one block;
@@ -51,8 +51,8 @@ run must reproduce its original stdout and exit code.
 Programs with `count` in the manifest, at `-O3`, from
 `valgrind --tool=cachegrind`:
 
-- `compile`: `cppgm++` instructions.
-- `run`: instructions of the `cppgm++` and `g++` binaries.
+- `compile`: `cppgm` instructions.
+- `run`: instructions of the `cppgm` and `g++` binaries.
 
 `count` applies only to single-threaded programs with repeatable counts.
 
@@ -70,15 +70,15 @@ flags. To turn off their vectorizers, set `references` in the manifest:
 
 A run fails if:
 
-- `cppgm++` cannot build a program that `g++` builds.
-- The output or exit code of a `cppgm++` binary differs from `g++` at the same
+- `cppgm` cannot build a program that `g++` builds.
+- The output or exit code of a `cppgm` binary differs from `g++` at the same
   level.
 
 A `clang++` failure does not fail the run. The program is left out of the
 `clang++` column.
 
 Differences in the numbers do not fail the run. `report` writes a warning when
-a `cppgm++` count differs from `baseline.json`:
+a `cppgm` count differs from `baseline.json`:
 
 - Compile counts: more than 0.5%.
 - Run counts: more than 1%.
@@ -95,7 +95,7 @@ Both reports identify their own measured commit, toolchains, CI run and raw
 measurements. The tables also appear in their workflow summaries and
 `details.md` artifacts (`public-benchmarks-*` and `self-build-benchmarks-*`).
 
-Program speed is `GCC CPU time / cppgm++ CPU time`: 1× is equal, and higher
+Program speed is `GCC CPU time / cppgm CPU time`: 1× is equal, and higher
 is faster. Compile speed measures compilation, excluding linking;
 generated code speed measures execution of the resulting programs. The `-O3`
 execution timings use the separate timing pass described above.
@@ -110,8 +110,8 @@ so counts can differ between columns.
 The compiler build/codegen rows time the same compiler sources at `-O3`, with the
 same job count:
 
-- **Building `cppgm++`**: GCC's or Clang's native build CPU time divided by the
-  time taken by GCC-built `cppgm++` to build itself. Each native toolchain uses
+- **Building `cppgm`**: GCC's or Clang's native build CPU time divided by the
+  time taken by GCC-built `cppgm` to build itself. Each native toolchain uses
   a fresh, isolated object root.
 - **Self-built compiler speed**: that self-build time divided by the time
   taken by the self-built compiler to compile the same sources. After the
@@ -124,7 +124,7 @@ same job count:
 
 `selfhost --paired-blocks N` changes the rebuild block count per native baseline;
 `--clangxx PATH` selects native Clang. The initial GCC and Clang builds are each
-measured once for **Building `cppgm++`**. All binaries keep `CPPGM_HOST_CXX=g++`
+measured once for **Building `cppgm`**. All binaries keep `CPPGM_HOST_CXX=g++`
 and identical builtin host configuration hashes, so the compiler's target header
 environment stays fixed while its native code generator changes. Source hashes,
 toolchain identities, commands and bootstrap logs are retained. Pairing reduces

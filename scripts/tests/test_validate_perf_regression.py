@@ -104,7 +104,7 @@ class ValidatePerfRegressionTest(unittest.TestCase):
 
     def test_perf_gate_rejects_live_or_modified_workload_commands(self):
         live_headers = [
-            "./dev/cppgm++",
+            "./dev/cppgm",
             "-I",
             "dev/src",
             "-c",
@@ -119,10 +119,10 @@ class ValidatePerfRegressionTest(unittest.TestCase):
             MODULE.validate_frozen_workload(REPO_ROOT, live_headers)
 
     def test_workload_comparison_ignores_only_output_path(self):
-        baseline = ["./dev/cppgm++", "-I", "frozen", "-c", "-o", "/tmp/a.o", "input.cpp"]
-        candidate = ["./dev/cppgm++", "-I", "frozen", "-c", "-o", "/tmp/b.o", "input.cpp"]
+        baseline = ["./dev/cppgm", "-I", "frozen", "-c", "-o", "/tmp/a.o", "input.cpp"]
+        candidate = ["./dev/cppgm", "-I", "frozen", "-c", "-o", "/tmp/b.o", "input.cpp"]
         changed_headers = [
-            "./dev/cppgm++", "-I", "dev/src", "-c", "-o", "/tmp/b.o", "input.cpp"
+            "./dev/cppgm", "-I", "dev/src", "-c", "-o", "/tmp/b.o", "input.cpp"
         ]
 
         self.assertEqual(

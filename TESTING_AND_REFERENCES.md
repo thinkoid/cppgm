@@ -108,8 +108,8 @@ compile/runtime badges and per-suite detail. The failure controls are in `make t
 ## Public benchmarks CI
 
 The **Public benchmarks** workflow runs on each push to `main` and each pull
-request. It builds pinned third-party programs with `cppgm++`, `g++` and
-`clang++` at `-O0` and `-O3`. The output of each `cppgm++` binary must match
+request. It builds pinned third-party programs with `cppgm`, `g++` and
+`clang++` at `-O0` and `-O3`. The output of each `cppgm` binary must match
 `g++`, or the job fails. A count that differs
 from `benchmarks/public/baseline.json` only warns. See
 [benchmarks/public/README.md](benchmarks/public/README.md). The runner tests are
@@ -119,9 +119,9 @@ part of `make test-harness`.
 
 The **Clang build** workflow runs on each push to `main` and on each pull
 request that changes `dev/` or the check. It builds the `clang` target of
-LLVM 22.1.2 with `cppgm++` at `-O3`; the host compiler links. The built Clang
+LLVM 22.1.2 with `cppgm` at `-O3`; the host compiler links. The built Clang
 then compiles a checked program at `-O0` and `-O2`, and the output of the
-program must match. A source that `cppgm++` does not compile fails the job;
+program must match. A source that `cppgm` does not compile fails the job;
 the job summary shows the first failed steps and `build.log` in the artifact
 has every one. To run the check locally:
 
@@ -176,7 +176,7 @@ In the LowIR-graded assignments (PA10–PA23), a control that states its
 expected outcome is a self-checking program: `expect exit N` or
 `expect reject` in its leading comment, or an `x.expect` sidecar (`exit N`
 or `reject`, with optional exact output in `x.stdout`).
-`scripts/check_controls.pl` compiles it with `cppgm++ --emit-lowir -O0`,
+`scripts/check_controls.pl` compiles it with `cppgm --emit-lowir -O0`,
 builds the LowIR with `lowir2native-ref -O0`, runs it and checks the status
 and output, or that the frontend rejects it; the LowIR text is not compared.
 A program killed by a signal fails whatever status it states (SIGABRT is not

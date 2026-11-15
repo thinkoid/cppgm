@@ -2271,7 +2271,7 @@ def host_eh_object_evidence(path: Path, current_pa: str, source: str) -> str:
         strip_string_literals(strip_comments(source)))
     source_match = SOURCE_EXCEPTION_RE.search(stripped_source)
     if source_match:
-        return f"harness:cppgm++ -c, source:{source_match.group(0)}"
+        return f"harness:cppgm -c, source:{source_match.group(0)}"
     inspect_ref = path.with_suffix(".ref.inspect")
     if inspect_ref.exists():
         inspect_match = re.search(

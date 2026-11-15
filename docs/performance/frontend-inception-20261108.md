@@ -7,8 +7,8 @@ prototype rewrites has established a reliable CPU-time win.
 
 ## What is being compared
 
-The codegen score compares **GCC-built cppgm++ with self-built cppgm++ executing
-identical compiler inputs**. It is separate from cppgm++ versus GCC compiling
+The codegen score compares **GCC-built cppgm with self-built cppgm executing
+identical compiler inputs**. It is separate from cppgm versus GCC compiling
 C++ source. The latter measures the compiler algorithms and feature coverage;
 the former measures the native code those algorithms run as.
 
@@ -110,7 +110,7 @@ those two generators. The recent assembly/Godot branch does not change the
 native compiler bytes for either implementation.
 
 The first independent CI self-build run at `6a6a15f44` reports 0.98× versus
-GCC-built and 1.02× versus Clang-built cppgm++ on EPYC 9V74, with GCC/Clang
+GCC-built and 1.02× versus Clang-built cppgm on EPYC 9V74, with GCC/Clang
 A/A ratios 1.013/1.018. Its compiler sources are unchanged by the CI split.
 Those calibrations limit interpretation of a one-percentage-point move.
 

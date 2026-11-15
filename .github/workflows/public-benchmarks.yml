@@ -60,7 +60,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Build compiler
-        run: make -C dev cppgm++
+        run: make -C dev cppgm
 
       - name: Cache pinned sources
         uses: actions/cache@v4
@@ -90,7 +90,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.course_quality
         run: |
           python3 scripts/check_optimization_quality.py pa33/tests/improvements \
-            --mode native --compiler dev/cppgm++ --report-only \
+            --mode native --compiler dev/cppgm --report-only \
             --iterations 1000000 --timing-rounds 6 \
             --out obj/public-benchmarks/course-quality
 
@@ -194,7 +194,7 @@ jobs:
                 build-essential ca-certificates clang git libgmp-dev patch python3 time valgrind
               git config --global --add safe.directory /work
               jobs=16
-              make -C dev cppgm++ -j "$jobs"
+              make -C dev cppgm -j "$jobs"
               python3 scripts/public_benchmarks.py fetch --cache obj/public-benchmarks/src
               python3 scripts/public_benchmarks.py run \
                 --cache obj/public-benchmarks/src --work obj/public-benchmarks/work \
@@ -205,7 +205,7 @@ jobs:
                 --badges obj/public-benchmarks/badges
               if [ "$COURSE_QUALITY" = true ]; then
                 python3 scripts/check_optimization_quality.py pa33/tests/improvements \
-                  --mode native --compiler dev/cppgm++ --report-only \
+                  --mode native --compiler dev/cppgm --report-only \
                   --iterations 1000000 --timing-rounds 6 \
                   --out obj/public-benchmarks/course-quality
               fi

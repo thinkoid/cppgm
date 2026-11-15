@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build unmodified pinned Clang with cppgm++ and run the built compiler on a checked program."""
+"""Build unmodified pinned Clang with cppgm and run the built compiler on a checked program."""
 import argparse
 import json
 import os
@@ -167,14 +167,14 @@ def implicit_includes(verbose):
 
 
 def rules(host, includes):
-    """CMake rules for cppgm++: it compiles each C++ source; the host compiler links.
+    """CMake rules for cppgm: it compiles each C++ source; the host compiler links.
 
-    The link command has no compile flags: the configuration tests them with cppgm++, which accepts
+    The link command has no compile flags: the configuration tests them with cppgm, which accepts
     warning options that the host compiler does not have.
     """
     return '\n'.join([
         f'set(CMAKE_CXX_LINK_EXECUTABLE "{host} <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>")',
-        # cppgm++ does not print GCC's verbose compilation; state the directories that it searches.
+        # cppgm does not print GCC's verbose compilation; state the directories that it searches.
         'set(CMAKE_CXX_VERBOSE_FLAG "")',
         f'set(_CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES_INIT "{";".join(includes)}")',
         'set(CMAKE_CXX_COMPILE_OBJECT "<CMAKE_CXX_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -o <OBJECT> -c <SOURCE>")',
@@ -239,7 +239,7 @@ def check_program(clang, directory, flags=(), levels=('O0', 'O2')):
 
 
 def report(document):
-    lines = ['# Clang built by cppgm++', '']
+    lines = ['# Clang built by cppgm', '']
     if document['status'] != 'complete':
         lines += [f"Status: **{document['status']}**. {document.get('error', '')}", '']
         for block in document.get('failures', []):
@@ -250,7 +250,7 @@ def report(document):
     build = document['build']
     lines += [f"LLVM {VERSION} (`{COMMIT[:12]}`), target `clang`, `-{document['level']}`.", '',
               '| Step | Result |', '|---|---|',
-              f"| C++ sources compiled by cppgm++ | {document['units']} |",
+              f"| C++ sources compiled by cppgm | {document['units']} |",
               f"| Build wall time | {build['wall']:.0f} s |",
               f"| Build CPU time | {build['cpu']:.0f} s |",
               f"| Built compiler | `{document['version']}` |",
@@ -313,7 +313,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
     runner = commands.add_parser('run')
-    runner.add_argument('--compiler', type=Path, default=ROOT / 'dev/cppgm++')
+    runner.add_argument('--compiler', type=Path, default=ROOT / 'dev/cppgm')
     runner.add_argument('--repo-root', type=Path, default=ROOT, help='source checkout that built the compiler')
     runner.add_argument('--source', type=Path, help='existing clean checkout of the pinned LLVM commit')
     runner.add_argument('--output', type=Path, required=True)

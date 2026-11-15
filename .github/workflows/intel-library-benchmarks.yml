@@ -70,7 +70,7 @@ jobs:
               esac
               git config --global --add safe.directory /work/source
               git config --global --add safe.directory /work/tools
-              make -C dev cppgm++ -j16
+              make -C dev cppgm -j16
               python3 -u ../tools/scripts/intel_library_benchmarks.py run \
                 --suite "$SUITE" --source /work/source --jobs 16
             '

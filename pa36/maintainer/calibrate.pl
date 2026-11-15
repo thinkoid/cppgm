@@ -4,7 +4,7 @@
 # The PA36 release check, for course maintainers (`make -C pa36 ref-test`).
 #
 # 1. The course build: every gate (check.pl, all three groups, N generated
-#    seeds, default 100) on dev/cppgm++ as this repository's Makefile builds
+#    seeds, default 100) on dev/cppgm as this repository's Makefile builds
 #    it, into DIR/course.
 # 2. The student build: the same source built as the student export's
 #    dev/Makefile builds it (%STUDENT_MAKE: plain -O3, the C library's
@@ -234,7 +234,7 @@ for my $b (qw(student course)) {
 	$text .= join('', map { "meta\t$_->[0]\t$_->[1]\n" } @meta, ['build', $BUILD_META{$b}]);
 	$text .= "#\n# gate\top\tlimit\trelease margin\tvalue\tmargin\tstatus\n";
 	$text .= join('', map { join("\t", 'gate', @$_) . "\n" } @{ $rows{$b} });
-	$text .= "#\n# measurement\tseed or cppgm++\tself or host\tratio\n";
+	$text .= "#\n# measurement\tseed or cppgm\tself or host\tratio\n";
 	$text .= join('', map { "detail\t$_\n" } details_of($b));
 	PA36::spit($b eq 'student' ? $o{out} : $o{'course-out'}, $text);
 }

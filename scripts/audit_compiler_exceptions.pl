@@ -79,7 +79,7 @@ my $locate_type = 'locate';
 # with an InternalError catch. Counts make additions and moves explicit.
 my %terminal_allowlist = (
 	'dev/abimangle.cpp' => 1,
-	'dev/cppgm++.cpp' => 1,
+	'dev/cppgm.cpp' => 1,
 	'dev/ppexpr.cpp' => 1,
 	'dev/lowir.cpp' => 1,
 	'dev/lowir2native.cpp' => 1,

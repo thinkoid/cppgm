@@ -42,7 +42,7 @@ in the detail report.
 To reproduce on Linux x86-64 with GCC, Clang and SCons 4.10.1 installed:
 
 ```sh
-make -C dev cppgm++
+make -C dev cppgm
 python3 scripts/godot_ci.py run --output obj/godot-local --runtime-cpu 0
 ```
 

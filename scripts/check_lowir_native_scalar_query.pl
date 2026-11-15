@@ -11,7 +11,7 @@ use lib $FindBin::Bin;
 use CppgmBatchWorker qw(collect_tests run_command_capture);
 
 # The wrapper's exact-result call becomes a tail jump (MIR `tail_jump`) at
-# -O1 and above in the host exception model only: objects `cppgm++ -c`
+# -O1 and above in the host exception model only: objects `cppgm -c`
 # writes for the host toolchain (dev/src/native/select/branch_layout.cpp,
 # form_tail_jumps). No dump shows that model's MIR, so the check reads the
 # host object's encoding: a tail jump is a `jmp` whose branch relocation
@@ -102,7 +102,7 @@ sub block_with
 if(scalar(@ARGV) != 3)
 {
 	die "Usage: check_lowir_native_scalar_query.pl " .
-		"<lowir2native> <cppgm++> <test-or-directory>\n";
+		"<lowir2native> <cppgm> <test-or-directory>\n";
 }
 
 my ($app, $driver, $root) = @ARGV;
@@ -217,7 +217,7 @@ for my $test (@tests)
 
 	my $driver_input = "$directory/driver.lowir";
 	copy($test, $driver_input) or
-		die "$test: unable to prepare cppgm++ replay: $!\n";
+		die "$test: unable to prepare cppgm replay: $!\n";
 	for my $level (qw(O0 O1 O2 O3)) {
 		my $object = "$directory/host-$level.o";
 		my $status = run_command_capture(
@@ -278,7 +278,7 @@ for my $test (@tests)
 		stderr => "$directory/driver.compile.stderr",
 		timeout => 60,
 	);
-	die "$test: O3 cppgm++ replay failed\n" .
+	die "$test: O3 cppgm replay failed\n" .
 		read_file("$directory/driver.compile.stderr") if $status != 0;
 	run_program($test, $driver_program, 'driver', $directory);
 }

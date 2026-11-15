@@ -1,9 +1,9 @@
 kind	path	token	reason
 diagnostic	dev/src/opt/optimizer.cpp	pa33_opt_stats	stable emitted statistics key
-comment	dev/cppgm++.cpp	PA12	handout or fixture cross-reference in a comment
-comment	dev/cppgm++.cpp	PA33	handout or fixture cross-reference in a comment
-comment	dev/cppgm++.cpp	PA5	handout or fixture cross-reference in a comment
-comment	dev/cppgm++.cpp	PA6	handout or fixture cross-reference in a comment
+comment	dev/cppgm.cpp	PA12	handout or fixture cross-reference in a comment
+comment	dev/cppgm.cpp	PA33	handout or fixture cross-reference in a comment
+comment	dev/cppgm.cpp	PA5	handout or fixture cross-reference in a comment
+comment	dev/cppgm.cpp	PA6	handout or fixture cross-reference in a comment
 comment	dev/lowir.cpp	PA8	handout or fixture cross-reference in a comment
 comment	dev/preproc.cpp	PA2	handout or fixture cross-reference in a comment
 comment	dev/src/abi/facts/abi_fact_case.h	PA9	handout or fixture cross-reference in a comment

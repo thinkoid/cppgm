@@ -24,7 +24,7 @@ TARGETS = \
 	lowir \
 	lowiropt \
 	lowir2native \
-	cppgm++
+	cppgm
 
 CXX ?= g++
 CPPGM_HOST_CXX ?= $(CXX)
@@ -87,17 +87,17 @@ RUNNER_STATE_STAMP = $(OBJDIR)/.test_runner_mode
 
 all: $(TARGETS)
 
-cppgm++-telemetry-off:
+cppgm-telemetry-off:
 	$(Q)$(MAKE) OBJ='$(TELEMETRY_OFF_OBJ)' CPPGM_TEST_RUNNER=0 \
-		CC_FLAGS='$(TELEMETRY_OFF_CC_FLAGS)' cppgm++-telemetry-off-build
+		CC_FLAGS='$(TELEMETRY_OFF_CC_FLAGS)' cppgm-telemetry-off-build
 
-cppgm++-telemetry-off-build: $(call link_objs,cppgm++) $(RUNNER_STATE_STAMP) | $(OBJDIR)
-	$(call quiet,LINK,cppgm++-telemetry-off)
-	$(Q)$(CXX) $(CC_FLAGS) $(INC) -o cppgm++-telemetry-off.tmp \
-		$(call link_objs,cppgm++)
-	@if ! cmp -s cppgm++-telemetry-off.tmp cppgm++-telemetry-off 2>/dev/null; then \
-		mv -f cppgm++-telemetry-off.tmp cppgm++-telemetry-off; \
-	else rm -f cppgm++-telemetry-off.tmp; fi
+cppgm-telemetry-off-build: $(call link_objs,cppgm) $(RUNNER_STATE_STAMP) | $(OBJDIR)
+	$(call quiet,LINK,cppgm-telemetry-off)
+	$(Q)$(CXX) $(CC_FLAGS) $(INC) -o cppgm-telemetry-off.tmp \
+		$(call link_objs,cppgm)
+	@if ! cmp -s cppgm-telemetry-off.tmp cppgm-telemetry-off 2>/dev/null; then \
+		mv -f cppgm-telemetry-off.tmp cppgm-telemetry-off; \
+	else rm -f cppgm-telemetry-off.tmp; fi
 
 # Record successful links separately: an identical binary retains its mtime,
 # while newer objects must not force that same link on every subsequent make.
@@ -161,7 +161,7 @@ $(OBJDIR)/%.o: $(SRC)/%.cpp $(COMPILE_CONFIG_STAMP)
 	@mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
 clean:
-	-rm -f $(TARGETS) cppgm++-telemetry-off $(TOOLCHAIN_STAMP)
+	-rm -f $(TARGETS) cppgm-telemetry-off $(TOOLCHAIN_STAMP)
 	-rm -rf $(OBJDIR)
 
 $(DEPDIR)/%.d: ;
@@ -171,6 +171,6 @@ $(DEPDIR)/%.d: ;
 -include $(addprefix $(DEPDIR)/entry/,$(addsuffix .d,$(TARGETS)))
 -include $(DEPDIR)/test_runner_enabled.d
 
-.PHONY: all clean FORCE cppgm++-telemetry-off cppgm++-telemetry-off-build
+.PHONY: all clean FORCE cppgm-telemetry-off cppgm-telemetry-off-build
 
 include lowir_library.mk

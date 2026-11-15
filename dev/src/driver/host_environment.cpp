@@ -225,7 +225,7 @@ bool host_stdlib_selected(const std::string& name)
 std::string host_query(const std::string& flag)
 {
 	if (flag == "--version" || flag == "-v")
-		return std::string("cppgm++ (host configuration: ") + cppgm_builtin_host_config::kHostCxx + ")\n";
+		return std::string("cppgm (host configuration: ") + cppgm_builtin_host_config::kHostCxx + ")\n";
 	if (flag == "-dumpmachine")
 		return cppgm_builtin_host_config::kTarget;
 	if (flag == "-dumpversion")

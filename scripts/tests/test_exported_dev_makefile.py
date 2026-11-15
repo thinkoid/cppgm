@@ -16,14 +16,14 @@ TESTS_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "tests.yml"
 
 REFERENCE_TARGETS = [
     "abimangle", "pptoken", "posttoken", "ppexpr", "preproc",
-    "cppgm++", "lowir",
+    "cppgm", "lowir",
     "lowir2native", "lowiropt",
 ]
 
 ASSIGNMENT_REFERENCE_TARGETS = {
-    **{f"pa{i}": "cppgm++" for i in range(5, 8)},
-    **{f"pa{i}": "cppgm++" for i in range(10, 24)},
-    **{f"pa{i}": "cppgm++" for i in range(25, 33)},
+    **{f"pa{i}": "cppgm" for i in range(5, 8)},
+    **{f"pa{i}": "cppgm" for i in range(10, 24)},
+    **{f"pa{i}": "cppgm" for i in range(25, 33)},
     "pa1": "pptoken",
     "pa2": "posttoken",
     "pa3": "ppexpr",
@@ -33,7 +33,7 @@ ASSIGNMENT_REFERENCE_TARGETS = {
     "pa24": "lowir2native",
     "pa33": "lowiropt",
     "pa34": "lowir2native",
-    "pa38": "cppgm++",
+    "pa38": "cppgm",
 }
 
 
@@ -327,7 +327,7 @@ class ExportedDevMakefileTests(unittest.TestCase):
             targets = [
                 "abimangle", "pptoken", "posttoken", "ppexpr",
                 "preproc", "lowir", "lowiropt", "lowir2native",
-                "cppgm++",
+                "cppgm",
             ]
             source_sets = []
             for target in targets:

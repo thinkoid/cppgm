@@ -10,14 +10,14 @@ under `dev/src/`.
 
 ### One backend, two exception models
 
-`lowir2native` and both `cppgm++` object paths use the same selector
+`lowir2native` and both `cppgm` object paths use the same selector
 (`native/select/`) and encoder (`native/x86/`) at the requested level. The
 selector also follows an exception model: `lowir2native`, `.obj` objects
-and `cppgm++` link mode use the course model (handler records, the course
-runtime); `cppgm++ -c` to any other output uses the host model (Itanium
+and `cppgm` link mode use the course model (handler records, the course
+runtime); `cppgm -c` to any other output uses the host model (Itanium
 tables). MIR dumps come only from `lowir2native`, so every dump the lanes
 read is a course-model dump. Decisions marked *host* below never appear in
-one; `cppgm++ --stats-functions` and a disassembly of the object show
+one; `cppgm --stats-functions` and a disassembly of the object show
 them.
 
 Per function, the selector analyzes the LowIR, assigns registers to values
@@ -29,7 +29,7 @@ cleanups and branch layout. The dump and the encoder read the same
 - `-O0` is the PA24 backend, whose shapes PA24's exact fixtures pin.
 - `-O1` turns on nearly everything below.
 - `-O2` adds a search tree for sparse switches and, *host*, tail jumps.
-- `-O3` selects exactly as `-O2`. In `cppgm++`, PA33's optimizer also runs
+- `-O3` selects exactly as `-O2`. In `cppgm`, PA33's optimizer also runs
   on the unit at the requested level (not at `-O0`) before native
   lowering, so the LowIR differs too.
 
@@ -242,7 +242,7 @@ left in the blocks, which can include removed instructions the dump omits.
 The encoding counters, `native_returns` through `code_bytes`, stay zero
 unless `-o` runs the encoder.
 
-`cppgm++ --stats-functions` prints, for each function the object backend
+`cppgm --stats-functions` prints, for each function the object backend
 selects in the model of the output, one `function_census` line and one
 `loop_census` line per natural loop of its final MIR
 (`native/object/function_census.h`). `function_census` gives the MIR

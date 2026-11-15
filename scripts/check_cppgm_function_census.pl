@@ -61,7 +61,7 @@ sub expected_loop_symbols
 
 if (scalar(@ARGV) != 2)
 {
-	die "Usage: check_cppgm_function_census.pl <cppgm++> <test-or-directory>\n";
+	die "Usage: check_cppgm_function_census.pl <cppgm> <test-or-directory>\n";
 }
 
 my ($app, $root) = @ARGV;

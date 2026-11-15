@@ -93,14 +93,14 @@ def prepare(args):
     inputs = package / "inputs"
     inputs.mkdir()
     copy_tree(REPO / "dev/src", inputs / "dev/src")
-    tools = getattr(args, "reference_tools", ["cppgm++"])
+    tools = getattr(args, "reference_tools", ["cppgm"])
     for name in tools:
         shutil.copyfile(REPO / ("dev/" + name + ".cpp"), inputs / ("dev/" + name + ".cpp"))
     for name in ['LICENSE', 'NOTICE']:
         shutil.copyfile(REPO / name, inputs / name)
     shutil.copyfile(HERE / "wasi_host.h", inputs / "wasi_host.h")
     tool_sources = source_sets(tools)
-    sources = tool_sources["cppgm++"]
+    sources = tool_sources["cppgm"]
     config = (REPO / "obj/generated/cppgm_builtin_host_config.h").read_text()
     paths = re.search(r"kStandardIncludePaths\[\] = \{(.*?)\};", config, re.S)
     if paths is None:
@@ -331,7 +331,7 @@ def main():
     pack = commands.add_parser("prepare")
     pack.add_argument("--directory", required=True, type=Path)
     pack.add_argument("--sdk", required=True, type=Path)
-    pack.add_argument("--compiler", type=Path, default=REPO / "dev/cppgm++")
+    pack.add_argument("--compiler", type=Path, default=REPO / "dev/cppgm")
     pack.add_argument("--shim", required=True, type=Path)
     pack.add_argument("--x86-headers", action="store_true")
     pack.add_argument("--optimization", type=int, choices=[0, 1, 2, 3], default=3)

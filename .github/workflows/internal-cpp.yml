@@ -50,7 +50,7 @@ jobs:
       - name: Trust the mounted checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build compiler
-        run: make -C dev cppgm++ -j "$(nproc)"
+        run: make -C dev cppgm -j "$(nproc)"
       - name: Cache pinned course source archive
         uses: actions/cache@v4
         with:

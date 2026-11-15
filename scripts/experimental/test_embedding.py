@@ -44,7 +44,7 @@ const fs = require('fs');
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--compiler', type=Path, default=ROOT / 'dev/cppgm++')
+    parser.add_argument('--compiler', type=Path, default=ROOT / 'dev/cppgm')
     parser.add_argument('--backend', type=Path, default=ROOT / 'dev/lowir2native')
     parser.add_argument('--node', default='node')
     args = parser.parse_args()

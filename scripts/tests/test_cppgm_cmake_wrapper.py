@@ -16,7 +16,7 @@ class CppgmCmakeWrapperTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="cppgm-cmake-wrapper.") as temp_dir:
             temp = Path(temp_dir)
             argv_file = temp / "argv.txt"
-            fake_compiler = temp / "fake-cppgm++"
+            fake_compiler = temp / "fake-cppgm"
             fake_compiler.write_text(
                 "#!/usr/bin/env sh\n"
                 "printf '%s\\n' \"$@\" > \"$CPPGM_WRAPPER_ARGV_FILE\"\n"

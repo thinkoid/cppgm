@@ -87,7 +87,7 @@ sub check_effects
 if(scalar(@ARGV) != 3)
 {
 	die "Usage: check_lowir_addressed_scalar_slots.pl " .
-		"<lowiropt> <cppgm++> <test-or-directory>\n";
+		"<lowiropt> <cppgm> <test-or-directory>\n";
 }
 
 my ($app, $driver, $root) = @ARGV;

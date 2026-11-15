@@ -176,7 +176,7 @@ function to use its object signature as an `env` import. Other unresolved
 symbols still fail. `--export-table` exposes `__indirect_function_table`.
 `--export-ctors` exposes `__wasm_call_ctors` and defers freestanding constructor
 execution until the host calls it. The default freestanding initialization
-behavior remains as described in PA37. These options are shared by `cppgm++`
+behavior remains as described in PA37. These options are shared by `cppgm`
 and `lowir2native` and require a Wasm target.
 
 `-Wl,-z,stack-size=8388608` reserves an 8 MiB linear-memory stack; the compiler's

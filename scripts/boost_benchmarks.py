@@ -395,7 +395,7 @@ def main():
     runner = commands.add_parser('run')
     runner.add_argument('--archive', type=Path, required=True)
     runner.add_argument('--output', type=Path, required=True)
-    runner.add_argument('--compiler', default=ROOT / 'dev/cppgm++')
+    runner.add_argument('--compiler', default=ROOT / 'dev/cppgm')
     runner.add_argument('--repo-root', type=Path, default=ROOT, help='clean source checkout used to build the compiler')
     runner.add_argument('--gcc', default='g++')
     runner.add_argument('--clang', default='clang++')

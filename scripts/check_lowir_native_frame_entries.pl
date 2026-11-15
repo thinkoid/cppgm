@@ -12,7 +12,7 @@ use CppgmBatchWorker qw(collect_tests run_command_capture);
 
 # A function that returns on some paths without its frame sets the frame up
 # on each path that needs it (dev/src/native/select/shrink_wrap.cpp), in the
-# host exception model only: objects `cppgm++ -c` writes for the host
+# host exception model only: objects `cppgm -c` writes for the host
 # toolchain. At -O1 and above each set-up lies before its path's code and
 # falls into it, and a path that ends at a shared return of at most two
 # saved registers returns itself (dev/src/native/select/branch_layout.cpp).
@@ -61,7 +61,7 @@ sub run_program
 if(scalar(@ARGV) != 3)
 {
 	die "Usage: check_lowir_native_frame_entries.pl " .
-		"<lowir2native> <cppgm++> <test-or-directory>\n";
+		"<lowir2native> <cppgm> <test-or-directory>\n";
 }
 
 my ($app, $driver, $root) = @ARGV;
@@ -89,7 +89,7 @@ for my $test (@tests)
 
 	my $driver_input = "$directory/driver.lowir";
 	copy($test, $driver_input) or
-		die "$test: unable to prepare cppgm++ replay: $!\n";
+		die "$test: unable to prepare cppgm replay: $!\n";
 	for my $level (qw(O0 O1 O2 O3)) {
 		my $object = "$directory/host-$level.o";
 		my $status = run_command_capture(

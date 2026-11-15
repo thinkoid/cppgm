@@ -2,7 +2,7 @@
 """Source-acceptance survey, NOT a DejaGnu/lit conformance runner.
 
 Runs original sources with fixed C++11 flags against their host compiler and
-cppgm++. Upstream directives are recorded, not executed. Never counts a shared
+cppgm. Upstream directives are recorded, not executed. Never counts a shared
 rejection as a diagnostic-test pass. Logs and output live outside the sources.
 """
 import argparse

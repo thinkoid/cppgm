@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare cppgm++ with g++ and clang++ on the pinned public benchmarks.
+"""Compare cppgm with g++ and clang++ on the pinned public benchmarks.
 
 fetch   Clone each source at its pinned commit and apply its patch.
 run     Build and run each program with each compiler at each level.
@@ -72,7 +72,7 @@ BADGES = (
     ('o3-compile', '-O3 compile speed vs gcc', 'compile_cpu_O3', 1),
     ('o3-generated', '-O3 generated speed vs gcc', 'run_cpu_O3', 2),
 )
-# The builds of cppgm++: build, reference build, file name, label, decimal
+# The builds of cppgm: build, reference build, file name, label, decimal
 # places and summary title. The second compares the same compile, done by the
 # self-built and by the g++-built compiler.
 BUILDS = (
@@ -590,7 +590,7 @@ def badge_color(speed):
 
 
 def speed_text(mean, digits=2):
-    """Return the speed of a cppgm++ over reference ratio, in the badge format."""
+    """Return the speed of a cppgm over reference ratio, in the badge format."""
     return f'{1 / mean:.{digits}f}×' if mean else '-'
 
 
@@ -671,7 +671,7 @@ def cpu_text(value):
 
 
 def timing_table(results, metric):
-    lines = ['| Program | cppgm++ (s) | GCC (s) | Speed vs GCC ↑ | Clang (s) | Speed vs Clang ↑ | Status |',
+    lines = ['| Program | cppgm (s) | GCC (s) | Speed vs GCC ↑ | Clang (s) | Speed vs Clang ↑ | Status |',
              '| --- | ---: | ---: | ---: | ---: | ---: | --- |']
     for result in sorted(results, key=lambda row: row['name']):
         name = result['name'].replace('|', r'\|').replace('\n', ' ')
@@ -688,7 +688,7 @@ def timing_table(results, metric):
 def timing_details(document, builds=None):
     lines = ['', '## Compile CPU times', '',
              'Times are CPU seconds, excluding linking. Speed is reference time divided by '
-             'cppgm++ time; higher is better. Every program is listed. Missing times show a dash. '
+             'cppgm time; higher is better. Every program is listed. Missing times show a dash. '
              'Ratios are omitted for failed programs or when either time is below 10 ms.', '',
              'Compilation is measured once per compiler and level; the ABBA/BAAB repetitions '
              'apply to generated-program execution and self-built compiler speed.', '']
@@ -706,8 +706,8 @@ def selfhost_details(builds):
              '| Compiler doing the rebuild | CPU seconds |', '| --- | ---: |',
              f'| GCC | {cpu_text(builds.get("gcc"))} |',
              f'| Clang | {cpu_text(builds.get("clang"))} |',
-             f'| GCC-built cppgm++ | {cpu_text(builds.get("self"))} |',
-             f'| Self-built cppgm++ | {cpu_text(builds.get("inception"))} |', '',
+             f'| GCC-built cppgm | {cpu_text(builds.get("self"))} |',
+             f'| Self-built cppgm | {cpu_text(builds.get("inception"))} |', '',
              'These are the initial bootstrap builds. GCC and Clang are each measured once.']
     for key, reference in [('paired_self', 'GCC'), ('paired_clang', 'Clang')]:
         paired = builds.get(key, {})
@@ -715,7 +715,7 @@ def selfhost_details(builds):
             continue
         heading = 'Paired self-built compiler measurements' if key == 'paired_self' else 'Paired codegen measurements vs Clang-built compiler'
         lines += ['', '#### ' + heading, '',
-                  f'| Block | {reference}-built cppgm++ (s) | Self-built cppgm++ (s) | Self-built speed ↑ |',
+                  f'| Block | {reference}-built cppgm (s) | Self-built cppgm (s) | Self-built speed ↑ |',
                   '| ---: | ---: | ---: | ---: |']
         for index, block in enumerate(paired['comparison']['blocks'], 1):
             lines.append(f'| {index} | {cpu_text(block["reference_cpu"])} | '
@@ -731,20 +731,20 @@ def selfhost_details(builds):
 
 def selfhost_summary(builds):
     lines = ['# Compiler build and codegen benchmarks', '',
-             'Speed is reference CPU time divided by cppgm++ CPU time; higher is better.', '']
+             'Speed is reference CPU time divided by cppgm CPU time; higher is better.', '']
     metadata = builds.get('metadata', {})
     for key, label in [('cpu', 'CPU'), ('revision', 'Measured compiler'),
                        ('gcc', 'GCC'), ('clang', 'Clang'), ('jobs', 'Build jobs')]:
         if key in metadata:
             lines += [f'{label}: {metadata[key]}.', '']
     lines += ['| Measure | vs GCC ↑ | vs Clang ↑ |', '| --- | ---: | ---: |',
-              '| Building cppgm++ | ' + ' | '.join(speed_text(build_ratio(builds, 'self', r))
+              '| Building cppgm | ' + ' | '.join(speed_text(build_ratio(builds, 'self', r))
                                                     for r in ('gcc', 'clang')) + ' |',
               '| Self-built compiler speed | ' + ' | '.join(
                   speed_text(build_ratio(builds, 'inception', r))
                   for r in ('self', 'clang-built')) + ' |', '',
-              'Building cppgm++ compares toolchains compiling the same sources. '
-              'Self-built compiler speed compares fixed native-built and self-built cppgm++ '
+              'Building cppgm compares toolchains compiling the same sources. '
+              'Self-built compiler speed compares fixed native-built and self-built cppgm '
               'binaries rebuilding identical inputs in paired ABBA/BAAB blocks. '
               'Every rebuild must produce identical objects and compiler binaries.', '']
     if builds.get('status') != 'ok':
@@ -776,8 +776,8 @@ def summary(document, changes, builds=None):
     failures = [r for r in results if r['status'] != 'ok']
     lines = ['# Public benchmarks', '',
              f'{len(results) - len(failures)} of {len(results)} programs built '
-             'with cppgm++ and g++ and agreed. Each number is the reference over '
-             'cppgm++, so above 1× means cppgm++ is smaller or faster.', '']
+             'with cppgm and g++ and agreed. Each number is the reference over '
+             'cppgm, so above 1× means cppgm is smaller or faster.', '']
     cpu = document.get('environment', {}).get('cpu')
     if cpu:
         lines += [f'CPU: {cpu}.', '']
@@ -903,13 +903,13 @@ def build_cpu(command, log=None, root=None):
 def selfhost_commands(work, jobs, clangxx='clang++'):
     """Build identical compiler sources at O3, with isolated objects per role."""
     work = Path(work).resolve()
-    pa35 = ['make', '-C', 'pa35', f'-j{jobs}', 'CXX=../dev/cppgm++', 'CPPGM_HOST_CXX=g++',
+    pa35 = ['make', '-C', 'pa35', f'-j{jobs}', 'CXX=../dev/cppgm', 'CPPGM_HOST_CXX=g++',
             f'INCEPTION_OBJ_ROOT_BASE={work}/pa35', f'INCEPTION_BUILD_JOBS={jobs}',
             f'INCEPTION_OBJECT_BUILD_JOBS={jobs}']
-    return (('gcc', ['make', '-C', 'dev', f'-j{jobs}', 'cppgm++', f'OBJ={work}/gcc', 'CXX=g++', 'CPPGM_HOST_CXX=g++']),
-            ('self', pa35 + ['cppgm++-self']),
-            ('inception', pa35 + ['cppgm++-inception']),
-            ('clang', ['make', '-C', 'dev', f'-j{jobs}', 'cppgm++', f'OBJ={work}/clang',
+    return (('gcc', ['make', '-C', 'dev', f'-j{jobs}', 'cppgm', f'OBJ={work}/gcc', 'CXX=g++', 'CPPGM_HOST_CXX=g++']),
+            ('self', pa35 + ['cppgm-self']),
+            ('inception', pa35 + ['cppgm-inception']),
+            ('clang', ['make', '-C', 'dev', f'-j{jobs}', 'cppgm', f'OBJ={work}/clang',
                        f'CXX={clangxx}', 'CPPGM_HOST_CXX=g++']))
 
 
@@ -965,21 +965,21 @@ def selfhost(arguments):
             if builds[key] is None:
                 raise RuntimeError(f'{key} build failed')
             if key == 'gcc':
-                shutil.copy2(root / 'dev/cppgm++', seed)
+                shutil.copy2(root / 'dev/cppgm', seed)
                 seed.chmod(0o555)
             if key == 'clang':
-                shutil.copy2(root / 'dev/cppgm++', clang_seed)
+                shutil.copy2(root / 'dev/cppgm', clang_seed)
                 clang_seed.chmod(0o555)
         configs = {name: timing.sha(bootstrap / name / 'generated/cppgm_builtin_host_config.h') for name in ('gcc', 'clang')}
         require(configs['gcc'] == configs['clang'], 'native compilers have different builtin host configurations')
         builds['metadata']['builtin_host_config_sha256'] = configs
-        compiler = bootstrap / 'pa35/bin/selfhost/cppgm++-self'
-        inception = bootstrap / 'pa35/bin/inception/cppgm++-inception'
+        compiler = bootstrap / 'pa35/bin/selfhost/cppgm-self'
+        inception = bootstrap / 'pa35/bin/inception/cppgm-inception'
         require(timing.sha(compiler) == timing.sha(inception),
                 'self and inception compiler binaries differ')
-        builds['paired_self'] = paired_rebuilds(directory, arguments.jobs, seed, compiler, arguments.paired_blocks, 'GCC-built cppgm++', root)
+        builds['paired_self'] = paired_rebuilds(directory, arguments.jobs, seed, compiler, arguments.paired_blocks, 'GCC-built cppgm', root)
         clang_directory = Path(tempfile.mkdtemp(prefix='paired-clang-', dir=work))
-        builds['paired_clang'] = paired_rebuilds(clang_directory, arguments.jobs, clang_seed, compiler, arguments.paired_blocks, 'Clang-built cppgm++', root)
+        builds['paired_clang'] = paired_rebuilds(clang_directory, arguments.jobs, clang_seed, compiler, arguments.paired_blocks, 'Clang-built cppgm', root)
         require(inputs and inputs == compiler_source_hashes(root), 'compiler source inputs changed during measurement')
     except (RuntimeError, ValueError, OSError) as error:
         builds['status'] = str(error)
@@ -1001,7 +1001,7 @@ def main():
     command.add_argument('--cache', required=True)
     command.add_argument('--work', required=True)
     command.add_argument('--output', required=True)
-    command.add_argument('--cppgm', default=str(ROOT / 'dev/cppgm++'))
+    command.add_argument('--cppgm', default=str(ROOT / 'dev/cppgm'))
     command.add_argument('--gcc', default='gcc')
     command.add_argument('--gxx', default='g++')
     command.add_argument('--clang', default='clang++')

@@ -50,7 +50,7 @@ jobs:
       - name: Trust the mounted checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build compiler
-        run: make -C dev cppgm++ -j "$(nproc)"
+        run: make -C dev cppgm -j "$(nproc)"
       - name: Build and run the singleheader demo with every kernel
         run: python3 scripts/simdjson_ci.py demo --output obj/simdjson-demo
       - name: Build, validate and measure scalar and SSE parsers

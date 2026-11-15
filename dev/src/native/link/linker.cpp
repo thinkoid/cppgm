@@ -354,10 +354,10 @@ bool Linker::check_undefined()
 	if (count > 8)
 		missing += ", ...";
 	// Host EH tables need the host C++ runtime, which link mode does not
-	// provide: cppgm++ -c writes course objects for *.obj outputs.
+	// provide: cppgm -c writes course objects for *.obj outputs.
 	if (host_eh)
 		missing += "; an object with host EH tables needs the host C++ toolchain's link (for link mode, compile "
-				   "the source with cppgm++ -c to a *.obj course object)";
+				   "the source with cppgm -c to a *.obj course object)";
 	return fail("undefined symbol" + std::string(count > 1 ? "s: " : ": ") + missing);
 }
 

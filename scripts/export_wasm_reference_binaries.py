@@ -13,7 +13,7 @@ import urllib.request
 
 from experimental import wasi_inception as frozen
 
-TOOLS = ['abimangle', 'pptoken', 'posttoken', 'ppexpr', 'preproc', 'cppgm++',
+TOOLS = ['abimangle', 'pptoken', 'posttoken', 'ppexpr', 'preproc', 'cppgm',
          'lowir', 'lowir2native', 'lowiropt']
 
 
@@ -92,7 +92,7 @@ def export(args):
         actual = output / ('text.' + target + '.wasi.lowir')
         subprocess.run([str(package / 'native-compiler'), *flags, '--emit-lowir',
                         'reference-wasm/text.cpp', '-o', str(reference)], cwd=inputs, check=True)
-        run('cppgm++', *flags, '--emit-lowir', 'reference-wasm/text.cpp', '-o', str(actual.relative_to(inputs)))
+        run('cppgm', *flags, '--emit-lowir', 'reference-wasm/text.cpp', '-o', str(actual.relative_to(inputs)))
         frozen.compare(reference, actual)
         run('lowiropt', '-O0', str(actual.relative_to(inputs)), '-o', 'reference-wasm/text.optimized.lowir')
     # The full compiler package's floating cases exercise the wide constant evaluator.
@@ -101,7 +101,7 @@ def export(args):
         actual = output / ('floating.' + target + '.wasi.o')
         subprocess.run([str(package / 'native-compiler'), *flags, '-O3', '-c', 'checks/floating.cpp',
                         '-o', str(reference)], cwd=inputs, check=True)
-        run('cppgm++', *flags, '-O3', '-c', 'checks/floating.cpp', '-o', str(actual.relative_to(inputs)))
+        run('cppgm', *flags, '-O3', '-c', 'checks/floating.cpp', '-o', str(actual.relative_to(inputs)))
         frozen.compare(reference, actual)
     frozen.verify(package, manifest)
     record = dict(schema=1, platform='wasm32-wasip1', source_sha=manifest['revision'],
@@ -120,7 +120,7 @@ def export(args):
             raise RuntimeError('release notice checksum mismatch: ' + name)
     shutil.copyfile(notices, licenses / 'sources.json')
     readme = package / 'README.txt'
-    readme.write_text('''WASI reference tools\n\nThese nine command modules were built by cppgm at O3. Statistics and\npersistent POSIX batch-runner support are disabled in this host profile.\nThe SDK libraries are prebuilt WASI SDK dependencies, not built from C here.\n\nThe frozen filesystem includes compiler source, target headers and SDK inputs.\nUnpack it into a new directory, then run a module with Wasmtime 50 or newer:\n\n  python3 unpack_wasi_inputs.py . inputs\n  cd inputs\n  wasmtime run -W exceptions=y -W max-wasm-stack=8388608 --dir . ../bin/cppgm++.wasm --help\n\nUse --target=wasm32-wasip1 --sysroot=sysroot -resource-dir=resource for WASI\nsource. The default code target is x86_64 Linux; its frozen header paths\nare relative to inputs. External native host compiler/linker subprocesses\nare unavailable in WASI. Compilation and the internal linkers remain local.\n\nmanifest.json records input hashes and canonical flags.\nwasm-reference-provenance.json records the source and compiler identity.\nLICENSE and NOTICE cover cppgm; licenses/ covers the bundled SDK and headers.\n''')
+    readme.write_text('''WASI reference tools\n\nThese nine command modules were built by cppgm at O3. Statistics and\npersistent POSIX batch-runner support are disabled in this host profile.\nThe SDK libraries are prebuilt WASI SDK dependencies, not built from C here.\n\nThe frozen filesystem includes compiler source, target headers and SDK inputs.\nUnpack it into a new directory, then run a module with Wasmtime 50 or newer:\n\n  python3 unpack_wasi_inputs.py . inputs\n  cd inputs\n  wasmtime run -W exceptions=y -W max-wasm-stack=8388608 --dir . ../bin/cppgm.wasm --help\n\nUse --target=wasm32-wasip1 --sysroot=sysroot -resource-dir=resource for WASI\nsource. The default code target is x86_64 Linux; its frozen header paths\nare relative to inputs. External native host compiler/linker subprocesses\nare unavailable in WASI. Compilation and the internal linkers remain local.\n\nmanifest.json records input hashes and canonical flags.\nwasm-reference-provenance.json records the source and compiler identity.\nLICENSE and NOTICE cover cppgm; licenses/ covers the bundled SDK and headers.\n''')
     # Include target headers and SDK inputs: these tools never consult a machine's
     # native include directories. Browser consumers can use the same frozen VFS.
     args.bundle.parent.mkdir(parents=True, exist_ok=True)

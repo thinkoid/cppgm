@@ -9,7 +9,7 @@
 
 namespace native {
 
-// `cppgm++ --stats-functions` (telemetry): for a function the object back
+// `cppgm --stats-functions` (telemetry): for a function the object back
 // end selected into `mir`, one line
 //
 //   function_census symbol=<name> mir=N mov_loads=N mov_stores=N

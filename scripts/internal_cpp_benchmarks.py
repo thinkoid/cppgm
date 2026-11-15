@@ -272,7 +272,7 @@ def main():
     runner.add_argument('--output', type=Path, required=True)
     runner.add_argument('--cache', type=Path, default=ROOT / 'obj/internal-inputs')
     runner.add_argument('--repo-root', type=Path, default=ROOT)
-    runner.add_argument('--compiler', dest='cppgm', default=str(ROOT / 'dev/cppgm++'))
+    runner.add_argument('--compiler', dest='cppgm', default=str(ROOT / 'dev/cppgm'))
     runner.add_argument('--gcc', default='g++')
     runner.add_argument('--clang', default='clang++')
     runner.add_argument('--jobs', type=int, default=4)

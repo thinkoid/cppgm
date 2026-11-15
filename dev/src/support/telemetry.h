@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // Telemetry (spec.md section 9): the work counters, sizes and phase clocks
-// that `--stats` and `cppgm++ --stats-functions` report. They only observe
+// that `--stats` and `cppgm --stats-functions` report. They only observe
 // work the compiler does anyway. A build with -DCPPGM_TELEMETRY_ENABLED=0
 // compiles them out: each counter below keeps nothing, the reports are not
 // built, and the tools reject the statistics options ("statistics are

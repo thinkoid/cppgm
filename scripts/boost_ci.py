@@ -153,7 +153,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--boost-root', type=Path, required=True)
     parser.add_argument('--archive', type=Path, required=True)
-    parser.add_argument('--compiler', type=Path, default=Path('dev/cppgm++'))
+    parser.add_argument('--compiler', type=Path, default=Path('dev/cppgm'))
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--jobs', type=int, default=4)
     parser.add_argument('--optimization', choices=('O0', 'O3'), default='O0')

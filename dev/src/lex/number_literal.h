@@ -33,7 +33,7 @@ struct NumberLiteral
 // 2.14.4); GCC's dialect too (binary literals, hexadecimal floating
 // literals, the q/Q and f16 ... f64x suffixes) as the compiler reads it,
 // q/Q naming __float128 as in GCC; or that dialect with the course's
-// preprocessor stream conventions (cppgm++ -E). Numeric types agree in
+// preprocessor stream conventions (cppgm -E). Numeric types agree in
 // both GNU modes; strict C++11 tools still reject GNU literal forms.
 enum class NumberDialect : uint8_t
 {

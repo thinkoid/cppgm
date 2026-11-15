@@ -76,7 +76,7 @@ class Rebuild:
         objects = self.build / 'selfhost'
         if objects.exists():
             shutil.rmtree(objects)
-        command = ['make', '-C', 'pa35', f'-j{self.jobs}', 'cppgm++-self',
+        command = ['make', '-C', 'pa35', f'-j{self.jobs}', 'cppgm-self',
                    f'CXX={self.binaries[label]}', 'CPPGM_HOST_CXX=g++',
                    f'INCEPTION_OBJ_ROOT_BASE={self.build}',
                    'INCEPTION_COMPILER_FLAVOR=selfhost',
@@ -93,7 +93,7 @@ class Rebuild:
         retain(self.directory / 'observations.jsonl', row)
         if result['timed_out'] or result['code']:
             raise RuntimeError(f'paired rebuild failed: {log}')
-        output = self.build / 'bin/selfhost/cppgm++-self'
+        output = self.build / 'bin/selfhost/cppgm-self'
         digest = sha(output)
         produced = {str(p.relative_to(objects)): sha(p) for p in objects.rglob('*.o')}
         row.update(output_sha256=digest, object_sha256=produced)

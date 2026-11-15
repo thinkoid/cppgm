@@ -38,11 +38,11 @@ The released source is b4d107a1d; assignments are 32ffbc016.
 types; the small case makes no visitation allocation. Bounds, traversal order,
 cycle suppression, ordinary trait definitions and ABI decisions are preserved.
 A maintainer unit test covers forced collisions, growth, zero/maximum identities,
-independent query state and allocation bounds; it also passes as a cppgm++ O3
+independent query state and allocation bounds; it also passes as a cppgm O3
 object linked by the host. No language fixtures or references are added.
 Local qualification passes: strict **6084/6084** (one line), debug-info,
 backend variants, all architecture/file/placement checks, harness unit tests,
-self-host through PA5 and byte-identical cppgm++ inception. The initial local
+self-host through PA5 and byte-identical cppgm inception. The initial local
 debug invocation hit concurrent Make build-stamp writes; the completed rerun
 uses the built tools. The strict report was repeated without other fixture
 runners because the first concurrent run's shared test counts were inflated.
@@ -1086,7 +1086,7 @@ The running checkout advanced from 78410bfc to PA27 during this read-only
 review; the correction evidence is from completed PA9-23 work, while the
 PA26 audit was initially a draft. Nothing in that checkout was edited or
 built. Reproducers were copied into this scratch directory and run against
-/home/vishvananda/cppgm-extended/dev/cppgm++ at solution HEAD 3299e7ff3,
+/home/vishvananda/cppgm-extended/dev/cppgm at solution HEAD 3299e7ff3,
 including the prior locally authorized cleanup fix.
 
 134 shared reference sidecars differ: 130 LowIR/ABI outputs and four rejection
@@ -4491,7 +4491,7 @@ fixture. The reference should retain the potentially nonterminating branch.
 current-controls.json retains eighty fresh observations: sixteen optimizer
 invocations, thirty-two lowerings and thirty-two executions, using equal,
 finite same-residue and unequal-residue pointer inputs at O0 through O3 with
-both cppgm++ and lowir2native. Every build succeeds. All finite executions
+both cppgm and lowir2native. Every build succeeds. All finite executions
 return zero. O0's unequal-residue executions time out; both native paths at
 O1/O2/O3 incorrectly return zero instead. A timeout alone is not a proof;
 the invariant end - 8*k modulo eight supplies the missing termination

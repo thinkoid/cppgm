@@ -93,7 +93,7 @@ bool compile_object(
 			std::cerr << opt::describe_stats(stats) << std::endl;
 			const double object_ms =
 				std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - object_start).count();
-			std::cerr << "cppgm++ wasm object stats: functions=" << object.functions.size()
+			std::cerr << "cppgm wasm object stats: functions=" << object.functions.size()
 					  << " optimize_ms=" << stats.optimize_ms << " object_ms=" << object_ms << std::endl;
 		}
 #endif

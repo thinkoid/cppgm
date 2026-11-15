@@ -10,7 +10,7 @@
 #include "native/x86/emitter.h"
 
 // One translation unit's LowIR program -> a relocatable object (the
-// `cppgm++ -c` back end): each function definition is selected, encoded
+// `cppgm -c` back end): each function definition is selected, encoded
 // and its body released as it is completed, then the code, constants and
 // globals are placed in sections and every reference becomes a relocation.
 //
@@ -61,7 +61,7 @@ struct ObjectStats
 {
 	// Whether the phase clocks run (--stats); the counters always do.
 	bool clocks = false;
-	// `cppgm++ --stats-functions`: each selected function's census lines
+	// `cppgm --stats-functions`: each selected function's census lines
 	// (native/object/function_census.h).
 	bool census = false;
 	std::vector<std::string> census_lines;

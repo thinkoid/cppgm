@@ -30,7 +30,7 @@ jobs:
       - name: Install pinned WASI adapter
         run: npm ci --ignore-scripts --prefix scripts/experimental
       - name: Build the host compiler
-        run: make -C dev cppgm++ lowir2native CXX=g++ CPPGM_HOST_CXX=g++
+        run: make -C dev cppgm lowir2native CXX=g++ CPPGM_HOST_CXX=g++
       - name: Check the optional C assignment on Wasm
         run: |
           PATH="$RUNNER_TEMP/wasm-tools/bin:$PATH" \
@@ -43,7 +43,7 @@ jobs:
             --directory "$RUNNER_TEMP/reference-wasm" \
             --sdk "$RUNNER_TEMP/wasm-tools/wasi-sdk" \
             --wasmtime "$RUNNER_TEMP/wasm-tools/bin/wasmtime" \
-            --compiler "$PWD/dev/cppgm++" \
+            --compiler "$PWD/dev/cppgm" \
             --shim "$PWD/scripts/experimental/node_modules/@bjorn3/browser_wasi_shim" \
             --jobs 2 \
             --bundle "$RUNNER_TEMP/upload/cppgm-reference-binaries-wasm32-wasip1-${short_sha}.tar.gz"

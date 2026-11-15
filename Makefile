@@ -170,11 +170,11 @@ build-telemetry-off:
 	@lockdir=$(DEV_BUILD_LOCK); \
 	while ! mkdir $$lockdir 2>/dev/null; do sleep 1; done; \
 	trap 'rmdir "$$lockdir" 2>/dev/null || true' EXIT HUP INT TERM; \
-	$(MAKE) -s -C dev cppgm++-telemetry-off
+	$(MAKE) -s -C dev cppgm-telemetry-off
 
 test-telemetry-off: build build-telemetry-off
 	@python3 scripts/tests/test_telemetry_off_build.py \
-		dev/cppgm++ dev/cppgm++-telemetry-off
+		dev/cppgm dev/cppgm-telemetry-off
 
 test: build
 	@for dir in $(SORTED_PAS); do \
@@ -265,10 +265,10 @@ test-target-features-nobuild:
 
 inception: build
 	@$(MAKE) -C pa35 \
-		CXX=../dev/cppgm++ \
+		CXX=../dev/cppgm \
 		CPPGM_HOST_CXX="$(CPPGM_HOST_CXX)" \
 		CPPGM_STDLIB_FLAGS="$(CPPGM_STDLIB_FLAGS)" \
-		compare-cppgm++-inception
+		compare-cppgm-inception
 
 # Toolchain cells.  Each supported (host compiler, standard library) pair keeps
 # its own object roots, so switching cells relinks the tools in dev/ but does
@@ -407,7 +407,7 @@ ASAN_CELL_OBJ ?= obj-asan
 ASAN_CC_FLAGS ?= -std=gnu++11 -O1 -g -fno-omit-frame-pointer -fsanitize=address
 
 asan-build: require-clang
-	@$(MAKE) -C dev cppgm++ \
+	@$(MAKE) -C dev cppgm \
 		CXX=$(CLANG_CXX) \
 		CPPGM_HOST_CXX=$(CLANG_CXX) \
 		OBJ=../$(ASAN_CELL_OBJ) \
@@ -600,7 +600,7 @@ run-cppgm-nobuild:
 		echo "usage: make run-cppgm-nobuild CPPGM_ARGS='...'" >&2; \
 		exit 2; \
 	fi
-	@./dev/cppgm++ $(CPPGM_ARGS)
+	@./dev/cppgm $(CPPGM_ARGS)
 
 clean:
 	-$(MAKE) -C dev clean

@@ -213,7 +213,7 @@ def arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--tools', type=Path, default=ROOT / 'obj/wasm-tools')
-    parser.add_argument('--compiler', type=Path, default=ROOT / 'dev/cppgm++')
+    parser.add_argument('--compiler', type=Path, default=ROOT / 'dev/cppgm')
     parser.add_argument('--shim', type=Path, default=ROOT / 'scripts/experimental/node_modules/@bjorn3/browser_wasi_shim')
     parser.add_argument('--jobs', type=int, default=2)
     parser.add_argument('--blocks', type=int, default=3)

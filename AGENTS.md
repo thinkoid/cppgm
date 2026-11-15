@@ -33,7 +33,7 @@ make CXX=clang++ CPPGM_HOST_CXX=clang++
 make test-pa8
 CPPGM_LOWIR_DIRECT_TEXT_COMPARE=1 make test-report
 make test-debuginfo
-make -C pa35 test-through-pa5 CXX=../dev/cppgm++ CPPGM_HOST_CXX=g++
+make -C pa35 test-through-pa5 CXX=../dev/cppgm CPPGM_HOST_CXX=g++
 make inception
 ```
 
@@ -100,7 +100,7 @@ verify output equality.
   reader, writer and validator, and the LowIR optimizer. PA8's construction
   exercises are in `lowir/exercises.cpp`.
 - `native`: instruction selection to machine IR, x86-64 encoding, objects,
-  the course runtime and the linker; `driver`: `cppgm++`'s modes and host
+  the course runtime and the linker; `driver`: `cppgm`'s modes and host
   toolchain; `support`: shared utilities.
 - The shipped scaffold files (`dev_support_files` in
   `scripts/export_student_repo.sh`) are course files and the vocabulary the
@@ -117,5 +117,5 @@ verify output equality.
 - `docs/v5/`: the v5 release's review records, likewise historical.
 - `benchmarks/`: fixed performance inputs; `obj/`: generated artifacts.
 
-The nine tools are `pptoken`, `posttoken`, `ppexpr`, `preproc`, `cppgm++`,
+The nine tools are `pptoken`, `posttoken`, `ppexpr`, `preproc`, `cppgm`,
 `abimangle`, `lowir`, `lowiropt` and `lowir2native`. They all build from `dev/`.

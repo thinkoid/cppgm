@@ -42,11 +42,11 @@ Options:
   --work-root PATH       Cache/build root (default: /tmp/cppgm-ppexpr-bench)
   --levels CSV           Optimization levels to run (default: O0,O1,O2)
   --include-o3           Append O3 to the selected levels
-  --host-cxx PATH        Host compiler for control builds and cppgm++ bootstrap
-  --self-compiler PATH   Use an existing cppgm++ instead of caching one here
+  --host-cxx PATH        Host compiler for control builds and cppgm bootstrap
+  --self-compiler PATH   Use an existing cppgm instead of caching one here
   --host-only            Run only host clang++ control builds
-  --self-only            Run only self-hosted cppgm++ builds
-  --rebuild-compiler     Force rebuilding cached host-built cppgm++
+  --self-only            Run only self-hosted cppgm builds
+  --rebuild-compiler     Force rebuilding cached host-built cppgm
   --rebuild-host         Force rebuilding host ppexpr binaries
   --rebuild-self         Force rebuilding self-hosted ppexpr binaries
   --no-verify            Skip stdout verification against pa3/tests/300-triple.ref
@@ -254,7 +254,7 @@ build_cppgm_if_needed() {
     return 0
   fi
 
-  local compiler_bin="$work_root/bin/cppgm++"
+  local compiler_bin="$work_root/bin/cppgm"
   local obj_root="$work_root/obj-cppgm-host"
   local obj_meta="${obj_root}/.bench.meta"
   local meta_file="${compiler_bin}.meta"
@@ -263,23 +263,23 @@ build_cppgm_if_needed() {
   local cc_flags
   cc_flags="$(cc_flags_for -O2 "$obj_root")"
   local build_key
-  build_key="tool=cppgm++|compiler=${host_id}|host=${host_id}|obj=${obj_root}|flags=${cc_flags}"
+  build_key="tool=cppgm|compiler=${host_id}|host=${host_id}|obj=${obj_root}|flags=${cc_flags}"
   ensure_obj_root_matches "$obj_root" "$obj_meta" "$build_key"
   if needs_rebuild "$compiler_bin" "$rebuild_compiler" || ! meta_matches "$meta_file" "$build_key"; then
-    echo "Building cached cppgm++ with host compiler" >&2
-    rm -f "$repo_root/dev/cppgm++"
-    make -s -C "$repo_root/dev" cppgm++ \
+    echo "Building cached cppgm with host compiler" >&2
+    rm -f "$repo_root/dev/cppgm"
+    make -s -C "$repo_root/dev" cppgm \
       "CXX=$host_cxx" \
       "CPPGM_HOST_CXX=$host_cxx" \
       "CPPGM_TEST_RUNNER=0" \
       "OBJ=$obj_root" \
       "CC_FLAGS=$cc_flags" \
       "ENTRY_CC_FLAGS=$cc_flags" >&2
-    cp "$repo_root/dev/cppgm++" "$compiler_bin"
+    cp "$repo_root/dev/cppgm" "$compiler_bin"
     printf '%s\n' "$build_key" > "$meta_file"
     printf '%s\n' "$build_key" > "$obj_meta"
   else
-    echo "Reusing cached cppgm++" >&2
+    echo "Reusing cached cppgm" >&2
   fi
   printf '%s\n' "$compiler_bin"
 }

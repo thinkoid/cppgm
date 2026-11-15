@@ -1,4 +1,4 @@
-# cppgm++ compile time and codegen · local Intel
+# cppgm compile time and codegen · local Intel
 
 CPU: **Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz**, local shared host, 8 build workers. Measured source revision: [`17a21ad27`](https://github.com/vishvananda/cppgm-extended/commit/17a21ad27ace6eda20b948e57c2e78ab3d568374).
 
@@ -17,14 +17,14 @@ Higher is better. Native compiler builds are single fresh CPU observations. Code
 | --- | ---: |
 | GCC | 477.440 |
 | Clang | 440.640 |
-| GCC-built cppgm++ | 118.360 |
-| Self-built cppgm++ | 121.050 |
+| GCC-built cppgm | 118.360 |
+| Self-built cppgm | 121.050 |
 
 These are the initial bootstrap builds. The GCC rebuild is measured once.
 
 #### Paired self-built compiler measurements
 
-| Block | GCC-built cppgm++ (s) | Self-built cppgm++ (s) | Self-built speed ↑ |
+| Block | GCC-built cppgm (s) | Self-built cppgm (s) | Self-built speed ↑ |
 | ---: | ---: | ---: | ---: |
 | 1 | 118.634 | 120.475 | 0.98× |
 | 2 | 118.901 | 121.355 | 0.98× |
@@ -35,7 +35,7 @@ GCC-built A/A CPU ratio: 1.001. A/A variation limits conclusions about small dif
 
 #### Paired codegen measurements vs Clang-built compiler
 
-| Block | Clang-built cppgm++ (s) | Self-built cppgm++ (s) | Self-built speed ↑ |
+| Block | Clang-built cppgm (s) | Self-built cppgm (s) | Self-built speed ↑ |
 | ---: | ---: | ---: | ---: |
 | 1 | 118.798 | 119.025 | 1.00× |
 | 2 | 118.856 | 117.914 | 1.01× |

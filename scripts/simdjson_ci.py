@@ -319,7 +319,7 @@ def demo(args):
                                 str(source / 'singleheader' / (name + '.cpp')), '-o', str(output)],
                                stdout=log, stderr=subprocess.STDOUT, check=True, timeout=1800)
             objects.append(str(output))
-        # cppgm++ links only the course runtime, so GCC links libstdc++.
+        # cppgm links only the course runtime, so GCC links libstdc++.
         executables[label] = directory / ('demo-' + label)
         with (directory / ('link-' + label + '.log')).open('w') as log:
             subprocess.run([str(gcc), *objects, '-pthread', '-o', str(executables[label])],
@@ -331,7 +331,7 @@ def demo(args):
         raise ValueError('the GCC-built demo failed')
     wrong = demo_mismatches(expected, outputs)
     (directory / 'details.md').write_text(
-        '# simdjson demo\n\nThe singleheader demo of v5.1.1, built by cppgm++ at `-O3` with all kernels, '
+        '# simdjson demo\n\nThe singleheader demo of v5.1.1, built by cppgm at `-O3` with all kernels, '
         + ('prints the output of the GCC build with each kernel: auto, ' + ', '.join(KERNELS) + '.\n'
            if not wrong else '**differs from the GCC build** with: ' + ', '.join(wrong) + '.\n'))
     if wrong:
@@ -366,7 +366,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
     runner = commands.add_parser('run')
-    runner.add_argument('--compiler', type=Path, default=ROOT / 'dev/cppgm++')
+    runner.add_argument('--compiler', type=Path, default=ROOT / 'dev/cppgm')
     runner.add_argument('--repo-root', type=Path, default=ROOT, help='clean source checkout used to build the compiler')
     runner.add_argument('--source', type=Path)
     runner.add_argument('--output', type=Path, required=True)
@@ -377,7 +377,7 @@ def main():
     runner.add_argument('--aa-blocks', type=int, default=1)
     runner.add_argument('--seconds', type=float, default=.35)
     demonstration = commands.add_parser('demo')
-    demonstration.add_argument('--compiler', type=Path, default=ROOT / 'dev/cppgm++')
+    demonstration.add_argument('--compiler', type=Path, default=ROOT / 'dev/cppgm')
     demonstration.add_argument('--source', type=Path)
     demonstration.add_argument('--output', type=Path, required=True)
     demonstration.add_argument('--gcc', default='g++')

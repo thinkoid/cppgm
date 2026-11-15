@@ -61,7 +61,7 @@ retains history by commit and host.
 To reproduce on Linux with GCC, Clang, GDB and the verified archive installed:
 
 ```sh
-make -C dev cppgm++
+make -C dev cppgm
 python3 scripts/boost_benchmarks.py run \
   --archive /path/to/boost_1_92_0.tar.bz2 --output obj/boost-local --jobs 4
 ```

@@ -179,7 +179,7 @@ class AuditPAFeaturePlacementTests(unittest.TestCase):
             root = Path(tmp)
             write(root / 'pa26/Makefile', '''LEVEL = -O1
 test:
-	@CPPGM_HOST_CXX=g++ CPPGM_APP_ARGS='$(LEVEL)' perl ../scripts/runner.pl ../dev/cppgm++ my tests
+	@CPPGM_HOST_CXX=g++ CPPGM_APP_ARGS='$(LEVEL)' perl ../scripts/runner.pl ../dev/cppgm my tests
 ''')
             findings = audit.scan_optimization_requirements(root, ['pa26'])
             self.assertEqual([(f['path'], f['kind']) for f in findings],
@@ -232,7 +232,7 @@ for my $test (@tests) {
 ''')
             write(root / 'pa26/scripts/run_all_tests.pl', '# generic runner\n')
             write(root / 'pa26/scripts/wrapper.sh', '#!/bin/sh\nexec scripts/optimized.sh "$@"\n')
-            write(root / 'pa26/scripts/optimized.sh', '#!/bin/sh\nexec ../dev/cppgm++ -O2 "$@"\n')
+            write(root / 'pa26/scripts/optimized.sh', '#!/bin/sh\nexec ../dev/cppgm -O2 "$@"\n')
             write(root / 'pa26/tests/general/300-catch.t', 'int main() {}\n')
             write(root / 'pa26/tests/general/300-catch.env', 'CPPGM_APP_ARGS=-O3\n')
             findings = audit.scan_optimization_requirements(root, ['pa26'])
@@ -249,8 +249,8 @@ for my $test (@tests) {
 ''')
             write(root / 'pa26/scripts/run_all_tests.pl', '# generic runner\n')
             write(root / 'pa26/scripts/wrapper.sh',
-                  '#!/bin/sh\n# scripts/optimized.sh is the maintainer variant.\nexec ../dev/cppgm++ "$@"\n')
-            write(root / 'pa26/scripts/optimized.sh', '#!/bin/sh\nexec ../dev/cppgm++ -O2 "$@"\n')
+                  '#!/bin/sh\n# scripts/optimized.sh is the maintainer variant.\nexec ../dev/cppgm "$@"\n')
+            write(root / 'pa26/scripts/optimized.sh', '#!/bin/sh\nexec ../dev/cppgm -O2 "$@"\n')
             write(root / 'pa26/tests/general/300-catch.t', 'int main() {}\n')
             self.assertEqual(audit.scan_optimization_requirements(root, ['pa26']), [])
 
@@ -276,9 +276,9 @@ for my $test (@tests) {
             root = Path(tmp)
             write(root / 'pa26/Makefile', '''test:
 ifneq ($(CPPGM_BATCH_TESTS),)
-	@CPPGM_APP_ARGS=-O1 ../dev/cppgm++ tests/general/300-catch.t
+	@CPPGM_APP_ARGS=-O1 ../dev/cppgm tests/general/300-catch.t
 else
-	@perl ../scripts/control.pl ../dev/cppgm++ tests/general
+	@perl ../scripts/control.pl ../dev/cppgm tests/general
 endif
 ''')
             write(root / 'pa26/tests/general/300-catch.t', 'int main() {}\n')
@@ -1211,7 +1211,7 @@ function @main() -> i32 {
             write(unselected, "")
             write(unselected.parent / f"{unselected.name}.1", "// hidden-eh\nint main() { return 0; }\n")
 
-            compiler = root / "fake-cppgm++"
+            compiler = root / "fake-cppgm"
             write(compiler, textwrap.dedent(
                 """\
                 #!/usr/bin/env python3
@@ -1269,7 +1269,7 @@ function @main() -> i32 {
 
             self.assertEqual(
                 audit.host_eh_object_evidence(anchor, "pa26", source),
-                "harness:cppgm++ -c, source:throw",
+                "harness:cppgm -c, source:throw",
             )
             self.assertEqual(audit.host_eh_object_evidence(anchor, "pa21", source), "")
 

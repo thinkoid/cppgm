@@ -116,7 +116,7 @@ sub returns_condition
 if (scalar(@ARGV) != 3)
 {
 	die "Usage: check_lowir_zero_bounded_range.pl " .
-		"<lowiropt> <cppgm++> <test-or-directory>\n";
+		"<lowiropt> <cppgm> <test-or-directory>\n";
 }
 
 my ($app, $driver, $root) = @ARGV;

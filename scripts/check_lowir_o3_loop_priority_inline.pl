@@ -83,7 +83,7 @@ sub compile_and_run
 if(scalar(@ARGV) != 3)
 {
 	die "Usage: check_lowir_o3_loop_priority_inline.pl " .
-		"<lowiropt> <cppgm++> <test-or-directory>\n";
+		"<lowiropt> <cppgm> <test-or-directory>\n";
 }
 
 my ($app, $driver, $root) = @ARGV;

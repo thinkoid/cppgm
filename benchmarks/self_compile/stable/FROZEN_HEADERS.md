@@ -11,7 +11,7 @@ The 51-file closure was discovered with:
   benchmarks/self_compile/stable/semantic_overload.cpp
 ```
 
-It was then verified by compiling the stable source with `cppgm++` while the
+It was then verified by compiling the stable source with `cppgm` while the
 frozen directory was the only project include path. The default performance
 gate uses:
 

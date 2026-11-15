@@ -1,7 +1,7 @@
 name: Tests
 
 # The 36-assignment course owns self-hosting in PA35. PA5 is the
-# consolidated parser checkpoint (formerly PA10); it builds cppgm++ in full.
+# consolidated parser checkpoint (formerly PA10); it builds cppgm in full.
 
 on:
   pull_request:
@@ -180,7 +180,7 @@ jobs:
             for exe in \
               abimangle \
               pptoken posttoken ppexpr preproc \
-              cppgm++ lowir lowiropt lowir2native; do
+              cppgm lowir lowiropt lowir2native; do
               printf 'dev/%s\n' "$exe"
             done
             if [ -d obj/generated ]; then
@@ -346,7 +346,7 @@ jobs:
             timeout: 30
           - id: selfhost-through-pa5
             name: test-through-pa5
-            command: make -C pa35 test-through-pa5 CXX=../dev/cppgm++ CPPGM_HOST_CXX="$CPPGM_HOST_CXX" CPPGM_STDLIB_FLAGS="$CPPGM_STDLIB_FLAGS"
+            command: make -C pa35 test-through-pa5 CXX=../dev/cppgm CPPGM_HOST_CXX="$CPPGM_HOST_CXX" CPPGM_STDLIB_FLAGS="$CPPGM_STDLIB_FLAGS"
             timeout: 90
 
     env:
@@ -394,7 +394,7 @@ jobs:
           tar -xzf "$RUNNER_TEMP/cppgm-build-artifact/cppgm-build.tar.gz"
           cat "$RUNNER_TEMP/cppgm-build-artifact/metadata.env"
           test -x dev/abimangle
-          test -x dev/cppgm++
+          test -x dev/cppgm
 
       - name: Show compiler configuration
         run: |
@@ -442,7 +442,7 @@ jobs:
           path: ${{ runner.temp }}/internal-tests.json
           retention-days: 14
 
-      - name: Package cppgm++ self compiler
+      - name: Package cppgm self compiler
         if: matrix.suite.id == 'selfhost-through-pa5'
         run: |
           set -euo pipefail
@@ -450,8 +450,8 @@ jobs:
           bundle="$RUNNER_TEMP/cppgm-self"
           upload="$RUNNER_TEMP/cppgm-self-upload"
           mkdir -p "$bundle/bin" "$upload"
-          cp obj/pa35/bin/selfhost/cppgm++-self "$bundle/bin/cppgm++-self"
-          chmod 755 "$bundle/bin/cppgm++-self"
+          cp obj/pa35/bin/selfhost/cppgm-self "$bundle/bin/cppgm-self"
+          chmod 755 "$bundle/bin/cppgm-self"
           {
             printf 'source_sha=%s\n' "$source_sha"
             printf 'source_ref=%s\n' "$GITHUB_REF"
@@ -463,7 +463,7 @@ jobs:
             printf 'cppgm_host_cxx=%s\n' "$CPPGM_HOST_CXX"
             printf 'cppgm_stdlib_flags=%s\n' "$CPPGM_STDLIB_FLAGS"
           } > "$bundle/metadata.env"
-          (cd "$bundle" && sha256sum bin/cppgm++-self > SHA256SUMS)
+          (cd "$bundle" && sha256sum bin/cppgm-self > SHA256SUMS)
           tar -C "$bundle" -czf "$upload/cppgm-self.tar.gz" .
           cp "$bundle/metadata.env" "$upload/metadata.env"
           cp "$bundle/SHA256SUMS" "$upload/SHA256SUMS"
@@ -484,7 +484,7 @@ jobs:
             echo "\`\`\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload cppgm++ self compiler
+      - name: Upload cppgm self compiler
         if: matrix.suite.id == 'selfhost-through-pa5'
         uses: actions/upload-artifact@v6
         with:

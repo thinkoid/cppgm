@@ -304,7 +304,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
     runner = commands.add_parser('run')
-    runner.add_argument('--compiler', type=Path, default=ROOT / 'dev/cppgm++')
+    runner.add_argument('--compiler', type=Path, default=ROOT / 'dev/cppgm')
     runner.add_argument('--repo-root', type=Path, default=ROOT, help='clean source checkout used to build the compiler')
     runner.add_argument('--source', type=Path)
     runner.add_argument('--output', type=Path, required=True)

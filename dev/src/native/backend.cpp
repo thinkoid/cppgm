@@ -251,20 +251,20 @@ bool compile_program(
 			if (undefined < program.symbols.size())
 				error += std::string(": ") + program.spelling(program.symbols[undefined].name);
 			else if (undefined == runtime.eh_catch)
-				error += ": C++ catch clauses need cppgm++'s link-mode runtime library";
+				error += ": C++ catch clauses need cppgm's link-mode runtime library";
 			else
 			{
 				for (unsigned k = 0; k < 4; ++k)
 				{
 					if (undefined == runtime.wide_division[k])
 						error += std::string(": ") + kWideDivisionSymbols[k] +
-							" (i128 division) needs cppgm++'s link mode";
+							" (i128 division) needs cppgm's link mode";
 				}
 				for (unsigned k = 0; k < 12; ++k)
 				{
 					if (undefined == runtime.float_conversion[k])
 						error += std::string(": ") + kFloatConversionSymbols[k] +
-							" (i128/floating conversion) needs cppgm++'s link mode";
+							" (i128/floating conversion) needs cppgm's link mode";
 				}
 			}
 			return false;

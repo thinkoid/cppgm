@@ -8,10 +8,10 @@ import unittest
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-COMPILER = ROOT / "dev" / "cppgm++"
+COMPILER = ROOT / "dev" / "cppgm"
 
 
-@unittest.skipUnless(COMPILER.is_file(), "build dev/cppgm++ first")
+@unittest.skipUnless(COMPILER.is_file(), "build dev/cppgm first")
 class FunctionOrderReuseTests(unittest.TestCase):
     def compile(self, source, succeeds=True):
         with tempfile.TemporaryDirectory() as directory:

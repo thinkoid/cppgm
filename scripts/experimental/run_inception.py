@@ -21,7 +21,7 @@ def arguments(argv=None):
     parser.add_argument('--directory', type=Path,
                         help='new frozen package (default: unique directory in obj/wasm-inception)')
     parser.add_argument('--tools', type=Path, default=REPO / 'obj/wasm-tools')
-    parser.add_argument('--compiler', type=Path, default=REPO / 'dev/cppgm++')
+    parser.add_argument('--compiler', type=Path, default=REPO / 'dev/cppgm')
     parser.add_argument('--playwright', type=Path, default=HERE / 'node_modules/playwright')
     parser.add_argument('--shim', type=Path, default=HERE / 'node_modules/@bjorn3/browser_wasi_shim')
     parser.add_argument('--chromium', type=Path, help='override the pinned Playwright browser')

@@ -61,8 +61,8 @@ jobs:
           paths=()
           for path in obj/pa36-release pa36/obj/calibrate/course \
               pa36/obj/calibrate/student pa36/obj/cache pa36/obj/bin \
-              pa36/obj/calibrate/student-seed/cppgm++ \
-              pa36/obj/calibrate/student-self/cppgm++; do
+              pa36/obj/calibrate/student-seed/cppgm \
+              pa36/obj/calibrate/student-self/cppgm; do
             if [ -e "$path" ]; then paths+=("$path"); fi
           done
           if [ "${#paths[@]}" -gt 0 ]; then

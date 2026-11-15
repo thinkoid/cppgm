@@ -64,7 +64,7 @@ absolute times. Raw observations and calibration warnings stay linked.
 
 Keep source version/input hashes, compiler source revision/binary hashes,
 compiler/library versions, full flags, ISA, workers, affinity and resource limits
-alongside the tables. The cppgm++ runtime result measures codegen performance:
+alongside the tables. The cppgm runtime result measures codegen performance:
 the self-built compiler runs against GCC-built and Clang-built compilers on
 identical inputs.
 

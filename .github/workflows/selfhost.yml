@@ -57,24 +57,24 @@ jobs:
           printf 'CPPGM_STDLIB_FLAGS=%s\n' "$CPPGM_STDLIB_FLAGS"
 
       - name: Build host compiler
-        run: make -C dev cppgm++
+        run: make -C dev cppgm
 
       - name: Run selfhost through PA5
         run: |
           make -C pa35 test-through-pa5 \
-            CXX=../dev/cppgm++ \
+            CXX=../dev/cppgm \
             CPPGM_HOST_CXX="$CPPGM_HOST_CXX" \
             CPPGM_STDLIB_FLAGS="$CPPGM_STDLIB_FLAGS"
 
-      - name: Package cppgm++ self compiler
+      - name: Package cppgm self compiler
         run: |
           set -euo pipefail
           source_sha="$GITHUB_SHA"
           bundle="$RUNNER_TEMP/cppgm-self"
           upload="$RUNNER_TEMP/cppgm-self-upload"
           mkdir -p "$bundle/bin" "$upload"
-          cp obj/pa35/bin/selfhost/cppgm++-self "$bundle/bin/cppgm++-self"
-          chmod 755 "$bundle/bin/cppgm++-self"
+          cp obj/pa35/bin/selfhost/cppgm-self "$bundle/bin/cppgm-self"
+          chmod 755 "$bundle/bin/cppgm-self"
           {
             printf 'source_sha=%s\n' "$source_sha"
             printf 'source_ref=%s\n' "$GITHUB_REF"
@@ -86,7 +86,7 @@ jobs:
             printf 'cppgm_host_cxx=%s\n' "$CPPGM_HOST_CXX"
             printf 'cppgm_stdlib_flags=%s\n' "$CPPGM_STDLIB_FLAGS"
           } > "$bundle/metadata.env"
-          (cd "$bundle" && sha256sum bin/cppgm++-self > SHA256SUMS)
+          (cd "$bundle" && sha256sum bin/cppgm-self > SHA256SUMS)
           tar -C "$bundle" -czf "$upload/cppgm-self.tar.gz" .
           cp "$bundle/metadata.env" "$upload/metadata.env"
           cp "$bundle/SHA256SUMS" "$upload/SHA256SUMS"
@@ -107,7 +107,7 @@ jobs:
             echo "\`\`\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload cppgm++ self compiler
+      - name: Upload cppgm self compiler
         uses: actions/upload-artifact@v6
         with:
           name: ${{ env.SELFHOST_ARTIFACT_NAME }}
@@ -153,24 +153,24 @@ jobs:
           printf 'CPPGM_STDLIB_FLAGS=%s\n' "$CPPGM_STDLIB_FLAGS"
 
       - name: Build host compiler
-        run: make -C dev cppgm++
+        run: make -C dev cppgm
 
       - name: Run selfhost through PA5
         run: |
           make -C pa35 test-through-pa5 \
-            CXX=../dev/cppgm++ \
+            CXX=../dev/cppgm \
             CPPGM_HOST_CXX="$CPPGM_HOST_CXX" \
             CPPGM_STDLIB_FLAGS="$CPPGM_STDLIB_FLAGS"
 
-      - name: Package cppgm++ self compiler
+      - name: Package cppgm self compiler
         run: |
           set -euo pipefail
           source_sha="$GITHUB_SHA"
           bundle="$RUNNER_TEMP/cppgm-self"
           upload="$RUNNER_TEMP/cppgm-self-upload"
           mkdir -p "$bundle/bin" "$upload"
-          cp obj/pa35/bin/selfhost/cppgm++-self "$bundle/bin/cppgm++-self"
-          chmod 755 "$bundle/bin/cppgm++-self"
+          cp obj/pa35/bin/selfhost/cppgm-self "$bundle/bin/cppgm-self"
+          chmod 755 "$bundle/bin/cppgm-self"
           {
             printf 'source_sha=%s\n' "$source_sha"
             printf 'source_ref=%s\n' "$GITHUB_REF"
@@ -182,7 +182,7 @@ jobs:
             printf 'cppgm_host_cxx=%s\n' "$CPPGM_HOST_CXX"
             printf 'cppgm_stdlib_flags=%s\n' "$CPPGM_STDLIB_FLAGS"
           } > "$bundle/metadata.env"
-          (cd "$bundle" && sha256sum bin/cppgm++-self > SHA256SUMS)
+          (cd "$bundle" && sha256sum bin/cppgm-self > SHA256SUMS)
           tar -C "$bundle" -czf "$upload/cppgm-self.tar.gz" .
           cp "$bundle/metadata.env" "$upload/metadata.env"
           cp "$bundle/SHA256SUMS" "$upload/SHA256SUMS"
@@ -203,7 +203,7 @@ jobs:
             echo "\`\`\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload cppgm++ self compiler
+      - name: Upload cppgm self compiler
         uses: actions/upload-artifact@v6
         with:
           name: ${{ env.SELFHOST_ARTIFACT_NAME }}
@@ -257,24 +257,24 @@ jobs:
           cat /etc/os-release
 
       - name: Build host compiler
-        run: make -C dev cppgm++
+        run: make -C dev cppgm
 
       - name: Run selfhost through PA5
         run: |
           make -C pa35 test-through-pa5 \
-            CXX=../dev/cppgm++ \
+            CXX=../dev/cppgm \
             CPPGM_HOST_CXX="$CPPGM_HOST_CXX" \
             CPPGM_STDLIB_FLAGS="$CPPGM_STDLIB_FLAGS"
 
-      - name: Package cppgm++ self compiler
+      - name: Package cppgm self compiler
         run: |
           set -euo pipefail
           source_sha="$GITHUB_SHA"
           bundle="$RUNNER_TEMP/cppgm-self"
           upload="$RUNNER_TEMP/cppgm-self-upload"
           mkdir -p "$bundle/bin" "$upload"
-          cp obj/pa35/bin/selfhost/cppgm++-self "$bundle/bin/cppgm++-self"
-          chmod 755 "$bundle/bin/cppgm++-self"
+          cp obj/pa35/bin/selfhost/cppgm-self "$bundle/bin/cppgm-self"
+          chmod 755 "$bundle/bin/cppgm-self"
           {
             printf 'source_sha=%s\n' "$source_sha"
             printf 'source_ref=%s\n' "$GITHUB_REF"
@@ -286,7 +286,7 @@ jobs:
             printf 'cppgm_host_cxx=%s\n' "$CPPGM_HOST_CXX"
             printf 'cppgm_stdlib_flags=%s\n' "$CPPGM_STDLIB_FLAGS"
           } > "$bundle/metadata.env"
-          (cd "$bundle" && sha256sum bin/cppgm++-self > SHA256SUMS)
+          (cd "$bundle" && sha256sum bin/cppgm-self > SHA256SUMS)
           tar -C "$bundle" -czf "$upload/cppgm-self.tar.gz" .
           cp "$bundle/metadata.env" "$upload/metadata.env"
           cp "$bundle/SHA256SUMS" "$upload/SHA256SUMS"
@@ -307,7 +307,7 @@ jobs:
             echo "\`\`\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload cppgm++ self compiler
+      - name: Upload cppgm self compiler
         uses: actions/upload-artifact@v6
         with:
           name: ${{ env.SELFHOST_ARTIFACT_NAME }}
@@ -364,24 +364,24 @@ jobs:
           cat /etc/os-release
 
       - name: Build host compiler
-        run: make -C dev cppgm++
+        run: make -C dev cppgm
 
       - name: Run selfhost through PA5
         run: |
           make -C pa35 test-through-pa5 \
-            CXX=../dev/cppgm++ \
+            CXX=../dev/cppgm \
             CPPGM_HOST_CXX="$CPPGM_HOST_CXX" \
             CPPGM_STDLIB_FLAGS="$CPPGM_STDLIB_FLAGS"
 
-      - name: Package cppgm++ self compiler
+      - name: Package cppgm self compiler
         run: |
           set -euo pipefail
           source_sha="$GITHUB_SHA"
           bundle="$RUNNER_TEMP/cppgm-self"
           upload="$RUNNER_TEMP/cppgm-self-upload"
           mkdir -p "$bundle/bin" "$upload"
-          cp obj/pa35/bin/selfhost/cppgm++-self "$bundle/bin/cppgm++-self"
-          chmod 755 "$bundle/bin/cppgm++-self"
+          cp obj/pa35/bin/selfhost/cppgm-self "$bundle/bin/cppgm-self"
+          chmod 755 "$bundle/bin/cppgm-self"
           {
             printf 'source_sha=%s\n' "$source_sha"
             printf 'source_ref=%s\n' "$GITHUB_REF"
@@ -393,7 +393,7 @@ jobs:
             printf 'cppgm_host_cxx=%s\n' "$CPPGM_HOST_CXX"
             printf 'cppgm_stdlib_flags=%s\n' "$CPPGM_STDLIB_FLAGS"
           } > "$bundle/metadata.env"
-          (cd "$bundle" && sha256sum bin/cppgm++-self > SHA256SUMS)
+          (cd "$bundle" && sha256sum bin/cppgm-self > SHA256SUMS)
           tar -C "$bundle" -czf "$upload/cppgm-self.tar.gz" .
           cp "$bundle/metadata.env" "$upload/metadata.env"
           cp "$bundle/SHA256SUMS" "$upload/SHA256SUMS"
@@ -414,7 +414,7 @@ jobs:
             echo "\`\`\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload cppgm++ self compiler
+      - name: Upload cppgm self compiler
         uses: actions/upload-artifact@v6
         with:
           name: ${{ env.SELFHOST_ARTIFACT_NAME }}

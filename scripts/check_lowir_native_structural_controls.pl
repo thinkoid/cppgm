@@ -51,7 +51,7 @@ sub block_body
 
 if (scalar(@ARGV) != 3)
 {
-	die "Usage: check_lowir_native_structural_controls.pl <lowir2native> <cppgm++> <test-or-directory>\n";
+	die "Usage: check_lowir_native_structural_controls.pl <lowir2native> <cppgm> <test-or-directory>\n";
 }
 
 	my ($app, $driver, $root) = @ARGV;

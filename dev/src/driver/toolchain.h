@@ -5,7 +5,7 @@
 
 #include "preprocess/preprocessor.h"
 
-// cppgm++'s compile (-c) and link modes: each C++ source is its own
+// cppgm's compile (-c) and link modes: each C++ source is its own
 // translation unit, compiled through the whole pipeline (preprocessing,
 // parsing, semantic analysis, LowIR lowering, the native back end) into a
 // relocatable object; link mode compiles its source inputs the same way,

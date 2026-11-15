@@ -215,7 +215,7 @@ def run_reader_case(control, fields, lowiropt):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--compiler", default=str(ROOT / "dev/cppgm++"))
+    parser.add_argument("--compiler", default=str(ROOT / "dev/cppgm"))
     parser.add_argument("--host-cxx", default="g++")
     parser.add_argument("--native", default=str(ROOT / "dev/lowir2native"))
     parser.add_argument("--abimangle", default=str(ROOT / "dev/abimangle"))

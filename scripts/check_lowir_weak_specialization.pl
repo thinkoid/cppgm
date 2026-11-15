@@ -67,7 +67,7 @@ sub compile_and_run
 if(scalar(@ARGV) != 3)
 {
 	die "Usage: check_lowir_weak_specialization.pl " .
-		"<lowiropt> <cppgm++> <test-or-directory>\n";
+		"<lowiropt> <cppgm> <test-or-directory>\n";
 }
 
 my ($app, $driver, $root) = @ARGV;

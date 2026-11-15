@@ -51,7 +51,7 @@ jobs:
       - name: Trust the mounted checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build compiler
-        run: make -C dev cppgm++ -j "$(nproc)"
+        run: make -C dev cppgm -j "$(nproc)"
       - name: Build Godot with all three compilers and compare checked workloads
         run: python3 scripts/godot_ci.py run --output obj/godot
       - name: Generate standard benchmark records and tables

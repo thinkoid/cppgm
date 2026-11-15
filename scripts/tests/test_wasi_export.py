@@ -17,7 +17,7 @@ def digest(data):
 
 class WasiExport(unittest.TestCase):
     def test_all_lowir_tools_include_host_independent_floating_conversion(self):
-        for name, sources in source_sets(['lowir', 'lowiropt', 'lowir2native', 'cppgm++']).items():
+        for name, sources in source_sets(['lowir', 'lowiropt', 'lowir2native', 'cppgm']).items():
             with self.subTest(tool=name):
                 self.assertIn('dev/src/lex/interchange_float.cpp', sources)
                 self.assertIn('dev/src/preprocess/lexer/char_classes.cpp', sources)

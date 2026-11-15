@@ -6,7 +6,7 @@ the frozen self-compile workload; they do not replace or modify its epoch.
 
 ```sh
 python3 benchmarks/frontend_scaling/generate.py parameter-bases 32768 > /tmp/bases.cpp
-dev/cppgm++ -std=c++11 -fsyntax-only /tmp/bases.cpp
+dev/cppgm -std=c++11 -fsyntax-only /tmp/bases.cpp
 ```
 
 `parameter-bases` declares independent class templates inheriting their type

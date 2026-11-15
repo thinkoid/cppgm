@@ -55,7 +55,7 @@ jobs:
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build compiler and install pinned tools
         run: |
-          make -C dev cppgm++ -j "$(nproc)"
+          make -C dev cppgm -j "$(nproc)"
           perl scripts/install_wasm_tools.pl --prefix obj/wasm-tools
           npm ci --ignore-scripts --prefix scripts/experimental
       - name: Measure full compiler rebuilds
@@ -109,7 +109,7 @@ jobs:
       - name: Trust the mounted checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build compiler
-        run: make -C dev cppgm++ -j "$(nproc)"
+        run: make -C dev cppgm -j "$(nproc)"
       - name: Install pinned engine and reference tools
         run: perl scripts/install_wasm_tools.pl --prefix obj/wasm-tools --benchmark-engine
       - name: Check host and guest resource limits

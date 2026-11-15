@@ -306,7 +306,7 @@ shape, together with that fallback's shape copies and counters. Correctness,
 ABI, recursion, exception and explicit inline-attribute checks remain in place.
 This is a partial implementation of C4, not the proposed complete cost model.
 
-The private compiler is `gap-C-final-shape-compiler-r3/cppgm++` under the
+The private compiler is `gap-C-final-shape-compiler-r3/cppgm` under the
 evidence root. Its 40 rebuilt LLVM objects and linked diagnostic Clang are
 byte-identical to the preceding r2 experiment, which retained the obsolete
 bookkeeping. All 325 frozen workload objects and the linked executable match
@@ -1260,7 +1260,7 @@ Rebase validation is complete: strict 10,627/10,627, debug information,
 self-host through PA5 in a new object root, PA36 smoke, architecture/format/
 file audits and placement all pass. Placement scans 9,958 tests and requires
 no fixture moves. The immutable rebased compiler is
-compiler-gap-C-main-04d-r24/cppgm++, SHA ac9793804d2df9807b06fe2137f42f73040c3696565333c721b544cd6b405b8f.
+compiler-gap-C-main-04d-r24/cppgm, SHA ac9793804d2df9807b06fe2137f42f73040c3696565333c721b544cd6b405b8f.
 Against r18, its O0–O3 frozen instructions change +0.0008%, +0.0702%,
 +0.0975% and +0.1638%. Its 43-provider LLVM slice reproduces all 325 native
 objects and the linked compiler. A full O1 LLVM rebuild is running to measure
