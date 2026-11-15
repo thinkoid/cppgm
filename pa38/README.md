@@ -84,7 +84,7 @@ The first fixture set covers these parts of the C17 input profile:
   explicit alignment requests. Array decay and pointers formed by `&array`
   use the actual saved extent.
 - Hosted C header declarations and their builtin operations through the
-  existing hosted environment.
+  existing hosted environment, including PA30's GNU startup-function attributes.
 
 This is an initial profile, not a claim of complete C17 conformance. Use
 `(void)` for a prototype with no parameters; an empty `()` declares a function

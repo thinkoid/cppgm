@@ -114,7 +114,9 @@ enum class AttributeKind : uint8_t
 	WasmImportName,
 	WasmExportName,
 	// GNU alias("object_name"): another linking identity for a definition.
-	ObjectAlias
+	ObjectAlias,
+	// GNU constructor[(priority)]: run the function before program entry.
+	Startup
 };
 
 struct TypeId;

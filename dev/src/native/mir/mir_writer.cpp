@@ -464,6 +464,12 @@ void MirWriter::header(const Startup& startup, Target target)
 	if (startup.entry == lowir::kNoId)
 		return;
 	text_ += "\nstartup\n";
+	for (lowir::SymbolId function : startup.constructors)
+	{
+		text_ += "    call ";
+		symbol(function);
+		text_ += " [args=()]\n";
+	}
 	if (startup.init != lowir::kNoId)
 	{
 		text_ += "    call ";

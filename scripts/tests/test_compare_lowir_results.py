@@ -45,6 +45,19 @@ RENAMED = """function @main(%a : i64, %b : i64) -> i64 {
 
 
 class LowIrComparisonTest(unittest.TestCase):
+    def test_global_section_is_validated_and_preserved(self):
+        program = """global @startup : ptr [section=.init_array.100, binding=internal, object_root=yes] = addr @init
+function @init() -> void {
+  block ^entry:
+    return void
+}
+""" + REFERENCE
+        result = self.compare(program, program, direct=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        changed = program.replace('section=.init_array.100', 'section=.init_array.200')
+        result = self.compare(program, changed)
+        self.assertNotEqual(result.returncode, 0)
+
     ADDRESSED = """function @main() -> i32 {
   code_label @target = ^destination
   block ^entry:

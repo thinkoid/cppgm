@@ -240,6 +240,7 @@ inline bool in_aligned_region(const Function& function, int32_t disp)
 // entry function returns, most recent first, before the fini hook).
 struct Startup
 {
+	std::vector<lowir::SymbolId> constructors;
 	lowir::SymbolId init = lowir::kNoId;
 	lowir::SymbolId entry = lowir::kNoId;
 	lowir::SymbolId fini = lowir::kNoId;

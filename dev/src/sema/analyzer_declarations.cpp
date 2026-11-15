@@ -485,6 +485,11 @@ void Analyzer::symbol_attributes(Entity* entity, const syntax::Attribute* leadin
 				object_alias_attribute(entity, *attribute);
 				continue;
 			}
+			if (attribute->kind == syntax::AttributeKind::Startup)
+			{
+				startup_attribute(entity, *attribute);
+				continue;
+			}
 			if ((attribute->kind != syntax::AttributeKind::Weak && attribute->kind != syntax::AttributeKind::Section) ||
 				(attribute->standard && attribute->on_type))
 				continue;

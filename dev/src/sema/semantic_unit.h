@@ -192,6 +192,14 @@ struct SemanticGraph
 	};
 	PointerMap object_alias_index;
 	std::vector<ObjectAlias> object_aliases;
+	// GNU startup functions are rare; ordinary function records do not grow.
+	struct StartupFunction
+	{
+		const FunctionEntity* function;
+		uint32_t priority;
+	};
+	PointerMap startup_index;
+	std::vector<StartupFunction> startup_functions;
 	// Sparse target function bindings; ordinary function records stay small.
 	struct WasmBinding
 	{

@@ -228,6 +228,7 @@ void ProgramLowering::lower_unit(
 	}
 	if (!source_object_aliases_.empty())
 		emit_source_object_aliases();
+	startup_functions();
 	// A delegating constructor namespace-scope code odr-uses is emitted,
 	// with the target its body calls (the course's form).
 	for (const sema::DemandList* node = graph.root_demands; node != nullptr; node = node->next)

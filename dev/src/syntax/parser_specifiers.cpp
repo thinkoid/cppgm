@@ -121,6 +121,15 @@ bool Parser::parse_decl_specifier_seq(ListFrame<DeclSpecifier>& list, SpecifierI
 
 bool Parser::gnu_attribute(const char* spelling, Attribute& attribute, bool& kept)
 {
+	if (std::strcmp(spelling, "constructor") == 0 || std::strcmp(spelling, "__constructor__") == 0)
+	{
+		attribute.kind = AttributeKind::Startup;
+		kept = true;
+		if (!accept(TokenKind::OP_LPAREN))
+			return true;
+		attribute.expression = parse_assignment_expression();
+		return attribute.expression != nullptr && expect(TokenKind::OP_RPAREN);
+	}
 	// malloc(deallocator, ...) is only a deallocation association; it does
 	// not make the no-alias promise of the argumentless malloc attribute.
 	if ((std::strcmp(spelling, "malloc") == 0 || std::strcmp(spelling, "__malloc__") == 0) && at(TokenKind::OP_LPAREN))

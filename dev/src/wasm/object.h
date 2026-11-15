@@ -118,6 +118,7 @@ ValueType global_type(const Object& object, uint32_t index);
 bool mutable_global(const Object& object, uint32_t index);
 void prepare_finalizers(lowir::Program& program);
 void adapt_wasi_entry(Object& object, uint32_t symbol);
+void append_startup_functions(const lowir::Program& program, const std::vector<uint32_t>& symbols, Object& object);
 void add_runtime_inputs(LinkInputs& inputs, const backend::Options& options);
 void make_object(lowir::Program& program, const backend::Options& options, Object& object, std::string& dump);
 void append_object_aliases(const lowir::Program& program, const Module& module, Object& object,

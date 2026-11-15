@@ -1,6 +1,7 @@
 #include "native/backend.h"
 
 #include "lowir/assembly.h"
+#include "lowir/startup_sections.h"
 
 #include <chrono>
 #include <cstdio>
@@ -142,7 +143,12 @@ bool compile_program(
 		return true;
 	}
 	const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-	const Startup startup = find_startup(program);
+	Startup startup = find_startup(program);
+	std::vector<lowir::StartupFunction> constructors;
+	if (!lowir::startup_functions(program, constructors, error))
+		return false;
+	for (const auto& function : constructors)
+		startup.constructors.push_back(function.symbol);
 	if (!options.output.empty() && startup.entry == lowir::kNoId)
 	{
 		error = "no entry function for an executable";

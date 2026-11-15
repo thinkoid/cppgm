@@ -1336,6 +1336,7 @@ private:
 	void state_pending_signatures(size_t first);
 	void prepare_source_object_aliases(const syntax::TranslationUnit& unit);
 	void emit_source_object_aliases();
+	void startup_functions();
 
 	// Polymorphic classes (lower/vtable_lowering.cpp).
 	void define_typeinfo(const sema::ClassEntity* entity, lowir::SymbolId symbol);

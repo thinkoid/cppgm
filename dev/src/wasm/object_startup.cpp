@@ -1,6 +1,23 @@
 #include "wasm/object.h"
 
+#include "lowir/startup_sections.h"
+
 namespace wasm {
+
+void append_startup_functions(const lowir::Program& program, const std::vector<uint32_t>& symbols, Object& object)
+{
+	std::vector<lowir::StartupFunction> functions;
+	std::string error;
+	if (!lowir::startup_functions(program, functions, error))
+		throw WasmError(error);
+	for (const auto& function : functions)
+	{
+		if (function.symbol >= symbols.size() || symbols[function.symbol] >= object.symbols.size() ||
+			object.symbols[symbols[function.symbol]].kind != 0)
+			throw WasmError("an initialization function has no Wasm object identity");
+		object.initializers.push_back({ function.priority, symbols[function.symbol] });
+	}
+}
 
 void adapt_wasi_entry(Object& object, uint32_t index)
 {

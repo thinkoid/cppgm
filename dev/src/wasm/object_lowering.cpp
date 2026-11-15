@@ -261,6 +261,7 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 	}
 	append_object_aliases(program, module, object, symbols, groups);
 	bind_object_aliases(program, module.object_symbols, symbols, groups, object);
+	append_startup_functions(program, symbols, object);
 	for (const lowir::FunctionBinding& binding : program.function_bindings)
 	{
 		ObjectSymbol& symbol = object.symbols[symbols[binding.symbol]];

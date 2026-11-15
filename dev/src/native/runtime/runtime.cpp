@@ -404,6 +404,8 @@ uint32_t emit_runtime(
 		a.mov_rr(arguments, RSP);
 		a.alu_ri(4, RM::r(RSP), -16, 8);
 	}
+	for (lowir::SymbolId function : startup.constructors)
+		a.call_symbol(function);
 	if (startup.init != lowir::kNoId)
 		a.call_symbol(startup.init);
 	if (startup.entry_params >= 1)
