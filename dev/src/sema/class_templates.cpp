@@ -277,8 +277,34 @@ void Analyzer::merge_template_head(
 	// and in each parameter's kind.
 	if (list.parameters.size != head->count)
 		error(location, "template redeclared with a different template parameter list");
-	if (cxx20_ && !template_constraints_equivalent(head, current_template_constraint(), &list, scope))
-		error(location, "template redeclared with different associated constraints");
+	if (cxx20_)
+	{
+		// A friend declared in a template has its parameters one level
+		// deeper than the declaration it repeats (14.5.4): their names are
+		// bound to that declaration's parameters, so that constraints
+		// written alike have one key.
+		Scope* keyed = scope;
+		if (head->count != 0 && template_entities_.size() == head->count &&
+			template_entities_[0]->depth != head->parameters[0]->depth)
+		{
+			keyed = new_scope(ScopeKind::TemplateParameters, scope->parent, nullptr, nullptr, nullptr);
+			keyed->dumped = false;
+			for (uint32_t i = 0; i < head->count; ++i)
+			{
+				const Identifier* name = template_entities_[i]->name;
+				TemplateParameterEntity* earlier = head->parameters[i];
+				if (name == nullptr)
+					continue;
+				Binding* binding = earlier->non_type
+					? new_binding(BindingKind::TemplateValue, name, earlier, earlier->value_type)
+					: new_binding(BindingKind::Type, name, earlier, earlier->type);
+				binding->hidden = earlier->non_type;
+				declare_in(keyed, binding);
+			}
+		}
+		if (!template_constraints_equivalent(head, current_template_constraint(), &list, keyed))
+			error(location, "template redeclared with different associated constraints");
+	}
 	for (uint32_t i = 0; i < head->count; ++i)
 	{
 		const syntax::TemplateParameter* parameter = list.parameters[i];
