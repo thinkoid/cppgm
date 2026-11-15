@@ -140,7 +140,7 @@ class ExportedDevMakefileTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='exported-pa34.') as temp:
             root = Path(temp)
             shutil.copytree(REPO_ROOT / 'pa34', root / 'pa34', symlinks=True,
-                            ignore=shutil.ignore_patterns('*.my*', '*.check*', '*.ref.program'))
+                    ignore=shutil.ignore_patterns('obj', '*.my*', '*.check*', '*.ref.program'))
             shutil.copytree(REPO_ROOT / 'scripts', root / 'scripts', symlinks=True)
             shutil.copy(REPO_ROOT / 'Makefile', root / 'Makefile')
             # Driver links now reuse fixtures from their earliest owning PA.
@@ -186,7 +186,7 @@ class ExportedDevMakefileTests(unittest.TestCase):
             root = Path(temp)
             for pa in ('pa24', 'pa33', 'pa34', 'pa37'):
                 shutil.copytree(REPO_ROOT / pa, root / pa, symlinks=True,
-                                ignore=shutil.ignore_patterns('*.my*', '*.check*', '*.ref.program'))
+                                ignore=shutil.ignore_patterns('obj', '*.my*', '*.check*', '*.ref.program'))
             shutil.copytree(REPO_ROOT / 'scripts', root / 'scripts', symlinks=True)
             (root / 'dev').mkdir()
             shutil.copy(REPO_ROOT / 'dev/frontend_source_sets.mk', root / 'dev')
