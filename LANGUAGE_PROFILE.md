@@ -20,6 +20,9 @@ return-deduction extensions remain available in the course's C++11 mode.
 | Three-way comparison, rewritten candidates and defaulted comparisons | C++20 | PA2/PA4 tokens and macros; PA5 syntax; PA9 ABI; PA12 class/subobject comparisons; PA16 constexpr and earlier template instantiation |
 | Named concepts, boolean concept-ids, compound return-type requirements | C++20 | PA5 syntax; PA14 lookup and type arguments; PA15 value arguments and packs; PA16 constexpr calls; PA17 variable templates |
 | Requires-expressions with simple, type, `noexcept` compound and nested requirements | C++20 | PA5 syntax; PA7 non-template checks; PA14 substitution; PA15 packs; PA16 constant evaluation; PA17 variable templates |
+| Associated constraints, trailing requires-clauses, constrained friends | C++20 | PA5 syntax; PA15 template-heads and overloads; PA17 partial specializations, alias and variable templates, friends; PA18 template signatures |
+| Implied `typename` in type-only contexts | C++20 | PA14 dependent names; PA15 non-type parameter types |
+| Abbreviated function templates, constrained placeholders (`C auto`, `C decltype(auto)`) | C++20 | PA5 syntax; PA20 parameter invention and deduction checks |
 | Nested namespaces, attribute using-prefixes | C++17 | PA5 syntax, PA6 lookup; vendor effects PA30 |
 | Contextual conversions, aggregate member defaults | C++14+ | PA11/PA12; constexpr PA16 |
 | Public aggregate bases, direct prvalue result objects, inline variables, aligned allocation | C++17 | PA11/PA12; constexpr PA16; multi-TU PA25; host ABI PA32 |
