@@ -110,6 +110,13 @@ private:
 		int64_t modulus, first; // and the element of the first pass
 	};
 
+	struct Limit
+	{
+		Value kept = Value::none(), tested = Value::none();
+		int64_t bound = 0;
+		bool upper = false;
+	};
+
 	bool in_body(Value v) const;
 	bool narrow_fits(Value v, Type type, unsigned depth) const;
 	Value narrowed(Value v, Type type, InstId& tail);
@@ -128,6 +135,9 @@ private:
 	bool lane_cells_fit();
 	void mark(Value v, std::vector<uint8_t>& marks);
 	void mark_uses();
+	bool limit(Value v, Limit& out) const;
+	bool tests(Value tested, Value kept) const;
+	Value packed_source(const Instruction& inst, unsigned& from, bool& to_unsigned) const;
 	bool integer_term(Value v, Linear& out, int64_t factor, unsigned depth) const;
 	bool address(Value v, Linear& out, Value& base, Value& object) const;
 	bool read_accesses();
@@ -163,6 +173,7 @@ private:
 		std::vector<std::vector<Value>>& cells);
 	Value extend(Value v, unsigned from, unsigned to, bool is_signed);
 	Value narrow(Value v, unsigned from, unsigned to);
+	Value pack(Value v, unsigned from, unsigned to, bool to_unsigned);
 	void widen_convert(const Instruction& inst);
 	Value widen_word_to_double(Value v, bool is_signed);
 	Value widen_multiply(Value a, Value b);
@@ -912,6 +923,101 @@ void LoopVectorizer::mark(Value v, std::vector<uint8_t>& marks)
 		marks[v.index] = 1;
 }
 
+// Whether `v` is a select between a value and a literal by a signed compare
+// with that literal: the value kept, below the literal (`upper`) or above
+// it, and the value compared.
+bool LoopVectorizer::limit(Value v, Limit& out) const
+{
+	if (!in_body(v))
+		return false;
+	const Instruction& pick = body_.instructions[body_.temps[v.index].def];
+	if (pick.op != Opcode::Select || !in_body(pick.ops[0]))
+		return false;
+	const Instruction& test = body_.instructions[body_.temps[pick.ops[0].index].def];
+	auto word = [](Type type) { return type.kind() == TypeKind::I32 || type.kind() == TypeKind::I16; };
+	auto value = [&](Value literal, Type type) {
+		const uint64_t bits = body_.literals[literal.index].low;
+		return type.kind() == TypeKind::I16 ? static_cast<int64_t>(static_cast<int16_t>(bits))
+											: static_cast<int64_t>(static_cast<int32_t>(bits));
+	};
+	if (test.op != Opcode::Compare || !test.ops[1].is(ValueKind::Integer) || !word(test.type) || !word(pick.type))
+		return false;
+	const bool literal_taken = pick.ops[1].is(ValueKind::Integer);
+	const Value literal = pick.ops[literal_taken ? 1 : 2];
+	out.kept = pick.ops[literal_taken ? 2 : 1];
+	out.tested = test.ops[0];
+	if (!literal.is(ValueKind::Integer) || !out.kept.is(ValueKind::Temp) ||
+		value(literal, pick.type) != value(test.ops[1], test.type))
+		return false;
+	switch (static_cast<ComparePredicate>(test.sub))
+	{
+	case ComparePredicate::Lt:
+	case ComparePredicate::Le:
+		out.upper = !literal_taken;
+		break;
+	case ComparePredicate::Gt:
+	case ComparePredicate::Ge:
+		out.upper = literal_taken;
+		break;
+	default:
+		return false;
+	}
+	out.bound = value(literal, pick.type);
+	return true;
+}
+
+// Whether a signed compare of `tested` is one of `kept`: the same value, or
+// the 16-bit value that `kept` extends.
+bool LoopVectorizer::tests(Value tested, Value kept) const
+{
+	if (tested == kept)
+		return true;
+	if (!in_body(kept))
+		return false;
+	const Instruction& def = body_.instructions[body_.temps[kept.index].def];
+	return def.op == Opcode::Convert && static_cast<ConvertOp>(def.sub) == ConvertOp::SExt &&
+		convert_source_type(def).kind() == TypeKind::I16 && def.ops[0] == tested;
+}
+
+// The value a truncation's operand keeps within two literals, when a
+// saturating pack to the narrow lanes keeps a lane within the same two
+// (`to_unsigned`: 0 and 255, else the narrow signed range), or none. `from`
+// is the lane the pack starts at. The second select tests what the first
+// keeps, or the value the first tests: the two literals are in order.
+Value LoopVectorizer::packed_source(const Instruction& inst, unsigned& from, bool& to_unsigned) const
+{
+	if (inst.op != Opcode::Convert || static_cast<ConvertOp>(inst.sub) != ConvertOp::Trunc)
+		return Value::none();
+	from = lane_bytes(convert_source_type(inst));
+	const unsigned to = lane_bytes(inst.type);
+	Limit outer, inner;
+	if ((from != 4 && from != 2) || to == 0 || to >= from || !limit(inst.ops[0], outer) || !limit(outer.kept, inner) ||
+		outer.upper == inner.upper || !tests(inner.tested, inner.kept) ||
+		(!tests(outer.tested, outer.kept) && !tests(outer.tested, inner.kept)))
+		return Value::none();
+	if (lane_bytes(body_.temps[inst.ops[0].index].type) != from ||
+		lane_bytes(body_.temps[outer.kept.index].type) != from ||
+		lane_bytes(body_.temps[inner.kept.index].type) != from)
+		return Value::none();
+	const int64_t low = outer.upper ? inner.bound : outer.bound, high = outer.upper ? outer.bound : inner.bound;
+	to_unsigned = to == 1 && low == 0 && high == 255;
+	const bool to_signed = to == 1 ? low == -128 && high == 127 : low == -32768 && high == 32767;
+	if (!to_unsigned && !to_signed)
+		return Value::none();
+	// (Bytes of a word the loop extends are packed from the word.)
+	if (from == 4 && to == 1 && in_body(inner.kept))
+	{
+		const Instruction& def = body_.instructions[body_.temps[inner.kept.index].def];
+		if (def.op == Opcode::Convert && static_cast<ConvertOp>(def.sub) == ConvertOp::SExt &&
+			convert_source_type(def).kind() == TypeKind::I16 && def.ops[0].is(ValueKind::Temp))
+		{
+			from = 2;
+			return def.ops[0];
+		}
+	}
+	return inner.kept;
+}
+
 // What must be a lane value and what a scalar one (of the first lane): the
 // operands of each, from the loop's effects back. Each value's uses follow
 // it, so one walk back through the block does.
@@ -943,9 +1049,15 @@ void LoopVectorizer::mark_uses()
 		}
 		if (inst.result == kNoId)
 			continue;
+		// (A pack that saturates reads what the selects limit, not them.)
+		bool to_unsigned;
+		unsigned from;
+		const Value packed = in_wide_[inst.result] ? packed_source(inst, from, to_unsigned) : Value::none();
+		if (!packed.is(ValueKind::None))
+			mark(packed, in_wide_);
 		for (const Value& v : inst.ops)
 		{
-			if (in_wide_[inst.result])
+			if (in_wide_[inst.result] && packed.is(ValueKind::None))
 				mark(v, in_wide_);
 			if (in_scalar_[inst.result])
 				mark(v, in_scalar_);
@@ -1256,8 +1368,15 @@ bool LoopVectorizer::choose_lanes()
 			continue;
 		if (!lane(lane_bytes(inst.type)) || !supported(inst))
 			return false;
-		if (inst.op == Opcode::Convert && !lane(lane_bytes(convert_source_type(inst))))
-			return false;
+		if (inst.op == Opcode::Convert)
+		{
+			// (A saturating pack may start at narrower lanes than its source.)
+			unsigned from = lane_bytes(convert_source_type(inst));
+			bool to_unsigned;
+			packed_source(inst, from, to_unsigned);
+			if (!lane(from))
+				return false;
+		}
 	}
 	for (const Reduction& r : reductions_)
 		if (!lane(lane_bytes(r.type)))
@@ -1651,10 +1770,29 @@ Value LoopVectorizer::narrow(Value v, unsigned from, unsigned to)
 	return v;
 }
 
+// Integer lanes half as wide, as often as it takes, each kept within the
+// narrow lane's range.
+Value LoopVectorizer::pack(Value v, unsigned from, unsigned to, bool to_unsigned)
+{
+	if (from == 4)
+		v = vector(VectorOp::Packssdw, v, v);
+	if (to == 1)
+		v = vector(to_unsigned ? VectorOp::Packuswb : VectorOp::Packsswb, v, v);
+	return v;
+}
+
 void LoopVectorizer::widen_convert(const Instruction& inst)
 {
 	const Type source = convert_source_type(inst);
 	const unsigned from = lane_bytes(source), to = lane_bytes(inst.type);
+	bool to_unsigned;
+	unsigned packed_from;
+	const Value packed = packed_source(inst, packed_from, to_unsigned);
+	if (!packed.is(ValueKind::None))
+	{
+		wides_[inst.result] = pack(wide(packed, body_.temps[packed.index].type), packed_from, to, to_unsigned);
+		return;
+	}
 	const Value v = wide(inst.ops[0], source);
 	Value out = Value::none();
 	switch (static_cast<ConvertOp>(inst.sub))
