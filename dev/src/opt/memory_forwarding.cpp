@@ -1836,6 +1836,10 @@ Value MemoryForwarding::value_at_end(BlockId block, const Key& key, const Addres
 			if (may_clobber(inst, key, want, type, typed))
 				return Value::none();
 		}
+		// (An exception or a kept code address enters such a block from
+		// code that no predecessor edge names.)
+		if ((cfg_.flags[block] & (BF_HANDLER | BF_ADDRESS)) != 0)
+			return Value::none();
 		if (cfg_.pred_count(block) == 1)
 		{
 			block = cfg_.preds[cfg_.pred_first[block]];
