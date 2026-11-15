@@ -1,0 +1,71 @@
+declare function @make(%result : ptr [pass=indirect_result, alias=exclusive_result, object_bytes=24], %x : i32) -> void
+declare function @next() -> void
+declare function @pair(%x : i32) -> obj<8x4> [result_classes=sse]
+
+function @discarded(%x : i32) -> i32 [binding=strong] {
+  slot $ignored : obj<24x8>
+
+  block ^entry:
+    %result = addr $ignored
+    call void @make(%result, %x)
+    return i32 %x
+}
+function @read_at_return(%x : i32) -> i64 [binding=strong] {
+  slot $value : obj<24x8>
+
+  block ^entry:
+    %result = addr $value
+    call void @make(%result, %x)
+    %first = load typed i64 %result
+    %at = index i8 [projection=field] %result, 16
+    %third = load typed i64 %at
+    %sum = binary add i64 %first, %third
+    return i64 %sum
+}
+function @read_later(%x : i32) -> i64 [binding=strong] {
+  slot $aggregate__1 : obj<24x8>
+
+  block ^entry:
+    %t1 = addr $aggregate__1
+    call void @make(%t1, %x)
+    %t2 = load i64 %t1
+    call void @next()
+    return i64 %t2
+}
+function @value_read_whole(%x : i32) -> i64 [binding=strong] {
+  slot $value : obj<8x4>
+
+  block ^entry:
+    %made = call obj<8x4> @pair(%x)
+    %at = addr $value
+    copyobj 8x4 %made, %at
+    %whole = load i64 %at
+    return i64 %whole
+}
+function @value_read_in_halves(%x : i32) -> f32 [binding=strong] {
+  slot $aggregate__1 : obj<8x4>
+
+  block ^entry:
+    %made = call obj<8x4> @pair(%x)
+    %t2 = addr $aggregate__1
+    copyobj 8x4 %made, %t2
+    %t3 = load i64 %t2
+    %t4 = convert trunc u32 i64 %t3
+    %low = copy f32 %t4
+    %t6 = binary ushr i64 %t3, 32
+    %t7 = convert trunc u32 i64 %t6
+    %high = copy f32 %t7
+    %sum = binary add f32 %low, %high
+    return f32 %sum
+}
+function @value_half_read(%x : i32) -> f32 [binding=strong] {
+  slot $value : obj<8x4>
+
+  block ^entry:
+    %made = call obj<8x4> @pair(%x)
+    %at = addr $value
+    copyobj 8x4 %made, %at
+    %high_at = index i8 [projection=field] %at, 4
+    %high = load typed f32 %high_at
+    return f32 %high
+}

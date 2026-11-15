@@ -40,6 +40,10 @@ struct SlotFacts
 	bool partial = false;                               // fixed fields split; untiled bytes keep their original storage
 	bool call_written = false;                          // a call returns its object into the slot
 	bool copied_out = false;                            // a copy reads the slot whole
+	bool zeroed = false;                                // a zero fill writes a field
+	uint32_t fills = 0;                                 // object values and calls' results written over the whole slot
+	bool read_apart = false;                            // a load does not follow such a fill at once
+	std::vector<Field> direct;                          // the distinct loads of a slot that only fills write
 	std::vector<Field> fields;                          // typed accesses
 	std::vector<uint64_t> recurrent;                    // fields written on every pass of a loop
 	std::vector<std::pair<uint64_t, uint64_t>> indexed; // ranges accessed through bounded variable indices
@@ -93,9 +97,12 @@ private:
 	uint64_t address_extent(Value v) const { return !v.is(ValueKind::Temp) || extent_.empty() ? 0 : extent_[v.index]; }
 	void escape(Value v);
 	void analyze();
+	void fill(Value storage, uint64_t bytes);
+	void read(Value storage);
+	bool in_place(const SlotFacts& facts) const;
 	bool scalarize_partial_copies();
 	void mark_recurrent_fields();
-	void access(Value storage, Type type, bool store);
+	void access(Value storage, Type type, bool store, bool zero = false);
 	void span(Value storage, uint64_t bytes, bool read = false);
 	bool settle(SlotFacts& facts, uint64_t size, SlotId slot);
 	uint64_t packable(SlotFacts& facts, uint64_t size) const;
@@ -119,6 +126,8 @@ private:
 	std::vector<SlotAddress> address_; // per temp (slot kNoId: none)
 	std::vector<uint64_t> extent_;     // maximum additional offset of a bounded address
 	std::vector<SlotFacts> facts_;     // per slot
+	// The slots filled in this block with no write of other memory since.
+	std::vector<SlotId> filled_;
 	std::vector<SlotCopy> copies_;
 	bool partial_copy_ = false;
 	std::vector<uint32_t> first_field_; // per slot: first new slot of its fields (kNoId: kept)
@@ -149,7 +158,7 @@ void AggregateSlots::escape(Value v)
 		facts_[v.index].candidate = false;
 }
 
-void AggregateSlots::access(Value storage, Type type, bool store)
+void AggregateSlots::access(Value storage, Type type, bool store, bool zero)
 {
 	SlotAddress a;
 	if (storage.is(ValueKind::Slot))
@@ -175,6 +184,7 @@ void AggregateSlots::access(Value storage, Type type, bool store)
 		return;
 	}
 	facts_[a.slot].fields.push_back(Field{ static_cast<uint64_t>(a.offset), type, false });
+	facts_[a.slot].zeroed = facts_[a.slot].zeroed || zero;
 	if (type.kind() == TypeKind::I64 && a.offset % 8 == 0)
 		facts_[a.slot].wholes.push_back(std::make_pair(static_cast<uint64_t>(a.offset), !store));
 	if (store)
@@ -212,10 +222,17 @@ void AggregateSlots::analyze()
 	copies_.clear();
 	partial_copy_ = false;
 	for (BlockId b : body_.layout)
+	{
+		filled_.clear();
 		for (InstId i = body_.blocks[b].first; i != kNoId; i = body_.instructions[i].next)
 		{
 			const Instruction& inst = body_.instructions[i];
 			SlotAddress a;
+			// (A write to a slot of the function writes no other slot.)
+			const bool stores = inst.op == Opcode::Store || inst.op == Opcode::CopyObject;
+			if ((stores || inst.op == Opcode::ZeroInit) && !inst.ops[stores ? 1 : 0].is(ValueKind::Slot) &&
+				!address_of(inst.ops[stores ? 1 : 0], a))
+				filled_.clear();
 			switch (inst.op)
 			{
 			case Opcode::Addr:
@@ -268,6 +285,7 @@ void AggregateSlots::analyze()
 			case Opcode::Load:
 				if ((inst.flags & IF_VOLATILE) != 0)
 					break;
+				read(inst.ops[0]);
 				access(inst.ops[0], inst.type, false);
 				continue;
 			case Opcode::Store:
@@ -287,7 +305,10 @@ void AggregateSlots::analyze()
 					if (inst.ops[0].index < body_.parameter_count)
 						escape(inst.ops[1]);
 					else
+					{
 						span(inst.ops[1], static_cast<uint64_t>(inst.immediate));
+						fill(inst.ops[1], static_cast<uint64_t>(inst.immediate));
+					}
 					continue;
 				}
 				span(inst.ops[0], static_cast<uint64_t>(inst.immediate), true);
@@ -323,7 +344,7 @@ void AggregateSlots::analyze()
 				continue;
 			case Opcode::ZeroInit:
 				if (scalar_zero(inst))
-					access(inst.ops[0], filler_type(static_cast<uint64_t>(inst.immediate)), true);
+					access(inst.ops[0], filler_type(static_cast<uint64_t>(inst.immediate)), true, true);
 				else
 					span(inst.ops[0], static_cast<uint64_t>(inst.immediate));
 				continue;
@@ -336,6 +357,7 @@ void AggregateSlots::analyze()
 				// the call (rewrite), as a copy from an object value.
 				const Signature* sig = c_.program.call_boundary(inst);
 				const Parameter* params = sig != nullptr ? c_.program.parameters_of(*sig) : nullptr;
+				filled_.clear();
 				for (unsigned k = 0; k < 3; ++k)
 					escape(inst.ops[k]);
 				for (uint32_t k = 0; k < inst.extra_count; ++k)
@@ -349,6 +371,7 @@ void AggregateSlots::analyze()
 					{
 						span(v, storage_bytes(body_.slots[r.slot].type));
 						facts_[r.slot].call_written = true;
+						fill(v, storage_bytes(body_.slots[r.slot].type));
 					}
 					else
 						escape(v);
@@ -358,12 +381,56 @@ void AggregateSlots::analyze()
 			default:
 				break;
 			}
+			if (!is_pure(inst))
+				filled_.clear();
 			for_each_operand(body_, const_cast<Instruction&>(inst), [&](Value& v) { escape(v); });
 		}
+	}
 	for (BlockId b : body_.layout)
 		for (InstId i = body_.blocks[b].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
 			i = body_.instructions[i].next)
 			for_each_operand(body_, body_.instructions[i], [&](Value& v) { escape(v); });
+}
+
+// An object value or a call's result written to the storage: a fill, when it covers a whole slot.
+void AggregateSlots::fill(Value storage, uint64_t bytes)
+{
+	SlotAddress a = { storage.is(ValueKind::Slot) ? storage.index : kNoId, 0 };
+	if ((!storage.is(ValueKind::Slot) && !address_of(storage, a)) || a.offset != 0 ||
+		bytes != storage_bytes(body_.slots[a.slot].type))
+		return;
+	++facts_[a.slot].fills;
+	filled_.push_back(a.slot);
+}
+
+// A load of the storage: apart, unless it follows a fill of its slot with no write of other memory between.
+void AggregateSlots::read(Value storage)
+{
+	SlotAddress a = { storage.is(ValueKind::Slot) ? storage.index : kNoId, 0 };
+	if ((storage.is(ValueKind::Slot) || address_of(storage, a)) &&
+		std::find(filled_.begin(), filled_.end(), a.slot) == filled_.end())
+		facts_[a.slot].read_apart = true;
+}
+
+// A slot that only fills write, each read by the loads that follow it at
+// once, is as a split leaves a fill: its value in a slot of its own, each
+// field loaded there. A field with one load has that form whatever the
+// load's width (a packed field's load narrows to its one reader). Another
+// split would fill a new slot and load the same fields again.
+bool AggregateSlots::in_place(const SlotFacts& facts) const
+{
+	const std::vector<Field>& fields = facts.fields;
+	size_t k = 0, last = fields.size();
+	for (const Field& load : facts.direct) // (in the fields' order)
+	{
+		while (k < fields.size() && fields[k].offset + storage_bytes(fields[k].type) <= load.offset)
+			++k;
+		if (k == fields.size() || k == last || load.offset < fields[k].offset ||
+			load.offset + storage_bytes(load.type) > fields[k].offset + storage_bytes(fields[k].type))
+			return false;
+		last = k;
+	}
+	return facts.fills != 0;
 }
 
 // Splitting every field of a large copied object can turn cold state into
@@ -506,18 +573,24 @@ bool widen_integer_fields(SlotFacts& facts, uint64_t size)
 	return true;
 }
 
-bool AggregateSlots::settle(SlotFacts& facts, uint64_t size, SlotId slot)
+// The accesses in offset order, each descriptor once.
+void distinct(std::vector<Field>& fields)
 {
-	std::vector<Field>& fields = facts.fields;
-	// Access frequency does not change the storage shape. Collapse repeated
-	// descriptors before testing overlap, and inspect only intersecting ranges.
-	// Scalar widths and the finite type vocabulary bound each overlap window.
 	std::sort(fields.begin(), fields.end(), [](const Field& x, const Field& y) {
 		return x.offset < y.offset || (x.offset == y.offset && x.type.kind() < y.type.kind());
 	});
 	fields.erase(std::unique(fields.begin(), fields.end(),
 					 [](const Field& x, const Field& y) { return x.offset == y.offset && x.type == y.type; }),
 		fields.end());
+}
+
+bool AggregateSlots::settle(SlotFacts& facts, uint64_t size, SlotId slot)
+{
+	std::vector<Field>& fields = facts.fields;
+	// Access frequency does not change the storage shape. Collapse repeated
+	// descriptors before testing overlap, and inspect only intersecting ranges.
+	// Scalar widths and the finite type vocabulary bound each overlap window.
+	distinct(fields);
 	facts.partial = !facts.spans.empty() && size > 8 * kMaxFields;
 	if (facts.partial && facts.recurrent.empty())
 		return false;
@@ -1537,6 +1610,16 @@ bool AggregateSlots::run()
 		// fields would be loaded after the call and stored again.
 		if (facts.call_written && facts.copied_out)
 			continue;
+		// (Before the fields settle: the typed accesses are then the loads.)
+		const bool filled = facts.fills != 0 && facts.spans.size() == facts.fills && facts.stores.empty() &&
+			facts.indexed.empty() && !facts.read_apart;
+		if (facts.candidate && filled)
+		{
+			facts.direct = facts.fields;
+			distinct(facts.direct);
+		}
+		else
+			facts.fills = 0;
 		if (!facts.candidate || !settle(facts, storage_bytes(type), s))
 			continue;
 		settled[s] = 1;
@@ -1554,6 +1637,13 @@ bool AggregateSlots::run()
 		if ((facts.forced & ~facts.packed) != 0)
 			continue;
 		pack(facts);
+		// A field slot that only loads and stores of its type access is a
+		// split's product: its one field would be the slot under a new name.
+		const bool whole = body_.slots[s].kind == SlotKind::Field && !facts.zeroed && facts.spans.empty() &&
+			facts.indexed.empty() && facts.fields.size() == 1 && facts.fields[0].offset == 0 &&
+			facts.fields[0].type == body_.slots[s].type;
+		if (whole || in_place(facts))
+			continue;
 		first_field_[s] = static_cast<uint32_t>(body_.slots.size());
 		for (const Field& f : facts.fields)
 			body_.slots.push_back(Slot{ 0, SlotKind::Field, 0, 0, f.type });
