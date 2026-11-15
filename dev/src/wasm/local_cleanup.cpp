@@ -1,4 +1,5 @@
 #include "wasm/mir.h"
+#include "wasm/local_lifetimes.h"
 
 namespace wasm {
 
@@ -249,6 +250,8 @@ void cleanup_locals(Function& function, bool optimize)
 			auto& operand = function.operands[inst.operands.first];
 			operand = uses[operand];
 		}
+	if (optimize)
+		reuse_locals(function);
 }
 
 } // namespace wasm

@@ -1,0 +1,89 @@
+{
+  "source": true,
+  "llvm_interop": true,
+  "exports": [
+    "visit"
+  ],
+  "calls": [
+    {
+      "export": "observe",
+      "args": [
+        "0",
+        "0"
+      ],
+      "result": "17"
+    },
+    {
+      "export": "observe",
+      "args": [
+        "3",
+        "1"
+      ],
+      "result": "17"
+    },
+    {
+      "export": "observe",
+      "args": [
+        "11",
+        "32"
+      ],
+      "result": "17"
+    },
+    {
+      "export": "observe",
+      "args": [
+        "2147483647",
+        "100"
+      ],
+      "result": "17"
+    },
+    {
+      "export": "observe",
+      "args": [
+        "-1",
+        "128"
+      ],
+      "result": "17"
+    },
+    {
+      "export": "cycle",
+      "args": [
+        "0"
+      ],
+      "result": "6"
+    },
+    {
+      "export": "cycle",
+      "args": [
+        "1"
+      ],
+      "result": "17"
+    },
+    {
+      "export": "cycle",
+      "args": [
+        "7"
+      ],
+      "result": "70006"
+    },
+    {
+      "export": "cycle",
+      "args": [
+        "80"
+      ],
+      "result": "-95668216"
+    }
+  ],
+  "quality": {
+    "levels": [
+      1,
+      2,
+      3
+    ],
+    "functions": {
+      "visit": {
+        "locals": 40
+      }
+    }
+  }
+}
