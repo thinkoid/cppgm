@@ -49,6 +49,11 @@ const size_t kPairedCode = 12;
 // pass hold different elements, and each element's passes keep their order.
 // The elements stay in registers of lanes for the whole vector loop, which
 // does K passes a round (one copy of the lanes' code per register).
+//
+// A pair sum is two products of sign-extended 16-bit loads, added, where each
+// pass takes the next two elements of each array (a[2i] * b[2i] +
+// a[2i + 1] * b[2i + 1]). One operation makes a 32-bit lane's sum from the two
+// word pairs of that lane (pmaddwd), so the lanes load whole registers of words.
 class LoopVectorizer
 {
 public:
@@ -92,6 +97,7 @@ private:
 		Linear at;
 		Value base, object;
 		uint32_t group;
+		bool pair; // a pair sum's load: two elements a pass
 	};
 	// The accesses of one base, apart by known offsets.
 	struct Group
@@ -116,6 +122,12 @@ private:
 		int64_t bound = 0;
 		bool upper = false;
 	};
+	struct PairSum
+	{
+		InstId add;
+		InstId first[2], second[2]; // the loads of each array, at its lower address and the next
+		bool live;                  // only lanes read the sum
+	};
 
 	bool in_body(Value v) const;
 	bool narrow_fits(Value v, Type type, unsigned depth) const;
@@ -128,6 +140,10 @@ private:
 	bool read_exit();
 	bool read_code();
 	bool fixed_address(Value v) const;
+	bool word_product(Value v, InstId loads[2], InstId inner[3]) const;
+	bool next_word(InstId low, InstId high) const;
+	void read_pair_sums();
+	const PairSum* pair_sum(InstId id, unsigned& role) const;
 	void read_cells();
 	bool count_modulo(Value v, int64_t& modulus, int64_t& first) const;
 	void read_lane_cells();
@@ -212,6 +228,7 @@ private:
 	std::vector<Induction> inductions_;
 	std::vector<Reduction> reductions_;
 	std::vector<LaneCell> lane_cells_;
+	std::vector<PairSum> pair_sums_;
 	int64_t copies_ = 1; // copies of the lanes' code a round of the vector loop runs
 	std::vector<InstId> code_;
 	std::vector<Access> accesses_;
@@ -750,6 +767,106 @@ bool LoopVectorizer::fixed_address(Value v) const
 // last. Or a phi's sum stored on each pass: the scalar loop, which runs last,
 // stores it. Both accesses leave the code the lanes read. Nothing else in the
 // loop may reach the cell: read_accesses and read_dependences see to that.
+// Whether `v` is a 32-bit product of two sign-extended 16-bit loads of the
+// block: the loads, and the product with its extensions.
+bool LoopVectorizer::word_product(Value v, InstId loads[2], InstId inner[3]) const
+{
+	if (!in_body(v))
+		return false;
+	inner[0] = body_.temps[v.index].def;
+	const Instruction& product = body_.instructions[inner[0]];
+	if (product.op != Opcode::Binary || static_cast<BinaryOp>(product.sub) != BinaryOp::Mul ||
+		!product.type.is_integer() || lane_bytes(product.type) != 4)
+		return false;
+	for (unsigned k = 0; k < 2; ++k)
+	{
+		if (!in_body(product.ops[k]))
+			return false;
+		inner[1 + k] = body_.temps[product.ops[k].index].def;
+		const Instruction& extension = body_.instructions[inner[1 + k]];
+		if (extension.op != Opcode::Convert || static_cast<ConvertOp>(extension.sub) != ConvertOp::SExt ||
+			convert_source_type(extension).kind() != TypeKind::I16 || lane_bytes(extension.type) != 4 ||
+			!in_body(extension.ops[0]))
+			return false;
+		loads[k] = body_.temps[extension.ops[0].index].def;
+		const Instruction& load = body_.instructions[loads[k]];
+		if (load.op != Opcode::Load || load.type.kind() != TypeKind::I16)
+			return false;
+	}
+	return true;
+}
+
+// Whether each pass loads two words at `low` and the next two after them, and
+// `high` loads the second of them.
+bool LoopVectorizer::next_word(InstId low, InstId high) const
+{
+	Linear a, b;
+	Value a_base = Value::none(), b_base = Value::none(), a_object = Value::none(), b_object = Value::none();
+	return address(body_.instructions[low].ops[0], a, a_base, a_object) &&
+		address(body_.instructions[high].ops[0], b, b_base, b_object) && a_base == b_base && a.term == b.term &&
+		a.term_scale == b.term_scale && a.scale == 4 && b.scale == 4 && b.offset == a.offset + 2;
+}
+
+void LoopVectorizer::read_pair_sums()
+{
+	pair_sums_.clear();
+	for (InstId id : code_)
+	{
+		const Instruction& add = body_.instructions[id];
+		InstId loads[2][2], inner[2][3];
+		if (add.op != Opcode::Binary || static_cast<BinaryOp>(add.sub) != BinaryOp::Add || !add.type.is_integer() ||
+			lane_bytes(add.type) != 4 || !word_product(add.ops[0], loads[0], inner[0]) ||
+			!word_product(add.ops[1], loads[1], inner[1]))
+			continue;
+		// Which product takes the lower words, and which of its loads is of
+		// which array.
+		PairSum sum{ id, { kNoId, kNoId }, { kNoId, kNoId }, false };
+		for (unsigned low = 0; low < 2 && sum.first[0] == kNoId; ++low)
+			for (unsigned crossed = 0; crossed < 2 && sum.first[0] == kNoId; ++crossed)
+			{
+				const InstId* a = loads[low];
+				const InstId* b = loads[1 - low];
+				if (next_word(a[0], b[crossed]) && next_word(a[1], b[1 - crossed]))
+					sum = PairSum{ id, { a[0], a[1] }, { b[crossed], b[1 - crossed] }, false };
+			}
+		if (sum.first[0] == kNoId)
+			continue;
+		// Only the sum reads the products, and only they their parts.
+		bool own = true;
+		for (InstId i = body_.blocks[b_].first; i != kNoId && own; i = body_.instructions[i].next)
+		{
+			const Instruction& reader = body_.instructions[i];
+			const bool part = i == id || i == inner[0][0] || i == inner[0][1] || i == inner[0][2] || i == inner[1][0] ||
+				i == inner[1][1] || i == inner[1][2];
+			for_each_operand(body_, reader, [&](const Value& v) {
+				if (part || !in_body(v))
+					return;
+				const InstId def = body_.temps[v.index].def;
+				for (unsigned k = 0; k < 2; ++k)
+					own = own && def != inner[k][0] && def != inner[k][1] && def != inner[k][2] && def != loads[k][0] &&
+						def != loads[k][1];
+			});
+		}
+		if (own)
+			pair_sums_.push_back(sum);
+	}
+}
+
+// The live pair sum that `id` is the sum of (`role` 0), a first load of (1)
+// or a second (2), or null.
+const LoopVectorizer::PairSum* LoopVectorizer::pair_sum(InstId id, unsigned& role) const
+{
+	for (const PairSum& sum : pair_sums_)
+	{
+		if (!sum.live)
+			continue;
+		role = id == sum.add ? 0 : id == sum.first[0] || id == sum.first[1] ? 1 : 2;
+		if (role != 2 || id == sum.second[0] || id == sum.second[1])
+			return &sum;
+	}
+	return nullptr;
+}
+
 void LoopVectorizer::read_cells()
 {
 	for (size_t i = 0; i < code_.size(); ++i)
@@ -1042,13 +1159,21 @@ void LoopVectorizer::mark_uses()
 			mark(inst.ops[1], in_scalar_);
 			continue;
 		}
+		unsigned role = 0;
 		if (inst.op == Opcode::Load)
 		{
-			mark(inst.ops[0], in_scalar_);
+			// (The lanes of a pair sum load at its first loads' addresses.)
+			if (pair_sum(code_[at], role) == nullptr || role == 1 || in_scalar_[inst.result])
+				mark(inst.ops[0], in_scalar_);
 			continue;
 		}
 		if (inst.result == kNoId)
 			continue;
+		// (The sum's lanes come from the words: its products have none.)
+		bool pairs = false;
+		for (PairSum& sum : pair_sums_)
+			if (sum.add == code_[at])
+				pairs = sum.live = in_wide_[inst.result] && !in_scalar_[inst.result];
 		// (A pack that saturates reads what the selects limit, not them.)
 		bool to_unsigned;
 		unsigned from;
@@ -1057,7 +1182,7 @@ void LoopVectorizer::mark_uses()
 			mark(packed, in_wide_);
 		for (const Value& v : inst.ops)
 		{
-			if (in_wide_[inst.result] && packed.is(ValueKind::None))
+			if (in_wide_[inst.result] && packed.is(ValueKind::None) && !pairs)
 				mark(v, in_wide_);
 			if (in_scalar_[inst.result])
 				mark(v, in_scalar_);
@@ -1179,10 +1304,19 @@ bool LoopVectorizer::read_accesses()
 		const Instruction& inst = body_.instructions[id];
 		if (inst.op != Opcode::Load && inst.op != Opcode::Store)
 			continue;
+		unsigned role = 0;
 		Access a{ id, inst.type, inst.op == Opcode::Store, (inst.flags & IF_TYPED) != 0, Linear(), Value::none(),
-			Value::none(), 0 };
+			Value::none(), 0, pair_sum(id, role) != nullptr };
 		if (!address(inst.ops[a.store ? 1 : 0], a.at, a.base, a.object))
 			return false;
+		if (a.pair)
+		{
+			// (Two elements a pass, upward.)
+			if (!accesses_.empty() && backward_)
+				return false;
+			accesses_.push_back(a);
+			continue;
+		}
 		const int64_t bytes = static_cast<int64_t>(lane_bytes(inst.type));
 		// A read of one address: every pass reads what was there before the
 		// loop, once its stores are apart from it (read_dependences), so the
@@ -1209,7 +1343,8 @@ bool LoopVectorizer::read_accesses()
 			// happens in the loop's order only if nothing else reaches it.
 			const uint32_t flags = body_.instructions[r.store].flags &
 				(r.load != kNoId ? body_.instructions[r.load].flags : IF_TYPED);
-			Access a{ r.store, r.type, true, (flags & IF_TYPED) != 0, Linear(), Value::none(), Value::none(), 0 };
+			Access a{ r.store, r.type, true, (flags & IF_TYPED) != 0, Linear(), Value::none(), Value::none(), 0,
+				false };
 			if (!address(r.cell, a.at, a.base, a.object))
 				return false;
 			a.at = Linear();
@@ -1493,6 +1628,8 @@ bool LoopVectorizer::read_dependences()
 				continue;
 			if (first.group == later.group)
 			{
+				if (first.pair || later.pair)
+					return false;
 				const int64_t apart = (later.at.offset - first.at.offset) * (backward_ ? -1 : 1);
 				const int64_t whole = static_cast<int64_t>(lanes_) * std::max(first.at.scale, later.at.scale);
 				if ((apart == 0 && first.at.scale == later.at.scale) || apart >= whole || apart <= -whole)
@@ -1523,6 +1660,7 @@ bool LoopVectorizer::analyze(uint32_t loop)
 		return false;
 	read_cells();
 	read_lane_cells();
+	read_pair_sums();
 	mark_uses();
 	return read_accesses() && lane_cells_apart() && choose_lanes() && lane_cells_fit() && read_dependences();
 }
@@ -2162,11 +2300,13 @@ bool LoopVectorizer::widen_reduction_select(const Instruction& inst, Value mask,
 
 void LoopVectorizer::widen(const Instruction& inst, InstId origin)
 {
+	unsigned role = 0;
 	switch (inst.op)
 	{
 	case Opcode::Load:
-		// (A fixed read's lanes are set before the loop.)
-		if (std::find(fixed_reads_.begin(), fixed_reads_.end(), origin) != fixed_reads_.end())
+		// (A fixed read's lanes are set before the loop; a pair sum loads its own.)
+		if (std::find(fixed_reads_.begin(), fixed_reads_.end(), origin) != fixed_reads_.end() ||
+			pair_sum(origin, role) != nullptr)
 			break;
 		wides_[inst.result] = widen_load(
 			lane_address(scalar(inst.ops[0]), inst.type), lanes_ * lane_bytes(inst.type), origin);
@@ -2181,6 +2321,16 @@ void LoopVectorizer::widen(const Instruction& inst, InstId origin)
 		wides_[inst.result] = wides_[inst.ops[0].index];
 		break;
 	case Opcode::Binary:
+		if (const PairSum* sum = pair_sum(origin, role))
+		{
+			Value words[2];
+			for (unsigned k = 0; k < 2; ++k)
+				words[k] = k == 1 && sum->first[1] == sum->first[0]
+					? words[0]
+					: widen_load(scalar(body_.instructions[sum->first[k]].ops[0]), lanes_ * 4, sum->first[k]);
+			wides_[inst.result] = vector(VectorOp::Pmaddwd, words[0], words[1]);
+			break;
+		}
 		widen_binary(inst);
 		break;
 	case Opcode::Unary:

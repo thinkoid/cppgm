@@ -1,0 +1,386 @@
+global @x : obj<128x2> [binding=internal, object=_ZL1x] = {
+  zero 128
+}
+global @y : obj<128x2> [binding=internal, object=_ZL1y] = {
+  zero 128
+}
+global @sums : obj<128x4> [binding=internal, object=_ZL4sums] = {
+  zero 128
+}
+
+function @dot_product(%t : ptr, %w : ptr, %n : i32) -> i32 [binding=internal, object=_ZL11dot_productPKsS0_i, no_inline=yes] {
+  block ^entry:
+    %t1 = cmp gt i32 %n, 0
+    branch %t1, ^loop_preheader_1, ^for_end_7
+
+  block ^loop_preheader_1:
+    %t2 = cmp uge i32 %n, 8
+    %t3 = binary and i64 %t1, %t2
+    branch %t3, ^loop_preheader_2, ^loop_preheader_5
+
+  block ^loop_preheader_2:
+    %t4 = binary add i32 %n, -8
+    %t5 = vector pzero
+    jump ^wide_loop_3
+
+  block ^wide_loop_3:
+    %t6 = phi v128 [^loop_preheader_2: %t5, ^wide_loop_3: %t14]
+    %t7 = phi i64 [^loop_preheader_2: 0, ^wide_loop_3: %t15]
+    %t8 = index inbounds i16 [projection=array_element] %t, %t7
+    %t9 = index inbounds i16 [projection=array_element] %w, %t7
+    %t10 = load v128 %t8
+    %t11 = load v128 %t9
+    %t12 = vector pmaddwd %t10, %t11
+    %t13 = vector psradi %t12, 8
+    %t14 = vector paddd %t6, %t13
+    %t15 = binary add nowrap i64 %t7, 8
+    %t16 = convert trunc exact i32 i64 %t15
+    %t17 = cmp le i32 %t16, %t4
+    branch %t17, ^wide_loop_3, ^loop_exit_4
+
+  block ^loop_exit_4:
+    %t18 = vector pshufd %t14, 78
+    %t19 = vector paddd %t14, %t18
+    %t20 = vector pshufd %t19, 177
+    %t21 = vector paddd %t19, %t20
+    %t22 = vector toi32 %t21
+    %t23 = cmp lt i32 %t16, %n
+    branch %t23, ^loop_preheader_5, ^for_end_7
+
+  block ^loop_preheader_5:
+    %t24 = phi i32 [^loop_preheader_1: 0, ^loop_exit_4: %t22]
+    %t25 = phi i32 [^loop_preheader_1: 0, ^loop_exit_4: %t16]
+    %t26 = convert sext i64 i32 %t25
+    jump ^for_body_6
+
+  block ^for_body_6:
+    %t27 = phi i32 [^for_body_6: %t45, ^loop_preheader_5: %t24]
+    %t28 = phi i64 [^for_body_6: %t46, ^loop_preheader_5: %t26]
+    %t29 = index inbounds i16 [projection=array_element] %t, %t28
+    %t30 = load typed i16 %t29
+    %t31 = convert sext i32 i16 %t30
+    %t32 = index inbounds i16 [projection=array_element] %w, %t28
+    %t33 = load typed i16 %t32
+    %t34 = convert sext i32 i16 %t33
+    %t35 = binary mul nowrap i32 %t31, %t34
+    %t36 = index i16 [projection=array_element] %t29, 1
+    %t37 = load typed i16 %t36
+    %t38 = convert sext i32 i16 %t37
+    %t39 = index i16 [projection=array_element] %t32, 1
+    %t40 = load typed i16 %t39
+    %t41 = convert sext i32 i16 %t40
+    %t42 = binary mul nowrap i32 %t38, %t41
+    %t43 = binary add nowrap i32 %t35, %t42
+    %t44 = binary shr i32 %t43, 8
+    %t45 = binary add nowrap i32 %t44, %t27
+    %t46 = binary add nowrap i64 %t28, 2
+    %t47 = convert trunc exact i32 i64 %t46
+    %t48 = cmp lt i32 %t47, %n
+    branch %t48, ^for_body_6, ^for_end_7
+
+  block ^for_end_7:
+    %t49 = phi i32 [^entry: 0, ^for_body_6: %t45, ^loop_exit_4: %t22]
+    return i32 %t49
+}
+function @pair_sums(%a : ptr, %b : ptr, %out : ptr) -> void [binding=internal, object=_ZL9pair_sumsPKsS0_Pii, no_inline=yes] {
+  block ^entry:
+    jump ^unrolled_1
+
+  block ^unrolled_1:
+    %t1 = phi i64 [^unrolled_1: %t18, ^entry: 0]
+    %t2 = convert trunc exact i32 i64 %t1
+    %t3 = binary mul nowrap i32 %t2, 2
+    %t4 = index inbounds i16 [projection=array_element] %a, %t3
+    %t5 = index inbounds i16 [projection=array_element] %b, %t3
+    %t6 = load v128 %t4
+    %t7 = load v128 %t5
+    %t8 = vector pmaddwd %t6, %t7
+    %t9 = index inbounds i32 [projection=array_element] %out, %t1
+    store v128 %t8, %t9
+    %t10 = binary add nowrap i32 %t2, 4
+    %t11 = binary mul nowrap i32 %t10, 2
+    %t12 = index inbounds i16 [projection=array_element] %a, %t11
+    %t13 = index inbounds i16 [projection=array_element] %b, %t11
+    %t14 = load v128 %t12
+    %t15 = load v128 %t13
+    %t16 = vector pmaddwd %t14, %t15
+    %t17 = index inbounds i32 [projection=array_element] %t9, 4
+    store v128 %t16, %t17
+    %t18 = binary add nowrap i64 %t1, 8
+    %t19 = convert trunc exact i32 i64 %t18
+    %t20 = cmp ne i32 %t19, 32
+    branch %t20, ^unrolled_1, ^loop_exit_2
+
+  block ^loop_exit_2:
+    return void
+}
+function @energy(%a : ptr, %n : i32) -> u32 [binding=internal, object=_ZL6energyPKsi, no_inline=yes] {
+  block ^entry:
+    %t1 = cmp gt i32 %n, 0
+    branch %t1, ^loop_preheader_1, ^for_end_7
+
+  block ^loop_preheader_1:
+    %t2 = cmp uge i32 %n, 8
+    %t3 = binary and i64 %t1, %t2
+    branch %t3, ^loop_preheader_2, ^loop_preheader_5
+
+  block ^loop_preheader_2:
+    %t4 = binary add i32 %n, -8
+    %t5 = vector pzero
+    jump ^wide_loop_3
+
+  block ^wide_loop_3:
+    %t6 = phi v128 [^loop_preheader_2: %t5, ^wide_loop_3: %t12]
+    %t7 = phi i64 [^loop_preheader_2: 0, ^wide_loop_3: %t13]
+    %t8 = index inbounds i16 [projection=array_element] %a, %t7
+    %t9 = load v128 %t8
+    %t10 = vector pmaddwd %t9, %t9
+    %t11 = vector psrldi %t10, 4
+    %t12 = vector paddd %t6, %t11
+    %t13 = binary add nowrap i64 %t7, 8
+    %t14 = convert trunc exact i32 i64 %t13
+    %t15 = cmp le i32 %t14, %t4
+    branch %t15, ^wide_loop_3, ^loop_exit_4
+
+  block ^loop_exit_4:
+    %t16 = vector pshufd %t12, 78
+    %t17 = vector paddd %t12, %t16
+    %t18 = vector pshufd %t17, 177
+    %t19 = vector paddd %t17, %t18
+    %t20 = vector toi32 %t19
+    %t21 = copy u32 %t20
+    %t22 = cmp lt i32 %t14, %n
+    branch %t22, ^loop_preheader_5, ^for_end_7
+
+  block ^loop_preheader_5:
+    %t23 = phi i32 [^loop_preheader_1: 0, ^loop_exit_4: %t20]
+    %t24 = phi i32 [^loop_preheader_1: 0, ^loop_exit_4: %t14]
+    %t25 = copy u32 %t23
+    %t26 = convert sext i64 i32 %t24
+    jump ^for_body_6
+
+  block ^for_body_6:
+    %t27 = phi u32 [^for_body_6: %t40, ^loop_preheader_5: %t25]
+    %t28 = phi i64 [^for_body_6: %t41, ^loop_preheader_5: %t26]
+    %t29 = index inbounds i16 [projection=array_element] %a, %t28
+    %t30 = load typed i16 %t29
+    %t31 = convert sext i32 i16 %t30
+    %t32 = binary mul nowrap i32 %t31, %t31
+    %t33 = index i16 [projection=array_element] %t29, 1
+    %t34 = load typed i16 %t33
+    %t35 = convert sext i32 i16 %t34
+    %t36 = binary mul nowrap i32 %t35, %t35
+    %t37 = binary add nowrap i32 %t32, %t36
+    %t38 = copy u32 %t37
+    %t39 = binary ushr u32 %t38, 4
+    %t40 = binary add u32 %t39, %t27
+    %t41 = binary add nowrap i64 %t28, 2
+    %t42 = convert trunc exact i32 i64 %t41
+    %t43 = cmp lt i32 %t42, %n
+    branch %t43, ^for_body_6, ^for_end_7
+
+  block ^for_end_7:
+    %t44 = phi u32 [^entry: 0, ^for_body_6: %t40, ^loop_exit_4: %t21]
+    return u32 %t44
+}
+function @apart(%t : ptr, %w : ptr) -> u32 [binding=internal, object=_ZL5apartPKsS0_i, no_inline=yes] {
+  block ^entry:
+    jump ^for_body_1
+
+  block ^for_body_1:
+    %t1 = phi u32 [^for_body_1: %t21, ^entry: 0]
+    %t2 = phi i64 [^for_body_1: %t18, ^entry: 0]
+    %t3 = index inbounds i16 [projection=array_element] %t, %t2
+    %t4 = load typed i16 %t3
+    %t5 = convert sext i32 i16 %t4
+    %t6 = index inbounds i16 [projection=array_element] %w, %t2
+    %t7 = load typed i16 %t6
+    %t8 = convert sext i32 i16 %t7
+    %t9 = binary mul nowrap i32 %t5, %t8
+    %t10 = index inbounds i16 [projection=array_element] %t3, 2
+    %t11 = load typed i16 %t10
+    %t12 = convert sext i32 i16 %t11
+    %t13 = index inbounds i16 [projection=array_element] %t6, 2
+    %t14 = load typed i16 %t13
+    %t15 = convert sext i32 i16 %t14
+    %t16 = binary mul nowrap i32 %t12, %t15
+    %t17 = binary add nowrap i32 %t9, %t16
+    %t18 = binary add nowrap i64 %t2, 2
+    %t19 = convert trunc exact i32 i64 %t18
+    %t20 = copy u32 %t17
+    %t21 = binary add u32 %t20, %t1
+    %t22 = cmp lt i32 %t19, 60
+    branch %t22, ^for_body_1, ^for_end_2
+
+  block ^for_end_2:
+    return u32 %t21
+}
+function @in_place(%a : ptr, %b : ptr) -> void [binding=internal, object=_ZL8in_placePsPKsi, no_inline=yes] {
+  block ^entry:
+    jump ^for_body_1
+
+  block ^for_body_1:
+    %t1 = phi i32 [^for_body_1: %t21, ^entry: 0]
+    %t2 = binary mul nowrap i32 %t1, 2
+    %t3 = index inbounds i16 [projection=array_element] %a, %t2
+    %t4 = load typed i16 %t3
+    %t5 = convert sext i32 i16 %t4
+    %t6 = index inbounds i16 [projection=array_element] %b, %t2
+    %t7 = load typed i16 %t6
+    %t8 = convert sext i32 i16 %t7
+    %t9 = binary mul nowrap i32 %t5, %t8
+    %t10 = binary add nowrap i32 %t2, 1
+    %t11 = index inbounds i16 [projection=array_element] %a, %t10
+    %t12 = load typed i16 %t11
+    %t13 = convert sext i32 i16 %t12
+    %t14 = index inbounds i16 [projection=array_element] %b, %t10
+    %t15 = load typed i16 %t14
+    %t16 = convert sext i32 i16 %t15
+    %t17 = binary mul nowrap i32 %t13, %t16
+    %t18 = binary add nowrap i32 %t9, %t17
+    %t19 = binary shr i32 %t18, 12
+    %t20 = convert trunc i16 i32 %t19
+    store typed i16 %t20, %t3
+    %t21 = binary add nowrap i32 %t1, 1
+    %t22 = cmp lt i32 %t21, 32
+    branch %t22, ^for_body_1, ^for_end_2
+
+  block ^for_end_2:
+    return void
+}
+function @main() -> i32 [role=entry, binding=strong, keep_alias=yes] {
+  block ^entry:
+    %t1 = addr @x
+    %t2 = addr @y
+    %t3 = vector fromi64 4294967296
+    %t4 = vector fromi64 12884901890
+    %t5 = vector punpcklqdq %t3, %t4
+    %t6 = vector pzero
+    %t7 = vector paddd %t6, %t5
+    %t8 = vector fromi32 1237
+    %t9 = vector pshufd %t8, 0
+    %t10 = vector fromi32 32768
+    %t11 = vector pshufd %t10, 0
+    %t12 = vector fromi32 911
+    %t13 = vector pshufd %t12, 0
+    %t14 = vector fromi32 32767
+    %t15 = vector pshufd %t14, 0
+    %t16 = vector fromi32 4
+    %t17 = vector pshufd %t16, 0
+    %t18 = vector psrlqi %t9, 32
+    %t19 = vector psrlqi %t13, 32
+    jump ^wide_loop_1
+
+  block ^wide_loop_1:
+    %t20 = phi v128 [^entry: %t7, ^wide_loop_1: %t47]
+    %t21 = phi i64 [^entry: 0, ^wide_loop_1: %t45]
+    %t22 = vector pmuludq %t20, %t9
+    %t23 = vector psrlqi %t20, 32
+    %t24 = vector pmuludq %t23, %t18
+    %t25 = vector pshufd %t22, 8
+    %t26 = vector pshufd %t24, 8
+    %t27 = vector punpckldq %t25, %t26
+    %t28 = vector psubd %t27, %t11
+    %t29 = vector pslldi %t28, 16
+    %t30 = vector psradi %t29, 16
+    %t31 = vector packssdw %t30, %t30
+    %t32 = index inbounds i16 [projection=array_element] %t1, %t21
+    %t33 = vector toi64 %t31
+    store i64 %t33, %t32
+    %t34 = vector pmuludq %t20, %t13
+    %t35 = vector pmuludq %t23, %t19
+    %t36 = vector pshufd %t34, 8
+    %t37 = vector pshufd %t35, 8
+    %t38 = vector punpckldq %t36, %t37
+    %t39 = vector psubd %t15, %t38
+    %t40 = vector pslldi %t39, 16
+    %t41 = vector psradi %t40, 16
+    %t42 = vector packssdw %t41, %t41
+    %t43 = index inbounds i16 [projection=array_element] %t2, %t21
+    %t44 = vector toi64 %t42
+    store i64 %t44, %t43
+    %t45 = binary add nowrap i64 %t21, 4
+    %t46 = convert trunc exact i32 i64 %t45
+    %t47 = vector paddd %t20, %t17
+    %t48 = cmp le i32 %t46, 60
+    branch %t48, ^wide_loop_1, ^for_end_2
+
+  block ^for_end_2:
+    %t49 = index inbounds i16 [projection=array_element] %t2, 62
+    store typed i16 -32768, %t49
+    %t50 = index inbounds i16 [projection=array_element] %t1, 62
+    store typed i16 -32768, %t50
+    %t51 = index inbounds i16 [projection=array_element] %t2, 63
+    store typed i16 32767, %t51
+    %t52 = index inbounds i16 [projection=array_element] %t1, 63
+    store typed i16 32767, %t52
+    %t53 = call i32 @dot_product(%t1, %t2, 64)
+    %t54 = copy u32 %t53
+    %t55 = binary mul u32 %t54, 31
+    %t56 = index inbounds i8 %t1, 2
+    %t57 = index inbounds i8 %t2, 6
+    %t58 = call i32 @dot_product(%t56, %t57, 26)
+    %t59 = copy u32 %t58
+    %t60 = binary add u32 %t55, %t59
+    %t61 = addr @sums
+    call void @pair_sums(%t1, %t2, %t61)
+    jump ^for_body_3
+
+  block ^for_body_3:
+    %t62 = phi u32 [^for_body_3: %t67, ^for_end_2: %t60]
+    %t63 = phi i64 [^for_body_3: %t68, ^for_end_2: 0]
+    %t64 = binary mul u32 %t62, 31
+    %t65 = index inbounds i32 [projection=array_element] %t61, %t63
+    %t66 = load typed u32 %t65
+    %t67 = binary add u32 %t64, %t66
+    %t68 = binary add nowrap i64 %t63, 1
+    %t69 = convert trunc exact i32 i64 %t68
+    %t70 = cmp lt i32 %t69, 32
+    branch %t70, ^for_body_3, ^for_end_4
+
+  block ^for_end_4:
+    %t71 = binary mul u32 %t67, 31
+    %t72 = call u32 @energy(%t1, 64)
+    %t73 = binary add u32 %t71, %t72
+    %t74 = index inbounds i8 %t2, 10
+    %t75 = call u32 @energy(%t74, 22)
+    %t76 = binary add u32 %t73, %t75
+    %t77 = binary mul u32 %t76, 31
+    %t78 = call u32 @apart(%t1, %t2)
+    %t79 = binary add u32 %t77, %t78
+    call void @in_place(%t1, %t2)
+    jump ^unrolled_5
+
+  block ^unrolled_5:
+    %t80 = phi u32 [^unrolled_5: %t101, ^for_end_4: %t79]
+    %t81 = phi i64 [^unrolled_5: %t102, ^for_end_4: 0]
+    %t82 = binary mul u32 %t80, 31
+    %t83 = index inbounds i16 [projection=array_element] %t1, %t81
+    %t84 = load typed u16 %t83
+    %t85 = convert zext u32 u16 %t84
+    %t86 = binary add u32 %t82, %t85
+    %t87 = binary mul u32 %t86, 31
+    %t88 = index inbounds i16 [projection=array_element] %t83, 1
+    %t89 = load typed u16 %t88
+    %t90 = convert zext u32 u16 %t89
+    %t91 = binary add u32 %t87, %t90
+    %t92 = binary mul u32 %t91, 31
+    %t93 = index inbounds i16 [projection=array_element] %t83, 2
+    %t94 = load typed u16 %t93
+    %t95 = convert zext u32 u16 %t94
+    %t96 = binary add u32 %t92, %t95
+    %t97 = binary mul u32 %t96, 31
+    %t98 = index inbounds i16 [projection=array_element] %t83, 3
+    %t99 = load typed u16 %t98
+    %t100 = convert zext u32 u16 %t99
+    %t101 = binary add u32 %t97, %t100
+    %t102 = binary add nowrap i64 %t81, 4
+    %t103 = convert trunc exact i32 i64 %t102
+    %t104 = cmp ne i32 %t103, 64
+    branch %t104, ^unrolled_5, ^loop_exit_6
+
+  block ^loop_exit_6:
+    %t105 = cmp eq u32 %t101, 2796917751
+    %t106 = select i32 %t105, 0, 1
+    return i32 %t106
+}
