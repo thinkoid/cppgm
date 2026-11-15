@@ -1,3 +1,3 @@
-template<class T> concept Integral = __is_integral(T);
+template<class T> concept Modular = requires(T value) { value % value; };
 struct Object {};
-int main() { return !Integral<int> || Integral<Object> || sizeof(Integral<void>) != sizeof(bool); }
+int main() { return !Modular<int> || Modular<Object> || sizeof(Modular<void>) != sizeof(bool); }

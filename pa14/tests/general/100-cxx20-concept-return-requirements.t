@@ -1,9 +1,12 @@
-template<class T, class U> concept Same = __is_same(T,U);
-template<class T> concept Integral = __is_integral(T);
-template<class T> concept Void = __is_same(T,void);
+// Same: one T must fit both arguments, so deduction fails for two types.
+template<class T> struct Tag {};
+template<class T> void same(Tag<T>, Tag<T>);
+template<class T, class U> concept Same = requires(Tag<T> a, Tag<U> b) { same(a, b); };
+template<class T> concept Modular = requires(T value) { value % value; };
+template<class T> concept Void = Same<T, void>;
 template<class T> concept Returning = requires(T value) {
   { value.field } -> Same<int&>;
-  { value.run() } noexcept -> Integral;
+  { value.run() } noexcept -> Modular;
 };
 struct Good { int field; int run() noexcept; };
 struct WrongField { long field; int run() noexcept; };

@@ -508,25 +508,3 @@ only when every use of its address is a direct load or store, a copy, a
 zeroing or a call's indirect result, so an object can live in registers only
 after its constructor and destructor calls are inlined. Keep them ordinary calls to ordinary
 functions that the inliner can take.
-
-### C++20 comparisons
-
-Resolve user-defined `<=>` and rewritten comparison candidates using the
-ordinary conversion rankings. Prefer a non-rewritten candidate on a tie,
-then a non-reversed one. Rewritten equality requires an operator returning
-`bool`. Retain operand evaluation, conversions and temporary destruction.
-
-Built-in three-way comparisons return the actual declared standard
-comparison category and its static constants. Integer, enumeration and
-object-pointer comparisons yield `std::strong_ordering`; floating-point
-comparisons yield `std::partial_ordering`, including unordered results.
-Apply the arithmetic, narrowing and pointer restrictions of C++20.
-
-Defaulted comparisons compare base and member subobjects in declaration
-order, expanding arrays in index order. Generate counted loops for arrays.
-Infer defaulted `<=>`'s category, declare its matching equality when
-required, and use the specified equality/less fallback for an explicit
-standard category. Invalid subobject comparisons, reference and variant
-members delete the applicable defaulted comparison. Secondary defaulted
-comparisons require a usable rewritten comparison. These functions
-have ordinary analyzed bodies shared by native and Wasm lowering.

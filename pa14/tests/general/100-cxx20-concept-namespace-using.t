@@ -1,4 +1,4 @@
-namespace N {template<class T> concept Integral = __is_integral(T);}
-using N::Integral;
+namespace N {template<class T> concept Modular = requires(T value) { value % value; };}
+using N::Modular;
 
-int main() { return !N::Integral<unsigned>; }
+int main() { return !N::Modular<unsigned> || !Modular<int>; }

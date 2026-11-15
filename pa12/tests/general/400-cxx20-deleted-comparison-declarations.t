@@ -1,7 +1,7 @@
 // VALIDATION: compile-pass
 struct Ref {
   int& value;
-  constexpr auto operator<=>(const Ref&) const = default;
+  auto operator<=>(const Ref&) const = default;
 };
 struct Unordered {};
 struct Contains {

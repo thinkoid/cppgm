@@ -1,1 +1,1 @@
-template<class T> concept C = true; auto p = &C<int>;
+template<class T> concept C = true; const bool* p = &C<int>;

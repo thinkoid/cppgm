@@ -40,6 +40,8 @@ static_assert(Box{1} < Box{2});
 static_assert(Box{1} != Box{2});
 struct Default { int value; constexpr auto operator<=>(const Default&) const = default; };
 static_assert(Default{1} < Default{2});
+// Deleted where defaulted: a declaration that nothing uses is valid.
+struct Ref { int& value; constexpr auto operator<=>(const Ref&) const = default; };
 enum class E : unsigned { first=1, second=2 };
 static_assert((E::first <=> E::second) == std::strong_ordering::less);
 constexpr int* null = nullptr;
@@ -48,6 +50,6 @@ static_assert(noexcept(Default{1} == Default{1}));
 int calls;
 int next() { return ++calls; }
 int main() {
- auto x = next() <=> next();
+ std::strong_ordering x = next() <=> next();
  return calls != 2 || x.value != -1 || x.padding != 71 || !(Box{2} > Box{1});
 }
