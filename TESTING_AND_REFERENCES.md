@@ -226,12 +226,27 @@ from the references. After regenerating references, regenerate them:
 perl scripts/audit_ir_expectations.pl --backend dev/lowir2native-ref --write
 ```
 
-Regeneration never tightens a bound and keeps hand-written lines. `make
+Regeneration never tightens a bound and keeps hand-written lines. An existing
+outcome block keeps each line the reference still meets and gains none, and a
+sidecar without an outcome block keeps having none: a better solution does not
+make an existing course fixture ask for more. For a new fixture (start from
+an empty sidecar), or after reviewing a fixture's outcomes, write the blocks
+with:
+
+```sh
+perl scripts/regenerate_ir_expectations.pl --add-budgets --add-outcomes --write paN/tests/oN/x.ref.expect
+```
+
+Each generated outcome line names the function it is about. A fixture whose
+header comment does not name an outcome should not require it. `make
 audit-ir-expectations` and export validation fail on a stale sidecar.
 When alternative instruction choices are part of a fixture's contract, add
 `# explicit-outcomes` to its sidecar and state the intended predicates by hand.
-Regeneration still checks budgets and contracts, but does not infer additional
-opcode-absence requirements from the reference.
+Regeneration still checks budgets and contracts, but does not infer
+opcode-absence requirements from the reference, also with `--add-outcomes`.
+`scripts/expect_ir.pl` rejects a predicate whose pattern cannot match: a bare
+pattern of more than two words, or a LowIR operator without its instruction
+kind (`ushr` for `binary ushr`).
 
 Failed-case stdout is an informational diagnostic example, generated on Linux
 by the export and untracked here. Successful stdout and required exit-status

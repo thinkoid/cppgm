@@ -2,8 +2,8 @@
 # Rewrite the generated blocks of expectation sidecars from the current
 # references, keeping their hand-written lines.
 #
-#   regenerate_ir_expectations.pl [--tolerance N] [--add-budgets] [--backend TOOL]
-#                                 [--write] <root>...
+#   regenerate_ir_expectations.pl [--tolerance N] [--add-budgets] [--add-outcomes]
+#                                 [--backend TOOL] [--write] <root>...
 #
 # For every x.t under the roots with an x.ref.expect sidecar and a reference
 # output (x.ref.mir for machine IR, else x.ref for LowIR):
@@ -11,7 +11,11 @@
 #     regenerated, and no line of it is made tighter than the current one:
 #     a bound is the larger of the two, and a line the generator no longer
 #     writes is dropped;
-#   - the outcome block (make_ir_outcome.pl, LowIR only) is regenerated;
+#   - the outcome block (LowIR only) keeps each line the reference still
+#     meets and gains none: a better solution does not make an existing
+#     fixture ask for more.  --add-outcomes writes the block again from
+#     make_ir_outcome.pl, for a new fixture or one whose outcomes were
+#     reviewed; a sidecar with no outcome block keeps having none without it;
 #   - a contract block (make_ir_contract.pl, machine IR only) is regenerated
 #     with the flags the current block shows (--preserve when it bounds
 #     `preserve`, --memory when it has `count(load) >=` or `count(store) >=`).
@@ -35,9 +39,9 @@ use FindBin;
 use Getopt::Long;
 
 my %o = (tolerance => 10);
-GetOptions(\%o, 'tolerance=i', 'add-budgets', 'backend=s', 'write') && @ARGV
-	or die "usage: regenerate_ir_expectations.pl [--tolerance N] [--add-budgets] [--backend TOOL] [--write] <root>...\n";
-my $scratch = defined($o{backend}) ? tempdir(CLEANUP => 1) : undef;
+GetOptions(\%o, 'tolerance=i', 'add-budgets', 'add-outcomes', 'backend=s', 'write') && @ARGV
+	or die "usage: regenerate_ir_expectations.pl [--tolerance N] [--add-budgets] [--add-outcomes] [--backend TOOL] [--write] <root>...\n";
+my $scratch = tempdir(CLEANUP => 1);
 
 sub slurp
 {
@@ -83,6 +87,32 @@ sub blocks_of
 			: $_->[0] =~ /^# contract/ ? 'contract' : 'hand';
 		[$kind, $_];
 	} @blocks;
+}
+
+# The lines of an outcome block that the reference still meets, with the
+# block's comment lines.
+sub outcomes_still_met
+{
+	my ($block, $reference) = @_;
+	my $probe = "$scratch/outcomes.expect";
+	open(my $fh, '>', $probe) or die "cannot write $probe: $!\n";
+	print $fh "$_\n" for @$block;
+	close($fh);
+	my %failed;
+	open(my $run, '-|', $^X, "$FindBin::Bin/expect_ir.pl", $reference, $probe)
+		or die "cannot run expect_ir.pl: $!\n";
+	while (my $line = <$run>)
+	{
+		die "expect_ir.pl: $line" if $line =~ /^ERROR: \S+:\d+:/;
+		$failed{$1} = 1 if $line =~ /^FAIL: (.*?): (?:actual \d+|function \S+ is defined)$/;
+	}
+	close($run);
+	return grep {
+		my $predicate = $_;
+		$predicate =~ s/#.*$//;
+		$predicate =~ s/^\s+|\s+$//g;
+		$predicate eq '' || !$failed{$predicate};
+	} @$block;
 }
 
 # A budget line's key (the line with its bound replaced) and bound.
@@ -149,10 +179,15 @@ for my $sidecar (sort @sidecars)
 		}
 		push @out, [@budget];
 	}
-	if (!$explicit_outcomes && !$machine && -f $input)
+	if (!$explicit_outcomes && !$machine && -f $input && $o{'add-outcomes'})
 	{
 		my @outcome = generate($^X, "$FindBin::Bin/make_ir_outcome.pl", $input, $reference);
 		push @out, [@outcome] if @outcome;
+	}
+	elsif (!$explicit_outcomes && !$machine && defined($old_outcome))
+	{
+		my @outcome = outcomes_still_met($old_outcome, $reference);
+		push @out, [@outcome] if grep { !/^\s*#/ } @outcome;
 	}
 	elsif (!$explicit_outcomes && defined($old_outcome))
 	{

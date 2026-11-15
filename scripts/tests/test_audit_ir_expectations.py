@@ -146,15 +146,123 @@ function @constant_read() -> i32 {
         self.sidecar(base).write_text("instructions <= 8\ncount(load) <= 1\n")
         return base
 
-    def test_default_outcomes_still_follow_the_reference(self):
+    def test_regeneration_adds_no_outcomes_to_an_existing_sidecar(self):
         base = self.lowir_choice()
+        before = self.sidecar(base).read_text()
         self.regenerate(base.parent)
-        self.assertIn("none(phi)", self.sidecar(base).read_text())
+        self.assertEqual(self.sidecar(base).read_text(), before)
         self.assertEqual(self.audit().returncode, 0)
+
+    def test_add_outcomes_names_the_function_of_each_outcome(self):
+        base = self.lowir_choice()
+        self.regenerate(base.parent, "--add-outcomes")
+        self.assertIn("none(phi) in @choose", self.sidecar(base).read_text())
+        self.assertEqual(self.audit().returncode, 0)
+
+    def two_choices(self, first: str, second: str) -> str:
+        return (first.replace("@choose", "@first") + second.replace("@choose", "@second"))
+
+    def test_an_outcome_block_gains_no_line_from_a_better_reference(self):
+        base = self.fixture("pa33/tests/o2/x")
+        base.with_suffix(".t").write_text(self.two_choices(POINTER_CHOICE, POINTER_CHOICE))
+        base.with_name("x.ref").write_text(self.two_choices(SELECT_CHOICE, POINTER_CHOICE))
+        self.sidecar(base).write_text("instructions <= 20\n")
+        self.regenerate(base.parent, "--add-outcomes")
+        reviewed = self.sidecar(base).read_text()
+        self.assertIn("none(phi) in @first", reviewed)
+        self.assertNotIn("@second", reviewed)
+
+        base.with_name("x.ref").write_text(self.two_choices(SELECT_CHOICE, SELECT_CHOICE))
+        self.assertEqual(self.audit().returncode, 0)
+        self.regenerate(base.parent)
+        self.assertEqual(self.sidecar(base).read_text(), reviewed)
+
+    def test_an_outcome_the_reference_no_longer_meets_is_dropped(self):
+        base = self.fixture("pa33/tests/o2/x")
+        base.with_suffix(".t").write_text(self.two_choices(POINTER_CHOICE, POINTER_CHOICE))
+        base.with_name("x.ref").write_text(self.two_choices(SELECT_CHOICE, SELECT_CHOICE))
+        self.sidecar(base).write_text("instructions <= 20\n")
+        self.regenerate(base.parent, "--add-outcomes")
+        self.assertIn("none(phi) in @second", self.sidecar(base).read_text())
+
+        base.with_name("x.ref").write_text(self.two_choices(SELECT_CHOICE, POINTER_CHOICE))
+        self.assertEqual(self.audit().returncode, 1)
+        self.regenerate(base.parent)
+        updated = self.sidecar(base).read_text()
+        self.assertIn("none(phi) in @first", updated)
+        self.assertNotIn("@second", updated)
+        self.assertEqual(self.audit().returncode, 0)
+
+        base.with_name("x.ref").write_text(self.two_choices(POINTER_CHOICE, POINTER_CHOICE))
+        self.regenerate(base.parent)
+        self.assertEqual(self.sidecar(base).read_text(), "instructions <= 20\n")
+
+    def test_a_retyped_function_gets_no_outcome(self):
+        base = self.fixture("pa33/tests/o1/x")
+        base.with_suffix(".t").write_text("""function @read(%value : obj<8x8> [pass=direct]) -> i64 {
+  slot $local : obj<8x8>
+  block ^entry:
+    %address = addr $local
+    copyobj 8x8 %value, %address
+    %word = load i64 %address
+    return i64 %word
+}
+function @main() -> i64 [role=entry] {
+  slot $object : obj<8x8>
+  block ^entry:
+    %address = addr $object
+    store i64 37, %address
+    %word = call i64 @read($object)
+    return i64 %word
+}
+""")
+        base.with_name("x.ref").write_text("""function @read(%value : i64) -> i64 {
+  block ^entry:
+    return i64 %value
+}
+function @main() -> i64 [role=entry] {
+  block ^entry:
+    return i64 37
+}
+""")
+        self.sidecar(base).write_text("instructions <= 8\n")
+        self.regenerate(base.parent, "--add-outcomes")
+        outcomes = self.sidecar(base).read_text()
+        self.assertNotIn("in @read", outcomes)
+        self.assertIn("none(call @read) in @main", outcomes)
+        self.assertIn("none(store) in @main", outcomes)
+
+    def test_a_pattern_that_cannot_match_is_an_error(self):
+        lowir = self.root / "candidate.lowir"
+        lowir.write_text("""function @shift(%x : i64) -> i64 {
+  block ^entry:
+    %moved = binary ushr i64 %x, 3
+    return i64 %moved
+}
+""")
+        machine = self.root / "candidate.mir"
+        machine.write_text(MACHINE_IR)
+        sidecar = self.root / "candidate.expect"
+        for text, candidate, status, message in [
+            ("none(ushr) in @shift\n", lowir, 2, "write `binary ushr`"),
+            ("none(trunc)\n", lowir, 2, "write `convert trunc`"),
+            ("count(binary ushr i64) <= 0 in @shift\n", lowir, 2, "at most two words"),
+            ("none(binary ushr) in @shift\n", lowir, 1, "actual 1"),
+            ("count(/binary ushr i64/) == 1 in @shift\n", lowir, 0, ""),
+            ("count(add) >= 0\n", machine, 0, ""),
+            ("count(mov rax rdi) >= 0\n", machine, 2, "at most two words"),
+        ]:
+            with self.subTest(text=text):
+                sidecar.write_text(text)
+                result = subprocess.run(["perl", str(EXPECT), str(candidate), str(sidecar)],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, status, result.stdout + result.stderr)
+                self.assertIn(message, result.stdout)
 
     def test_explicit_outcomes_allow_an_equivalent_phi_and_keep_bounds(self):
         base = self.lowir_choice()
-        self.regenerate(base.parent, "--add-budgets")
+        self.regenerate(base.parent, "--add-budgets", "--add-outcomes")
+        self.assertIn("none(phi) in @choose", self.sidecar(base).read_text())
         with self.sidecar(base).open("a") as stream:
             stream.write("\n# explicit-outcomes\n")
         self.assertNotEqual(self.audit().returncode, 0)
@@ -180,7 +288,7 @@ function @constant_read() -> i32 {
 
     def test_outcome_policy_does_not_hide_a_generated_block_header(self):
         base = self.lowir_choice()
-        self.regenerate(base.parent, "--add-budgets")
+        self.regenerate(base.parent, "--add-budgets", "--add-outcomes")
         original = self.sidecar(base).read_text()
         for text in ["# explicit-outcomes\n" + original,
                      original.replace("instructions <=", "# explicit-outcomes\ninstructions <=", 1),
