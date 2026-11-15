@@ -115,6 +115,22 @@ from `benchmarks/public/baseline.json` only warns. See
 [benchmarks/public/README.md](benchmarks/public/README.md). The runner tests are
 part of `make test-harness`.
 
+## Clang build CI
+
+The **Clang build** workflow runs on each push to `main` and on each pull
+request that changes `dev/` or the check. It builds the `clang` target of
+LLVM 22.1.2 with `cppgm++` at `-O3`; the host compiler links. The built Clang
+then compiles a checked program at `-O0` and `-O2`, and the output of the
+program must match. A source that `cppgm++` does not compile fails the job;
+the job summary shows the first failed steps and `build.log` in the artifact
+has every one. To run the check locally:
+
+```sh
+python3 scripts/llvm_ci.py run --output obj/llvm
+```
+
+The script tests are part of `make test-harness`.
+
 ## Fixture ownership
 
 Every required fixture lives under its owning `paN/tests/`. From PA5 onward,

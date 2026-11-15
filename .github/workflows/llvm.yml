@@ -1,0 +1,66 @@
+name: Clang build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - dev/**
+      - scripts/llvm_ci.py
+      - scripts/benchmark_hosts.py
+      - .github/workflows/llvm.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clang-build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  clang:
+    name: Clang built by cppgm++ at -O3
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: bash
+    env:
+      CXX: g++
+      CPPGM_HOST_CXX: g++
+      CPPGM_STDLIB_FLAGS: ""
+      CPPGM_WARNINGS_AS_ERRORS: "1"
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential binutils ca-certificates cmake git ninja-build python3
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Trust the mounted checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Build compiler
+        run: make -C dev cppgm++ -j "$(nproc)"
+      - name: Build pinned Clang with cppgm++ and run the built compiler
+        run: python3 scripts/llvm_ci.py run --output obj/llvm
+      - name: Report
+        if: always()
+        run: |
+          if [ -f obj/llvm/summary.md ]; then
+            cat obj/llvm/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Retain results and logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: llvm-${{ github.sha }}-${{ github.run_id }}
+          path: |
+            obj/llvm/*.json
+            obj/llvm/*.md
+            obj/llvm/*.log
+          if-no-files-found: warn
+          retention-days: 14
