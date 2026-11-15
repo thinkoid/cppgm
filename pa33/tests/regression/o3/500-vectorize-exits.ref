@@ -1,3 +1,8 @@
+global @__vector_literal_00000001000000010000000100000001 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4294967297
+  i64 4294967297
+}
+
 function @up_lt(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
   block ^entry:
     %t1 = cmp gt i64 %n, 0
@@ -16,8 +21,8 @@ function @up_lt(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
 
   block ^loop_preheader_2:
     %t10 = binary add i64 %n, -4
-    %t11 = vector fromi32 1
-    %t12 = vector pshufd %t11, 0
+    %t11 = addr @__vector_literal_00000001000000010000000100000001
+    %t12 = load v128 %t11
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -72,8 +77,8 @@ function @up_le(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
 
   block ^loop_preheader_2:
     %t11 = binary add i64 %n, -3
-    %t12 = vector fromi32 1
-    %t13 = vector pshufd %t12, 0
+    %t12 = addr @__vector_literal_00000001000000010000000100000001
+    %t13 = load v128 %t12
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -127,8 +132,8 @@ function @up_ult(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
 
   block ^loop_preheader_2:
     %t10 = binary add i64 %n, -4
-    %t11 = vector fromi32 1
-    %t12 = vector pshufd %t11, 0
+    %t11 = addr @__vector_literal_00000001000000010000000100000001
+    %t12 = load v128 %t11
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -183,8 +188,8 @@ function @up_ule(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
 
   block ^loop_preheader_2:
     %t11 = binary add i64 %n, -3
-    %t12 = vector fromi32 1
-    %t13 = vector pshufd %t12, 0
+    %t12 = addr @__vector_literal_00000001000000010000000100000001
+    %t13 = load v128 %t12
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -238,8 +243,8 @@ function @up_ne(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
 
   block ^loop_preheader_2:
     %t10 = binary add i64 %n, -4
-    %t11 = vector fromi32 1
-    %t12 = vector pshufd %t11, 0
+    %t11 = addr @__vector_literal_00000001000000010000000100000001
+    %t12 = load v128 %t11
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -293,8 +298,8 @@ function @flipped(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
 
   block ^loop_preheader_2:
     %t10 = binary add i64 %n, -4
-    %t11 = vector fromi32 1
-    %t12 = vector pshufd %t11, 0
+    %t11 = addr @__vector_literal_00000001000000010000000100000001
+    %t12 = load v128 %t11
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -348,8 +353,8 @@ function @stays_on_false(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
 
   block ^loop_preheader_2:
     %t10 = binary add i64 %n, -4
-    %t11 = vector fromi32 1
-    %t12 = vector pshufd %t11, 0
+    %t11 = addr @__vector_literal_00000001000000010000000100000001
+    %t12 = load v128 %t11
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -404,8 +409,8 @@ function @tests_old_value(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] 
 
   block ^loop_preheader_2:
     %t11 = binary add i64 %n, -3
-    %t12 = vector fromi32 1
-    %t13 = vector pshufd %t12, 0
+    %t12 = addr @__vector_literal_00000001000000010000000100000001
+    %t13 = load v128 %t12
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -461,8 +466,8 @@ function @narrow_counter(%d : ptr, %x : ptr, %n : i32) -> void [no_inline=yes] {
 
   block ^loop_preheader_2:
     %t12 = binary add i32 %n, -4
-    %t13 = vector fromi32 1
-    %t14 = vector pshufd %t13, 0
+    %t13 = addr @__vector_literal_00000001000000010000000100000001
+    %t14 = load v128 %t13
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -520,8 +525,8 @@ function @narrow_unsigned(%d : ptr, %x : ptr, %n : u32) -> void [no_inline=yes] 
 
   block ^loop_preheader_2:
     %t11 = binary add u32 %n, 4294967292
-    %t12 = vector fromi32 1
-    %t13 = vector pshufd %t12, 0
+    %t12 = addr @__vector_literal_00000001000000010000000100000001
+    %t13 = load v128 %t12
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -576,8 +581,8 @@ function @counts_down(%d : ptr, %x : ptr, %n : i32) -> void [no_inline=yes] {
     branch %t11, ^loop_preheader_2, ^loop_preheader_5
 
   block ^loop_preheader_2:
-    %t12 = vector fromi32 1
-    %t13 = vector pshufd %t12, 0
+    %t12 = addr @__vector_literal_00000001000000010000000100000001
+    %t13 = load v128 %t12
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -628,8 +633,8 @@ function @pointer_counter(%d : ptr, %e : ptr) -> void [no_inline=yes] {
 
   block ^loop_preheader_1:
     %t5 = index i8 %e, -16
-    %t6 = vector fromi32 1
-    %t7 = vector pshufd %t6, 0
+    %t6 = addr @__vector_literal_00000001000000010000000100000001
+    %t7 = load v128 %t6
     jump ^wide_loop_2
 
   block ^wide_loop_2:

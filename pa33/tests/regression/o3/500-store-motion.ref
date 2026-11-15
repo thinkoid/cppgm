@@ -15,6 +15,22 @@ global @values : obj<80x8> = {
 }
 global @first : i64 = 0
 global @second : i64 = 0
+global @__vector_literal_00000000000000010000000000000000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 0
+  i64 1
+}
+global @__vector_literal_00000000000000020000000000000002 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 2
+  i64 2
+}
+global @__vector_literal_00000000000000040000000000000004 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4
+  i64 4
+}
+global @__vector_literal_00000000000000010000000000000001 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 1
+  i64 1
+}
 
 function @opaque(%x : i64) -> i64 [no_inline=yes] {
   block ^entry:
@@ -175,13 +191,13 @@ function @nested(%n : i64, %m : i64) -> void [no_inline=yes] {
     %t4 = binary and i64 %t2, %t3
     %t5 = binary add i64 %m, -4
     %t6 = vector pzero
-    %t7 = vector fromi64 1
-    %t8 = vector punpcklqdq %t6, %t7
+    %t7 = addr @__vector_literal_00000000000000010000000000000000
+    %t8 = load v128 %t7
     %t9 = vector paddq %t6, %t8
-    %t10 = vector fromi64 2
-    %t11 = vector pshufd %t10, 68
-    %t12 = vector fromi64 4
-    %t13 = vector pshufd %t12, 68
+    %t10 = addr @__vector_literal_00000000000000020000000000000002
+    %t11 = load v128 %t10
+    %t12 = addr @__vector_literal_00000000000000040000000000000004
+    %t13 = load v128 %t12
     jump ^outer
 
   block ^outer:
@@ -251,13 +267,13 @@ function @escaped_slot(%n : i64) -> i64 [no_inline=yes] {
     %t6 = binary add i64 %n, -4
     %t7 = vector fromi64 %n
     %t8 = vector pzero
-    %t9 = vector fromi64 1
-    %t10 = vector punpcklqdq %t8, %t9
+    %t9 = addr @__vector_literal_00000000000000010000000000000000
+    %t10 = load v128 %t9
     %t11 = vector paddq %t8, %t10
-    %t12 = vector fromi64 2
-    %t13 = vector pshufd %t12, 68
-    %t14 = vector fromi64 4
-    %t15 = vector pshufd %t14, 68
+    %t12 = addr @__vector_literal_00000000000000020000000000000002
+    %t13 = load v128 %t12
+    %t14 = addr @__vector_literal_00000000000000040000000000000004
+    %t15 = load v128 %t14
     jump ^wide_loop_2
 
   block ^wide_loop_2:
@@ -436,8 +452,8 @@ function @pointer_walk(%p : ptr, %e : ptr) -> void [no_inline=yes] {
 
   block ^loop_preheader_1:
     %t5 = index i8 %e, -32
-    %t6 = vector fromi64 1
-    %t7 = vector pshufd %t6, 68
+    %t6 = addr @__vector_literal_00000000000000010000000000000001
+    %t7 = load v128 %t6
     jump ^wide_loop_2
 
   block ^wide_loop_2:
@@ -663,13 +679,13 @@ function @stepped(%n : i64, %p : ptr) -> void [no_inline=yes] {
   block ^loop_preheader_1:
     %t4 = binary add i64 %n, -4
     %t5 = vector pzero
-    %t6 = vector fromi64 1
-    %t7 = vector punpcklqdq %t5, %t6
+    %t6 = addr @__vector_literal_00000000000000010000000000000000
+    %t7 = load v128 %t6
     %t8 = vector paddq %t5, %t7
-    %t9 = vector fromi64 2
-    %t10 = vector pshufd %t9, 68
-    %t11 = vector fromi64 4
-    %t12 = vector pshufd %t11, 68
+    %t9 = addr @__vector_literal_00000000000000020000000000000002
+    %t10 = load v128 %t9
+    %t11 = addr @__vector_literal_00000000000000040000000000000004
+    %t12 = load v128 %t11
     jump ^wide_loop_2
 
   block ^wide_loop_2:
@@ -810,13 +826,13 @@ function @changing_step(%n : i64) -> void [no_inline=yes] {
   block ^loop_preheader_1:
     %t4 = binary add i64 %n, -4
     %t5 = vector pzero
-    %t6 = vector fromi64 1
-    %t7 = vector punpcklqdq %t5, %t6
+    %t6 = addr @__vector_literal_00000000000000010000000000000000
+    %t7 = load v128 %t6
     %t8 = vector paddq %t5, %t7
-    %t9 = vector fromi64 2
-    %t10 = vector pshufd %t9, 68
-    %t11 = vector fromi64 4
-    %t12 = vector pshufd %t11, 68
+    %t9 = addr @__vector_literal_00000000000000020000000000000002
+    %t10 = load v128 %t9
+    %t11 = addr @__vector_literal_00000000000000040000000000000004
+    %t12 = load v128 %t11
     jump ^wide_loop_2
 
   block ^wide_loop_2:

@@ -4,6 +4,14 @@ global @table : obj<320x8> = {
 global @other : obj<320x8> = {
   zero 320
 }
+global @__vector_literal_00000000000000010000000000000001 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 1
+  i64 1
+}
+global @__vector_literal_00000000000000020000000000000002 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 2
+  i64 2
+}
 
 function @same_object() -> void [no_inline=yes] {
   block ^entry:
@@ -55,10 +63,10 @@ function @two_pointers(%a : ptr, %b : ptr) -> void [no_inline=yes] {
     branch %t5, ^loop_preheader_1, ^unrolled_4
 
   block ^loop_preheader_1:
-    %t6 = vector fromi64 1
-    %t7 = vector pshufd %t6, 68
-    %t8 = vector fromi64 2
-    %t9 = vector pshufd %t8, 68
+    %t6 = addr @__vector_literal_00000000000000010000000000000001
+    %t7 = load v128 %t6
+    %t8 = addr @__vector_literal_00000000000000020000000000000002
+    %t9 = load v128 %t8
     jump ^unrolled_2
 
   block ^unrolled_2:

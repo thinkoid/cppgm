@@ -4,6 +4,10 @@ global @table : obj<4000x4> = {
 global @other : obj<4000x4> = {
   zero 4000
 }
+global @__vector_literal_00000001000000010000000100000001 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4294967297
+  i64 4294967297
+}
 
 function @reads_ahead(%a : ptr, %n : i64) -> void [no_inline=yes] {
   block ^entry:
@@ -14,8 +18,8 @@ function @reads_ahead(%a : ptr, %n : i64) -> void [no_inline=yes] {
 
   block ^loop_preheader_1:
     %t4 = binary add i64 %n, -4
-    %t5 = vector fromi32 1
-    %t6 = vector pshufd %t5, 0
+    %t5 = addr @__vector_literal_00000001000000010000000100000001
+    %t6 = load v128 %t5
     jump ^wide_loop_2
 
   block ^wide_loop_2:
@@ -61,8 +65,8 @@ function @same_element(%a : ptr, %n : i64) -> void [no_inline=yes] {
 
   block ^loop_preheader_1:
     %t4 = binary add i64 %n, -4
-    %t5 = vector fromi32 1
-    %t6 = vector pshufd %t5, 0
+    %t5 = addr @__vector_literal_00000001000000010000000100000001
+    %t6 = load v128 %t5
     jump ^wide_loop_2
 
   block ^wide_loop_2:
@@ -197,8 +201,8 @@ function @apart_behind(%a : ptr, %n : i64) -> void [no_inline=yes] {
 
   block ^loop_preheader_1:
     %t4 = binary add i64 %n, -4
-    %t5 = vector fromi32 1
-    %t6 = vector pshufd %t5, 0
+    %t5 = addr @__vector_literal_00000001000000010000000100000001
+    %t6 = load v128 %t5
     jump ^wide_loop_2
 
   block ^wide_loop_2:

@@ -1,4 +1,76 @@
 global @cell : i32 [binding=internal] = 0
+global @__vector_literal_00000007000000070000000700000007 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 30064771079
+  i64 30064771079
+}
+global @__vector_literal_00000001000000010000000100000001 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4294967297
+  i64 4294967297
+}
+global @__vector_literal_00000002000000020000000200000002 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 8589934594
+  i64 8589934594
+}
+global @__vector_literal_00000003000000030000000300000003 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 12884901891
+  i64 12884901891
+}
+global @__vector_literal_00000004000000040000000400000004 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 17179869188
+  i64 17179869188
+}
+global @__vector_literal_00000005000000050000000500000005 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 21474836485
+  i64 21474836485
+}
+global @__vector_literal_00000006000000060000000600000006 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 25769803782
+  i64 25769803782
+}
+global @__vector_literal_00000008000000080000000800000008 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 34359738376
+  i64 34359738376
+}
+global @__vector_literal_00000009000000090000000900000009 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 38654705673
+  i64 38654705673
+}
+global @__vector_literal_0000000a0000000a0000000a0000000a : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 42949672970
+  i64 42949672970
+}
+global @__vector_literal_0000000b0000000b0000000b0000000b : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 47244640267
+  i64 47244640267
+}
+global @__vector_literal_0000000c0000000c0000000c0000000c : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 51539607564
+  i64 51539607564
+}
+global @__vector_literal_0000000d0000000d0000000d0000000d : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 55834574861
+  i64 55834574861
+}
+global @__vector_literal_0000000e0000000e0000000e0000000e : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 60129542158
+  i64 60129542158
+}
+global @__vector_literal_0000000f0000000f0000000f0000000f : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 64424509455
+  i64 64424509455
+}
+global @__vector_literal_00000010000000100000001000000010 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 68719476752
+  i64 68719476752
+}
+global @__vector_literal_00000011000000110000001100000011 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 73014444049
+  i64 73014444049
+}
+global @__vector_literal_00000012000000120000001200000012 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 77309411346
+  i64 77309411346
+}
 
 function @many(%p : ptr, %n : i64, %m : i32) -> i32 [binding=strong, no_inline=yes] {
   block ^entry:
@@ -1954,10 +2026,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t10 = binary add i64 %n, -4
     %t11 = load i32 @cell
     %t12 = vector fromi32 %t11
-    %t13 = vector fromi32 7
-    %t14 = vector pshufd %t13, 0
-    %t15 = vector fromi32 1
-    %t16 = vector pshufd %t15, 0
+    %t13 = addr @__vector_literal_00000007000000070000000700000007
+    %t14 = load v128 %t13
+    %t15 = addr @__vector_literal_00000001000000010000000100000001
+    %t16 = load v128 %t15
     jump ^wide_loop_4
 
   block ^wide_loop_4:
@@ -2017,10 +2089,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t45 = binary add i64 %n, -4
     %t46 = load i32 @cell
     %t47 = vector fromi32 %t46
-    %t48 = vector fromi32 7
-    %t49 = vector pshufd %t48, 0
-    %t50 = vector fromi32 2
-    %t51 = vector pshufd %t50, 0
+    %t48 = addr @__vector_literal_00000007000000070000000700000007
+    %t49 = load v128 %t48
+    %t50 = addr @__vector_literal_00000002000000020000000200000002
+    %t51 = load v128 %t50
     jump ^wide_loop_12
 
   block ^wide_loop_12:
@@ -2080,10 +2152,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t80 = binary add i64 %n, -4
     %t81 = load i32 @cell
     %t82 = vector fromi32 %t81
-    %t83 = vector fromi32 7
-    %t84 = vector pshufd %t83, 0
-    %t85 = vector fromi32 3
-    %t86 = vector pshufd %t85, 0
+    %t83 = addr @__vector_literal_00000007000000070000000700000007
+    %t84 = load v128 %t83
+    %t85 = addr @__vector_literal_00000003000000030000000300000003
+    %t86 = load v128 %t85
     jump ^wide_loop_20
 
   block ^wide_loop_20:
@@ -2143,10 +2215,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t115 = binary add i64 %n, -4
     %t116 = load i32 @cell
     %t117 = vector fromi32 %t116
-    %t118 = vector fromi32 7
-    %t119 = vector pshufd %t118, 0
-    %t120 = vector fromi32 4
-    %t121 = vector pshufd %t120, 0
+    %t118 = addr @__vector_literal_00000007000000070000000700000007
+    %t119 = load v128 %t118
+    %t120 = addr @__vector_literal_00000004000000040000000400000004
+    %t121 = load v128 %t120
     jump ^wide_loop_28
 
   block ^wide_loop_28:
@@ -2206,10 +2278,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t150 = binary add i64 %n, -4
     %t151 = load i32 @cell
     %t152 = vector fromi32 %t151
-    %t153 = vector fromi32 7
-    %t154 = vector pshufd %t153, 0
-    %t155 = vector fromi32 5
-    %t156 = vector pshufd %t155, 0
+    %t153 = addr @__vector_literal_00000007000000070000000700000007
+    %t154 = load v128 %t153
+    %t155 = addr @__vector_literal_00000005000000050000000500000005
+    %t156 = load v128 %t155
     jump ^wide_loop_36
 
   block ^wide_loop_36:
@@ -2269,10 +2341,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t185 = binary add i64 %n, -4
     %t186 = load i32 @cell
     %t187 = vector fromi32 %t186
-    %t188 = vector fromi32 7
-    %t189 = vector pshufd %t188, 0
-    %t190 = vector fromi32 6
-    %t191 = vector pshufd %t190, 0
+    %t188 = addr @__vector_literal_00000007000000070000000700000007
+    %t189 = load v128 %t188
+    %t190 = addr @__vector_literal_00000006000000060000000600000006
+    %t191 = load v128 %t190
     jump ^wide_loop_44
 
   block ^wide_loop_44:
@@ -2332,8 +2404,8 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t220 = binary add i64 %n, -4
     %t221 = load i32 @cell
     %t222 = vector fromi32 %t221
-    %t223 = vector fromi32 7
-    %t224 = vector pshufd %t223, 0
+    %t223 = addr @__vector_literal_00000007000000070000000700000007
+    %t224 = load v128 %t223
     jump ^wide_loop_52
 
   block ^wide_loop_52:
@@ -2393,10 +2465,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t253 = binary add i64 %n, -4
     %t254 = load i32 @cell
     %t255 = vector fromi32 %t254
-    %t256 = vector fromi32 7
-    %t257 = vector pshufd %t256, 0
-    %t258 = vector fromi32 8
-    %t259 = vector pshufd %t258, 0
+    %t256 = addr @__vector_literal_00000007000000070000000700000007
+    %t257 = load v128 %t256
+    %t258 = addr @__vector_literal_00000008000000080000000800000008
+    %t259 = load v128 %t258
     jump ^wide_loop_60
 
   block ^wide_loop_60:
@@ -2456,10 +2528,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t288 = binary add i64 %n, -4
     %t289 = load i32 @cell
     %t290 = vector fromi32 %t289
-    %t291 = vector fromi32 7
-    %t292 = vector pshufd %t291, 0
-    %t293 = vector fromi32 9
-    %t294 = vector pshufd %t293, 0
+    %t291 = addr @__vector_literal_00000007000000070000000700000007
+    %t292 = load v128 %t291
+    %t293 = addr @__vector_literal_00000009000000090000000900000009
+    %t294 = load v128 %t293
     jump ^wide_loop_68
 
   block ^wide_loop_68:
@@ -2519,10 +2591,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t323 = binary add i64 %n, -4
     %t324 = load i32 @cell
     %t325 = vector fromi32 %t324
-    %t326 = vector fromi32 7
-    %t327 = vector pshufd %t326, 0
-    %t328 = vector fromi32 10
-    %t329 = vector pshufd %t328, 0
+    %t326 = addr @__vector_literal_00000007000000070000000700000007
+    %t327 = load v128 %t326
+    %t328 = addr @__vector_literal_0000000a0000000a0000000a0000000a
+    %t329 = load v128 %t328
     jump ^wide_loop_76
 
   block ^wide_loop_76:
@@ -2582,10 +2654,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t358 = binary add i64 %n, -4
     %t359 = load i32 @cell
     %t360 = vector fromi32 %t359
-    %t361 = vector fromi32 7
-    %t362 = vector pshufd %t361, 0
-    %t363 = vector fromi32 11
-    %t364 = vector pshufd %t363, 0
+    %t361 = addr @__vector_literal_00000007000000070000000700000007
+    %t362 = load v128 %t361
+    %t363 = addr @__vector_literal_0000000b0000000b0000000b0000000b
+    %t364 = load v128 %t363
     jump ^wide_loop_84
 
   block ^wide_loop_84:
@@ -2645,10 +2717,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t393 = binary add i64 %n, -4
     %t394 = load i32 @cell
     %t395 = vector fromi32 %t394
-    %t396 = vector fromi32 7
-    %t397 = vector pshufd %t396, 0
-    %t398 = vector fromi32 12
-    %t399 = vector pshufd %t398, 0
+    %t396 = addr @__vector_literal_00000007000000070000000700000007
+    %t397 = load v128 %t396
+    %t398 = addr @__vector_literal_0000000c0000000c0000000c0000000c
+    %t399 = load v128 %t398
     jump ^wide_loop_92
 
   block ^wide_loop_92:
@@ -2708,10 +2780,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t428 = binary add i64 %n, -4
     %t429 = load i32 @cell
     %t430 = vector fromi32 %t429
-    %t431 = vector fromi32 7
-    %t432 = vector pshufd %t431, 0
-    %t433 = vector fromi32 13
-    %t434 = vector pshufd %t433, 0
+    %t431 = addr @__vector_literal_00000007000000070000000700000007
+    %t432 = load v128 %t431
+    %t433 = addr @__vector_literal_0000000d0000000d0000000d0000000d
+    %t434 = load v128 %t433
     jump ^wide_loop_100
 
   block ^wide_loop_100:
@@ -2771,10 +2843,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t463 = binary add i64 %n, -4
     %t464 = load i32 @cell
     %t465 = vector fromi32 %t464
-    %t466 = vector fromi32 7
-    %t467 = vector pshufd %t466, 0
-    %t468 = vector fromi32 14
-    %t469 = vector pshufd %t468, 0
+    %t466 = addr @__vector_literal_00000007000000070000000700000007
+    %t467 = load v128 %t466
+    %t468 = addr @__vector_literal_0000000e0000000e0000000e0000000e
+    %t469 = load v128 %t468
     jump ^wide_loop_108
 
   block ^wide_loop_108:
@@ -2834,10 +2906,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t498 = binary add i64 %n, -4
     %t499 = load i32 @cell
     %t500 = vector fromi32 %t499
-    %t501 = vector fromi32 7
-    %t502 = vector pshufd %t501, 0
-    %t503 = vector fromi32 15
-    %t504 = vector pshufd %t503, 0
+    %t501 = addr @__vector_literal_00000007000000070000000700000007
+    %t502 = load v128 %t501
+    %t503 = addr @__vector_literal_0000000f0000000f0000000f0000000f
+    %t504 = load v128 %t503
     jump ^wide_loop_116
 
   block ^wide_loop_116:
@@ -2897,10 +2969,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t533 = binary add i64 %n, -4
     %t534 = load i32 @cell
     %t535 = vector fromi32 %t534
-    %t536 = vector fromi32 7
-    %t537 = vector pshufd %t536, 0
-    %t538 = vector fromi32 16
-    %t539 = vector pshufd %t538, 0
+    %t536 = addr @__vector_literal_00000007000000070000000700000007
+    %t537 = load v128 %t536
+    %t538 = addr @__vector_literal_00000010000000100000001000000010
+    %t539 = load v128 %t538
     jump ^wide_loop_124
 
   block ^wide_loop_124:
@@ -2960,10 +3032,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t568 = binary add i64 %n, -4
     %t569 = load i32 @cell
     %t570 = vector fromi32 %t569
-    %t571 = vector fromi32 7
-    %t572 = vector pshufd %t571, 0
-    %t573 = vector fromi32 17
-    %t574 = vector pshufd %t573, 0
+    %t571 = addr @__vector_literal_00000007000000070000000700000007
+    %t572 = load v128 %t571
+    %t573 = addr @__vector_literal_00000011000000110000001100000011
+    %t574 = load v128 %t573
     jump ^wide_loop_132
 
   block ^wide_loop_132:
@@ -3023,10 +3095,10 @@ function @memory_sums(%p : ptr, %n : i64) -> void [binding=strong, no_inline=yes
     %t603 = binary add i64 %n, -4
     %t604 = load i32 @cell
     %t605 = vector fromi32 %t604
-    %t606 = vector fromi32 7
-    %t607 = vector pshufd %t606, 0
-    %t608 = vector fromi32 18
-    %t609 = vector pshufd %t608, 0
+    %t606 = addr @__vector_literal_00000007000000070000000700000007
+    %t607 = load v128 %t606
+    %t608 = addr @__vector_literal_00000012000000120000001200000012
+    %t609 = load v128 %t608
     jump ^wide_loop_140
 
   block ^wide_loop_140:

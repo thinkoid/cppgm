@@ -1,0 +1,143 @@
+global @__vector_literal_5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 6655295901103053916
+  i64 6655295901103053916
+}
+global @__vector_literal_100f0e0d0c0b0a090807060504030201 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 578437695752307201
+  i64 1157159078456920585
+}
+global @__vector_literal_00000004000000030000000200000001 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 8589934593
+  i64 17179869187
+}
+global @__vector_literal_3fc000003fc000003fc000003fc00000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4593671620987453440
+  i64 4593671620987453440
+}
+global @__vector_literal_40000000000000004008000000000000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4613937818241073152
+  i64 4611686018427387904
+}
+global @__vector_literal_78787878787878787878787878787878 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 8680820740569200760
+  i64 8680820740569200760
+}
+
+function @splat(%p : ptr) -> i32 [binding=strong] {
+  block ^entry:
+    %v = load v128 %p
+    %t2 = addr @__vector_literal_5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c
+    %all = load v128 %t2
+    %eq = vector pcmpeqb %v, %all
+    %mask = vector pmovmskb %eq
+    return i32 %mask
+}
+function @again(%p : ptr) -> i32 [binding=strong] {
+  block ^entry:
+    %v = load v128 %p
+    %t2 = addr @__vector_literal_5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c
+    %all = load v128 %t2
+    %eq = vector pcmpeqb %v, %all
+    %mask = vector pmovmskb %eq
+    return i32 %mask
+}
+function @halves() -> v128 [binding=strong] {
+  block ^entry:
+    %t1 = addr @__vector_literal_100f0e0d0c0b0a090807060504030201
+    %all = load v128 %t1
+    return v128 %all
+}
+function @words() -> v128 [binding=strong] {
+  block ^entry:
+    %t1 = addr @__vector_literal_00000004000000030000000200000001
+    %all = load v128 %t1
+    return v128 %all
+}
+function @floats() -> v128 [binding=strong] {
+  block ^entry:
+    %t1 = addr @__vector_literal_3fc000003fc000003fc000003fc00000
+    %all = load v128 %t1
+    return v128 %all
+}
+function @doubles() -> v128 [binding=strong] {
+  block ^entry:
+    %t1 = addr @__vector_literal_40000000000000004008000000000000
+    %all = load v128 %t1
+    return v128 %all
+}
+function @in_loop(%p : ptr, %n : i64) -> i32 [binding=strong] {
+  block ^entry:
+    %t1 = addr @__vector_literal_78787878787878787878787878787878
+    %all = load v128 %t1
+    %t3 = binary and i64 %n, -64
+    %t4 = cmp gt i64 %t3, 0
+    branch %t4, ^unrolled_1, ^wide_tail_2
+
+  block ^unrolled_1:
+    %t5 = phi i64 [^unrolled_1: %t27, ^entry: 0]
+    %t6 = phi i32 [^unrolled_1: %t26, ^entry: 0]
+    %t7 = index inbounds i8 %p, %t5
+    %t8 = load v128 %t7
+    %t9 = vector pcmpeqb %t8, %all
+    %t10 = vector pmovmskb %t9
+    %t11 = binary add i32 %t6, %t10
+    %t12 = index inbounds i8 %t7, 16
+    %t13 = load v128 %t12
+    %t14 = vector pcmpeqb %t13, %all
+    %t15 = vector pmovmskb %t14
+    %t16 = binary add i32 %t11, %t15
+    %t17 = index inbounds i8 %t7, 32
+    %t18 = load v128 %t17
+    %t19 = vector pcmpeqb %t18, %all
+    %t20 = vector pmovmskb %t19
+    %t21 = binary add i32 %t16, %t20
+    %t22 = index inbounds i8 %t7, 48
+    %t23 = load v128 %t22
+    %t24 = vector pcmpeqb %t23, %all
+    %t25 = vector pmovmskb %t24
+    %t26 = binary add i32 %t21, %t25
+    %t27 = binary add nowrap i64 %t5, 64
+    %t28 = cmp ne i64 %t3, %t27
+    branch %t28, ^unrolled_1, ^wide_tail_2
+
+  block ^wide_tail_2:
+    %t29 = phi i64 [^entry: 0, ^unrolled_1: %t27]
+    %t30 = phi i32 [^entry: 0, ^unrolled_1: %t26]
+    jump ^head
+
+  block ^head:
+    %i = phi i64 [^wide_tail_2: %t29, ^body: %next]
+    %sum = phi i32 [^wide_tail_2: %t30, ^body: %more]
+    %go = cmp lt i64 %i, %n
+    branch %go, ^body, ^out
+
+  block ^body:
+    %at = index inbounds i8 %p, %i
+    %v = load v128 %at
+    %eq = vector pcmpeqb %v, %all
+    %mask = vector pmovmskb %eq
+    %more = binary add i32 %sum, %mask
+    %next = binary add nowrap i64 %i, 16
+    jump ^head
+
+  block ^out:
+    return i32 %sum
+}
+function @zero() -> v128 [binding=strong] {
+  block ^entry:
+    %half = vector fromi64 0
+    %all = vector punpcklqdq %half, %half
+    return v128 %all
+}
+function @one_lane() -> v128 [binding=strong] {
+  block ^entry:
+    %low = vector fromi64 7
+    return v128 %low
+}
+function @not_literal(%x : i64) -> v128 [binding=strong] {
+  block ^entry:
+    %low = vector fromi64 %x
+    %high = vector fromi64 7
+    %all = vector punpcklqdq %low, %high
+    return v128 %all
+}

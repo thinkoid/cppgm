@@ -1,8 +1,17 @@
+global @__vector_literal_3ff00000000000003ff0000000000000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4607182418800017408
+  i64 4607182418800017408
+}
+global @__vector_literal_3fc000003fc000003fc000003fc00000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4593671620987453440
+  i64 4593671620987453440
+}
+
 function @fill(%e : ptr [pass=by_address, object_bytes=4864]) -> void [binding=strong, object=_Z4fillR6Engine] {
   block ^entry:
     %t3 = index i8 [projection=field] %e, 8
-    %t2 = vector fromf64 1
-    %t6 = vector pshufd %t2, 68
+    %t2 = addr @__vector_literal_3ff00000000000003ff0000000000000
+    %t6 = load v128 %t2
     jump ^unrolled_1
 
   block ^unrolled_1:
@@ -209,8 +218,8 @@ function @floats(%v : ptr, %lim : ptr, %n : i64) -> void [binding=strong, object
 
   block ^loop_preheader_3:
     %t18 = binary add i64 %n, -4
-    %t19 = vector fromf32 1.5f
-    %t20 = vector pshufd %t19, 0
+    %t19 = addr @__vector_literal_3fc000003fc000003fc000003fc00000
+    %t20 = load v128 %t19
     jump ^wide_loop_4
 
   block ^wide_loop_4:

@@ -16,6 +16,22 @@ global @pixels [binding=internal, object=_ZL6pixels] = {
 global @bytes [binding=internal, object=_ZL5bytes] = {
   zero 45
 }
+global @__vector_literal_00000001000000010000000100000001 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4294967297
+  i64 4294967297
+}
+global @__vector_literal_00000003000000030000000300000003 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 12884901891
+  i64 12884901891
+}
+global @__vector_literal_ffff8001ffff8001ffff8001ffff8001 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 -140728898453503
+  i64 -140728898453503
+}
+global @__vector_literal_00007fff00007fff00007fff00007fff : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 140733193420799
+  i64 140733193420799
+}
 
 function @train(%t : ptr, %w : ptr, %err : i32) -> void [binding=internal, object=_ZL5trainPKsPsii, no_inline=yes] {
   block ^entry:
@@ -29,8 +45,8 @@ function @train(%t : ptr, %w : ptr, %err : i32) -> void [binding=internal, objec
   block ^loop_preheader_1:
     %t6 = vector fromi32 %err
     %t7 = vector pshufd %t6, 0
-    %t8 = vector fromi32 1
-    %t9 = vector pshufd %t8, 0
+    %t8 = addr @__vector_literal_00000001000000010000000100000001
+    %t9 = load v128 %t8
     %t10 = vector psrlqi %t7, 32
     jump ^wide_loop_2
 
@@ -175,8 +191,8 @@ function @to_signed_bytes(%x : ptr, %out : ptr) -> void [binding=internal, objec
     branch %t5, ^loop_preheader_1, ^loop_preheader_3
 
   block ^loop_preheader_1:
-    %t6 = vector fromi32 3
-    %t7 = vector pshufd %t6, 0
+    %t6 = addr @__vector_literal_00000003000000030000000300000003
+    %t7 = load v128 %t6
     %t8 = vector psrlqi %t7, 32
     jump ^wide_loop_2
 
@@ -227,12 +243,12 @@ function @to_signed_bytes(%x : ptr, %out : ptr) -> void [binding=internal, objec
 }
 function @almost(%x : ptr, %out : ptr) -> void [binding=internal, object=_ZL6almostPKiPsi, no_inline=yes] {
   block ^entry:
-    %t1 = vector fromi32 3
-    %t2 = vector pshufd %t1, 0
-    %t3 = vector fromi32 -32767
-    %t4 = vector pshufd %t3, 0
-    %t5 = vector fromi32 32767
-    %t6 = vector pshufd %t5, 0
+    %t1 = addr @__vector_literal_00000003000000030000000300000003
+    %t2 = load v128 %t1
+    %t3 = addr @__vector_literal_ffff8001ffff8001ffff8001ffff8001
+    %t4 = load v128 %t3
+    %t5 = addr @__vector_literal_00007fff00007fff00007fff00007fff
+    %t6 = load v128 %t5
     %t7 = vector psrlqi %t2, 32
     jump ^wide_loop_1
 

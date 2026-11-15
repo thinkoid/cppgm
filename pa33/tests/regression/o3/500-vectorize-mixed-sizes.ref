@@ -1,3 +1,12 @@
+global @__vector_literal_00000000000000070000000000000007 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 7
+  i64 7
+}
+global @__vector_literal_00000002000000020000000200000002 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 8589934594
+  i64 8589934594
+}
+
 function @widen_short(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
   block ^entry:
     %t1 = cmp gt i64 %n, 0
@@ -260,8 +269,8 @@ function @two_arrays(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
   block ^loop_preheader_1:
     %t4 = binary add i64 %n, -4
     %t5 = vector pzero
-    %t6 = vector fromi64 7
-    %t7 = vector pshufd %t6, 68
+    %t6 = addr @__vector_literal_00000000000000070000000000000007
+    %t7 = load v128 %t6
     jump ^wide_loop_2
 
   block ^wide_loop_2:
@@ -322,8 +331,8 @@ function @two_sizes(%a : ptr, %b : ptr, %n : i64) -> void [no_inline=yes] {
     %t5 = vector fromi32 1
     %t6 = vector pshuflw %t5, 0
     %t7 = vector pshufd %t6, 0
-    %t8 = vector fromi32 2
-    %t9 = vector pshufd %t8, 0
+    %t8 = addr @__vector_literal_00000002000000020000000200000002
+    %t9 = load v128 %t8
     %t10 = vector toi64 %t7
     jump ^wide_loop_2
 

@@ -729,6 +729,14 @@ void finish_function(Program& program, SymbolId symbol, OptimizerStats& stats, c
 	changed = RUN_PASS(hold_loop_literals) || changed;
 	changed = RUN_PASS(issue_long_latency) || changed;
 	changed = RUN_PASS(sink_addresses) || changed;
+	// (The literal lanes it read are dead, and the globals are new symbols.)
+	if (RUN_PASS(load_vector_literals))
+	{
+		nounwind.resize(program.symbols.size(), 0);
+		unwritten.resize(program.symbols.size(), 0);
+		RUN_PASS(remove_dead_code);
+		changed = true;
+	}
 	// Two tests of different values with one target between them as one
 	// branch, once the loop passes have read the tests apart (a test of a
 	// joined value leaves the compares it replaces dead).

@@ -13,6 +13,10 @@ global @counts : obj<4096x4> = {
 global @ints : obj<4096x4> = {
   zero 4096
 }
+global @__vector_literal_00000005000000050000000500000005 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 21474836485
+  i64 21474836485
+}
 
 function @product(%i : i64) -> void [no_inline=yes] {
   block ^entry:
@@ -91,8 +95,8 @@ function @started() -> void [no_inline=yes] {
   block ^entry:
     %r = addr @counts
     %b = addr @ints
-    %t3 = vector fromi32 5
-    %t4 = vector pshufd %t3, 0
+    %t3 = addr @__vector_literal_00000005000000050000000500000005
+    %t4 = load v128 %t3
     jump ^unrolled_1
 
   block ^unrolled_1:

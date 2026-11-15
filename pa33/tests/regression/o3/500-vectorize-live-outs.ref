@@ -1,3 +1,8 @@
+global @__vector_literal_00000005000000050000000500000005 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 21474836485
+  i64 21474836485
+}
+
 function @sum(%x : ptr, %n : i64) -> u32 [no_inline=yes] {
   block ^entry:
     branch %n, ^loop_preheader_1, ^done
@@ -170,8 +175,8 @@ function @last(%x : ptr, %n : i64) -> u32 [no_inline=yes] {
   block ^loop_preheader_1:
     %t4 = binary add i64 %n, -4
     %t5 = vector pzero
-    %t6 = vector fromi32 5
-    %t7 = vector pshufd %t6, 0
+    %t6 = addr @__vector_literal_00000005000000050000000500000005
+    %t7 = load v128 %t6
     %t8 = vector psrlqi %t7, 32
     %t9 = binary and i64 %t4, -8
     branch %t9, ^unrolled_2, ^wide_tail_4

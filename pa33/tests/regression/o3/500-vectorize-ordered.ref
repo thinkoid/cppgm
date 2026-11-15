@@ -1,3 +1,20 @@
+global @__vector_literal_40080000000000004008000000000000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4613937818241073152
+  i64 4613937818241073152
+}
+global @__vector_literal_00000001000000010000000100000001 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4294967297
+  i64 4294967297
+}
+global @__vector_literal_3ff00000000000003ff0000000000000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4607182418800017408
+  i64 4607182418800017408
+}
+global @__vector_literal_00000002000000020000000200000002 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 8589934594
+  i64 8589934594
+}
+
 function @dot(%x : ptr, %y : ptr, %n : i64) -> f64 [no_inline=yes] {
   block ^entry:
     %t1 = cmp gt i64 %n, 0
@@ -120,8 +137,8 @@ function @down(%x : ptr, %n : i64) -> f64 [no_inline=yes] {
     branch %t3, ^loop_preheader_1, ^loop_preheader_4
 
   block ^loop_preheader_1:
-    %t4 = vector fromf64 3
-    %t5 = vector pshufd %t4, 68
+    %t4 = addr @__vector_literal_40080000000000004008000000000000
+    %t5 = load v128 %t4
     jump ^wide_loop_2
 
   block ^wide_loop_2:
@@ -176,13 +193,13 @@ function @halves(%n : i32) -> f64 [no_inline=yes] {
   block ^loop_preheader_1:
     %t5 = binary add i32 %n, -2
     %t6 = vector fromi64 4294967296
-    %t7 = vector fromi32 1
-    %t8 = vector pshufd %t7, 0
+    %t7 = addr @__vector_literal_00000001000000010000000100000001
+    %t8 = load v128 %t7
     %t9 = vector paddd %t8, %t6
-    %t10 = vector fromf64 1
-    %t11 = vector pshufd %t10, 68
-    %t12 = vector fromi32 2
-    %t13 = vector pshufd %t12, 0
+    %t10 = addr @__vector_literal_3ff00000000000003ff0000000000000
+    %t11 = load v128 %t10
+    %t12 = addr @__vector_literal_00000002000000020000000200000002
+    %t13 = load v128 %t12
     jump ^wide_loop_2
 
   block ^wide_loop_2:

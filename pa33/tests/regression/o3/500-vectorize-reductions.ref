@@ -1,3 +1,16 @@
+global @__vector_literal_00000005000000050000000500000005 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 21474836485
+  i64 21474836485
+}
+global @__vector_literal_00000000000000050000000000000005 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 5
+  i64 5
+}
+global @__vector_literal_00000007000000070000000700000007 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 30064771079
+  i64 30064771079
+}
+
 function @add_i32(%x : ptr, %n : i64) -> i32 [no_inline=yes] {
   block ^entry:
     %t1 = cmp gt i64 %n, 0
@@ -107,8 +120,8 @@ function @and_i32(%x : ptr, %n : i64) -> i32 [no_inline=yes] {
 
   block ^loop_preheader_1:
     %t4 = binary add i64 %n, -4
-    %t5 = vector fromi32 5
-    %t6 = vector pshufd %t5, 0
+    %t5 = addr @__vector_literal_00000005000000050000000500000005
+    %t6 = load v128 %t5
     jump ^wide_loop_2
 
   block ^wide_loop_2:
@@ -362,8 +375,8 @@ function @and_i64(%x : ptr, %n : i64) -> i64 [no_inline=yes] {
 
   block ^loop_preheader_1:
     %t4 = binary add i64 %n, -4
-    %t5 = vector fromi64 5
-    %t6 = vector pshufd %t5, 68
+    %t5 = addr @__vector_literal_00000000000000050000000000000005
+    %t6 = load v128 %t5
     jump ^wide_loop_2
 
   block ^wide_loop_2:
@@ -619,8 +632,8 @@ function @and_commuted(%x : ptr, %n : i64) -> i32 [no_inline=yes] {
 
   block ^loop_preheader_1:
     %t4 = binary add i64 %n, -4
-    %t5 = vector fromi32 7
-    %t6 = vector pshufd %t5, 0
+    %t5 = addr @__vector_literal_00000007000000070000000700000007
+    %t6 = load v128 %t5
     jump ^wide_loop_2
 
   block ^wide_loop_2:

@@ -1,3 +1,28 @@
+global @__vector_literal_80000000800000008000000080000000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 -9223372034707292160
+  i64 -9223372034707292160
+}
+global @__vector_literal_80000000000000008000000000000000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 -9223372036854775808
+  i64 -9223372036854775808
+}
+global @__vector_literal_40200000402000004020000040200000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4620693218757967872
+  i64 4620693218757967872
+}
+global @__vector_literal_40040000000000004004000000000000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4612811918334230528
+  i64 4612811918334230528
+}
+global @__vector_literal_7fffffffffffffff7fffffffffffffff : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 9223372036854775807
+  i64 9223372036854775807
+}
+global @__vector_literal_00000001000000010000000100000001 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4294967297
+  i64 4294967297
+}
+
 function @add_f32(%d : ptr, %x : ptr, %y : ptr, %n : i64) -> void [no_inline=yes] {
   block ^entry:
     %t1 = cmp gt i64 %n, 0
@@ -317,8 +342,8 @@ function @neg_f32(%d : ptr, %x : ptr, %y : ptr, %n : i64) -> void [no_inline=yes
 
   block ^loop_preheader_2:
     %t10 = binary add i64 %n, -4
-    %t11 = vector fromi32 -2147483648
-    %t12 = vector pshufd %t11, 0
+    %t11 = addr @__vector_literal_80000000800000008000000080000000
+    %t12 = load v128 %t11
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -711,8 +736,8 @@ function @neg_f64(%d : ptr, %x : ptr, %y : ptr, %n : i64) -> void [no_inline=yes
 
   block ^loop_preheader_2:
     %t10 = binary add i64 %n, -4
-    %t11 = vector fromi64 -9223372036854775808
-    %t12 = vector pshufd %t11, 68
+    %t11 = addr @__vector_literal_80000000000000008000000000000000
+    %t12 = load v128 %t11
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -772,8 +797,8 @@ function @literal_f32(%d : ptr, %x : ptr, %y : ptr, %n : i64) -> void [no_inline
 
   block ^loop_preheader_2:
     %t10 = binary add i64 %n, -4
-    %t11 = vector fromf32 2.5f
-    %t12 = vector pshufd %t11, 0
+    %t11 = addr @__vector_literal_40200000402000004020000040200000
+    %t12 = load v128 %t11
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -828,8 +853,8 @@ function @literal_f64(%d : ptr, %x : ptr, %y : ptr, %n : i64) -> void [no_inline
 
   block ^loop_preheader_2:
     %t10 = binary add i64 %n, -4
-    %t11 = vector fromf64 2.5
-    %t12 = vector pshufd %t11, 68
+    %t11 = addr @__vector_literal_40040000000000004004000000000000
+    %t12 = load v128 %t11
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -890,8 +915,8 @@ function @magnitude_f64(%d : ptr, %x : ptr, %y : ptr, %n : i64) -> void [no_inli
 
   block ^loop_preheader_2:
     %t10 = binary add i64 %n, -4
-    %t11 = vector fromi64 9223372036854775807
-    %t12 = vector pshufd %t11, 68
+    %t11 = addr @__vector_literal_7fffffffffffffff7fffffffffffffff
+    %t12 = load v128 %t11
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -1032,8 +1057,8 @@ function @float_chooses_int(%d : ptr, %x : ptr, %y : ptr, %n : i64) -> void [no_
 
   block ^loop_preheader_1:
     %t4 = binary add i64 %n, -4
-    %t5 = vector fromi32 1
-    %t6 = vector pshufd %t5, 0
+    %t5 = addr @__vector_literal_00000001000000010000000100000001
+    %t6 = load v128 %t5
     jump ^wide_loop_2
 
   block ^wide_loop_2:

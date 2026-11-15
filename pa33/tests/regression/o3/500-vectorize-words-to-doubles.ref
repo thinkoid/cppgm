@@ -1,3 +1,44 @@
+global @__vector_literal_45300000000000004530000000000000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4985484787499139072
+  i64 4985484787499139072
+}
+global @__vector_literal_43300000000000004330000000000000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4841369599423283200
+  i64 4841369599423283200
+}
+global @__vector_literal_00000000ffffffff00000000ffffffff : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4294967295
+  i64 4294967295
+}
+global @__vector_literal_45300000001000004530000000100000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4985484787500187648
+  i64 4985484787500187648
+}
+global @__vector_literal_80000000000000008000000000000000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 -9223372036854775808
+  i64 -9223372036854775808
+}
+global @__vector_literal_45300000801000004530000080100000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4985484789647671296
+  i64 4985484789647671296
+}
+global @__vector_literal_00000000000000010000000000000000 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 0
+  i64 1
+}
+global @__vector_literal_00000000000000010000000000000001 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 1
+  i64 1
+}
+global @__vector_literal_00000000000000020000000000000002 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 2
+  i64 2
+}
+global @__vector_literal_00000000000000040000000000000004 : obj<16x16> [storage=readonly, binding=internal] = {
+  i64 4
+  i64 4
+}
+
 function @unsigned_words(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
   block ^entry:
     branch %n, ^loop_preheader_1, ^done
@@ -8,14 +49,14 @@ function @unsigned_words(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
 
   block ^loop_preheader_2:
     %t2 = binary add i64 %n, -4
-    %t3 = vector fromi64 4985484787499139072
-    %t4 = vector pshufd %t3, 68
-    %t5 = vector fromi64 4841369599423283200
-    %t6 = vector pshufd %t5, 68
-    %t7 = vector fromi64 4294967295
-    %t8 = vector pshufd %t7, 68
-    %t9 = vector fromi64 4985484787500187648
-    %t10 = vector pshufd %t9, 68
+    %t3 = addr @__vector_literal_45300000000000004530000000000000
+    %t4 = load v128 %t3
+    %t5 = addr @__vector_literal_43300000000000004330000000000000
+    %t6 = load v128 %t5
+    %t7 = addr @__vector_literal_00000000ffffffff00000000ffffffff
+    %t8 = load v128 %t7
+    %t9 = addr @__vector_literal_45300000001000004530000000100000
+    %t10 = load v128 %t9
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -77,16 +118,16 @@ function @signed_words(%d : ptr, %x : ptr, %n : i64) -> void [no_inline=yes] {
 
   block ^loop_preheader_2:
     %t2 = binary add i64 %n, -4
-    %t3 = vector fromi64 -9223372036854775808
-    %t4 = vector pshufd %t3, 68
-    %t5 = vector fromi64 4985484787499139072
-    %t6 = vector pshufd %t5, 68
-    %t7 = vector fromi64 4841369599423283200
-    %t8 = vector pshufd %t7, 68
-    %t9 = vector fromi64 4294967295
-    %t10 = vector pshufd %t9, 68
-    %t11 = vector fromi64 4985484789647671296
-    %t12 = vector pshufd %t11, 68
+    %t3 = addr @__vector_literal_80000000000000008000000000000000
+    %t4 = load v128 %t3
+    %t5 = addr @__vector_literal_45300000000000004530000000000000
+    %t6 = load v128 %t5
+    %t7 = addr @__vector_literal_43300000000000004330000000000000
+    %t8 = load v128 %t7
+    %t9 = addr @__vector_literal_00000000ffffffff00000000ffffffff
+    %t10 = load v128 %t9
+    %t11 = addr @__vector_literal_45300000801000004530000080100000
+    %t12 = load v128 %t11
     jump ^wide_loop_3
 
   block ^wide_loop_3:
@@ -154,27 +195,27 @@ function @places(%d : ptr, %n : i64, %whole : f64) -> void [no_inline=yes] {
 
   block ^loop_preheader_2:
     %t6 = binary add i64 %n, -4
-    %t7 = vector pzero
-    %t8 = vector fromi64 1
-    %t9 = vector punpcklqdq %t7, %t8
-    %t10 = vector pshufd %t8, 68
-    %t11 = vector paddq %t10, %t9
-    %t12 = vector fromi64 4985484787499139072
-    %t13 = vector pshufd %t12, 68
-    %t14 = vector fromi64 4841369599423283200
-    %t15 = vector pshufd %t14, 68
-    %t16 = vector fromi64 4294967295
-    %t17 = vector pshufd %t16, 68
-    %t18 = vector fromi64 4985484787500187648
-    %t19 = vector pshufd %t18, 68
+    %t7 = addr @__vector_literal_00000000000000010000000000000000
+    %t8 = load v128 %t7
+    %t9 = addr @__vector_literal_00000000000000010000000000000001
+    %t10 = load v128 %t9
+    %t11 = vector paddq %t10, %t8
+    %t12 = addr @__vector_literal_45300000000000004530000000000000
+    %t13 = load v128 %t12
+    %t14 = addr @__vector_literal_43300000000000004330000000000000
+    %t15 = load v128 %t14
+    %t16 = addr @__vector_literal_00000000ffffffff00000000ffffffff
+    %t17 = load v128 %t16
+    %t18 = addr @__vector_literal_45300000001000004530000000100000
+    %t19 = load v128 %t18
     %t20 = vector fromf64 %whole
     %t21 = vector pshufd %t20, 68
     %t22 = vector fromf64 %parts
     %t23 = vector pshufd %t22, 68
-    %t24 = vector fromi64 2
-    %t25 = vector pshufd %t24, 68
-    %t26 = vector fromi64 4
-    %t27 = vector pshufd %t26, 68
+    %t24 = addr @__vector_literal_00000000000000020000000000000002
+    %t25 = load v128 %t24
+    %t26 = addr @__vector_literal_00000000000000040000000000000004
+    %t27 = load v128 %t26
     jump ^wide_loop_3
 
   block ^wide_loop_3:

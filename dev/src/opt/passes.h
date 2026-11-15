@@ -330,6 +330,9 @@ bool place_steps(FunctionContext& context);
 // O2+: a loop without calls reads its floating literals from registers
 // (opt/loop_literals.cpp).
 bool hold_loop_literals(FunctionContext& context);
+// O2+: where the target reads floating literals from read-only data, a
+// vector of literal lanes is read from there too (opt/vector_literals.cpp).
+bool load_vector_literals(FunctionContext& context);
 // O2+: in a block, the square roots and divisions that follow one an
 // instruction is about to read start before it (opt/long_latency.cpp).
 bool issue_long_latency(FunctionContext& context);
