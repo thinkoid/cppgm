@@ -1419,10 +1419,14 @@ Expr* Parser::parse_lambda()
 		// GNU attributes may come before the specifiers.
 		if (!collect_attributes(lambda->attributes))
 			return nullptr;
-		while (at(TokenKind::KW_MUTABLE) || at(TokenKind::KW_CONSTEXPR))
+		while (at(TokenKind::KW_MUTABLE) || at(TokenKind::KW_CONSTEXPR) || at(TokenKind::KW_CONSTEVAL))
 		{
-			bool& specifier = at(TokenKind::KW_MUTABLE) ? lambda->is_mutable : lambda->is_constexpr;
-			if (specifier)
+			const bool immediate = at(TokenKind::KW_CONSTEVAL);
+			bool& specifier = at(TokenKind::KW_MUTABLE) ? lambda->is_mutable
+				: immediate                             ? lambda->is_consteval
+														: lambda->is_constexpr;
+			if (specifier || (immediate && lambda->is_constexpr) ||
+				(at(TokenKind::KW_CONSTEXPR) && lambda->is_consteval))
 			{
 				fail();
 				return nullptr;

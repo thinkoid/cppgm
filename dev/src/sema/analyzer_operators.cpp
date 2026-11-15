@@ -732,6 +732,8 @@ ExprFacts* Analyzer::selected_operator(const syntax::Expr& expr, TokenKind op,
 	// operator function's final overrider is called (5.2.2p1).
 	if (member && selected->is_virtual)
 		facts->flags |= kVirtualCall;
+	if (selected->is_consteval)
+		immediate_invocation(expr, selected);
 	return facts;
 }
 
@@ -862,7 +864,11 @@ void Analyzer::operator_conversions(
 			check_conversion_access(operands[i]->facts, conversion, operands[i]->location);
 		odr_use_constants(*operands[i], &conversion);
 		if (conversion.constructor != nullptr)
+		{
 			apply_user_conversion(operands[i]->facts, conversion, operands[i]->location);
+			if (conversion.constructor->is_consteval)
+				check_immediate_conversion(*operands[i], conversion);
+		}
 		// A class prvalue operand bound to a reference parameter, or the
 		// implicit object parameter (13.3.1p5), is a temporary.
 		if (i != 0 || !member)

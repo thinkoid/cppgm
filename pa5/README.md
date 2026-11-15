@@ -531,3 +531,10 @@ parameters stay compact on both native and wasm32 targets.
 Retain `<=>` as a binary operator and in operator-function names. It
 associates to the left, between shift and relational precedence. Keep
 its source operands for semantic analysis, including defaulted declarations.
+### C++20 immediate declarations
+
+In C++20 mode, parse `consteval` among function and constructor specifiers,
+`constinit` among declaration specifiers, and `consteval` as an alternative
+to `constexpr` in a lambda declarator. Retain these specifiers in the AST.
+PA6 checks declaration validity, PA16 checks immediate invocations and
+constant initialization, and PA20 supplies immediate lambda semantics.

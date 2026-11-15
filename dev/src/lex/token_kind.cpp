@@ -163,6 +163,8 @@ const SimpleSpelling kSimpleSpellings[] = {
 	// and their probe position in the shared read-only table.
 	{ "requires", TokenKind::KW_REQUIRES },
 	{ "concept", TokenKind::KW_CONCEPT },
+	{ "consteval", TokenKind::KW_CONSTEVAL },
+	{ "constinit", TokenKind::KW_CONSTINIT },
 	{ "<=>", TokenKind::OP_SPACESHIP },
 };
 

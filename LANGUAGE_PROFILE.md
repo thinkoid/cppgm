@@ -24,6 +24,7 @@ return-deduction extensions remain available in the course's C++11 mode.
 | Contextual conversions, aggregate member defaults | C++14+ | PA11/PA12; constexpr PA16 |
 | Public aggregate bases, direct prvalue result objects, inline variables, aligned allocation | C++17 | PA11/PA12; constexpr PA16; multi-TU PA25; host ABI PA32 |
 | Fold expressions | C++17 | PA15; composed deduction PA18/PA19 |
+| Immediate functions (`consteval`), constant-initialization declarations (`constinit`) | C++20 | PA2–PA5 tokens and syntax; PA6 declaration validity; PA16 evaluation; PA20 immediate lambdas |
 | Relaxed constexpr bodies | C++14 rules, existing C++11 extension | PA16 |
 | Variable templates | C++14, existing C++11 extension | PA17 |
 | Template-template `typename`, placeholder non-type parameters, class deduction/guides, using packs | C++17 | PA17 declarations, PA18 deduction; multiple-base/member-pointer combinations PA22 |

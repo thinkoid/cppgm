@@ -1635,6 +1635,11 @@ bool ConstantInterpreter::complete_elements(const ConstValue& value) const
 	return true;
 }
 
+void ConstantInterpreter::immediate_value(const ConstValue& source, ConstValue& out)
+{
+	CopyValue(out, source, arena_);
+}
+
 bool ConstantInterpreter::publishable(const ConstValue& value) const
 {
 	// Shared templates contain only unknown or zero values, never an
@@ -1648,6 +1653,8 @@ bool ConstantInterpreter::publishable(const ConstValue& value) const
 	{
 		if (value.root == RootKind::Object || value.root == RootKind::Parameter || value.root == RootKind::Unknown)
 			return false;
+		if (value.root == RootKind::Function)
+			return !static_cast<const FunctionEntity*>(value.address.entity)->is_consteval;
 		if (value.root == RootKind::Variable)
 		{
 			const VariableEntity* variable = static_cast<const VariableEntity*>(value.address.entity);
@@ -1655,6 +1662,9 @@ bool ConstantInterpreter::publishable(const ConstValue& value) const
 		}
 		return true;
 	}
+	if (value.kind == ValueKind::MemberPointer && value.address.entity != nullptr &&
+		value.type->unqualified->element->kind == TypeKind::Function)
+		return !static_cast<const FunctionEntity*>(value.address.entity)->is_consteval;
 	if (value.kind != ValueKind::Array && value.kind != ValueKind::Class)
 		return true;
 	for (uint32_t i = 0; i < value.count; ++i)
@@ -1729,6 +1739,77 @@ const ConstValue* ConstantInterpreter::publish(const ConstValue& value, uint32_t
 }
 
 // ------------------------------------------------------------- entry points
+
+const ConstValue* ConstantInterpreter::evaluate_immediate_construction(
+	const Type* type, const syntax::Initializer* initializer, const FunctionEntity* constructor, uint32_t location)
+{
+	++analyzer_.graph_.constant_evaluations;
+	ConstPlace object;
+	ConstValue value;
+	if (!new_object(type, object, location) || !construct(type, object, initializer, constructor, location) ||
+		!read(object, value, location) || !complete(value))
+		return nullptr;
+	return !incomplete_class_ ? publish(value, location) : nullptr;
+}
+
+const ConstValue* ConstantInterpreter::evaluate_immediate_conversion(
+	const syntax::Expr& expr, const Conversion& conversion)
+{
+	++analyzer_.graph_.constant_evaluations;
+	const FunctionEntity* function = conversion.constructor;
+	const Type* returned = function->constructor ? function->owner->entity->type : function->type->canonical->element;
+	Result result = Result();
+	ConstPlace object;
+	if (!returned->is_reference() && ClassOf(returned) != nullptr)
+	{
+		if (!new_object(returned, object, expr.location))
+			return nullptr;
+		result.target = &object;
+	}
+	ConstValue value = ConstValue();
+	if (function->constructor)
+	{
+		Argument argument = Argument();
+		argument.expr = &expr;
+		argument.conversion = conversion.argument;
+		if (!run_constructor(function, object, &argument, 1, expr.location))
+			return nullptr;
+	}
+	else if (!conversion_call(expr, expr.facts, function, result))
+		return nullptr;
+	if (returned->is_reference())
+		value = PointerTo(result.place, analyzer_.types_.pointer(returned->element));
+	else if (ClassOf(returned) != nullptr)
+	{
+		if (!read(object, value, expr.location) || !complete(value))
+			return nullptr;
+	}
+	else
+		value = result.value;
+	return !incomplete_class_ ? publish(value, expr.location) : nullptr;
+}
+
+const ConstValue* ConstantInterpreter::evaluate_immediate(const syntax::Expr& expr)
+{
+	++analyzer_.graph_.constant_evaluations;
+	ConstValue value = ConstValue();
+	if (IsVoid(expr.facts->type))
+	{
+		if (!discard(expr))
+			return nullptr;
+		value.type = expr.facts->type;
+	}
+	else if (expr.facts->category != ValueCategory::PRValue)
+	{
+		ConstPlace place;
+		if (!glvalue(expr, place))
+			return nullptr;
+		value = PointerTo(place, analyzer_.types_.pointer(expr.facts->type));
+	}
+	else if (!rvalue(expr, value) || !complete(value))
+		return nullptr;
+	return !incomplete_class_ ? publish(value, expr.location) : nullptr;
+}
 
 bool ConstantInterpreter::evaluate(const syntax::Expr& expr, bool converted, ConstValue& out)
 {

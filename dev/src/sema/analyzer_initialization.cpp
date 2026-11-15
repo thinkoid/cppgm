@@ -735,6 +735,8 @@ void Analyzer::aggregate_element(
 		}
 		expression_scope_ = scope;
 		apply_user_conversion(element.facts, conversion, element.location);
+		if (conversion.constructor->is_consteval)
+			check_immediate_conversion(element, conversion);
 		record_conversion(facts_of(element), conversion);
 		return;
 	}

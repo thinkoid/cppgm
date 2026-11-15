@@ -32,7 +32,8 @@ const syntax::Expr* WithoutParentheses(const syntax::Expr* expr)
 		if (expr->kind == syntax::ExprKind::Paren)
 			expr = static_cast<const syntax::ParenExpr*>(expr)->inner;
 		else if (expr->kind == syntax::ExprKind::Binary && expr->facts != nullptr &&
-			(expr->facts->flags & (sema::kRewrittenComparison | sema::kUserConverted)) == sema::kRewrittenComparison)
+			(expr->facts->flags & (sema::kRewrittenComparison | sema::kUserConverted | sema::kImmediateValue)) ==
+				sema::kRewrittenComparison)
 			expr = expr->facts->replacement;
 		else
 			break;
@@ -119,6 +120,8 @@ bool FunctionLowering::may_throw(const syntax::Expr* root)
 			found = true;
 			break;
 		}
+		if (facts != nullptr && (facts->flags & sema::kImmediateValue) != 0)
+			continue;
 		if (facts != nullptr && (facts->flags & sema::kUserConverted) != 0)
 		{
 			// 13.3.1.2p7, 13.3.1.5, 6.4p4: a class operand rewritten as its
@@ -129,7 +132,9 @@ bool FunctionLowering::may_throw(const syntax::Expr* root)
 				break;
 			}
 			facts = facts->original;
-			if (e->kind == syntax::ExprKind::Binary && (facts->flags & sema::kRewrittenComparison) != 0)
+			if (e->kind == syntax::ExprKind::Binary &&
+				(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted | sema::kImmediateValue)) ==
+					sema::kRewrittenComparison)
 			{
 				e = facts->replacement;
 				facts = e->facts;
@@ -1126,7 +1131,8 @@ bool FunctionLowering::creates_temporaries(
 		const sema::ExprFacts* facts = e->facts;
 		if (facts == nullptr || (facts->flags & sema::kFolded) != 0)
 			continue;
-		scan_constructor_temporaries(*e, &parameter_object);
+		if ((facts->flags & sema::kImmediateValue) == 0)
+			scan_constructor_temporaries(*e, &parameter_object);
 		// A converting constructor consumes its source as its first argument;
 		// its remaining arguments are evaluated in this full-expression too.
 		for (const sema::Conversion* c = facts->conversion; c != nullptr; c = c->after)
@@ -1142,10 +1148,12 @@ bool FunctionLowering::creates_temporaries(
 		}
 		// A class operand converted by a conversion function is evaluated
 		// as its own facts say (a prvalue's temporary is its object).
-		if ((facts->flags & sema::kUserConverted) != 0)
+		if ((facts->flags & (sema::kUserConverted | sema::kImmediateValue)) == sema::kUserConverted)
 		{
 			facts = facts->original;
-			if (e->kind == syntax::ExprKind::Binary && (facts->flags & sema::kRewrittenComparison) != 0)
+			if (e->kind == syntax::ExprKind::Binary &&
+				(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted | sema::kImmediateValue)) ==
+					sema::kRewrittenComparison)
 			{
 				e = facts->replacement;
 				facts = e->facts;
@@ -1194,6 +1202,8 @@ bool FunctionLowering::creates_temporaries(
 			found = true;
 			break;
 		}
+		if ((facts->flags & sema::kImmediateValue) != 0)
+			continue;
 		switch (e->kind)
 		{
 		case syntax::ExprKind::Binary:

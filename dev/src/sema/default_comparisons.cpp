@@ -215,6 +215,7 @@ void Analyzer::implicit_comparison_equality(FunctionEntity* source, const ClassE
 	function->member = source->member;
 	function->is_virtual = source->is_virtual;
 	function->is_constexpr = source->is_constexpr;
+	function->is_consteval = source->is_consteval;
 	function->internal_linkage = source->internal_linkage;
 	function->is_operator = true;
 	function->operator_token = TokenKind::OP_EQ;

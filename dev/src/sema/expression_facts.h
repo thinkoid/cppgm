@@ -245,6 +245,10 @@ enum : uint32_t
 	// local's literal initializer (the course keeps every emitted arm's
 	// cleanups), so none is set at present.
 	kThenUnreachable = 67108864,
+	// On an invocation (including a converted class operand): its
+	// published immediate result. A conditional retains kUserConverted.
+	// Kept in the existing union without growing ordinary expression facts.
+	kImmediateValue = kThenUnreachable,
 	kElseUnreachable = 134217728,
 	// An array new- or delete-expression of class elements whose class's
 	// usual operator delete[] (its member lookup's, 12.5p4-p5, whatever
@@ -328,6 +332,8 @@ struct ExprFacts
 		const ThreeWayComparison* comparison;
 		// A rewritten C++20 comparison (kRewrittenComparison).
 		const syntax::Expr* replacement;
+		// kImmediateValue: the complete constant result of an immediate call.
+		const ConstValue* immediate;
 	};
 
 	Constant constant() const { return Constant{ value, type }; }

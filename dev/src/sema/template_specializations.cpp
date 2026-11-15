@@ -297,6 +297,7 @@ Binding* Analyzer::explicit_function_specialization(const Specifiers& specifiers
 	function->explicit_specialization = true;
 	function->instantiated = false;
 	function->is_constexpr = specifiers.is_constexpr;
+	function->is_consteval = specifiers.is_consteval;
 	function->defined = function->defined || definition || deleted;
 	if (info.parameters != nullptr)
 		function->parameters = info.parameters;

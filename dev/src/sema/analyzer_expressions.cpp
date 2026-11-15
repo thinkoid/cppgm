@@ -208,6 +208,19 @@ void Analyzer::odr_use(FunctionEntity* function, bool call)
 				DeferredUse{ DeferredUse::Kind::Function, call, nullptr, nullptr, function, nullptr, nullptr, 0 });
 		return;
 	}
+	if (function->is_consteval)
+	{
+		if (!call && !immediate_context())
+		{
+			if (immediate_use_ != nullptr)
+				immediate_use_->function = function;
+			else
+				error(0, "an immediate function named outside an immediate invocation");
+		}
+		if (function->instantiated && !function->definition_demanded && semantic())
+			require_function_definition(function);
+		return;
+	}
 	if (default_argument_demand_ != nullptr && defer_default_function(function, call))
 		return;
 	if (function->temporary_reference_initializer)
@@ -1128,7 +1141,11 @@ const Conversion* Analyzer::finish_conversion(const syntax::Expr& expr, Conversi
 	if (potential)
 		potential_use(expr, &conversion);
 	if (conversion.constructor != nullptr)
+	{
 		apply_user_conversion(facts, conversion, expr.location);
+		if (conversion.constructor->is_consteval)
+			check_immediate_conversion(expr, conversion);
+	}
 	check_conversion_access(facts, conversion, expr.location);
 	check_binding_temporary(facts, conversion, expr.location);
 	if (!potential)
@@ -3122,6 +3139,8 @@ ExprFacts* Analyzer::explicit_conversion(
 				expression_scope_ = scope;
 				if (conversion.constructor != nullptr)
 					apply_user_conversion(source, conversion, expr.location);
+				if (conversion.constructor != nullptr && conversion.constructor->is_consteval)
+					check_immediate_conversion(*operand, conversion);
 				check_conversion_access(source, conversion, expr.location, !c_style);
 				if (failed())
 					return nullptr;
@@ -3220,6 +3239,8 @@ ExprFacts* Analyzer::explicit_conversion(
 	{
 		expression_scope_ = scope;
 		apply_user_conversion(source, conversion, expr.location);
+		if (conversion.constructor != nullptr && conversion.constructor->is_consteval)
+			check_immediate_conversion(*operand, conversion);
 		record_conversion(source, conversion);
 		return new_facts(expr, goal, ValueCategory::PRValue);
 	}

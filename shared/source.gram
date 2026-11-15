@@ -165,6 +165,7 @@ member-function-specifier:
 	KW_VIRTUAL
 	KW_EXPLICIT
 	KW_CONSTEXPR
+	KW_CONSTEVAL
 	KW_FRIEND
 	KW_STATIC
 
@@ -223,6 +224,8 @@ decl-specifier:
 	KW_INLINE
 	KW_VIRTUAL
 	KW_CONSTEXPR
+	KW_CONSTEVAL
+	KW_CONSTINIT
 	KW_THREAD_LOCAL
 	KW_AUTO
 
@@ -630,7 +633,7 @@ lambda-expression:
 	lambda-introducer lambda-declarator? compound-statement
 
 lambda-declarator:
-	parameter-clause KW_MUTABLE? KW_CONSTEXPR? noexcept-specification? trailing-return-type?
+	parameter-clause KW_MUTABLE? (KW_CONSTEXPR | KW_CONSTEVAL)? noexcept-specification? trailing-return-type?
 
 lambda-introducer:
 	OP_LSQUARE lambda-capture? OP_RSQUARE

@@ -249,8 +249,19 @@ bool ConstantInterpreter::rvalue(const syntax::Expr& expr, ConstValue& out)
 	if (!step(e->location))
 		return false;
 	TypeTable& types = analyzer_.types_;
+	if ((facts->flags & kImmediateValue) != 0)
+	{
+		if (facts->category != ValueCategory::PRValue)
+		{
+			ConstPlace place;
+			place = PlaceOf(*facts->immediate, facts->type);
+			return read(place, out, e->location);
+		}
+		immediate_value(*facts->immediate, out);
+		return true;
+	}
 	if (e->kind == syntax::ExprKind::Binary &&
-		(facts->flags & (kRewrittenComparison | kUserConverted)) == kRewrittenComparison)
+		(facts->flags & (kRewrittenComparison | kUserConverted | kImmediateValue)) == kRewrittenComparison)
 		return rvalue(*facts->replacement, out);
 	if ((facts->flags & kUserConverted) != 0)
 	{
@@ -784,8 +795,13 @@ bool ConstantInterpreter::glvalue(const syntax::Expr& expr, ConstPlace& out)
 		return fail(e->location, "an expression outside constant evaluation");
 	if (!step(e->location))
 		return false;
+	if ((facts->flags & kImmediateValue) != 0)
+	{
+		out = PlaceOf(*facts->immediate, facts->type);
+		return true;
+	}
 	if (e->kind == syntax::ExprKind::Binary &&
-		(facts->flags & (kRewrittenComparison | kUserConverted)) == kRewrittenComparison)
+		(facts->flags & (kRewrittenComparison | kUserConverted | kImmediateValue)) == kRewrittenComparison)
 		return glvalue(*facts->replacement, out);
 	if ((facts->flags & kUserConverted) != 0)
 	{
@@ -1102,6 +1118,8 @@ bool ConstantInterpreter::discard(const syntax::Expr& expr)
 	const ExprFacts* facts = e->facts;
 	if (facts == nullptr || facts->type == nullptr)
 		return fail(e->location, "an expression outside constant evaluation");
+	if ((facts->flags & kImmediateValue) != 0)
+		return true;
 	if (IsVoid(facts->type) && e->kind == syntax::ExprKind::Call)
 	{
 		Result result = Result();

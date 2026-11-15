@@ -58,6 +58,28 @@ the same source-file ordering and `-o` relaxations as the earlier source-to-LowI
 milestones. Preserve the earlier dump modes. Native driver behavior and optimized
 LowIR output are not required in PA16.
 
+### C++20 immediate functions and constant initialization
+
+In C++20 mode, `consteval` declares an immediate function or constructor.
+Its potentially evaluated invocations outside an immediate function context
+must be constant expressions, including implicit user conversions. Analyze
+these invocations with the shared typed constant evaluator, and pass their
+complete values to lowering. This applies to scalar, object, reference and
+void results at every optimization level. Calls inside an immediate function
+are evaluated as part of its enclosing invocation. Immediate function addresses
+can be used inside these evaluations, but cannot escape into a constant result
+or runtime code. Redeclarations must repeat the same specifier. `consteval`
+cannot declare a variable, destructor, allocation or deallocation function.
+The existing constexpr virtual-call limitation remains; C++23 `if consteval`
+and immediate-function escalation are outside this profile.
+
+`constinit` requires constant initialization and static or thread storage.
+It does not add `const`, make a mutable variable usable in constant expressions,
+or require a literal class type. Reuse the initialization rules of the hosted
+`__constinit` extension. Both new words remain identifiers in C++11–17;
+`__cpp_consteval` is `201811L` and `__cpp_constinit` is `201907L` in C++20.
+Immediate lambda call operators compose with PA20's closure rules.
+
 ### Fixed template arguments in function bodies
 
 A nondependent constant expression used as a template argument in a retained

@@ -201,6 +201,8 @@ ExprFacts* Analyzer::literal_call(const syntax::LiteralExpr& expr, FunctionEntit
 	facts->entity = function;
 	facts->flags |= kDirectCall | kUserLiteral;
 	facts->value = form;
+	if (function->is_consteval)
+		immediate_invocation(expr, function);
 	return facts;
 }
 
@@ -296,6 +298,8 @@ ExprFacts* Analyzer::user_string_literal(
 	facts->entity = function;
 	facts->flags |= kDirectCall | kUserLiteral;
 	facts->value = kLiteralCallString | uint64_t(string.units - 1) << 8;
+	if (function->is_consteval)
+		immediate_invocation(expr, function);
 	return facts;
 }
 

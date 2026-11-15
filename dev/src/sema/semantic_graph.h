@@ -34,6 +34,7 @@ struct ClassEntity;
 struct FunctionEntity;
 struct VariableEntity;
 struct DemandList;
+struct ConstValue;
 
 enum class BindingKind : uint8_t
 {

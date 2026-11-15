@@ -149,6 +149,8 @@ public:
 	// integral object's value, published on first request), in the
 	// semantic arena; null when it has none.
 	const ConstValue* evaluated_value(const VariableEntity* variable);
+	const ConstValue* immediate_conversion(const syntax::Expr& expr) const;
+	const ConstValue* immediate_construction(const void* key) const;
 	// A constexpr reference whose initializer selects its referent by a
 	// conditional expression (5.16): the course reads it through its
 	// storage and defines the functions its initializer odr-uses (see
@@ -1262,6 +1264,13 @@ private:
 	ExprFacts* builtin_invoke(const syntax::CallExpr& expr, Scope* scope);
 	ExprFacts* invoke_call(
 		const syntax::CallExpr& rewritten, const syntax::Expr* callable, const syntax::Expr* object, Scope* scope);
+	ExprFacts* call_form(const syntax::CallExpr& expr, Scope* scope);
+	bool immediate_context() const;
+	void immediate_invocation(const syntax::Expr& expr, const FunctionEntity* function);
+	void check_immediate_conversion(const syntax::Expr& expr, const Conversion& conversion);
+	void check_immediate_subobject(const SubobjectInit& init, uint32_t location);
+	void check_immediate_construction(const void* key, const Type* type, const syntax::Initializer* initializer,
+		const FunctionEntity* constructor, uint32_t location);
 	ExprFacts* indirect_call(const syntax::CallExpr& expr, ExprFacts* callee);
 	ExprFacts* c_unprototyped_call(const syntax::CallExpr& expr, ExprFacts* callee, const Type* function);
 	ExprFacts* resolved_call(const syntax::CallExpr& expr, const FunctionList* functions, ExprFacts* object,
@@ -2164,6 +2173,22 @@ private:
 	bool flexible_given_ = false;
 	// Nonzero inside unevaluated operands (5p8): nothing is odr-used.
 	uint32_t unevaluated_;
+	// A name of an immediate function is permitted inside an immediate
+	// invocation. Calls resolve after their operands: defer an operand
+	// designation until that enclosing call has selected its function.
+	struct ImmediateUse
+	{
+		ImmediateUse*& current;
+		ImmediateUse* parent;
+		const FunctionEntity* function = nullptr;
+		explicit ImmediateUse(ImmediateUse*& slot) : current(slot), parent(slot) { current = this; }
+		~ImmediateUse() { current = parent; }
+	};
+	ImmediateUse* immediate_use_ = nullptr;
+	// Only actual immediate user conversions have an entry; ordinary
+	// expressions and interned conversion records carry no added payload.
+	PointerMap immediate_conversion_index_;
+	std::vector<const ConstValue*> immediate_conversions_;
 	// Analyzing the body of a hosted inline wrapper of a reserved builtin
 	// this compiler lacks (see define_function): such a call is deferred
 	// (defer_reserved_call), and its callee is no undeclared name.

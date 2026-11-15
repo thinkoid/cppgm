@@ -527,6 +527,8 @@ public:
 	// The value the analysis's constant evaluation gave a variable's
 	// initialization, or null (sema::Analyzer::evaluated_value).
 	const sema::ConstValue* evaluated_value(const sema::VariableEntity* variable) const;
+	const sema::ConstValue* immediate_conversion(const syntax::Expr& expr) const;
+	const sema::ConstValue* immediate_construction(const void* key) const;
 	bool read_through_storage(const sema::VariableEntity* variable) const;
 	// A template instance's function definition, instantiated on this
 	// demand (false when its template has none).

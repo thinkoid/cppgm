@@ -195,6 +195,31 @@ bool Analyzer::member_template_arguments(
 
 ExprFacts* Analyzer::call(const syntax::CallExpr& expr, Scope* scope)
 {
+	if (!cxx20_ || unevaluated_ != 0 || immediate_context())
+		return call_form(expr, scope);
+	ImmediateUse use(immediate_use_);
+	ExprFacts* facts = call_form(expr, scope);
+	immediate_use_ = use.parent;
+	if (facts != nullptr && !failed())
+	{
+		const FunctionEntity* function = facts->entity != nullptr && facts->entity->kind == EntityKind::Function
+			? static_cast<const FunctionEntity*>(facts->entity)
+			: nullptr;
+		if (function != nullptr && function->is_consteval)
+			immediate_invocation(expr, function);
+		else if (use.function != nullptr)
+		{
+			if (use.parent != nullptr)
+				use.parent->function = use.function;
+			else
+				error(expr.location, "an immediate function named outside an immediate invocation");
+		}
+	}
+	return facts;
+}
+
+ExprFacts* Analyzer::call_form(const syntax::CallExpr& expr, Scope* scope)
+{
 	unsigned levels = 0;
 	const syntax::IdExpr* named = DesignatingName(expr.callee, levels);
 	const bool bare = named != nullptr && WithoutParentheses(expr.callee) == named;
@@ -1433,7 +1458,11 @@ void Analyzer::convert_arguments(
 				check_binding_temporary(argument.facts, conversion, argument.location);
 				odr_use_constants(argument, &conversion);
 				if (conversion.constructor != nullptr)
+				{
 					apply_user_conversion(argument.facts, conversion, argument.location);
+					if (conversion.constructor->is_consteval)
+						check_immediate_conversion(argument, conversion);
+				}
 				record_conversion(facts_of(argument), conversion);
 			}
 			else

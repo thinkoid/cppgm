@@ -118,8 +118,11 @@ void FunctionLowering::discard(const syntax::Expr& expr)
 	check_stack(e->location);
 	const DebugScope debug(*this, e->location);
 	const sema::ExprFacts* facts = e->facts;
+	if (facts != nullptr && (facts->flags & sema::kImmediateValue) != 0 && sema::ClassOf(facts->type) == nullptr)
+		return;
 	if (e->kind == syntax::ExprKind::Binary && facts != nullptr &&
-		(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted)) == sema::kRewrittenComparison)
+		(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted | sema::kImmediateValue)) ==
+			sema::kRewrittenComparison)
 	{
 		discard(*facts->replacement);
 		return;

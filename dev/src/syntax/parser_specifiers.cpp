@@ -71,6 +71,8 @@ bool IsKeywordSpecifier(TokenKind kind)
 	case TokenKind::KW_VIRTUAL:
 	case TokenKind::KW_EXPLICIT:
 	case TokenKind::KW_CONSTEXPR:
+	case TokenKind::KW_CONSTEVAL:
+	case TokenKind::KW_CONSTINIT:
 	case TokenKind::KW_THREAD_LOCAL:
 	case TokenKind::KW_MUTABLE:
 	case TokenKind::KW_REGISTER:
@@ -541,6 +543,8 @@ bool Parser::parse_decl_specifiers(ListFrame<DeclSpecifier>& list, SpecifierInfo
 				}
 				info.has_type = info.has_type || IsSimpleTypeKeyword(kind);
 				DeclSpecifier specifier = KeywordSpecifier(kind, token.location);
+				if (kind == TokenKind::KW_CONSTINIT)
+					specifier.kind = DeclSpecKind::Constinit;
 				next();
 				if (kind == TokenKind::KW_EXPLICIT && at(TokenKind::OP_LPAREN))
 				{

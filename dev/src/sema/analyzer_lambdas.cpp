@@ -1024,6 +1024,7 @@ void Analyzer::closure_conversion(const ClassEntity* entity, bool conversion_fun
 		invoker->is_static = true;
 		invoker->is_inline = true;
 		invoker->is_constexpr = call->is_constexpr;
+		invoker->is_consteval = call->is_consteval;
 		invoker->inline_member = true;
 		invoker->defined = true;
 		invoker->body = call->body;
@@ -1050,6 +1051,7 @@ void Analyzer::closure_conversion(const ClassEntity* entity, bool conversion_fun
 	conversion->conversion = true;
 	conversion->is_inline = true;
 	conversion->is_constexpr = cxx17_;
+	conversion->is_consteval = call->is_consteval;
 	conversion->inline_member = true;
 	conversion->nothrow = true;
 	Binding* binding = new_binding(BindingKind::Function, conversion_key_, conversion, conversion_type);
@@ -1126,6 +1128,7 @@ FunctionEntity* Analyzer::closure_call(ClassEntity* closure, const syntax::Lambd
 	// A C++17 call operator is a constexpr candidate until its typed body
 	// and deduced result settle eligibility, including specializations.
 	call->is_constexpr = cxx17_;
+	call->is_consteval = expr.is_consteval;
 	call->inline_member = true;
 	call->defined = true;
 	call->parameters = expr.parameters;

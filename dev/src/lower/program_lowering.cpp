@@ -917,6 +917,8 @@ lowir::SymbolId ProgramLowering::inline_copy(const sema::FunctionEntity* functio
 
 void ProgramLowering::demand(const sema::FunctionEntity* function, EntryVariant variant)
 {
+	if (function->is_consteval)
+		return;
 	if (function->denotes != nullptr)
 		function = function->denotes;
 	// A constructor's base entry is its own definition, as a virtual
@@ -1038,6 +1040,16 @@ bool ProgramLowering::callee_nothrow(const syntax::Expr& callee)
 const sema::ConstValue* ProgramLowering::evaluated_value(const sema::VariableEntity* variable) const
 {
 	return analyzer_ != nullptr ? analyzer_->evaluated_value(variable) : nullptr;
+}
+
+const sema::ConstValue* ProgramLowering::immediate_conversion(const syntax::Expr& expr) const
+{
+	return analyzer_ != nullptr ? analyzer_->immediate_conversion(expr) : nullptr;
+}
+
+const sema::ConstValue* ProgramLowering::immediate_construction(const void* key) const
+{
+	return analyzer_ != nullptr ? analyzer_->immediate_construction(key) : nullptr;
 }
 
 bool ProgramLowering::read_through_storage(const sema::VariableEntity* variable) const

@@ -328,6 +328,9 @@ bool FunctionLowering::unreachable_operand(const syntax::ConditionalExpr& expr, 
 	// kThenUnreachable, kElseUnreachable): the temporaries it would destroy
 	// at its branch's end (at the full-expression's root) get no cleanups.
 	const uint32_t flags = expr.facts->flags;
+	// A converted class operand reuses the bit for its immediate call.
+	if ((flags & sema::kUserConverted) != 0)
+		return false;
 	return (&operand == expr.then_expr && (flags & sema::kThenUnreachable) != 0) ||
 		(&operand == expr.else_expr && (flags & sema::kElseUnreachable) != 0);
 }

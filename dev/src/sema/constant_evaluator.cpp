@@ -1038,12 +1038,15 @@ void Analyzer::record_constant_initializer(
 	if (variable->member)
 		return;
 	const ConstValue* initialized = nullptr;
-	if (variable->is_constinit && semantic())
+	const bool immediate = variable->constructor != nullptr && variable->constructor->is_consteval &&
+		!immediate_context() && unevaluated_ == 0;
+	if ((variable->is_constinit || immediate) && semantic())
 	{
 		initialized = constant_initialization(variable, initializer);
 		if (initialized == nullptr)
 			error(initializer != nullptr ? initializer->location : 0,
-				"a __constinit variable is not constant-initialized");
+				immediate ? "an immediate constructor invocation is not a constant expression"
+						  : "a __constinit variable is not constant-initialized");
 		// Initialization bytes are available to lowering, while the mutable
 		// variable remains unusable as a constant expression.
 		set_evaluated(variable, initialized);

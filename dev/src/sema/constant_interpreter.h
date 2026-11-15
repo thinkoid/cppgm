@@ -47,6 +47,11 @@ public:
 	// recorded (a converted constant expression, 5.19p3, or a contextual
 	// conversion to bool).
 	bool evaluate(const syntax::Expr& expr, bool converted, ConstValue& out);
+	// A C++20 immediate invocation, including object, reference and void results.
+	const ConstValue* evaluate_immediate(const syntax::Expr& expr);
+	const ConstValue* evaluate_immediate_conversion(const syntax::Expr& expr, const Conversion& conversion);
+	const ConstValue* evaluate_immediate_construction(
+		const Type* type, const syntax::Initializer* initializer, const FunctionEntity* constructor, uint32_t location);
 	// A scalar initializer after its recorded conversion, published with
 	// only constant-address roots that survive this evaluation.
 	const ConstValue* evaluate_initializer(const syntax::Expr& expr);
@@ -189,6 +194,7 @@ private:
 	// ---------------------------------------------------- expressions
 	bool decay_reference(ConstPlace place, const Type* type, ConstValue& out, uint32_t location);
 	bool rvalue(const syntax::Expr& expr, ConstValue& out);
+	void immediate_value(const ConstValue& source, ConstValue& out);
 	bool operand(const syntax::Expr& expr, ConstValue& out);
 	bool converted(const syntax::Expr& expr, const Conversion* conversion, ConstValue& out);
 	bool apply_standard(const syntax::Expr& expr, const Conversion* conversion, ConstValue& value);

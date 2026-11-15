@@ -327,3 +327,10 @@ The same monotonic-extension rule applies here:
 - in practice, lambda helper synthesis and `auto` deduction should stay on-demand rather
   than eagerly changing the behavior of ordinary earlier programs that do not use those
   features
+
+### C++20 immediate lambdas
+
+A lambda declared with `consteval` has an immediate call operator. Apply
+PA16's immediate invocation and function-address restrictions to its calls
+and its conversion to a function pointer, including instantiated generic
+call operators. `constexpr` and `consteval` cannot appear together.

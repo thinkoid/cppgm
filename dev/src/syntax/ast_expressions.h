@@ -275,6 +275,7 @@ struct LambdaExpr : Expr
 	bool has_declarator;
 	bool is_mutable;
 	bool is_constexpr;
+	bool is_consteval;
 	bool has_noexcept;
 	// A dynamic-exception-specification, its type-ids in throw_types.
 	bool has_throw;

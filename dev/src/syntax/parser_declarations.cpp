@@ -12,7 +12,8 @@ namespace {
 bool IsMemberFunctionSpecifier(TokenKind kind)
 {
 	return kind == TokenKind::KW_INLINE || kind == TokenKind::KW_VIRTUAL || kind == TokenKind::KW_EXPLICIT ||
-		kind == TokenKind::KW_CONSTEXPR || kind == TokenKind::KW_FRIEND || kind == TokenKind::KW_STATIC;
+		kind == TokenKind::KW_CONSTEXPR || kind == TokenKind::KW_CONSTEVAL || kind == TokenKind::KW_FRIEND ||
+		kind == TokenKind::KW_STATIC;
 }
 
 bool IsAccessSpecifier(TokenKind kind)

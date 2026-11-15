@@ -474,7 +474,7 @@ void AstDumper::owned_specifier(const DeclSpecifier& specifier)
 	switch (specifier.kind)
 	{
 	case DeclSpecKind::Constinit:
-		line("decl-specifier", "__constinit");
+		line("decl-specifier", specifier.keyword == TokenKind::KW_CONSTINIT ? "constinit" : "__constinit");
 		break;
 	case DeclSpecKind::AtomicQualifier:
 		line("cv-qualifier", "_Atomic");
@@ -971,8 +971,9 @@ void AstDumper::lambda(const LambdaExpr& lambda)
 		parameter_clause(*lambda.parameters);
 		if (lambda.is_mutable)
 			line("lambda-specifier", TokenText(TokenKind::KW_MUTABLE));
-		if (lambda.is_constexpr)
-			line("lambda-specifier", TokenText(TokenKind::KW_CONSTEXPR));
+		if (lambda.is_constexpr || lambda.is_consteval)
+			line(
+				"lambda-specifier", TokenText(lambda.is_consteval ? TokenKind::KW_CONSTEVAL : TokenKind::KW_CONSTEXPR));
 		if (lambda.has_noexcept)
 		{
 			open("noexcept-specification");

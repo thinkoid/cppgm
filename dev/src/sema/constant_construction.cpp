@@ -103,12 +103,14 @@ bool ConstantInterpreter::materialize(const syntax::Expr& expr, const ConstPlace
 		return fail(e->location, "an expression outside constant evaluation");
 	if (!step(e->location))
 		return false;
+	if ((facts->flags & kImmediateValue) != 0)
+		return write(target, *facts->immediate, e->location);
 	const FunctionEntity* constructor = facts->entity != nullptr && facts->entity->kind == EntityKind::Function
 		? static_cast<const FunctionEntity*>(facts->entity)
 		: nullptr;
 	const Type* type = facts->type;
 	if (e->kind == syntax::ExprKind::Binary &&
-		(facts->flags & (kRewrittenComparison | kUserConverted)) == kRewrittenComparison)
+		(facts->flags & (kRewrittenComparison | kUserConverted | kImmediateValue)) == kRewrittenComparison)
 		return materialize(*facts->replacement, target);
 	if (e->kind == syntax::ExprKind::Binary &&
 		static_cast<const syntax::BinaryExpr*>(e)->op == TokenKind::OP_SPACESHIP &&

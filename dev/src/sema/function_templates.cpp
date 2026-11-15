@@ -1696,6 +1696,7 @@ FunctionEntity* Analyzer::specialize(FunctionEntity* primary, const TypeList& gi
 	// 14.8.2p8).
 	function->deleted = primary->deleted;
 	function->is_constexpr = primary->is_constexpr;
+	function->is_consteval = primary->is_consteval;
 	function->nothrow = primary->nothrow;
 	function->exception_spec = primary->exception_spec;
 	// A noexcept-specification's expression (the template's), substituted

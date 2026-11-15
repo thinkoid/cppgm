@@ -24,7 +24,8 @@ struct Specifiers
 	bool is_friend;
 	bool is_extern;
 	bool is_static;
-	bool is_constexpr;
+	bool is_constexpr : 1;
+	bool is_consteval : 1;
 	bool is_constinit;
 	bool is_inline;
 	bool is_virtual;

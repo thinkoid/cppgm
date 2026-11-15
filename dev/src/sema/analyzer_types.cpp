@@ -190,6 +190,14 @@ void Analyzer::specifiers(const syntax::Slice<syntax::DeclSpecifier>& list, Scop
 			out.is_static = true;
 			break;
 		case TokenKind::KW_CONSTEXPR:
+			if (out.is_consteval)
+				error(specifier.location, "constexpr and consteval in one declaration");
+			out.is_constexpr = true;
+			break;
+		case TokenKind::KW_CONSTEVAL:
+			if (out.is_constexpr)
+				error(specifier.location, "constexpr or consteval repeated with consteval");
+			out.is_consteval = true;
 			out.is_constexpr = true;
 			break;
 		case TokenKind::KW_INLINE:
@@ -233,6 +241,8 @@ void Analyzer::specifiers(const syntax::Slice<syntax::DeclSpecifier>& list, Scop
 			break;
 		}
 	}
+	if (out.is_consteval && out.is_typedef)
+		error(out.location, "consteval in a typedef declaration");
 	if (out.is_constinit && (lone_declaration || out.is_constexpr || out.is_typedef || out.is_friend))
 		error(out.location, "__constinit requires a variable declaration without constexpr, typedef or friend");
 	const Type* type = nullptr;
@@ -1658,6 +1668,8 @@ const Type* Analyzer::type_id(const syntax::TypeId& type, Scope* scope, bool all
 	this->specifiers(type.specifiers, scope, specifiers, false);
 	if (specifiers.is_constinit)
 		error(type.location, "__constinit in a type-id");
+	if (specifiers.is_consteval)
+		error(type.location, "consteval in a type-id");
 	if (failed())
 		return nullptr;
 	if (specifiers.type == nullptr)

@@ -371,6 +371,8 @@ bool Parser::statement_starts_declaration(bool& tentative)
 		case TokenKind::KW_REGISTER:
 		case TokenKind::KW_THREAD_LOCAL:
 		case TokenKind::KW_CONSTEXPR:
+		case TokenKind::KW_CONSTEVAL:
+		case TokenKind::KW_CONSTINIT:
 		case TokenKind::KW_MUTABLE:
 		case TokenKind::KW_INLINE:
 		case TokenKind::KW_VIRTUAL:

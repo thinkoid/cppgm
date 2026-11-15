@@ -136,6 +136,8 @@
 	X(OP_ARROW) \
 	X(KW_REQUIRES) \
 	X(KW_CONCEPT) \
+	X(KW_CONSTEVAL) \
+	X(KW_CONSTINIT) \
 	X(OP_SPACESHIP)
 // clang-format on
 
@@ -149,7 +151,7 @@ enum class TokenKind : uint8_t
 
 inline bool IsCxx20Keyword(TokenKind kind)
 {
-	return kind == TokenKind::KW_CHAR8_T || (kind >= TokenKind::KW_REQUIRES && kind <= TokenKind::KW_CONCEPT);
+	return kind == TokenKind::KW_CHAR8_T || (kind >= TokenKind::KW_REQUIRES && kind <= TokenKind::KW_CONSTINIT);
 }
 
 inline bool IsComparisonOperatorToken(TokenKind kind)

@@ -1080,6 +1080,8 @@ FunctionEntity* Analyzer::select_constructor(ClassEntity* entity, const syntax::
 		after.initialization = true;
 		conversion.after = intern_conversion(after);
 		apply_user_conversion(source, conversion, location);
+		if (conversion.constructor->is_consteval)
+			check_immediate_conversion(*arguments[0], conversion);
 		record_conversion(source, conversion);
 		return nullptr;
 	}
@@ -1300,6 +1302,8 @@ FunctionEntity* Analyzer::initialize_class(ClassEntity* entity, const Type* type
 		{
 			ExprFacts* facts = facts_of(*WithoutParentheses(&single));
 			apply_user_conversion(facts, conversion, location);
+			if (conversion.constructor->is_consteval)
+				check_immediate_conversion(single, conversion);
 			record_conversion(facts, conversion);
 			return nullptr;
 		}
@@ -1379,6 +1383,8 @@ ExprFacts* Analyzer::class_prvalue(
 		return nullptr;
 	ExprFacts* facts = new_facts(expr, type, ValueCategory::PRValue);
 	facts->entity = constructor;
+	if (constructor != nullptr && constructor->is_consteval)
+		immediate_invocation(expr, constructor);
 	return facts;
 }
 
@@ -1621,6 +1627,7 @@ void Analyzer::declare_inherited_constructors(ClassEntity* entity)
 			inheriting->is_inline = true;
 			inheriting->inline_member = true;
 			inheriting->is_explicit = constructor->is_explicit;
+			inheriting->is_consteval = constructor->is_consteval;
 			inheriting->nothrow = function_nothrow(constructor);
 			inheriting->deleted = constructor->deleted;
 			inheriting->inherited = constructor;
@@ -1711,6 +1718,7 @@ FunctionEntity* Analyzer::inherited_specialization(
 	inheriting->is_inline = true;
 	inheriting->inline_member = true;
 	inheriting->is_explicit = forwarded->is_explicit;
+	inheriting->is_consteval = forwarded->is_consteval;
 	inheriting->nothrow = function_nothrow(forwarded);
 	inheriting->deleted = forwarded->deleted;
 	inheriting->inherited = forwarded;
@@ -1901,6 +1909,8 @@ void Analyzer::constructor_plan(FunctionEntity* constructor, ClassEntity* entity
 		}
 		else
 			member_plan(init, is_union, variant_designated, user, scope, location);
+		if (cxx20_ && semantic() && !constructor->is_consteval && !failed())
+			check_immediate_subobject(init, location);
 		const bool temporary = TemporaryReferenceInit(init);
 		constructor->temporary_reference_initializer = constructor->temporary_reference_initializer || temporary;
 		if (definition && temporary)
@@ -2249,6 +2259,8 @@ void Analyzer::delegate_construction(
 	}
 	constructor->delegation = &initializer;
 	constructor->delegate = target;
+	if (target != nullptr && target->is_consteval && !constructor->is_consteval && semantic())
+		check_immediate_construction(constructor, entity->type, &view, target, initializer.location);
 }
 
 void Analyzer::instantiate_member_initializer(VariableEntity* member)

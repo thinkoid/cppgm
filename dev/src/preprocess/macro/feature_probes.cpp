@@ -45,7 +45,8 @@ const LanguageFeature kLanguageMacros[] = { { "aggregate_nsdmi", "201304L", 14 }
 	{ "nontype_template_args", "201411L", 17 }, { "nontype_template_parameter_auto", "201606L", 17 },
 	{ "range_based_for", "201603L", 17 }, { "static_assert", "201411L", 17 }, { "structured_bindings", "201606L", 17 },
 	{ "template_auto", "201606L", 17 }, { "template_template_args", "201611L", 17 },
-	{ "variadic_using", "201611L", 17 }, { "char8_t", "202207L", 20 } };
+	{ "variadic_using", "201611L", 17 }, { "char8_t", "202207L", 20 }, { "consteval", "201811L", 20 },
+	{ "constinit", "201907L", 20 } };
 
 } // namespace
 
@@ -64,7 +65,8 @@ bool IsProvidedFeature(const char* spelling, uint32_t length, const FeatureModes
 		return modes.rtti;
 	if (Equals("gnu_asm", spelling, length))
 		return true;
-	if (Equals("cxx_char8_t", spelling, length))
+	if (Equals("cxx_char8_t", spelling, length) || Equals("cxx_consteval", spelling, length) ||
+		Equals("cxx_constinit", spelling, length))
 		return modes.language >= 20;
 	static const char* const kCxx14[] = { "cxx_aggregate_nsdmi", "cxx_contextual_conversions", "cxx_decltype_auto",
 		"cxx_generic_lambdas", "cxx_init_captures", "cxx_relaxed_constexpr", "cxx_return_type_deduction" };

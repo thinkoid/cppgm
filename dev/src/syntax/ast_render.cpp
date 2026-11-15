@@ -137,7 +137,7 @@ void SyntaxRenderer::specifier(const DeclSpecifier& specifier)
 		name(*specifier.name, true);
 		break;
 	case DeclSpecKind::Constinit:
-		text("__constinit ");
+		text(specifier.keyword == TokenKind::KW_CONSTINIT ? "constinit " : "__constinit ");
 		break;
 	case DeclSpecKind::AtomicQualifier:
 		text("_Atomic ");
@@ -808,11 +808,11 @@ void SyntaxRenderer::lambda(const LambdaExpr& lambda)
 		parameters(*lambda.parameters);
 		if (lambda.is_mutable)
 			text("mutable");
-		if (lambda.is_constexpr)
+		if (lambda.is_constexpr || lambda.is_consteval)
 		{
 			if (lambda.is_mutable)
 				text(" ");
-			text("constexpr");
+			text(lambda.is_consteval ? "consteval" : "constexpr");
 			if (lambda.has_noexcept || lambda.has_throw)
 				text(" ");
 		}

@@ -3108,6 +3108,8 @@ void Analyzer::instantiate_default_argument(FunctionEntity* function, uint32_t i
 		InstantiationContext context(
 			*this, enter_instantiation(instantiation_depth_ + 1, copy->location), false, limit);
 		BodyContext body = BodyContext();
+		if (function->is_consteval)
+			body.closure_context = function;
 		// A member function's closures' context (see number_closure): a
 		// class template instance's member, or a member template's
 		// specialization, whose closures are numbered within it (Itanium

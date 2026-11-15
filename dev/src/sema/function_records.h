@@ -447,6 +447,8 @@ struct FunctionEntity : Entity
 	mutable bool has_overrider : 1;
 	// Optional raw assembly body; the assembly owns its ABI entry and exit.
 	bool naked : 1;
+	// C++20 immediate function: evaluated during semantics, never emitted.
+	bool is_consteval : 1;
 	// A noexcept-specification's constant expression waits for its first
 	// need (Analyzer::function_nothrow, which holds it; `nothrow` is false
 	// until then).

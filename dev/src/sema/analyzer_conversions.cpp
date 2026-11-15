@@ -852,6 +852,8 @@ ExprFacts* Analyzer::convert_class_operand(const syntax::Expr& expr, const Funct
 	odr_use(const_cast<FunctionEntity*>(function), true);
 	if (!function->nothrow)
 		++potentially_throwing_;
+	if (function->is_consteval)
+		immediate_invocation(expr, function);
 	return facts;
 }
 
@@ -1029,6 +1031,8 @@ ExprFacts* Analyzer::converted_conditional(const syntax::ConditionalExpr& expr, 
 	conversion.initialization = cls != nullptr;
 	if (conversion.constructor != nullptr)
 		apply_user_conversion(from, conversion, converted.location);
+	if (conversion.constructor != nullptr && conversion.constructor->is_consteval)
+		check_immediate_conversion(converted, conversion);
 	check_conversion_access(from, conversion, converted.location);
 	record_conversion(from, conversion);
 	if (cls != nullptr)

@@ -1089,13 +1089,15 @@ bool Analyzer::may_throw(const syntax::Expr& expr, uint32_t depth)
 	const syntax::Expr* e = WithoutParentheses(&expr);
 	const ExprFacts* facts = e->facts;
 	if (e->kind == syntax::ExprKind::Binary && facts != nullptr &&
-		(facts->flags & (kRewrittenComparison | kUserConverted)) == kRewrittenComparison)
+		(facts->flags & (kRewrittenComparison | kUserConverted | kImmediateValue)) == kRewrittenComparison)
 		return may_throw(*facts->replacement, depth + 1);
 	if (facts == nullptr || depth > 256)
 		return false;
 	check_stack(e->location);
 	if (conversion_may_throw(facts->conversion, 0))
 		return true;
+	if ((facts->flags & kImmediateValue) != 0)
+		return temporary_may_throw(facts);
 	if ((facts->flags & kUserConverted) != 0)
 		return function_may_throw(static_cast<const FunctionEntity*>(facts->entity)) || temporary_may_throw(facts) ||
 			(facts->original != nullptr && facts->original->category == ValueCategory::PRValue &&

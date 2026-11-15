@@ -2,6 +2,7 @@
 
 #include "sema/aggregates.h"
 #include "sema/conversions.h"
+#include "sema/constant_values.h"
 
 // Class objects of the non-polymorphic object model (12.1, 12.4, 12.6,
 // 6.6p2, 6.7p2): construction by the constructor the analysis selected for
@@ -265,6 +266,17 @@ bool FunctionLowering::elides_conversion(const sema::FunctionEntity* constructor
 void FunctionLowering::initialize_from(
 	const syntax::Expr& expr, const sema::Conversion* conversion, lowir::Value object, uint32_t location)
 {
+	if (conversion != nullptr && conversion->constructor != nullptr && conversion->constructor->constructor &&
+		conversion->constructor->is_consteval)
+	{
+		const sema::ConstValue* value = lowering_.immediate_conversion(expr);
+		if (value == nullptr)
+			throw LoweringError(location, "an immediate constructor conversion without a constant result");
+		Place source = Place();
+		source.storage = lowir::Value::symbol(lowering_.constant_temporary(value, location));
+		copy_object(value->type, address_of(source), object, location);
+		return;
+	}
 	if (conversion_function(conversion))
 	{
 		// A conversion function's prvalue of the class initializes the
@@ -881,7 +893,8 @@ void FunctionLowering::materialize_prvalue(const syntax::Expr& expr, lowir::Valu
 	}
 	const sema::ExprFacts* facts = e->facts;
 	if (e->kind == syntax::ExprKind::Binary &&
-		(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted)) == sema::kRewrittenComparison)
+		(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted | sema::kImmediateValue)) ==
+			sema::kRewrittenComparison)
 	{
 		materialize_prvalue(*facts->replacement, object, location);
 		return;
@@ -898,6 +911,13 @@ void FunctionLowering::materialize_prvalue(const syntax::Expr& expr, lowir::Valu
 		? static_cast<const sema::FunctionEntity*>(facts->entity)
 		: nullptr;
 	const sema::Type* type = facts->type;
+	if ((facts->flags & sema::kImmediateValue) != 0)
+	{
+		Place source = Place();
+		source.storage = lowir::Value::symbol(lowering_.constant_temporary(facts->immediate, location));
+		copy_object(type, address_of(source), object, location);
+		return;
+	}
 	const syntax::BracedInitList* braced = e->kind == syntax::ExprKind::BracedInit
 		? static_cast<const syntax::BracedInitList*>(e)
 		: e->kind == syntax::ExprKind::FunctionalCast ? static_cast<const syntax::FunctionalCastExpr*>(e)->list()
@@ -1119,7 +1139,8 @@ lowir::Value FunctionLowering::temporary_object(const syntax::Expr& expr, bool p
 	// operand makes (5.18p1; the course's form).
 	const syntax::Expr* e = WithoutParentheses(&expr);
 	if (e->kind == syntax::ExprKind::Binary &&
-		(e->facts->flags & (sema::kRewrittenComparison | sema::kUserConverted)) == sema::kRewrittenComparison)
+		(e->facts->flags & (sema::kRewrittenComparison | sema::kUserConverted | sema::kImmediateValue)) ==
+			sema::kRewrittenComparison)
 	{
 		for (const syntax::Expr* path : persistent_path_)
 			if (path == e)
@@ -1546,6 +1567,16 @@ void FunctionLowering::local_object(const sema::VariableEntity* variable, const 
 	// A class object (or array of them) of automatic storage: constructed
 	// where declared, destroyed when its scope ends.
 	const sema::Type* type = object_type != nullptr ? object_type : variable->type;
+	if (variable->constructor != nullptr && variable->constructor->is_consteval)
+	{
+		const sema::ConstValue* value = lowering_.evaluated_value(variable);
+		if (value == nullptr)
+			throw LoweringError(location, "an immediate constructor without a constant result");
+		Place source = Place();
+		source.storage = lowir::Value::symbol(lowering_.constant_temporary(value, location));
+		copy_object(type, address_of(source), address_of(place), location);
+		return;
+	}
 	const syntax::BracedInitList* list = initializer != nullptr ? BracedList(*initializer) : nullptr;
 	// `T x = T{...}` of an aggregate: the list initializes x itself
 	// (12.8p31), member by member as `T x = {...}` (the course's form).
@@ -1955,6 +1986,16 @@ FunctionLowering::OverlapScope::OverlapScope(bool& flag, const sema::DataMember*
 	flag_ = flag_ || (cls != nullptr && cls->empty);
 }
 
+void FunctionLowering::immediate_construction(const void* key, lowir::Value object, uint64_t bytes, uint32_t location)
+{
+	const sema::ConstValue* value = lowering_.immediate_construction(key);
+	if (value == nullptr)
+		throw LoweringError(location, "an immediate subobject without a constant result");
+	Place source = Place();
+	source.storage = lowir::Value::symbol(lowering_.constant_temporary(value, location));
+	copy_span(address_of(source), object, bytes, lowering_.alignment_of(value->type, location));
+}
+
 void FunctionLowering::initialize_subobjects(uint32_t location)
 {
 	// 12.6.2p10: the direct base, then the members in declaration order,
@@ -1977,8 +2018,12 @@ void FunctionLowering::initialize_subobjects(uint32_t location)
 		// convention virtual bases) on.
 		if (base_entry_ && VirtualBaseCount(sema::ClassOf(type)) != 0)
 			hidden_base_ = HiddenBase{ true, 0 };
-		construct(type, this_pointer(location), written, function_->delegate,
-			base_entry_ ? EntryVariant::Base : EntryVariant::Complete, location);
+		if (function_->delegate != nullptr && function_->delegate->is_consteval)
+			immediate_construction(function_, this_pointer(location),
+				base_entry_ ? entity->nvsize : lowering_.size_of(type, location), location);
+		else
+			construct(type, this_pointer(location), written, function_->delegate,
+				base_entry_ ? EntryVariant::Base : EntryVariant::Complete, location);
 		hidden_base_.active = false;
 		destroy_temporaries(first);
 		end_full_expression(region);
@@ -2098,6 +2143,13 @@ void FunctionLowering::construct_base(const sema::SubobjectInit& init, uint32_t 
 		// A base's construction writes within its non-virtual size (an
 		// empty base at offset 0 after another lowers no mark).
 		bit_high_ = std::max<uint64_t>(bit_high_, (init.base->offset + base->nvsize) * 8);
+	}
+	if (init.constructor != nullptr && init.constructor->is_consteval)
+	{
+		immediate_construction(&init, subobject_address(init.base, nullptr, location), base->nvsize, location);
+		if (needs_destruction(base->type))
+			subobject_constructed(Subobject{ init.base, nullptr, -1 }, location);
+		return;
 	}
 	if (VirtualBaseCount(base) != 0)
 		hidden_base_ = HiddenBase{ true,
@@ -2338,6 +2390,12 @@ bool FunctionLowering::initialize_member(const sema::SubobjectInit& init, uint32
 		? mem_initializer_view(init.mem_initializer, view)
 		: init.default_initializer;
 	const sema::Type* type = variable->type;
+	if (init.constructor != nullptr && init.constructor->is_consteval)
+	{
+		immediate_construction(
+			&init, subobject_address(nullptr, member, location), lowering_.size_of(type, location), location);
+		return true;
+	}
 	if (object_class(type) != nullptr && !type->is_reference())
 	{
 		if (written == nullptr && (init.constructor == nullptr || init.constructor->trivial))

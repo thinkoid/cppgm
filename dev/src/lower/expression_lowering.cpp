@@ -316,8 +316,11 @@ RValue FunctionLowering::rvalue(const syntax::Expr& expr)
 	const sema::ExprFacts* facts = e->facts;
 	if (facts == nullptr || facts->type == nullptr)
 		throw LoweringError(e->location, "an expression without semantic facts");
+	if ((facts->flags & sema::kImmediateValue) != 0)
+		return immediate_rvalue(*e);
 	if (e->kind == syntax::ExprKind::Binary &&
-		(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted)) == sema::kRewrittenComparison)
+		(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted | sema::kImmediateValue)) ==
+			sema::kRewrittenComparison)
 		return rvalue(*facts->replacement);
 	if ((facts->flags & sema::kUserConverted) != 0)
 		return converted_operand(*e);
@@ -634,6 +637,13 @@ Place FunctionLowering::glvalue(const syntax::Expr& expr)
 	if (facts == nullptr)
 		throw LoweringError(e->location, "an expression without semantic facts");
 	Place place = Place();
+	if ((facts->flags & sema::kImmediateValue) != 0)
+	{
+		if (!constant_address(*facts->immediate, place.storage, e->location))
+			throw LoweringError(e->location, "an immediate reference without a constant address");
+		qualify(place, facts->type);
+		return place;
+	}
 	if (facts->non_odr_value && facts->entity != nullptr && facts->entity->kind == sema::EntityKind::Variable)
 	{
 		if (e->kind == syntax::ExprKind::Member)
@@ -641,7 +651,8 @@ Place FunctionLowering::glvalue(const syntax::Expr& expr)
 		return non_odr_place(static_cast<const sema::VariableEntity*>(facts->entity), facts->type, e->location);
 	}
 	if (e->kind == syntax::ExprKind::Binary &&
-		(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted)) == sema::kRewrittenComparison)
+		(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted | sema::kImmediateValue)) ==
+			sema::kRewrittenComparison)
 		return glvalue(*facts->replacement);
 	if ((facts->flags & sema::kUserConverted) != 0)
 	{
@@ -1023,6 +1034,32 @@ Place FunctionLowering::variable_place(const sema::Entity* entity, const sema::T
 	return place;
 }
 
+RValue FunctionLowering::immediate_rvalue(const syntax::Expr& expr)
+{
+	const sema::ExprFacts* facts = expr.facts;
+	if (sema::IsVoid(facts->type))
+		return RValue();
+	if (facts->category != sema::ValueCategory::PRValue)
+	{
+		Place place = glvalue(expr);
+		if (facts->type->kind == sema::TypeKind::Array || facts->type->kind == sema::TypeKind::Function)
+			return RValue{ address_of(place), program_.pointer_type() };
+		return load(lowering_.storage_type(facts->type), place);
+	}
+	RValue out;
+	if (constant_rvalue(*facts->immediate, facts->type, out, expr.location))
+		return out;
+	if (facts->immediate->kind == sema::ValueKind::MemberPointer)
+		return member_pointer_constant(*facts->immediate, expr.location);
+	if (sema::ClassOf(facts->type) != nullptr)
+	{
+		Place place = Place();
+		place.storage = temporary_object(expr);
+		return load(lowering_.storage_type(facts->type), place);
+	}
+	throw LoweringError(expr.location, "an immediate result without a constant representation");
+}
+
 bool FunctionLowering::constant_rvalue(
 	const sema::ConstValue& value, const sema::Type* type, RValue& out, uint32_t location)
 {
@@ -1053,6 +1090,9 @@ bool FunctionLowering::constant_rvalue(
 		if (!storage.is_float())
 			return false;
 		out = floating(storage, lowir::float_literal(storage.kind(), value.floating));
+		return true;
+	case sema::ValueKind::Binary128:
+		out = soft_constant(SoftFloat::Quad, value.bits, value.high);
 		return true;
 	case sema::ValueKind::Pointer:
 		if (!storage.is_pointer())

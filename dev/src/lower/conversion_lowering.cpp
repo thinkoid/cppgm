@@ -2,6 +2,7 @@
 
 #include "lowir/literals.h"
 #include "sema/conversions.h"
+#include "sema/constant_values.h"
 #include "sema/integral_arithmetic.h"
 
 // The standard conversions of a value (clause 4: integral, floating,
@@ -289,6 +290,26 @@ lowir::Value FunctionLowering::conversion_object(
 RValue FunctionLowering::call_conversion(const syntax::Expr& expr, const sema::ExprFacts* facts,
 	const sema::FunctionEntity* function, lowir::Value destination)
 {
+	if (function->is_consteval)
+	{
+		const sema::ConstValue* value = lowering_.immediate_conversion(expr);
+		if (value == nullptr)
+			throw LoweringError(expr.location, "an immediate conversion without a constant result");
+		RValue out;
+		if (value->kind == sema::ValueKind::Class)
+		{
+			Place source = Place();
+			source.storage = lowir::Value::symbol(lowering_.constant_temporary(value, expr.location));
+			if (destination.kind != lowir::ValueKind::None)
+				copy_object(value->type, address_of(source), destination, expr.location);
+			return lowering_.indirect_result(function) ? RValue() : load(lowering_.storage_type(value->type), source);
+		}
+		if (constant_rvalue(*value, value->type, out, expr.location))
+			return out;
+		if (value->kind == sema::ValueKind::MemberPointer)
+			return member_pointer_constant(*value, expr.location);
+		throw LoweringError(expr.location, "an immediate conversion without a constant representation");
+	}
 	// The call: a class result initializes `destination` (through it as
 	// an indirect result, or copied from the call's value).
 	const sema::ClosureFacts* closure = lowering_.graph().closure_facts(sema::ClassOf(function->owner->entity->type));

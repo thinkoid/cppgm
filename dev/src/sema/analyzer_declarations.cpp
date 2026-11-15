@@ -1248,6 +1248,8 @@ const Type* Analyzer::complete_array_from_initializer(
 Binding* Analyzer::declare_variable(const Specifiers& specifiers, const DeclaratorInfo& info,
 	const syntax::Initializer* initializer, Scope* scope, uint32_t location, bool structured_binding)
 {
+	if (specifiers.is_consteval)
+		error(location, "consteval requires a function declaration");
 	const Type* type = info.type;
 	// A constexpr object is const (7.1.5p9).
 	if (specifiers.is_constexpr)
@@ -1529,7 +1531,8 @@ Binding* Analyzer::declare_variable(const Specifiers& specifiers, const Declarat
 		default_initialize(variable, type, location);
 		// 7.1.5p9: a constexpr object default-initialized by a constexpr
 		// constructor.
-		if (variable->is_constexpr || variable->is_constinit)
+		if (variable->is_constexpr || variable->is_constinit ||
+			(variable->constructor != nullptr && variable->constructor->is_consteval))
 			record_constant_initializer(variable, nullptr, lookup);
 	}
 	// 12.4p11: the object's destruction where its storage duration ends.
@@ -1867,6 +1870,11 @@ Binding* Analyzer::declare_function(const Specifiers& specifiers, const Declarat
 {
 	if (specifiers.is_constinit)
 		error(location, "__constinit on a function declaration");
+	if (specifiers.is_consteval && info.name != nullptr &&
+		(info.name->last().kind == syntax::NameComponentKind::Destructor ||
+			(info.name->last().kind == syntax::NameComponentKind::Operator &&
+				(info.name->last().op == TokenKind::KW_NEW || info.name->last().op == TokenKind::KW_DELETE))))
+		error(location, "a destructor or allocation function cannot be consteval");
 	if (c_source_ && info.parameters != nullptr && info.parameters->c_identifier_list && !definition)
 		error(location, "C identifier-list parameters require a function definition");
 	// 7.1.2p6: explicit is confined to constructor/conversion declarations
@@ -2325,7 +2333,8 @@ void Analyzer::redeclare_function(FunctionEntity* function, const Specifiers& sp
 		agree_language_linkage(function->c_linkage, location);
 	// 7.1.5p1: if any declaration of a function or function template is
 	// constexpr, all of them are.
-	if (function->is_constexpr != specifiers.is_constexpr && !function->implicit)
+	if ((function->is_constexpr != specifiers.is_constexpr || function->is_consteval != specifiers.is_consteval) &&
+		!function->implicit)
 		error(location, "declarations of a function that disagree on constexpr");
 	// 15.4p3: once a declaration does not allow all exceptions, every
 	// declaration has a compatible exception-specification (a
@@ -2377,6 +2386,7 @@ FunctionEntity* Analyzer::new_function(const Specifiers& specifiers, const Decla
 	function->member = where->kind == ScopeKind::Class;
 	function->is_static = function->member && specifiers.is_static;
 	function->is_constexpr = specifiers.is_constexpr;
+	function->is_consteval = specifiers.is_consteval;
 	function->is_virtual = specifiers.is_virtual;
 	function->constructor = name.key == constructor_key_;
 	function->destructor = name.key == destructor_key_;

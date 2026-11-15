@@ -43,7 +43,7 @@ const Type* ObjectType(const Type* type)
 
 bool ImplicitThis(const ExprFacts* facts)
 {
-	return facts != nullptr &&
+	return facts != nullptr && (facts->flags & kImmediateValue) == 0 &&
 		((facts->flags & kImplicitThis) != 0 ||
 			((facts->flags & kUserConverted) != 0 && facts->original != nullptr &&
 				(facts->original->flags & kImplicitThis) != 0));
