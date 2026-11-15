@@ -3,7 +3,7 @@
 import argparse
 from html import escape
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import subprocess
 import xml.etree.ElementTree as ET
@@ -12,6 +12,7 @@ from library_benchmark_badges import HOSTS
 from publish_benchmark_badges import badge_svg
 
 STALE_COMMITS = 10
+HIDDEN_COMMITS = 100
 NS = '{http://www.w3.org/2000/svg}'
 
 
@@ -39,29 +40,74 @@ def groups(target):
             yield workload, host, directory / host / 'metadata.json', directory.glob(host + '-*.svg'), directory / host / 'report.md'
 
 
+def keep_newest(target, repo, compare=comparison):
+    """Undo a publication that would replace a measurement of a newer commit.
+
+    Runs of two commits can end in either order. A host keeps the measurement
+    of its newest commit; the run of the older commit keeps its history entry.
+    """
+    def git(*arguments, check=True):
+        return subprocess.run(['git', '-C', str(target), *arguments], check=check, capture_output=True, text=True)
+
+    top = git('rev-parse', '--show-toplevel', check=False)
+    if top.returncode or Path(top.stdout.strip()).resolve() != target.resolve():
+        return []
+    older, newer = [], []
+    for workload, host, metadata_path, _, _ in groups(target):
+        before = git('show', 'HEAD:' + metadata_path.relative_to(target).as_posix(), check=False)
+        if before.returncode or not metadata_path.exists():
+            continue
+        published, measured = (json.loads(text)['revision'] for text in (before.stdout, metadata_path.read_text()))
+        if published != measured:
+            # The published commit is ahead of the measured one: the measured one is its ancestor.
+            behind = compare(repo, measured, published)['commits_behind']
+            (older if behind else newer).append(dict(workload=workload, host=host, published=published,
+                                                     measured=measured))
+    if older and newer:
+        raise ValueError('one publication holds measurements of both newer and older commits')
+    if older:
+        changed = git('status', '--porcelain', '-z', '--untracked-files=all').stdout
+        for state, name in ((entry[:2], entry[3:]) for entry in changed.split('\0') if entry):
+            if 'history' in PurePosixPath(name).parts:
+                continue
+            if state == '??':
+                (target / name).unlink()
+            else:
+                git('checkout', '-q', 'HEAD', '--', name)
+    return older
+
+
 def render(path, caption, metadata, age):
     root = ET.fromstring(path.read_text())
-    texts = root.findall(NS + 'text')
-    message = root.get('data-original-message', texts[-1].text or '')
+    message = root.get('data-original-message')
+    if message is None:
+        message = root.findall(NS + 'text')[-1].text or ''
     label = root.get('data-original-label')
     if label is None:
         label = (root.findtext(NS + 'title') or root.get('aria-label', '')).removesuffix(': ' + message)
-    panels = root.findall('.//' + NS + 'rect')
-    color = panels[-1].get('fill', '#475569').removeprefix('#')
+    color = root.get('data-original-color')
+    if color is None:
+        color = root.findall('.//' + NS + 'rect')[-1].get('fill', '#475569').removeprefix('#')
     measured = metadata is not None and message not in ('n/m', 'n/a', 'no data')
-    note, stale = '', False
+    note, stale, hidden = '', False, False
     if measured:
         count = age['commits_behind']
         stale = count is None or count >= STALE_COMMITS
+        hidden = count is not None and count >= HIDDEN_COMMITS
         detail = f'{count} commits behind main' if count is not None else 'outside main history'
         cpu = '' if metadata['cpu'] in label else '; ' + metadata['cpu']
         note = f"{cpu}; measured {metadata['revision']}; {detail}"
-    data = dict(label=label + note, left_label=caption,
-                message=message + ('*' if stale else ''), color=color)
-    content = badge_svg(data)
     attributes = (f' data-original-label="{escape(label, quote=True)}"'
                   f' data-original-message="{escape(message, quote=True)}"')
-    return content.replace('<svg ', '<svg' + attributes + ' ', 1)
+    if hidden:
+        # An empty image of the badge's size. It keeps the measurement, and a page that stacks the
+        # hosts keeps each host's position.
+        title = escape(f'{label}{note}: not shown', quote=True)
+        return (f'<svg{attributes} data-original-color="{color}" xmlns="http://www.w3.org/2000/svg" width="120" '
+                f'height="24" viewBox="0 0 120 24" role="img" aria-label="{title}">\n  <title>{title}</title>\n</svg>\n')
+    data = dict(label=label + note, left_label=caption,
+                message=message + ('*' if stale else ''), color=color)
+    return badge_svg(data).replace('<svg ', '<svg' + attributes + ' ', 1)
 
 
 def refresh(target, main, repo, compare=comparison):
@@ -99,10 +145,12 @@ def refresh(target, main, repo, compare=comparison):
     for path, text in replacements.items():
         path.write_text(text)
     cache_path.write_text(json.dumps(dict(schema=1, main=main, stale_commits=STALE_COMMITS,
-                                         revisions=ages, measurements=rows), indent=2) + '\n')
+                                         hidden_commits=HIDDEN_COMMITS, revisions=ages, measurements=rows),
+                                    indent=2) + '\n')
     lines = ['# Benchmark measurement age', '',
              f'Compared with main [`{main[:9]}`](https://github.com/{repo}/commit/{main}).', '',
              f'An asterisk marks a result at least {STALE_COMMITS} commits behind main, or outside its history. '
+             f'The badge of a result at least {HIDDEN_COMMITS} commits behind main is empty; this table keeps its row. '
              'Commit distance includes documentation and workflow changes; it does not establish a performance change. '
              'Missing measurements remain `n/m`. The metric value and its performance color are retained.', '',
              '| Workload | Host | CPU | Measured commit | Commit date (UTC) | Age | Results |',
@@ -110,6 +158,8 @@ def refresh(target, main, repo, compare=comparison):
     for row in rows:
         count = row['commits_behind']
         age = f'{count} commits' if count is not None else 'outside main history'
+        if count is not None and count >= HIDDEN_COMMITS:
+            age += ' (badge not shown)'
         revision = row['revision']
         cpu = row['cpu'].replace('|', '\\|').replace('\n', ' ')
         lines.append(f"| {row['workload']} | {HOSTS[row['host']]} | {cpu} | "
@@ -126,6 +176,9 @@ def main():
     parser.add_argument('--repo', default='vishvananda/cppgm-extended')
     args = parser.parse_args()
     from wasm_benchmark_results import seed
+    for row in keep_newest(args.target, args.repo):
+        print(f"{row['workload']} on {row['host']}: kept the measurement of {row['published']}; "
+              f"{row['measured']} is its ancestor")
     seed(args.target)
     refresh(args.target, args.revision, args.repo)
 

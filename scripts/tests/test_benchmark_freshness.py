@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -55,6 +56,41 @@ class FreshnessTests(unittest.TestCase):
             freshness.refresh(root, 'b' * 40, 'owner/repo', lambda *args: self.age(100))
             self.assertNotIn('n/m*', path.read_text())
             self.assertIn('>CI Intel</text>', path.read_text())
+
+    def test_very_old_number_has_an_empty_badge_until_it_is_measured_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path, metadata = self.make_group(root)
+            original = metadata.read_bytes()
+            freshness.refresh(root, 'b' * 40, 'owner/repo', lambda *args: self.age(99))
+            self.assertIn('4.41×*', path.read_text())
+            freshness.refresh(root, 'c' * 40, 'owner/repo', lambda *args: self.age(1))
+            hidden = path.read_text()
+            image = ET.fromstring(hidden)
+            self.assertEqual((image.get('width'), image.get('height')), ('120', '24'))
+            self.assertEqual([child.tag for child in image], ['{http://www.w3.org/2000/svg}title'])
+            self.assertIn('100 commits behind main: not shown', image.get('aria-label'))
+            self.assertNotIn('4.41×*', hidden)
+            self.assertEqual(metadata.read_bytes(), original)
+            table = (root / 'freshness.md').read_text()
+            self.assertIn('| 100 commits (badge not shown) |', table)
+            self.assertEqual(json.loads((root / 'freshness.json').read_text())['hidden_commits'], 100)
+            # A later refresh reads the empty badge; a new measurement shows its number again.
+            freshness.refresh(root, 'd' * 40, 'owner/repo', lambda *args: self.age(1))
+            self.assertEqual(path.read_text().replace('101 commits', '100 commits'), hidden)
+            metadata.write_text(json.dumps(dict(cpu='Intel test CPU', revision='d' * 40)))
+            freshness.refresh(root, 'd' * 40, 'owner/repo', lambda *args: self.age(0))
+            shown = path.read_text()
+            self.assertIn('>4.41×</text>', shown)
+            self.assertIn('fill="#14532d"', shown)
+            self.assertIn('>Intel</text>', shown)
+
+    def test_number_outside_main_history_keeps_its_mark(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path, _ = self.make_group(root)
+            freshness.refresh(root, 'b' * 40, 'owner/repo', lambda *args: self.age(None))
+            self.assertIn('4.41×*', path.read_text())
 
     def test_repeated_refresh_is_idempotent_and_reuses_comparisons(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -149,6 +185,68 @@ class FreshnessTests(unittest.TestCase):
                 self.assertIn('>CI Intel</text>', text)
                 self.assertIn('3.00×*', text)
                 self.assertIn('compile &amp; verify', text)
+
+    def branch(self, root):
+        """A badge branch that shows Godot on EPYC at revision b, with history."""
+        def git(*arguments):
+            subprocess.run(['git', '-C', str(root), '-c', 'user.name=test', '-c', 'user.email=test@example.invalid',
+                            *arguments], check=True, capture_output=True)
+        self.publish(root, 'b' * 40, '1.10×')
+        git('init', '-q')
+        git('add', '.')
+        git('commit', '-q', '-m', 'published')
+
+    def publish(self, root, revision, value):
+        for directory in (root / 'godot/epyc', root / 'godot/history' / revision / 'epyc'):
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / 'metadata.json').write_text(json.dumps(dict(cpu='AMD EPYC test', revision=revision)))
+            (directory / 'report.md').write_text('Godot at ' + revision + '\n')
+        (root / 'godot/epyc' / (revision[0] + '.json')).write_text('{}\n')
+        (root / 'godot/epyc-runtime-gcc.svg').write_text(badge_svg(
+            dict(label='godot runtime-gcc', message=value, color='14532d', left_label='EPYC')))
+        (root / 'godot/report.md').write_text('hosts at ' + revision + '\n')
+
+    def test_run_of_an_older_commit_keeps_the_newer_measurement_and_its_own_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.branch(root)
+            current = {path: path.read_bytes() for path in root.rglob('*') if path.is_file() and '.git' not in path.parts}
+            self.publish(root, 'a' * 40, '0.90×')
+            calls = []
+            def compare(repo, measured, published):
+                calls.append((measured, published))
+                return self.age(3)
+            dropped = freshness.keep_newest(root, 'owner/repo', compare)
+            self.assertEqual(calls, [('a' * 40, 'b' * 40)])
+            self.assertEqual(dropped, [dict(workload='godot', host='epyc', published='b' * 40, measured='a' * 40)])
+            self.assertEqual(current, {path: path.read_bytes() for path in current})
+            self.assertFalse((root / 'godot/epyc/a.json').exists())
+            history = root / 'godot/history' / ('a' * 40) / 'epyc'
+            self.assertEqual(json.loads((history / 'metadata.json').read_text())['revision'], 'a' * 40)
+            self.assertEqual(freshness.keep_newest(root, 'owner/repo', compare), [])
+
+    def test_newer_unrelated_and_first_measurements_are_published(self):
+        for age in (None, 0):
+            with self.subTest(age=age), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                self.branch(root)
+                self.publish(root, 'c' * 40, '1.20×')
+                (root / 'godot/github-intel').mkdir()
+                (root / 'godot/github-intel/metadata.json').write_text(json.dumps(
+                    dict(cpu='Intel hosted CPU', revision='a' * 40)))
+                self.assertEqual(freshness.keep_newest(root, 'owner/repo', lambda *args: self.age(age)), [])
+                self.assertEqual(json.loads((root / 'godot/epyc/metadata.json').read_text())['revision'], 'c' * 40)
+                self.assertIn('1.20×', (root / 'godot/epyc-runtime-gcc.svg').read_text())
+                self.assertTrue((root / 'godot/github-intel/metadata.json').exists())
+
+    def test_directory_that_is_not_a_branch_checkout_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.publish(root, 'a' * 40, '0.90×')
+            def compare(*args):
+                raise AssertionError('nothing is published to compare with')
+            self.assertEqual(freshness.keep_newest(root, 'owner/repo', compare), [])
+            self.assertTrue((root / 'godot/epyc/a.json').exists())
 
     def test_publication_refreshes_in_existing_write_jobs_without_completion_events(self):
         workflows = Path(__file__).resolve().parents[2] / '.github/workflows'

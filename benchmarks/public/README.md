@@ -188,6 +188,8 @@ publishing any host preserves the other hosts and the legacy EPYC URLs.
 and [Intel provenance](https://raw.githubusercontent.com/vishvananda/cppgm-extended/benchmark-badges/intel/provenance.json) record the exact CPU,
 compiler commit, toolchains and workflow URL. The README shows the measured
 commit because the hosts' latest measurements can be from different commits.
+A run of a commit that is an ancestor of the commit a host shows does not
+replace that measurement; this applies to every published workload.
 Self-build measurements retain their own `self-revision.svg` badge and
 `self-build-provenance.json`; publication by either workflow preserves the
 other workflow's last measurements.
