@@ -1136,8 +1136,8 @@ int Analyzer::compare_candidates(const Candidate& a, const Candidate& b, uint32_
 	// (14.5.6.2, over the parameters the call has arguments for; without
 	// an object argument, an operator's member candidate is ordered with
 	// its object parameter inserted, p3).
-	if (!better && !worse && cxx20_ && !a.from_template && !b.from_template &&
-		a.function->signature == b.function->signature)
+	if (!better && !worse && cxx20_ && !a.from_template && !b.from_template && a.function != nullptr &&
+		b.function != nullptr && a.function->signature == b.function->signature)
 	{
 		const bool forward = function_constraints_subsume(a.function, b.function);
 		const bool backward = function_constraints_subsume(b.function, a.function);
