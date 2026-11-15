@@ -1156,6 +1156,10 @@ void Analyzer::declare_alias_template(const syntax::AliasDecl& decl, Scope* scop
 		where->kind != ScopeKind::Class && (entry->value == nullptr || entry->value->invisible))
 	{
 		const AliasTemplateEntity* alias = static_cast<const AliasTemplateEntity*>(earlier->entity);
+		if (cxx20_ &&
+			!template_constraints_equivalent(
+				alias->head, current_template_constraint(), template_list_, template_scope_))
+			error(decl.location, "an alias template redeclared with different associated constraints");
 		if (alias->head->shape != head->shape || alias->type->canonical != info.type->canonical)
 			error(decl.location, "an alias template redeclared with a different template or type");
 		decl.declared = earlier;
@@ -1236,6 +1240,11 @@ const Type* Analyzer::alias_specialization(const AliasTemplateEntity* alias, Typ
 			soft_substitution_ == 0, location))
 	{
 		substitution_error(location, "template arguments that do not match the alias template's parameters");
+		return nullptr;
+	}
+	if (cxx20_ && !template_constraints_satisfied(head, canonical, location))
+	{
+		substitution_error(location, "alias template constraints are not satisfied");
 		return nullptr;
 	}
 	const SpecializationKey probe = SpecializationKey{ alias, canonical.data(),

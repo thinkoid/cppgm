@@ -2229,6 +2229,30 @@ FunctionEntity* Analyzer::earlier_function(
 			? names_.overload(where, name.key, signature,
 				  template_shape(template_entities_.data(), static_cast<uint32_t>(template_entities_.size())))
 			: names_.overload(where, name.key, signature);
+		if (cxx20_ && templated)
+		{
+			const Type* shape = template_shape(
+				template_entities_.data(), static_cast<uint32_t>(template_entities_.size()));
+			const auto equivalent = [&](const FunctionList* node) {
+				const FunctionEntity* other = static_cast<const FunctionEntity*>(node->binding->entity);
+				if (!other->templated || other->owner != where ||
+					signature_of(other->signature) != signature_of(signature) || HeadOf(other) == nullptr ||
+					HeadOf(other)->shape != shape)
+					return false;
+				return template_constraints_equivalent(
+					HeadOf(other), current_template_constraint(), template_list_, template_scope_);
+			};
+			if (same != nullptr && !equivalent(same))
+				same = nullptr;
+			for (const NameLookup::TemplateOverloadVariant* variant =
+					 names_.template_overload_variants(where, name.key, signature, shape);
+				same == nullptr && variant != nullptr; variant = variant->next)
+				if (equivalent(variant->node))
+					same = variant->node;
+			for (const FunctionList* node = entry->functions; same == nullptr && node != nullptr; node = node->next)
+				if (equivalent(node))
+					same = node;
+		}
 		// The index holds a scope's own templates only: a base's member
 		// template a using-declaration introduced, of the same
 		// parameter-type-list, qualifiers and an equivalent template-head

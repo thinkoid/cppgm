@@ -1060,6 +1060,13 @@ int Analyzer::function_template_order(
 		return 1;
 	if (trailing_pack_unused(first, second, arguments))
 		return -1;
+	if (cxx20_)
+	{
+		const bool first_subsumes = constraints_subsume(HeadOf(first), HeadOf(second));
+		const bool second_subsumes = constraints_subsume(HeadOf(second), HeadOf(first));
+		if (first_subsumes != second_subsumes)
+			return first_subsumes ? 1 : -1;
+	}
 	return 0;
 }
 

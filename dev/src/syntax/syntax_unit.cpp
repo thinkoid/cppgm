@@ -7,7 +7,8 @@ SyntaxUnit::SyntaxUnit(const PreprocessorOptions& options, const std::string& pa
 										options.target, options.gnu_c(), options.cplusplus == "202002L"),
 	  tokens_(post_tokens_, spellings_),
 	  parser_(tokens_, preprocessor_.identifiers(), arena_, options.hosted, options.cplusplus != "201103L",
-		  options.cplusplus >= "201703L", options.language == SourceLanguage::C, syntax_only),
+		  options.cplusplus >= "201703L", options.language == SourceLanguage::C, syntax_only,
+		  options.cplusplus == "202002L"),
 	  tree_(nullptr)
 {
 	tokens_.observe_pack(preprocessor_.pack_state());

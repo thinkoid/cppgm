@@ -22,7 +22,7 @@ class Parser : public ParserState
 {
 public:
 	Parser(ParseTokenStream& tokens, IdentifierTable& identifiers, Arena& arena, bool hosted = false,
-		bool cxx14 = false, bool cxx17 = false, bool c_source = false, bool lexical_hints = true);
+		bool cxx14 = false, bool cxx17 = false, bool c_source = false, bool lexical_hints = true, bool cxx20 = false);
 
 	// The translation unit, or null after a syntax error.
 	TranslationUnit* parse_translation_unit();
@@ -378,6 +378,8 @@ private:
 	Expr* parse_postfix_suffixes(Expr* expr);
 	Expr* parse_primary_expression();
 	Expr* parse_requires_expression();
+	Expr* parse_constraint_expression(bool conjunction = false);
+	Name* parse_type_constraint();
 	Decl* parse_concept_definition();
 	bool parse_requirement(Requirement& requirement);
 	Expr* parse_generic_selection();

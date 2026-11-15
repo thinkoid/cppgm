@@ -401,7 +401,9 @@ void ParserState::record_parameter_base(Scope* class_scope, const Identifier* na
 	for (uint32_t i = 0; i < parameters.size; ++i)
 	{
 		const TemplateParameter* parameter = parameters[i];
-		if (parameter->name != name || parameter->kind != TemplateParameterKind::Type)
+		if (parameter->name != name ||
+			(parameter->kind != TemplateParameterKind::Type &&
+				parameter->kind != TemplateParameterKind::ConstrainedType))
 			continue;
 		if (parameter->pack != pack)
 			return;

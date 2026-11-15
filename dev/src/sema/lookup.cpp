@@ -305,6 +305,8 @@ void NameLookup::declare(const Scope* scope, Binding* binding, bool tag_only)
 	}
 	else if (indexed_template)
 		slot = template_overloads_.find(key);
+	if (indexed_template && slot != nullptr && *slot != nullptr && (*slot)->binding->entity != function)
+		slot = template_variant(key, *slot, function);
 	// A function only friend declarations declared has a node the overload
 	// index finds but no set holds (argument-dependent lookup finds it
 	// through its befriending classes, see befriend); its first visible
@@ -338,6 +340,36 @@ void NameLookup::declare(const Scope* scope, Binding* binding, bool tag_only)
 		*slot = node;
 	else if (indexed_template)
 		template_overloads_.insert(key, node);
+}
+
+FunctionList** NameLookup::template_variant(
+	const TemplateOverloadKey& key, FunctionList* previous, const FunctionEntity* function)
+{
+	// Only a collision adds a secondary list. Hidden friends stay in this
+	// signature's index without becoming visible in its name's overload set.
+	TemplateOverloadVariant** found = template_variants_.find(key);
+	if (found == nullptr)
+	{
+		TemplateOverloadVariant* first = arena_.allocate_array<TemplateOverloadVariant>(1);
+		*first = TemplateOverloadVariant{ previous, nullptr };
+		template_variants_.insert(key, first);
+		found = template_variants_.find(key);
+	}
+	for (TemplateOverloadVariant* variant = *found; variant != nullptr; variant = variant->next)
+		if (variant->node->binding->entity == function)
+			return &variant->node;
+	TemplateOverloadVariant* variant = arena_.allocate_array<TemplateOverloadVariant>(1);
+	*variant = TemplateOverloadVariant{ nullptr, *found };
+	*found = variant;
+	return &variant->node;
+}
+
+const NameLookup::TemplateOverloadVariant* NameLookup::template_overload_variants(
+	const Scope* scope, const Identifier* name, const Type* signature, const Type* shape) const
+{
+	TemplateOverloadVariant* const* found = const_cast<NameLookup*>(this)->template_variants_.find(
+		TemplateOverloadKey{ scope, name, signature, shape });
+	return found == nullptr ? nullptr : *found;
 }
 
 void NameLookup::befriend(const Scope* befriending, Binding* binding)

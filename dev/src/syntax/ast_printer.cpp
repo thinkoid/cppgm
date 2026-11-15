@@ -208,6 +208,7 @@ void AstDumper::declaration(const Decl& decl)
 		close();
 		break;
 	}
+	case DeclKind::ConstrainedTemplate:
 	case DeclKind::Template:
 		template_declaration(static_cast<const TemplateDecl&>(decl));
 		break;
@@ -307,6 +308,12 @@ void AstDumper::template_declaration(const TemplateDecl& decl)
 {
 	open("template-declaration");
 	template_parameter_clause(decl.parameters);
+	if (const Expr* constraint = TemplateConstraint(decl))
+	{
+		open("requires-clause");
+		expression(*constraint);
+		close();
+	}
 	declaration(*decl.declaration);
 	close();
 }
@@ -721,7 +728,14 @@ void AstDumper::template_parameter(const TemplateParameter& parameter)
 		line("template-template-parameter");
 		template_parameter_clause(parameter.parameters);
 	}
-	line("parameter-key", TokenText(parameter.key));
+	if (const Name* constraint = TypeParameterConstraint(parameter))
+	{
+		open("type-constraint");
+		line("name", RenderName(*constraint));
+		close();
+	}
+	else
+		line("parameter-key", TokenText(parameter.key));
 	if (parameter.pack)
 		line("parameter-pack", "...");
 	if (parameter.name != nullptr)

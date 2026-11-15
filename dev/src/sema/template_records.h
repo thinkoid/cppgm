@@ -65,12 +65,46 @@ struct DeductionHeadOrigins
 
 // A concept owns its parsed definition and lexical parameter scope. It has
 // no object or emitted specialization; concept-ids cache satisfaction only.
-struct ConceptEntity : Entity
+enum class ConstraintNodeKind : uint8_t
+{
+	Atom,
+	Conjunction,
+	Disjunction
+};
+
+struct ConstraintNode
+{
+	ConstraintNodeKind kind;
+	const ConstraintNode* left;
+	const ConstraintNode* right;
+};
+
+struct ConstraintNormalization
+{
+	FactState state;
+	const ConstraintNode* node;
+};
+
+struct TypeConstraint
+{
+	const syntax::Name* name;
+	uint32_t index;
+};
+
+struct ConstraintPredicate : Entity
 {
 	TemplateHead* head;
 	Scope* parameters;
 	const syntax::Expr* definition;
+	const TypeConstraint* type_constraints;
+	uint32_t type_constraint_count;
+	uint32_t location;
+	mutable const ConstraintNode* normalized = nullptr;
+	mutable FactState normalization_state = FactState::NotStarted;
 };
+
+struct ConceptEntity : ConstraintPredicate
+{};
 
 struct ConceptEvaluation
 {

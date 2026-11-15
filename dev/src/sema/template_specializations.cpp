@@ -766,7 +766,7 @@ ClassEntity* Analyzer::partial_specialization(const syntax::Name& name, TokenKin
 	// A redeclaration (its definition after a declaration) declares the
 	// partial specialization of its argument list again.
 	const uint32_t count = static_cast<uint32_t>(arguments.size());
-	if (ClassEntity* earlier = partial_of_arguments(templ, arguments.data(), count))
+	if (ClassEntity* earlier = partial_of_arguments(templ, arguments.data(), count, scope, true))
 	{
 		merge_template_head(earlier->templ->head, *template_list_, template_scope_, name.location);
 		check_partial_arguments(templ->templ->head, earlier->templ->head, arguments.data(), count, name.location);
@@ -783,7 +783,15 @@ ClassEntity* Analyzer::partial_specialization(const syntax::Name& name, TokenKin
 	facts->definition_parameters = scope;
 	facts->dependent = true;
 	entity->label = templ->label;
-	partial_arguments_.insert(SpecializationKey{ templ, facts->arguments, facts->argument_count }, entity);
+	const SpecializationKey argument_key{ templ, facts->arguments, facts->argument_count };
+	if (ClassEntity** previous = partial_arguments_.find(argument_key))
+	{
+		partial_argument_predecessor_index_.set(entity, static_cast<uint32_t>(partial_argument_predecessors_.size()));
+		partial_argument_predecessors_.push_back(*previous);
+		*previous = entity;
+	}
+	else
+		partial_arguments_.insert(argument_key, entity);
 	// Indexed (see partial_index_key), else the last of the unindexed ones.
 	const Type* index_key[2];
 	const bool indexed = partial_index_key(templ->templ->head, facts->arguments, facts->argument_count, index_key);
@@ -830,7 +838,7 @@ void Analyzer::check_partial_arguments(const TemplateHead* primary, const Templa
 		}
 		own = arguments[i] == parameter;
 	}
-	if (own)
+	if (own && !(constraints_subsume(head, primary) && !constraints_subsume(primary, head)))
 		error(location, "a partial specialization whose arguments are its template's own parameters");
 	// A parameter pack's argument is a pack of the arguments given for it,
 	// each an argument.
@@ -1086,7 +1094,8 @@ void Analyzer::indexed_partials(
 	}
 }
 
-ClassEntity* Analyzer::partial_of_arguments(ClassEntity* templ, const Type* const* arguments, uint32_t count)
+ClassEntity* Analyzer::partial_of_arguments(
+	ClassEntity* templ, const Type* const* arguments, uint32_t count, Scope* scope, bool redeclaration)
 {
 	// The partial specialization declared with this canonical argument list
 	// (a redeclaration's; the current instantiation a dependent template-id
@@ -1094,7 +1103,19 @@ ClassEntity* Analyzer::partial_of_arguments(ClassEntity* templ, const Type* cons
 	if (templ->templ->partials == nullptr && templ->templ->partial_positions == 0)
 		return nullptr;
 	ClassEntity** found = partial_arguments_.find(SpecializationKey{ templ, arguments, count });
-	return found != nullptr ? *found : nullptr;
+	ClassEntity* entity = found == nullptr ? nullptr : *found;
+	if (!cxx20_ || scope == nullptr)
+		return entity;
+	while (entity != nullptr)
+	{
+		if (redeclaration ? template_constraints_equivalent(
+								entity->templ->head, current_template_constraint(), template_list_, scope)
+						  : current_instantiation(entity, scope))
+			return entity;
+		const uint32_t previous = partial_argument_predecessor_index_.find(entity);
+		entity = previous == PointerMap::kMissing ? nullptr : partial_argument_predecessors_[previous];
+	}
+	return nullptr;
 }
 
 Entity* Analyzer::class_partial_specialization(const syntax::ClassSpecifier& specifier, Scope* scope, Specifiers& out)
@@ -1165,7 +1186,7 @@ ClassEntity* Analyzer::member_partial_pattern(const syntax::ClassSpecifier& spec
 		return nullptr;
 	const syntax::Decl* declaration = active.pattern->members[active.declared];
 	const syntax::Decl* copy = active.copy->members[active.declared];
-	while (declaration->kind == syntax::DeclKind::Template && copy->kind == syntax::DeclKind::Template)
+	while (syntax::IsTemplateDeclaration(declaration->kind) && syntax::IsTemplateDeclaration(copy->kind))
 	{
 		declaration = static_cast<const syntax::TemplateDecl*>(declaration)->declaration;
 		copy = static_cast<const syntax::TemplateDecl*>(copy)->declaration;
@@ -1258,7 +1279,7 @@ bool Analyzer::deduce_partial(const ClassEntity* partial, const Type* const* arg
 			facts->head, pattern.data(), static_cast<uint32_t>(pattern.size()), arguments, count, deduced);
 	}
 	substitution_context_ = saved;
-	return matched;
+	return matched && (!cxx20_ || template_constraints_satisfied(facts->head, deduced, 0));
 }
 
 bool Analyzer::deduce_partial_arguments(const TemplateHead* head, const Type* const* pattern, uint32_t pattern_count,
@@ -1321,7 +1342,10 @@ bool Analyzer::partial_ordered(const Entity* first, const TemplateHead* head, co
 	const EntityPair key = EntityPair{ first, second };
 	if (const bool* known = partial_orderings_.find(key))
 		return *known;
-	const bool ordered = arguments_at_least_as_specialized(head, pattern, count, other, other_pattern, other_count);
+	bool ordered = arguments_at_least_as_specialized(head, pattern, count, other, other_pattern, other_count);
+	if (ordered && cxx20_ && (template_constraint(head) != nullptr || template_constraint(other) != nullptr) &&
+		arguments_at_least_as_specialized(other, other_pattern, other_count, head, pattern, count))
+		ordered = constraints_subsume(head, other);
 	if (partial_orderings_.find(key) == nullptr)
 		partial_orderings_.insert(key, ordered);
 	return ordered;

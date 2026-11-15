@@ -8,6 +8,8 @@ void Analyzer::concept_declaration(const syntax::ConceptDecl& decl, Scope* scope
 {
 	if (template_list_ == nullptr || scope != template_scope_ || template_list_->parameters.empty())
 		error(decl.location, "a concept definition requires a template parameter list");
+	if (current_template_constraint() != nullptr || HasTypeConstraints(*template_list_))
+		error(decl.location, "a concept definition cannot have associated constraints");
 	Scope* home = declaration_scope(scope);
 	if (home->kind != ScopeKind::Namespace)
 		error(decl.location, "a concept must be defined at namespace scope");
@@ -22,20 +24,11 @@ void Analyzer::concept_declaration(const syntax::ConceptDecl& decl, Scope* scope
 	definition->head = template_head(*template_list_, template_scope_, template_entities_);
 	definition->parameters = scope;
 	definition->definition = decl.constraint;
+	definition->location = decl.location;
 	// Check the definition's non-dependent obligations without evaluating
 	// its constraint or demanding function bodies. Its name is not yet in
 	// scope in its own constraint-expression.
-	expression_walk(decl.constraint, scope, true);
-	if (!type_dependent(decl.constraint, scope) && !instantiation_dependent(*decl.constraint, scope, true))
-	{
-		ScratchContext scratch(*this);
-		++unevaluated_;
-		const ExprFacts* facts = typed(*decl.constraint, scope);
-		--unevaluated_;
-		if (facts == nullptr || facts->type == nullptr ||
-			facts->type->unqualified != types_.fundamental(FundamentalType::Bool))
-			error(decl.location, "a concept constraint must have type bool");
-	}
+	check_constraint_definition(*decl.constraint, scope);
 	Binding* binding = new_binding(BindingKind::Concept, decl.name, definition, definition->type);
 	print_in(home, binding);
 	declare_in(home, binding);
@@ -96,11 +89,17 @@ bool Analyzer::concept_arguments(const ConceptEntity* definition, const syntax::
 
 ConstraintStatus Analyzer::concept_result(const ConceptEntity* definition, const TypeList& arguments, uint32_t location)
 {
+	return predicate_result(definition, arguments, location);
+}
+
+ConstraintStatus Analyzer::predicate_result(
+	const ConstraintPredicate* definition, const TypeList& arguments, uint32_t location)
+{
 	for (const Type* argument : arguments)
 		if (dependent_type(argument))
 			return ConstraintStatus::Dependent;
-	return concept_satisfied(definition, arguments, location) ? ConstraintStatus::Satisfied
-															  : ConstraintStatus::Unsatisfied;
+	return predicate_satisfied(definition, arguments, location) ? ConstraintStatus::Satisfied
+																: ConstraintStatus::Unsatisfied;
 }
 
 ConstraintStatus Analyzer::concept_constraint(const syntax::Name& name, const Type* type, Scope* scope)
@@ -123,7 +122,7 @@ ConstraintStatus Analyzer::concept_constraint(const syntax::Name& name, const Ty
 	return concept_result(definition, arguments, name.location);
 }
 
-bool Analyzer::concept_satisfied(const ConceptEntity* definition, const TypeList& arguments, uint32_t location)
+bool Analyzer::predicate_satisfied(const ConstraintPredicate* definition, const TypeList& arguments, uint32_t location)
 {
 	SpecializationKey key = { definition, arguments.data(), static_cast<uint32_t>(arguments.size()) };
 	if (ConceptEvaluation** known = concept_evaluations_.find(key))
@@ -144,9 +143,11 @@ bool Analyzer::concept_satisfied(const ConceptEntity* definition, const TypeList
 	Scope* frame = instantiation_frame(definition->parameters, key.arguments, key.count, definition->owner);
 	FrameExpander expander(*this, frame);
 	syntax::SyntaxCloner cloner(arena_, true, expander.get());
-	const syntax::Expr* expression = cloner.expr(definition->definition);
 	++unevaluated_;
-	evaluation->satisfied = constraint_satisfied(*expression, frame) && !substitution.failed();
+	evaluation->satisfied = type_constraints_satisfied(definition, arguments, frame);
+	if (evaluation->satisfied && definition->definition != nullptr)
+		evaluation->satisfied = constraint_satisfied(*cloner.expr(definition->definition), frame);
+	evaluation->satisfied = evaluation->satisfied && !substitution.failed();
 	--unevaluated_;
 	evaluation->state = FactState::Done;
 	return evaluation->satisfied;

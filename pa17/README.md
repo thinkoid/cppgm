@@ -383,3 +383,14 @@ satisfaction and preserve substitution short-circuiting. A compound requirement
 `{ expression } noexcept -> Concept<Args...>;` checks the expression, then its
 non-throwing property, then the concept with `decltype((expression))` prepended
 to its explicit arguments. Its value category and cv-qualifiers are preserved.
+
+### C++20 constrained templates
+
+Apply associated constraints to this assignment's partial specializations,
+alias and variable templates, and member and friend templates. Reject an
+unsatisfied alias or variable specialization before publishing it. A partial
+specialization may keep the primary's argument pattern when its constraints
+make it more specialized. Preserve distinct constrained partials with equal
+patterns and use normalized atomic subsumption to order viable matches.
+Equivalent redeclarations may rename parameters. Constrained hidden friends
+remain hidden until their own namespace declaration makes them visible.

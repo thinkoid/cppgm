@@ -620,6 +620,7 @@ void ProgramLowering::declaration(const syntax::Decl& decl)
 		if (const sema::VariableEntity* object = anonymous_object(decl))
 			define_variable(object, nullptr, decl.location);
 		return;
+	case syntax::DeclKind::ConstrainedTemplate:
 	case syntax::DeclKind::Template:
 	{
 		// An explicit specialization (14.7.3) is an ordinary definition,

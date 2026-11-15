@@ -304,7 +304,8 @@ enum class TemplateParameterKind : uint8_t
 {
 	Type,
 	NonType,
-	Template
+	Template,
+	ConstrainedType
 };
 
 struct TemplateParameter
@@ -319,7 +320,8 @@ struct TemplateParameter
 	TemplateParameterList* parameters;
 	// Type and Template: the default template argument.
 	TypeId* default_type;
-	// NonType: parameter-declaration parts.
+	// NonType: parameter-declaration parts. ConstrainedType: one Name
+	// specifier holding its type-constraint, with no extra ordinary fields.
 	Slice<DeclSpecifier> specifiers;
 	Declarator* declarator;
 	Expr* default_value;
@@ -330,6 +332,11 @@ struct TemplateParameterList
 	Slice<TemplateParameter*> parameters;
 	uint32_t location;
 };
+
+inline const Name* TypeParameterConstraint(const TemplateParameter& parameter)
+{
+	return parameter.kind == TemplateParameterKind::ConstrainedType ? parameter.specifiers[0].name : nullptr;
+}
 
 inline bool IsParameterPack(const TemplateParameter& parameter)
 {

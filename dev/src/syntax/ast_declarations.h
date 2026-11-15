@@ -26,7 +26,8 @@ enum class DeclKind : uint8_t
 	Access,
 	Asm,
 	DeductionGuide,
-	Concept
+	Concept,
+	ConstrainedTemplate
 };
 
 struct Decl
@@ -95,6 +96,24 @@ struct TemplateDecl : Decl
 	TemplateParameterList* parameters;
 	Decl* declaration;
 };
+
+// A template-head's requires-clause is rare. Keep the ordinary node's
+// layout unchanged on both native and wasm32 hosts.
+struct ConstrainedTemplateDecl : TemplateDecl
+{
+	Expr* constraint;
+};
+
+inline bool IsTemplateDeclaration(DeclKind kind)
+{
+	return kind == DeclKind::Template || kind == DeclKind::ConstrainedTemplate;
+}
+
+inline const Expr* TemplateConstraint(const TemplateDecl& decl)
+{
+	return decl.kind == DeclKind::ConstrainedTemplate ? static_cast<const ConstrainedTemplateDecl&>(decl).constraint
+													  : nullptr;
+}
 
 struct ConceptDecl : Decl
 {

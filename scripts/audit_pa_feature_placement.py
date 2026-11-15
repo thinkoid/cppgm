@@ -552,7 +552,7 @@ RULES: tuple[FeatureRule, ...] = (
     FeatureRule("template.alias", (rx(r"\btemplate\s*<[^>]*>\s*using\b"),)),
     FeatureRule("template.variable",
                 (rx(r"\btemplate\s*<[^>]*>\s*(?:constexpr\s+|const\s+|static\s+)?"
-                    r"(?!using\b)(?:bool|int|char|long|unsigned|signed|[A-Za-z_][A-Za-z0-9_:<>]*)\s+"
+                    r"(?!using\b|concept\b)(?:bool|int|char|long|unsigned|signed|[A-Za-z_][A-Za-z0-9_:<>]*)\s+"
                     r"(?!operator\b)\w+\s*="),)),
     FeatureRule("template.current_specialization", (),
                 path_patterns=(rx(r"current-specialization"),)),

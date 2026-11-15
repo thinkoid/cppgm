@@ -1636,6 +1636,8 @@ FunctionEntity* Analyzer::specialize(FunctionEntity* primary, const TypeList& gi
 	if (!match_template_arguments(
 			HeadOf(primary), given.data(), static_cast<uint32_t>(given.size()), arguments, false, 0))
 		return nullptr;
+	if (cxx20_ && !template_constraints_satisfied(HeadOf(primary), arguments, 0))
+		return nullptr;
 	SpecializationKey probe = SpecializationKey{ primary, arguments.data(), static_cast<uint32_t>(arguments.size()) };
 	if (Entity** found = specializations_.find(probe))
 		return static_cast<FunctionEntity*>(*found);

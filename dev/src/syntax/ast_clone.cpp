@@ -1741,16 +1741,26 @@ Decl* SyntaxCloner::decl(const Decl* decl)
 		result->declaration = this->decl(result->declaration);
 		return result;
 	}
+	case DeclKind::ConstrainedTemplate:
 	case DeclKind::Template:
 	{
-		// Its parameter packs are its instantiations' to expand.
 		const size_t shadows = shadows_.size();
-		TemplateDecl* result = copy(static_cast<const TemplateDecl*>(decl));
-		shadow_template_packs(result->parameters);
+		const TemplateDecl* pattern = static_cast<const TemplateDecl*>(decl);
+		shadow_template_packs(pattern->parameters);
+		TemplateDecl* result;
+		if (decl->kind == DeclKind::ConstrainedTemplate)
+		{
+			ConstrainedTemplateDecl* constrained = copy(static_cast<const ConstrainedTemplateDecl*>(decl));
+			constrained->constraint = expr(constrained->constraint);
+			result = constrained;
+		}
+		else
+			result = copy(pattern);
 		result->declaration = this->decl(result->declaration);
 		shadows_.resize(shadows);
 		return result;
 	}
+
 	case DeclKind::Class:
 	{
 		ClassDecl* result = copy(static_cast<const ClassDecl*>(decl));

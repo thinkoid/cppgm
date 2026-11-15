@@ -300,7 +300,8 @@ private:
 	Entity* index_partial(Entity* templ, Entity* partial, const Type* const* key, Entity* first, uint64_t& positions);
 	void indexed_partials(const Entity* templ, uint64_t positions, const Type* const* arguments, uint32_t count,
 		SmallList<Entity*, 4>& lists);
-	ClassEntity* partial_of_arguments(ClassEntity* templ, const Type* const* arguments, uint32_t count);
+	ClassEntity* partial_of_arguments(ClassEntity* templ, const Type* const* arguments, uint32_t count,
+		Scope* scope = nullptr, bool redeclaration = false);
 	Entity* class_partial_specialization(const syntax::ClassSpecifier& specifier, Scope* scope, Specifiers& out);
 	ClassEntity* member_partial_pattern(const syntax::ClassSpecifier& specifier);
 	ClassEntity* matching_partial(ClassEntity* templ, const Type* const* arguments, uint32_t count, TypeList& deduced,
@@ -623,10 +624,29 @@ private:
 	ExprFacts* requires_expression(const syntax::RequiresExpr& expr, Scope* scope);
 	void concept_declaration(const syntax::ConceptDecl& decl, Scope* scope);
 	ExprFacts* concept_reference(const syntax::IdExpr& expr, Scope* scope);
-	bool concept_satisfied(const ConceptEntity* definition, const TypeList& arguments, uint32_t location);
+	bool predicate_satisfied(const ConstraintPredicate* definition, const TypeList& arguments, uint32_t location);
 	bool concept_arguments(const ConceptEntity* definition, const syntax::NameComponent& component, Scope* scope,
 		TypeList& arguments, const Type* leading_type = nullptr);
 	ConstraintStatus concept_result(const ConceptEntity* definition, const TypeList& arguments, uint32_t location);
+	ConstraintStatus predicate_result(
+		const ConstraintPredicate* definition, const TypeList& arguments, uint32_t location);
+	const ConstraintPredicate* template_constraint(const TemplateHead* head) const;
+	const syntax::Expr* current_template_constraint() const;
+	static bool HasTypeConstraints(const syntax::TemplateParameterList&);
+	void attach_template_constraint(TemplateHead* head, Scope* parameters, const syntax::TemplateParameterList&);
+	bool template_constraints_equivalent(
+		const TemplateHead*, const syntax::Expr*, const syntax::TemplateParameterList*, Scope*);
+	bool type_constraints_satisfied(const ConstraintPredicate*, const TypeList&, Scope*);
+	const ConstraintNode* normalize_type_constraint(const syntax::Name&, const Type*, Scope*);
+	ConstraintNormalization* constraint_normalization(const ConceptEntity*, const TypeList&, uint32_t);
+	bool template_constraints_satisfied(const TemplateHead* head, const TypeList& arguments, uint32_t location);
+	bool constraints_equivalent(
+		const syntax::Expr* first, Scope* first_scope, const syntax::Expr* second, Scope* second_scope);
+	const ConstraintNode* normalized_constraint(const ConstraintPredicate*);
+	const ConstraintNode* normalize_constraint(const syntax::Expr&, Scope*);
+	bool constraints_subsume(const TemplateHead*, const TemplateHead*);
+	bool requires_words(const syntax::RequiresExpr&, Scope*);
+	void check_constraint_definition(const syntax::Expr&, Scope*);
 	ConstraintStatus concept_constraint(const syntax::Name& name, const Type* type, Scope* scope);
 	bool requirement_parameters(const syntax::RequiresExpr& expr, Scope*& scope);
 	bool requirements_satisfied(const syntax::RequiresExpr& expr, Scope* scope);
@@ -2723,6 +2743,15 @@ private:
 	// target's unit. Definitions cannot be redeclared, so entries do not
 	// invalidate; explicit in-progress state detects recursive satisfaction.
 	FlatMap<SpecializationKey, ConceptEvaluation*, SpecializationHash> concept_evaluations_;
+	// Only constrained heads have an entry; neither head nor ordinary
+	// function layouts grow to carry optional constraint metadata.
+	PointerMap template_constraint_index_;
+	std::vector<ConstraintPredicate*> template_constraints_;
+	FlatMap<DecltypeKey, const ConstraintNode*, DecltypeHash> constraint_atoms_;
+	FlatMap<SpecializationKey, ConstraintNormalization*, SpecializationHash> constraint_normalizations_;
+	FlatMap<EntityPair, bool, EntityPairHash> constraint_subsumptions_;
+	PointerMap template_clause_index_;
+	std::vector<const syntax::Expr*> template_clauses_;
 	// The function template specializations whose types are being
 	// substituted, innermost last, each with the depth of class template
 	// instantiations (class_instantiations_) it began in (see specialize).
@@ -2747,6 +2776,8 @@ private:
 	// by ordered pair of partial specializations once compared (14.5.5.2).
 	FlatMap<SpecializationKey, Entity*, SpecializationHash> partial_index_;
 	FlatMap<SpecializationKey, ClassEntity*, SpecializationHash> partial_arguments_;
+	PointerMap partial_argument_predecessor_index_;
+	std::vector<ClassEntity*> partial_argument_predecessors_;
 	FlatMap<EntityPair, bool, EntityPairHash> partial_orderings_;
 	// Function-template ordering is structural. Declaration/type identities,
 	// compared arity and call/address form distinguish its complete input.

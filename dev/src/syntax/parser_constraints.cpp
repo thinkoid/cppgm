@@ -4,6 +4,24 @@
 
 namespace syntax {
 
+Name* Parser::parse_type_constraint()
+{
+	if (!cxx20_ || (!at_identifier() && !at(TokenKind::OP_COLON2)))
+		return nullptr;
+	// An unqualified ordinary type is the common non-type-parameter
+	// spelling. Its existing binding rules out a concept without parsing.
+	if (at_identifier() && !at(TokenKind::OP_COLON2, 1) &&
+		scopes_.lookup(tok().identifier, false).category != NameCategory::Concept)
+		return nullptr;
+	Tentative tentative(*this);
+	NameInfo info;
+	Name* name = parse_name(NameMode::Expression, info);
+	if (name == nullptr || info.category != NameCategory::Concept)
+		return nullptr;
+	tentative.commit();
+	return name;
+}
+
 Decl* Parser::parse_concept_definition()
 {
 	ConceptDecl* decl = make<ConceptDecl>(DeclKind::Concept, location());
@@ -23,6 +41,33 @@ Decl* Parser::parse_concept_definition()
 	scopes_.declare(declaration_scope(), decl->name, NameBinding{ NameCategory::Concept, false, nullptr });
 	pending_template_ = false;
 	return decl;
+}
+
+Expr* Parser::parse_constraint_expression(bool conjunction)
+{
+	// A requires-clause uses primary expressions joined by && and ||.
+	// Calls and comparisons must be parenthesized; a concept-id and a
+	// requires-expression are already primary expressions.
+	Expr* left = conjunction ? parse_primary_expression() : parse_constraint_expression(true);
+	if (left == nullptr)
+		return nullptr;
+	const TokenKind op = conjunction ? TokenKind::OP_LAND : TokenKind::OP_LOR;
+	while (at(op))
+	{
+		const ParseToken token = tok();
+		next();
+		Expr* right = conjunction ? parse_primary_expression() : parse_constraint_expression(true);
+		if (right == nullptr)
+			return nullptr;
+		BinaryExpr* binary = make<BinaryExpr>(ExprKind::Binary, left->location);
+		binary->op = op;
+		binary->alternative = token.spelling.length != 0 && token.spelling.text[0] >= 'a' &&
+			token.spelling.text[0] <= 'z';
+		binary->left = left;
+		binary->right = right;
+		left = binary;
+	}
+	return left;
 }
 
 Expr* Parser::parse_requires_expression()

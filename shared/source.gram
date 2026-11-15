@@ -68,7 +68,7 @@ explicit-instantiation-target:
 	simple-declaration
 
 template-declaration:
-	KW_TEMPLATE template-parameter-clause declaration
+	KW_TEMPLATE template-parameter-clause requires-clause? declaration
 
 template-parameter-clause:
 	OP_LT template-parameter-list? close-angle-bracket
@@ -81,6 +81,7 @@ template-parameter:
 	non-type-template-parameter
 
 type-parameter:
+	type-constraint OP_DOTS? TT_IDENTIFIER? default-template-argument?
 	type-parameter-key OP_DOTS? TT_IDENTIFIER? default-template-argument?
 	KW_TEMPLATE template-parameter-clause type-parameter-key TT_IDENTIFIER? default-template-argument?
 
@@ -838,3 +839,15 @@ return-type-requirement:
 
 concept-definition:
 	KW_CONCEPT TT_IDENTIFIER OP_ASS logical-or-expression OP_SEMICOLON
+
+requires-clause:
+	KW_REQUIRES constraint-logical-or-expression
+
+constraint-logical-or-expression:
+	constraint-logical-and-expression (OP_LOR constraint-logical-and-expression)*
+
+constraint-logical-and-expression:
+	primary-expression (OP_LAND primary-expression)*
+
+type-constraint:
+	id-expression

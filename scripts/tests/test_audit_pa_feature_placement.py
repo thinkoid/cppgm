@@ -31,6 +31,12 @@ def write(path: Path, text: str) -> None:
 
 
 class AuditPAFeaturePlacementTests(unittest.TestCase):
+    def test_concept_definition_is_not_a_variable_template(self):
+        source = "template<class T> concept C = sizeof(T) > 1;"
+        self.assertNotIn("template.variable", audit.detect_features(source))
+        source += " template<class T> constexpr bool value = C<T>;"
+        self.assertIn("template.variable", audit.detect_features(source))
+
     def test_digit_separators_do_not_hide_later_source_features(self):
         source = "int n=1'000; double x=0xA'B.C'Dp+0'2; template<auto N> struct Value {}; auto lambda=[](auto x){return x;};"
         stripped = audit.strip_string_literals(audit.strip_comments(source))

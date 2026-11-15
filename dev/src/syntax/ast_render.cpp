@@ -1099,7 +1099,10 @@ void SyntaxRenderer::template_parameters(const TemplateParameterList& list)
 		}
 		if (parameter.kind == TemplateParameterKind::Template)
 			template_parameters(*parameter.parameters);
-		text(TokenKindSpelling(parameter.key));
+		if (const Name* constraint = TypeParameterConstraint(parameter))
+			name(*constraint, false);
+		else
+			text(TokenKindSpelling(parameter.key));
 		text(" ");
 		if (parameter.pack)
 			text("...");
@@ -1184,10 +1187,17 @@ void SyntaxRenderer::declaration(const Decl& decl)
 		declaration(*instantiation.declaration);
 		break;
 	}
+	case DeclKind::ConstrainedTemplate:
 	case DeclKind::Template:
 	{
 		const TemplateDecl& templated = static_cast<const TemplateDecl&>(decl);
 		template_parameters(*templated.parameters);
+		if (const Expr* constraint = TemplateConstraint(templated))
+		{
+			text("requires ");
+			expression(*constraint);
+			text(" ");
+		}
 		declaration(*templated.declaration);
 		break;
 	}

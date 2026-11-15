@@ -73,7 +73,10 @@ Binding* Analyzer::variable_template_binding(const Binding* found, const syntax:
 	default_template_arguments(head, arguments, component.location);
 	// A member template's specialization has its declaration's access
 	// (14.5.2p2, 11p4), as its binding tells unqualified uses.
-	Binding* binding = variable_specialization(templ, arguments, component.location)->templ->binding;
+	VariableEntity* specialization = variable_specialization(templ, arguments, component.location);
+	if (specialization == nullptr)
+		return nullptr;
+	Binding* binding = specialization->templ->binding;
 	if (found->declared_in == binding->declared_in)
 		binding->access = found->access;
 	return binding;
@@ -91,6 +94,11 @@ VariableEntity* Analyzer::variable_specialization(
 	const TemplateHead* head = templ->templ->head;
 	TypeList arguments;
 	match_template_arguments(head, given.data(), static_cast<uint32_t>(given.size()), arguments, true, location);
+	if (cxx20_ && !template_constraints_satisfied(head, arguments, location))
+	{
+		substitution_error(location, "variable template constraints are not satisfied");
+		return nullptr;
+	}
 	const SpecializationKey probe = SpecializationKey{ templ, arguments.data(),
 		static_cast<uint32_t>(arguments.size()) };
 	if (Entity** found = specializations_.find(probe))
@@ -162,6 +170,8 @@ const VariableEntity* Analyzer::matched_partial(
 			const VariableTemplateFacts* candidate = partial->templ;
 			if (!deduce_partial_arguments(
 					candidate->head, candidate->arguments, candidate->argument_count, arguments, count, trial))
+				continue;
+			if (cxx20_ && !template_constraints_satisfied(candidate->head, trial, location))
 				continue;
 			matches.push_back(partial);
 			if (best == nullptr ||
@@ -265,6 +275,8 @@ void Analyzer::variable_explicit_specialization(const Specifiers& specifiers, co
 	declaration_class_ = saved_class;
 	default_template_arguments(head, given, location);
 	VariableEntity* variable = variable_specialization(templ, given, location, true);
+	if (variable == nullptr)
+		return;
 	VariableTemplateFacts* facts = variable->templ;
 	// Its first declaration gives its type: declared, or deduced from its
 	// own initializer (7.1.6.4p6; a constexpr object is const, 7.1.5p9),

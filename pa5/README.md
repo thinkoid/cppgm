@@ -516,3 +516,13 @@ satisfaction and preserve substitution short-circuiting. A compound requirement
 `{ expression } noexcept -> Concept<Args...>;` checks the expression, then its
 non-throwing property, then the concept with `decltype((expression))` prepended
 to its explicit arguments. Its value category and cv-qualifiers are preserved.
+
+### C++20 associated constraints
+
+Retain a template-head's optional `requires` clause. Its grammar accepts
+primary expressions joined by `&&` and `||`; calls and comparisons need
+parentheses. A type template parameter may use a named concept in place of
+`class` or `typename`, optionally followed by an ellipsis and a parameter name.
+Retain the concept name and its explicit arguments for later semantic analysis.
+Keep this uncommon syntax separate so ordinary template declarations and
+parameters stay compact on both native and wasm32 targets.

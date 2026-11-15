@@ -553,6 +553,8 @@ bool Analyzer::decltype_words(const syntax::Expr* expr, Scope* scope)
 	const uint64_t kind = static_cast<uint64_t>(expr->kind);
 	switch (expr->kind)
 	{
+	case syntax::ExprKind::Requires:
+		return requires_words(static_cast<const syntax::RequiresExpr&>(*expr), scope);
 	case syntax::ExprKind::Concept:
 	case syntax::ExprKind::Id:
 	{

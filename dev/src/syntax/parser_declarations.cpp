@@ -491,18 +491,29 @@ Decl* Parser::parse_linkage_specification(DeclContext context)
 
 Decl* Parser::parse_template_declaration(DeclContext context)
 {
-	TemplateDecl* decl = make<TemplateDecl>(DeclKind::Template, location());
+	const uint32_t start = location();
 	if (!expect(TokenKind::KW_TEMPLATE))
 		return nullptr;
 	Scope* enclosing = scopes_.current();
 	scopes_.push(ScopeKind::Template, nullptr);
-	decl->parameters = parse_template_parameter_clause();
-	if (decl->parameters == nullptr)
+	TemplateParameterList* parameters = parse_template_parameter_clause();
+	if (parameters == nullptr)
 		return nullptr;
-	// An explicit specialization (`template<>`) declares no new template.
-	pending_template_ = !decl->parameters->parameters.empty();
+	TemplateDecl* decl;
+	if (accept(TokenKind::KW_REQUIRES))
+	{
+		ConstrainedTemplateDecl* constrained = make<ConstrainedTemplateDecl>(DeclKind::ConstrainedTemplate, start);
+		constrained->constraint = parse_constraint_expression();
+		if (constrained->constraint == nullptr)
+			return nullptr;
+		decl = constrained;
+	}
+	else
+		decl = make<TemplateDecl>(DeclKind::Template, start);
+	decl->parameters = parameters;
+	pending_template_ = !parameters->parameters.empty();
 	const TemplateParameterList* const enclosing_head = template_head_;
-	template_head_ = decl->parameters;
+	template_head_ = parameters;
 	decl->declaration = parse_declaration(context);
 	template_head_ = enclosing_head;
 	pending_template_ = false;
@@ -599,15 +610,27 @@ TemplateParameter* Parser::parse_template_parameter()
 		return parameter;
 	}
 	const bool type_key = at(TokenKind::KW_CLASS) || at(TokenKind::KW_TYPENAME);
-	const bool type_parameter = type_key &&
-		(at(TokenKind::OP_DOTS, 1) || at(TokenKind::OP_COMMA, 1) || at(TokenKind::OP_GT, 1) ||
-			at(TokenKind::OP_ASS, 1) ||
-			(at_identifier(1) && (at(TokenKind::OP_COMMA, 2) || at(TokenKind::OP_GT, 2) || at(TokenKind::OP_ASS, 2))));
+	Name* constraint = type_key ? nullptr : parse_type_constraint();
+	const bool type_parameter = constraint != nullptr ||
+		(type_key &&
+			(at(TokenKind::OP_DOTS, 1) || at(TokenKind::OP_COMMA, 1) || at(TokenKind::OP_GT, 1) ||
+				at(TokenKind::OP_ASS, 1) ||
+				(at_identifier(1) &&
+					(at(TokenKind::OP_COMMA, 2) || at(TokenKind::OP_GT, 2) || at(TokenKind::OP_ASS, 2)))));
 	if (type_parameter)
 	{
-		parameter->kind = TemplateParameterKind::Type;
-		parameter->key = tok().simple;
-		next();
+		parameter->kind = constraint == nullptr ? TemplateParameterKind::Type : TemplateParameterKind::ConstrainedType;
+		parameter->key = constraint == nullptr ? tok().simple : TokenKind::KW_TYPENAME;
+		if (constraint == nullptr)
+			next();
+		else
+		{
+			DeclSpecifier specifier = {};
+			specifier.kind = DeclSpecKind::Name;
+			specifier.name = constraint;
+			specifier.location = constraint->location;
+			parameter->specifiers = { arena_.copy_array(&specifier, 1), 1 };
+		}
 		parameter->pack = accept(TokenKind::OP_DOTS);
 		if (at_identifier())
 		{

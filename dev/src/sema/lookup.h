@@ -106,6 +106,13 @@ public:
 	// non-templates are indexed apart).
 	const FunctionList* overload(
 		const Scope* scope, const Identifier* name, const Type* signature, const Type* shape = nullptr) const;
+	struct TemplateOverloadVariant
+	{
+		FunctionList* node;
+		TemplateOverloadVariant* next;
+	};
+	const TemplateOverloadVariant* template_overload_variants(
+		const Scope*, const Identifier*, const Type* signature, const Type* shape) const;
 
 	LookupResult unqualified(Scope* scope, const Identifier* name, LookupFilter filter);
 	// Lookup in a namespace, class or scoped enumeration named by a
@@ -210,6 +217,7 @@ private:
 	{
 		size_t operator()(const TemplateOverloadKey& key) const;
 	};
+	FunctionList** template_variant(const TemplateOverloadKey&, FunctionList*, const FunctionEntity*);
 
 	// Member lookup in a complete class, bases included (10.2): a complete
 	// class's bases no longer change, so each (class, name, filter) result
@@ -304,6 +312,7 @@ private:
 	std::vector<OverloadSlot, ZeroedAllocator<OverloadSlot>> overloads_;
 	uint32_t overload_count_;
 	FlatMap<TemplateOverloadKey, FunctionList*, TemplateOverloadHash> template_overloads_;
+	FlatMap<TemplateOverloadKey, TemplateOverloadVariant*, TemplateOverloadHash> template_variants_;
 	std::vector<MemberSlot, ZeroedAllocator<MemberSlot>> members_;
 	uint32_t member_count_;
 	// Indexed by Identifier::id (and possibly shorter): the names declared

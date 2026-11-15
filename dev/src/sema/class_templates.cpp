@@ -238,6 +238,8 @@ TemplateHead* Analyzer::template_head(
 	head->deduction_origins = nullptr;
 	head->trailing_pack = head->count != 0 && parameters.back()->pack ? head->count - 1 : head->count;
 	head->ordinal = definition_point();
+	if (cxx20_ && (HasTypeConstraints(list) || (current_template_constraint() != nullptr && &list == template_list_)))
+		attach_template_constraint(head, scope, list);
 	// The first declaration's defaults come with the template wherever it
 	// is found (a member of a dependent type's class or by argument-
 	// dependent lookup, declared after a template's definition context);
@@ -275,6 +277,8 @@ void Analyzer::merge_template_head(
 	// and in each parameter's kind.
 	if (list.parameters.size != head->count)
 		error(location, "template redeclared with a different template parameter list");
+	if (cxx20_ && !template_constraints_equivalent(head, current_template_constraint(), &list, scope))
+		error(location, "template redeclared with different associated constraints");
 	for (uint32_t i = 0; i < head->count; ++i)
 	{
 		const syntax::TemplateParameter* parameter = list.parameters[i];
@@ -1378,6 +1382,12 @@ ClassEntity* Analyzer::class_specialization(
 			error(location, "template arguments that do not match their template's parameters");
 		return nullptr;
 	}
+	if (cxx20_ && !stand_in && !template_constraints_satisfied(head, canonical, location))
+	{
+		if (fatal)
+			substitution_error(location, "class template constraints are not satisfied");
+		return nullptr;
+	}
 	const bool own = !stand_in && own_arguments(head, canonical.data(), static_cast<uint32_t>(canonical.size()));
 	const SpecializationKey probe = SpecializationKey{ templ, canonical.data(),
 		static_cast<uint32_t>(canonical.size()) };
@@ -1516,7 +1526,7 @@ Binding* Analyzer::template_id_binding(const Binding* found, const syntax::NameC
 	// A partial specialization's argument list names it where it is the
 	// current instantiation (14.6.2.1p1).
 	ClassEntity* partial = specialization->templ->dependent
-		? partial_of_arguments(templ, specialization->templ->arguments, specialization->templ->argument_count)
+		? partial_of_arguments(templ, specialization->templ->arguments, specialization->templ->argument_count, scope)
 		: nullptr;
 	if (partial != nullptr && partial->templ->binding != nullptr && current_instantiation(partial, scope))
 		return partial->templ->binding;
@@ -1590,6 +1600,7 @@ const syntax::Name* NameDeclared(const syntax::Decl& decl)
 	}
 	case syntax::DeclKind::Enum:
 		return static_cast<const syntax::EnumDecl&>(decl).enum_specifier->name;
+	case syntax::DeclKind::ConstrainedTemplate:
 	case syntax::DeclKind::Template:
 		return NameDeclared(*static_cast<const syntax::TemplateDecl&>(decl).declaration);
 	default:
@@ -1623,7 +1634,7 @@ ClassEntity* Analyzer::qualifying_template(const syntax::Decl& decl, Scope* scop
 	// (one per enclosing class template or partial specialization, outermost
 	// first, 14.5.2p1, 14.5.5.3p1), whose parameters they may name.
 	uint32_t heads = ~0u;
-	if (decl.kind == syntax::DeclKind::Template)
+	if (syntax::IsTemplateDeclaration(decl.kind))
 	{
 		heads = 0;
 		for (const Scope* current = scope; current != nullptr && current->kind == ScopeKind::TemplateParameters;
@@ -1666,7 +1677,7 @@ ClassEntity* Analyzer::qualifying_template(const syntax::Decl& decl, Scope* scop
 			// including a member template of an explicitly specialized class.
 			// An enclosing declaration can still have unparsed inner heads;
 			// defer those qualifiers until their parameters are available.
-			const bool complete_heads = decl.kind != syntax::DeclKind::Template;
+			const bool complete_heads = !syntax::IsTemplateDeclaration(decl.kind);
 			if (ClassEntity* specialization = (explicit_specialization_ || complete_heads)
 					? named_specialization(cls, component, scope)
 					: nullptr)
@@ -1723,7 +1734,7 @@ Scope* Analyzer::member_template_home(const syntax::TemplateDecl& decl, Scope* s
 	// redeclares the head its class (or namespace) declared, so its
 	// placeholders are keyed there (14.5.6.1p5, see dependent_expression).
 	// That class or namespace, else null.
-	if (decl.declaration->kind == syntax::DeclKind::Template)
+	if (syntax::IsTemplateDeclaration(decl.declaration->kind))
 		return nullptr;
 	const syntax::Name* name = NameDeclared(*decl.declaration);
 	if (name == nullptr || !name->qualified())
@@ -1760,7 +1771,7 @@ ClassEntity* Analyzer::named_partial(ClassEntity* templ, const syntax::NameCompo
 	if (!match_template_arguments(templ->templ->head, given.data(), static_cast<uint32_t>(given.size()), canonical,
 			false, component.location))
 		return nullptr;
-	return partial_of_arguments(templ, canonical.data(), static_cast<uint32_t>(canonical.size()));
+	return partial_of_arguments(templ, canonical.data(), static_cast<uint32_t>(canonical.size()), scope, true);
 }
 
 bool Analyzer::dependent_type(const Type* type) const
@@ -2571,7 +2582,7 @@ void Analyzer::link_member_patterns(
 		const syntax::Decl* from = pattern.members[i];
 		const syntax::Decl* to = instance.members[i];
 		// A member template's declaration (14.5.2).
-		while (from->kind == syntax::DeclKind::Template && to->kind == syntax::DeclKind::Template)
+		while (syntax::IsTemplateDeclaration(from->kind) && syntax::IsTemplateDeclaration(to->kind))
 		{
 			from = static_cast<const syntax::TemplateDecl*>(from)->declaration;
 			to = static_cast<const syntax::TemplateDecl*>(to)->declaration;
@@ -2736,7 +2747,7 @@ const FunctionEntity* Analyzer::outside_pattern_member(const FunctionEntity* mem
 	{
 		const syntax::Decl* a = from.members[i];
 		const syntax::Decl* b = to.members[i];
-		while (a->kind == syntax::DeclKind::Template && b->kind == syntax::DeclKind::Template)
+		while (syntax::IsTemplateDeclaration(a->kind) && syntax::IsTemplateDeclaration(b->kind))
 		{
 			a = static_cast<const syntax::TemplateDecl*>(a)->declaration;
 			b = static_cast<const syntax::TemplateDecl*>(b)->declaration;

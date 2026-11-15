@@ -292,6 +292,8 @@ template Entity* Analyzer::new_entity<Entity>(EntityKind, const Identifier*, Sco
 template AliasTemplateEntity* Analyzer::new_entity<AliasTemplateEntity>(
 	EntityKind, const Identifier*, Scope*, const Type*);
 template ConceptEntity* Analyzer::new_entity<ConceptEntity>(EntityKind, const Identifier*, Scope*, const Type*);
+template ConstraintPredicate* Analyzer::new_entity<ConstraintPredicate>(
+	EntityKind, const Identifier*, Scope*, const Type*);
 
 const char* Analyzer::copy_label(const char* text, size_t length)
 {
@@ -388,6 +390,7 @@ void Analyzer::declaration(const syntax::Decl& decl, Scope* scope)
 		return alias_declaration(static_cast<const syntax::AliasDecl&>(decl), scope);
 	case syntax::DeclKind::ExplicitInstantiation:
 		return explicit_instantiation(static_cast<const syntax::ExplicitInstantiationDecl&>(decl), scope);
+	case syntax::DeclKind::ConstrainedTemplate:
 	case syntax::DeclKind::Template:
 		return template_declaration(static_cast<const syntax::TemplateDecl&>(decl), scope);
 	case syntax::DeclKind::Concept:
@@ -884,7 +887,11 @@ void Analyzer::template_declaration(const syntax::TemplateDecl& decl, Scope* sco
 		static_cast<const syntax::SimpleDecl*>(decl.declaration)->declarators.size > 1)
 		error(decl.location, "a template declaration must declare a single entity");
 	if (decl.parameters->parameters.empty())
+	{
+		if (syntax::TemplateConstraint(decl) != nullptr)
+			error(decl.location, "an explicit specialization cannot have a requires-clause");
 		return explicit_specialization(decl, scope);
+	}
 	// 14p2: a template-declaration is a namespace-scope or class-scope
 	// declaration; 14p4: a template does not have C language linkage (a
 	// class member's is ignored, 7.5p4).
@@ -927,6 +934,11 @@ void Analyzer::template_declaration(const syntax::TemplateDecl& decl, Scope* sco
 	template_entities_.swap(entities);
 	template_list_ = decl.parameters;
 	template_scope_ = parameters;
+	if (const syntax::Expr* clause = syntax::TemplateConstraint(decl))
+	{
+		template_clause_index_.set(parameters, static_cast<uint32_t>(template_clauses_.size()));
+		template_clauses_.push_back(clause);
+	}
 	template_owner_ = qualifying_template(*decl.declaration, parameters);
 	// 14.1p9: the template-parameter-list of a class template member's
 	// definition outside its class gives no default template argument.

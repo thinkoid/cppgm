@@ -346,3 +346,25 @@ satisfaction and preserve substitution short-circuiting. A compound requirement
 `{ expression } noexcept -> Concept<Args...>;` checks the expression, then its
 non-throwing property, then the concept with `decltype((expression))` prepended
 to its explicit arguments. Its value category and cv-qualifiers are preserved.
+
+### C++20 associated constraints
+
+A template-head may have a `requires` clause. A type template parameter may
+use a named concept in place of `class` or `typename`; a constrained pack
+checks every element and accepts an empty pack. Check these constraints
+before publishing a specialization or retaining a candidate. Unsatisfied
+immediate substitution rejects the candidate without instantiating its body.
+Preserve the written order and short-circuit substitution.
+
+Keep different constrained overloads distinct, even when their function types
+agree. Equivalent
+redeclarations may rename parameters. For ordering, normalize named concepts
+to their original atomic expressions with canonical parameter mappings.
+Subsumption uses atomic identity, not equal spelling or equal boolean values;
+unused concept parameters do not make otherwise identical atoms distinct.
+Constraint metadata and normalization caches must not enlarge ordinary
+function, template-head or expression records.
+
+A constrained parameter pack introduces one atomic fold constraint in C++20;
+do not apply C++26 fold-expanded ordering. Later assignments apply these rules
+to their partial specializations, alias and variable templates, and friends.
