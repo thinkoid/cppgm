@@ -1,61 +1,107 @@
-name: Version release
+name: Release
 
+# A semantic version tag (v0.9.0, v1.2.3-rc1) publishes a release. Assignment tags (assignments-v9) publish nothing.
+# A pull request that changes the release files builds and checks the same packages without publishing.
 on:
   push:
-    tags: ['v[0-9]*']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+      - '.github/workflows/export-wasm-references.yml'
+      - 'scripts/package_release.py'
+      - 'scripts/check_release_package.py'
+      - 'scripts/export_release_source.py'
+      - 'scripts/select_macos_llvm.sh'
 
 permissions:
   contents: read
 
 # A tag has one release producer. Never cancel an in-progress publication.
 concurrency:
-  group: version-release-${{ github.ref }}
-  cancel-in-progress: false
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
+
+env:
+  VERSION_TAG: ${{ github.event_name == 'push' && github.ref_name || 'v0.0.0' }}
 
 jobs:
   wasm:
+    if: github.event_name == 'push'
     uses: ./.github/workflows/export-wasm-references.yml
     with:
       revision: ${{ github.sha }}
+      bundle: cppgm-${{ github.ref_name }}-wasm32-wasip1.tar.gz
 
-  native-and-source:
+  linux:
+    name: Linux x86-64 tools, library and source
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Install export dependencies
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends binutils build-essential curl gdb git gzip perl rsync tar xz-utils
-          perl scripts/install_wasm_tools.pl --prefix "$RUNNER_TEMP/wasm-tools"
-          echo "$RUNNER_TEMP/wasm-tools/bin" >> "$GITHUB_PATH"
-      - name: Export the tagged source and qualified native references
-        env:
-          VERSION_TAG: ${{ github.ref_name }}
+          sudo apt-get install -y --no-install-recommends binutils build-essential git gzip perl tar
+      - name: Build the tools and the LowIR library
+        run: |
+          make -C dev -j4 all CXX=g++ CPPGM_HOST_CXX=g++
+          make -C dev -j4 lowir-library CXX=g++ CPPGM_HOST_CXX=g++
+      - name: Package and check the release files
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/upload"
+          # A pull request has no release tag: its trial tag names the checked-out commit.
+          git rev-parse -q --verify "refs/tags/$VERSION_TAG" >/dev/null || git tag "$VERSION_TAG"
+          python3 scripts/tests/test_release_source.py
+          python3 scripts/tests/test_package_release.py
           python3 scripts/export_release_source.py --tag "$VERSION_TAG" --output "$RUNNER_TEMP/upload"
-          bundle="$RUNNER_TEMP/upload/cppgm-reference-binaries-linux-x86_64-${VERSION_TAG}.tar.gz"
-          CPPGM_REFERENCE_BUNDLE_OUT="$bundle" \
-            CPPGM_REFERENCE_BUNDLE_NAME="$(basename "$bundle")" \
-            CPPGM_REFERENCE_BUNDLE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION_TAG}/$(basename "$bundle")" \
-            scripts/export_student_repo.sh --force "$RUNNER_TEMP/student-export"
-          python3 scripts/check_exported_reference_binaries.py "$RUNNER_TEMP/student-export" --bundle "$bundle"
-          make -C pa38 test CPPGM_SKIP_DEV_REBUILD=1
-          cp "$RUNNER_TEMP/student-export/reference-binaries/manifest.tsv" "$RUNNER_TEMP/upload/native-reference-manifest.tsv"
-          make test-harness
+          python3 scripts/package_release.py --tag "$VERSION_TAG" --platform linux-x86_64 \
+            --host "$(g++ --version | sed -n 1p)" --output "$RUNNER_TEMP/upload"
+          python3 scripts/check_release_package.py \
+            "$RUNNER_TEMP/upload/cppgm-${VERSION_TAG}-linux-x86_64.tar.gz" --host-cxx g++ --cc gcc
       - uses: actions/upload-artifact@v6
         with:
-          name: version-native-and-source
+          name: release-linux-and-source
+          path: ${{ runner.temp }}/upload/
+          if-no-files-found: error
+
+  macos:
+    name: Intel macOS tools and library
+    runs-on: macos-26-intel
+    timeout-minutes: 90
+    env:
+      CPPGM_STDLIB_FLAGS: ''
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install Homebrew LLVM Intel bottle
+        run: bash scripts/install_macos_llvm.sh 21
+      - name: Select Homebrew LLVM
+        run: bash scripts/select_macos_llvm.sh 21
+      - name: Build the tools and the LowIR library
+        run: |
+          make -C dev -j4 all CXX="$CXX" CPPGM_HOST_CXX="$CPPGM_HOST_CXX"
+          make -C dev -j4 lowir-library CXX="$CXX" CPPGM_HOST_CXX="$CPPGM_HOST_CXX"
+      - name: Package and check the release files
+        run: |
+          set -euo pipefail
+          python3 scripts/package_release.py --tag "$VERSION_TAG" --platform macos-x86_64 \
+            --host "$("$CXX" --version | sed -n 1p)" --output "$RUNNER_TEMP/upload"
+          python3 scripts/check_release_package.py \
+            "$RUNNER_TEMP/upload/cppgm-${VERSION_TAG}-macos-x86_64.tar.gz" --host-cxx "$CXX" --cc cc
+      - uses: actions/upload-artifact@v6
+        with:
+          name: release-macos
           path: ${{ runner.temp }}/upload/
           if-no-files-found: error
 
   publish:
-    needs: [wasm, native-and-source]
+    if: github.event_name == 'push'
+    needs: [wasm, linux, macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -63,33 +109,41 @@ jobs:
       - uses: actions/download-artifact@v7
         with:
           name: reference-binaries-wasi
+          path: wasi
+      - uses: actions/download-artifact@v7
+        with:
+          name: release-linux-and-source
           path: release
       - uses: actions/download-artifact@v7
         with:
-          name: version-native-and-source
+          name: release-macos
           path: release
       - name: Publish the version's complete release once
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          VERSION_TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          cp wasi/*.tar.gz wasi/*.json release/
           cd release
           # A rerun must not overwrite published assets for a version tag.
           if gh release view "$VERSION_TAG" >/dev/null 2>&1; then
             echo "::error::This version already has a release; create a new version tag."
             exit 1
           fi
-          sha256sum *.tar.gz *.json *.tsv > SHA256SUMS
-          cat > release-notes.md <<'EOF'
-          Native Linux x86_64 and WASI reference tools, with the matching source archive.
+          sha256sum *.tar.gz *.json > SHA256SUMS
+          cat > release-notes.md <<'NOTES'
+          Packages of the `cppgm` compiler, its eight stage tools and the LowIR library for Linux x86-64 and Intel macOS, the same nine tools as WASI modules, and the source archive.
 
-          WASI includes all nine tools and a frozen header/SDK filesystem. It uses prebuilt SDK libraries. These modules run in a WASI host or with the browser adapter; they are not standalone web pages.
+          The native packages hold `bin/`, `lib/libcppgm_lowir` (static and shared) and `include/`. Hosted compilation uses the host compiler and standard library that the package's README names; build from the source archive for another host.
 
-          SHA256SUMS and provenance records identify the source and build inputs. Native binaries require the Linux runtime used by the build. Source archives contain the committed version, without local build output.
-          EOF
-          gh release create "$VERSION_TAG" --verify-tag --draft \
+          The WASI package holds all nine tools and a frozen header and SDK filesystem. The modules run in a WASI host or with the browser adapter; they are not standalone web pages.
+
+          SHA256SUMS and the provenance records identify the source revision and the build inputs.
+          NOTES
+          prerelease=()
+          case "$VERSION_TAG" in *-*) prerelease=(--prerelease) ;; esac
+          gh release create "$VERSION_TAG" --verify-tag --draft "${prerelease[@]}" \
             --title "cppgm ${VERSION_TAG}" --notes-file release-notes.md \
-            ./*.tar.gz ./*.json ./*.tsv ./SHA256SUMS
+            ./*.tar.gz ./*.json ./SHA256SUMS
           gh release edit "$VERSION_TAG" --draft=false

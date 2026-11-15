@@ -22,27 +22,28 @@ class SourceRelease(unittest.TestCase):
                 (root / name).write_text('committed ' + name)
             git('add', '.')
             git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'Source')
-            git('tag', 'v8.1')
+            git('tag', 'v0.9.1')
             (root / 'source.cpp').write_text('local edits')
             (root / 'untracked.secret').write_text('must not ship')
-            first = release.export(root, 'v8.1', root / 'a')
-            second = release.export(root, 'v8.1', root / 'b')
+            first = release.export(root, 'v0.9.1', root / 'a')
+            second = release.export(root, 'v0.9.1', root / 'b')
             self.assertEqual(first.read_bytes(), second.read_bytes())
             with tarfile.open(first) as archive:
-                self.assertEqual(set(archive.getnames()), {'cppgm-v8.1', 'cppgm-v8.1/LICENSE',
-                                                        'cppgm-v8.1/NOTICE', 'cppgm-v8.1/source.cpp'})
-                self.assertEqual(archive.extractfile('cppgm-v8.1/source.cpp').read(), b'committed source.cpp')
+                self.assertEqual(set(archive.getnames()), {'cppgm-v0.9.1', 'cppgm-v0.9.1/LICENSE',
+                                                        'cppgm-v0.9.1/NOTICE', 'cppgm-v0.9.1/source.cpp'})
+                self.assertEqual(archive.extractfile('cppgm-v0.9.1/source.cpp').read(), b'committed source.cpp')
             record = json.loads((first.parent / 'source-provenance.json').read_text())
             self.assertEqual(record['source_sha'], git('rev-parse', 'HEAD').decode().strip())
             with self.assertRaises(FileExistsError):
-                release.export(root, 'v8.1', root / 'a')
+                release.export(root, 'v0.9.1', root / 'a')
             git('add', 'source.cpp')
             git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'Later')
             with self.assertRaisesRegex(ValueError, 'tagged commit'):
-                release.export(root, 'v8.1', root / 'c')
+                release.export(root, 'v0.9.1', root / 'c')
 
     def test_only_version_tags(self):
-        for tag in ['main', 'reference-binaries', '../v8', 'v8;command', 'v8/foo']:
+        for tag in ['main', 'reference-binaries', '../v0.9.0', 'v0.9.0;command', 'v0.9.0/foo', 'v8', 'v8.1',
+                    'assignments-v9']:
             with self.assertRaises(ValueError):
                 release.export(Path('/nonexistent'), tag, Path('/unused'))
 

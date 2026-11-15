@@ -295,21 +295,48 @@ using a command module; its README gives the Wasmtime invocation. Statistics
 and the persistent POSIX test runner are disabled in the WASI host profile.
 This does not change the output target or the ordinary native wrappers.
 
-Version tags such as `v8`, `v8.1`, `v8.1.2` and `v8.1-rc1` trigger the separate
-Version release workflow. It validates the native student reference bundle and
-WASI tools, then publishes both with source, provenance and SHA256SUMS. It
-creates a draft only after both build jobs pass, uploads the complete asset
-set, then publishes it. An existing version release is never overwritten by a
-rerun; use a new version tag. This workflow does not push the student repository
-or modify the rolling `reference-binaries` release.
+Tags have two schemes:
 
-Source tarballs are made only for version tags, using `git archive` at the
+- `assignments-vN` and `assignments-vN.M` mark course versions. The student
+  repository has the matching `vN` tag on its export commit. These tags
+  trigger no workflow.
+- Semantic version tags such as `v0.9.0` and `v1.2.3-rc1` mark compiler
+  releases and trigger the Release workflow.
+
+The Release workflow builds and checks these files, then publishes them with
+provenance records and SHA256SUMS:
+
+| File | Contents |
+| --- | --- |
+| `cppgm-<tag>-linux-x86_64.tar.gz` | The nine tools, `libcppgm_lowir` (static and shared) and its headers, built with GCC on Ubuntu 24.04 |
+| `cppgm-<tag>-macos-x86_64.tar.gz` | The same files, built with Homebrew LLVM 21 on Intel macOS |
+| `cppgm-<tag>-wasm32-wasip1.tar.gz` | The nine tools as WASI modules, with the frozen header and SDK filesystem |
+| `cppgm-<tag>-source.tar.gz` | The tagged source |
+
+`scripts/package_release.py` makes a native package from a built `dev/`
+directory; equal inputs give equal bytes. `scripts/check_release_package.py`
+checks its contents, compiles and runs a program with the packaged compiler,
+and links a C client with the packaged library. A native package reads the
+standard headers of its build host's compiler; its README names that compiler.
+
+The workflow creates a draft only after all build jobs pass, uploads the
+complete asset set, then publishes it. An existing release is never
+overwritten by a rerun; use a new version tag. A tag with a suffix (`-rc1`)
+publishes a prerelease. A pull request that changes the release files builds
+and checks the native packages without publishing. This workflow does not push
+the student repository or modify the rolling `reference-binaries` release.
+
+Source tarballs are made only for release tags, using `git archive` at the
 tagged commit and deterministic gzip metadata. They include tracked licenses
 and notices and exclude untracked files and local build products. The tagged
-commit must be checked out. For a local export:
+commit must be checked out. For a local export and package:
 
 ```sh
-python3 scripts/export_release_source.py --tag v8 --output /tmp/cppgm-v8-release
+python3 scripts/export_release_source.py --tag v0.9.0 --output /tmp/cppgm-v0.9.0-release
+make -C dev all lowir-library
+python3 scripts/package_release.py --tag v0.9.0 --platform linux-x86_64 \
+  --host "$(g++ --version | sed -n 1p)" --output /tmp/cppgm-v0.9.0-release
+python3 scripts/check_release_package.py /tmp/cppgm-v0.9.0-release/cppgm-v0.9.0-linux-x86_64.tar.gz
 ```
 
 ## Symbol names

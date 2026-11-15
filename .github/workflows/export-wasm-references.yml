@@ -6,6 +6,11 @@ on:
       revision:
         type: string
         required: true
+      bundle:
+        description: File name of the bundle. The default names the revision.
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -36,8 +41,11 @@ jobs:
           PATH="$RUNNER_TEMP/wasm-tools/bin:$PATH" \
             make -C pa38 test-wasm CPPGM_SKIP_DEV_REBUILD=1
       - name: Build and validate all nine WASI reference tools
+        env:
+          BUNDLE_NAME: ${{ inputs.bundle }}
         run: |
           short_sha=$(git rev-parse --short=12 HEAD)
+          bundle_name="${BUNDLE_NAME:-cppgm-reference-binaries-wasm32-wasip1-${short_sha}.tar.gz}"
           mkdir -p "$RUNNER_TEMP/upload"
           python3 scripts/export_wasm_reference_binaries.py \
             --directory "$RUNNER_TEMP/reference-wasm" \
@@ -46,7 +54,7 @@ jobs:
             --compiler "$PWD/dev/cppgm" \
             --shim "$PWD/scripts/experimental/node_modules/@bjorn3/browser_wasi_shim" \
             --jobs 2 \
-            --bundle "$RUNNER_TEMP/upload/cppgm-reference-binaries-wasm32-wasip1-${short_sha}.tar.gz"
+            --bundle "$RUNNER_TEMP/upload/${bundle_name}"
           cp "$RUNNER_TEMP/reference-wasm/wasm-reference-provenance.json" "$RUNNER_TEMP/upload/"
           cd "$RUNNER_TEMP/upload"
           sha256sum *.tar.gz *.json > SHA256SUMS
