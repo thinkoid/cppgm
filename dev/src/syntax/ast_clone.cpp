@@ -1106,6 +1106,74 @@ Expr* SyntaxCloner::call_like(const Expr* expr)
 	}
 }
 
+Expr* SyntaxCloner::requires_expression(const Expr* expr)
+{
+	if (collecting_ != nullptr)
+	{
+		const RequiresExpr& required = *static_cast<const RequiresExpr*>(expr);
+		const size_t shadows = shadows_.size();
+		if (required.parameters != nullptr)
+		{
+			for (const ParameterDeclaration* parameter : required.parameters->parameters)
+			{
+				const Name* id = NameOfDeclarator(parameter->declarator);
+				const Identifier* local = id != nullptr && id->last().kind == NameComponentKind::Identifier
+					? id->last().identifier
+					: nullptr;
+				const bool pack = parameter->declarator != nullptr && parameter->declarator->pack != PackPosition::None;
+				const auto pattern = [&]() {
+					specifiers(parameter->specifiers);
+					const size_t before = shadows_.size();
+					if (local != nullptr)
+						shadows_.push_back(std::make_pair(local, pack ? -2 : -1));
+					declarator(parameter->declarator);
+					shadows_.resize(before);
+				};
+				if (pack)
+					nested_expansion(pattern);
+				else
+					pattern();
+				// A declaration masks an outer name even for collectors
+				// whose name callback returns no known pack length.
+				if (local != nullptr)
+					shadows_.push_back(std::make_pair(local, pack ? -2 : -1));
+			}
+		}
+		for (const Requirement& requirement : required.requirements)
+		{
+			type_id(requirement.type);
+			this->expr(requirement.expression);
+			name(requirement.return_constraint);
+		}
+		shadows_.resize(shadows);
+		return const_cast<Expr*>(expr);
+	}
+	RequiresExpr* required = copy(static_cast<const RequiresExpr*>(expr));
+	const size_t packs = parameter_packs_.size();
+	const size_t shadows = shadows_.size();
+	required->parameters = parameter_clause(required->parameters);
+	if (parameter_packs_.size() > packs)
+	{
+		required->pattern_parameters = static_cast<const RequiresExpr*>(expr)->parameters;
+		required->parameter_packs = copied_parameter_packs(packs);
+	}
+	if (required->parameters != nullptr)
+		for (const ParameterDeclaration* parameter : required->parameters->parameters)
+			if (parameter->declarator == nullptr || parameter->declarator->pack == PackPosition::None)
+				shadow(parameter->declarator, -1);
+	Requirement* requirements = arena_.copy_array(required->requirements.data, required->requirements.size);
+	for (uint32_t i = 0; i < required->requirements.size; ++i)
+	{
+		requirements[i].type = type_id(requirements[i].type);
+		requirements[i].expression = this->expr(requirements[i].expression);
+		requirements[i].return_constraint = name(requirements[i].return_constraint);
+	}
+	required->requirements.data = requirements;
+	parameter_packs_.resize(packs);
+	shadows_.resize(shadows);
+	return required;
+}
+
 Expr* SyntaxCloner::expr(const Expr* expr)
 {
 	if (expr == nullptr)
@@ -1149,74 +1217,11 @@ Expr* SyntaxCloner::expr(const Expr* expr)
 		break;
 	}
 	case ExprKind::Requires:
-	{
+		// Apart from the other kinds: its state would enlarge every clone's frame.
+		result = requires_expression(expr);
 		if (collecting_ != nullptr)
-		{
-			const RequiresExpr& required = *static_cast<const RequiresExpr*>(expr);
-			const size_t shadows = shadows_.size();
-			if (required.parameters != nullptr)
-			{
-				for (const ParameterDeclaration* parameter : required.parameters->parameters)
-				{
-					const Name* id = NameOfDeclarator(parameter->declarator);
-					const Identifier* local = id != nullptr && id->last().kind == NameComponentKind::Identifier
-						? id->last().identifier
-						: nullptr;
-					const bool pack = parameter->declarator != nullptr &&
-						parameter->declarator->pack != PackPosition::None;
-					const auto pattern = [&]() {
-						specifiers(parameter->specifiers);
-						const size_t before = shadows_.size();
-						if (local != nullptr)
-							shadows_.push_back(std::make_pair(local, pack ? -2 : -1));
-						declarator(parameter->declarator);
-						shadows_.resize(before);
-					};
-					if (pack)
-						nested_expansion(pattern);
-					else
-						pattern();
-					// A declaration masks an outer name even for collectors
-					// whose name callback returns no known pack length.
-					if (local != nullptr)
-						shadows_.push_back(std::make_pair(local, pack ? -2 : -1));
-				}
-			}
-			for (const Requirement& requirement : required.requirements)
-			{
-				type_id(requirement.type);
-				this->expr(requirement.expression);
-				name(requirement.return_constraint);
-			}
-			shadows_.resize(shadows);
-			return const_cast<Expr*>(expr);
-		}
-		RequiresExpr* required = copy(static_cast<const RequiresExpr*>(expr));
-		const size_t packs = parameter_packs_.size();
-		const size_t shadows = shadows_.size();
-		required->parameters = parameter_clause(required->parameters);
-		if (parameter_packs_.size() > packs)
-		{
-			required->pattern_parameters = static_cast<const RequiresExpr*>(expr)->parameters;
-			required->parameter_packs = copied_parameter_packs(packs);
-		}
-		if (required->parameters != nullptr)
-			for (const ParameterDeclaration* parameter : required->parameters->parameters)
-				if (parameter->declarator == nullptr || parameter->declarator->pack == PackPosition::None)
-					shadow(parameter->declarator, -1);
-		Requirement* requirements = arena_.copy_array(required->requirements.data, required->requirements.size);
-		for (uint32_t i = 0; i < required->requirements.size; ++i)
-		{
-			requirements[i].type = type_id(requirements[i].type);
-			requirements[i].expression = this->expr(requirements[i].expression);
-			requirements[i].return_constraint = name(requirements[i].return_constraint);
-		}
-		required->requirements.data = requirements;
-		parameter_packs_.resize(packs);
-		shadows_.resize(shadows);
-		result = required;
+			return result;
 		break;
-	}
 	case ExprKind::Generic:
 	{
 		GenericExpr* generic = copy(static_cast<const GenericExpr*>(expr));

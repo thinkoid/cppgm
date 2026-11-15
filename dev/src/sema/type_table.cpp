@@ -71,8 +71,8 @@ uint32_t TypeTable::hash_of(const Type& type)
 	wide = Mix(wide, Bits(type.element));
 	wide = Mix(wide, Bits(type.owner));
 	wide = Mix(wide, Bits(type.entity));
-	if (type.runtime_array())
-		wide = Mix(wide, Bits(type.runtime_bound));
+	// A runtime array's bound is not hashed: every type would pay for the
+	// test, and same() tells apart the few such arrays of one element type.
 	for (uint32_t i = 0; i < type.param_count; ++i)
 		wide = Mix(wide, Bits(type.params[i]));
 	// A final avalanche for the low bits the table indexes by.
