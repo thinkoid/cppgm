@@ -97,6 +97,16 @@ TailCopies duplicate_short_tails(Function& function);
 // successor. Returns the jumps retargeted.
 uint32_t thread_decided_tests(Function& function, const lowir::Program& program);
 
+// A block that only sets registers to constants or to other registers (an
+// edge's transfers) and jumps on, entered by one two-way branch alone: a
+// transfer of the value the branch's test found in its register goes, and
+// the others run before that test when the branch's other successor writes
+// each register before it reads it. The block is then a jump, which branch
+// layout threads away: the branch reaches the block's target, and the
+// other successor no longer jumps over the transfers. Returns the blocks
+// emptied.
+uint32_t hoist_edge_moves(Function& function);
+
 // On the laid-out function: an instruction whose result nothing reads above
 // bit 31 takes its 32-bit form (a copy, a load, an address, an addition), and
 // an extension in place of such a value goes. Returns the instructions

@@ -1,0 +1,187 @@
+machine_ir x86_64 <host-target>
+
+startup
+    call @main [args=()]
+    mov rdi, rax
+    exit
+
+global @cell
+  storage data
+  item i64 7
+  item i64 30
+
+global @slot
+  storage scalar ptr
+  init ptr 0
+
+global @empty
+  storage scalar ptr
+  init ptr 0
+
+global @notes
+  storage scalar i64
+  init i64 0
+
+function @note
+  abi
+    return void -> void
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    add @notes, 1
+    ret
+
+function @size_of
+  abi
+    param %p -> rdi : ptr
+    return i64 -> rax
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    mov rax, 0
+    cmp.ptr rdi, 0
+    je ^join
+
+  block ^load
+    load.i64 rax, [rdi+<off0>]
+
+  block ^join
+    add rax, 1
+    ret rax
+
+function @either
+  abi
+    param %p -> rdi : ptr
+    param %d -> rsi : i64
+    return i64 -> rax
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    mov rax, rsi
+    cmp.ptr rdi, 0
+    je ^join
+
+  block ^load
+    load.i64 rax, [rdi]
+
+  block ^join
+    imul rax, 3
+    add rax, rsi
+    ret rax
+
+function @held
+  abi
+    param %s -> rdi : ptr
+    return i64 -> rax
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    load.ptr rax, [rdi]
+    cmp.ptr rax, 0
+    je ^entry~join
+
+  block ^load
+    load.i64 rax, [rax+<off0>]
+    ret rax
+
+  block ^entry~join
+    ret rax
+
+  block ^join
+    ret rax
+
+function @kept
+  abi
+    param %p -> rdi : ptr
+    return i64 -> rax
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    preserve <gpr0>
+
+  block ^entry
+    mov <gpr0>, rdi
+    cmp.ptr <gpr0>, 0
+    jne ^load
+
+  block ^entry~join
+    mov rax, 0
+
+  block ^join
+    add rax, 2
+    ret rax
+
+  block ^load
+    call @note [args=()]
+    load.i64 rax, [<gpr0>]
+    jmp ^join
+
+function @main
+  abi
+    return i32 -> rax
+  frame
+    stack_size N
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    preserve <gpr0> <gpr1> <gpr2> <gpr3> <gpr4>
+    temp %e -> [rbp-<off0>] : i64
+    temp %f -> [rbp-<off1>] : i64
+
+  block ^entry
+    mov <gpr0>, @cell
+    mov rdi, <gpr0>
+    call @size_of [args=(rdi)]
+    zext.i32 <gpr3>, rax
+    mov rdi, 0
+    call @size_of [args=(rdi)]
+    zext.i32 <gpr4>, rax
+    mov rdi, <gpr0>
+    mov rsi, 5
+    call @either [args=(rsi,rdi)]
+    zext.i32 <gpr2>, rax
+    mov rdi, 0
+    mov rsi, 5
+    call @either [args=(rsi,rdi)]
+    zext.i32 <gpr1>, rax
+    store.ptr @slot, <gpr0>
+    lea rdi, @slot
+    call @held [args=(rdi)]
+    mov <gpr5>, rax
+    store.i64 [rbp-<off0>], <gpr5>
+    lea rdi, @empty
+    call @held [args=(rdi)]
+    mov <gpr5>, rax
+    store.i64 [rbp-<off1>], <gpr5>
+    mov rdi, <gpr0>
+    call @kept [args=(rdi)]
+    zext.i32 <gpr0>, rax
+    mov rdi, 0
+    call @kept [args=(rdi)]
+    add.u32 <gpr3>, <gpr4>
+    add.u32 <gpr3>, <gpr2>
+    add.u32 <gpr3>, <gpr1>
+    add.u32 <gpr3>, [rbp-<off0>]
+    add.u32 <gpr3>, [rbp-<off1>]
+    add.u32 <gpr3>, <gpr0>
+    add.u32 rax, <gpr3>
+    add.u32 rax, @notes
+    ret rax

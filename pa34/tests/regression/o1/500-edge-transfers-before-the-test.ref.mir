@@ -1,0 +1,187 @@
+machine_ir x86_64 linux
+
+startup
+    call @main [args=()]
+    mov rdi, rax
+    exit
+
+global @cell
+  storage data
+  item i64 7
+  item i64 30
+
+global @slot
+  storage scalar ptr
+  init ptr 0
+
+global @empty
+  storage scalar ptr
+  init ptr 0
+
+global @notes
+  storage scalar i64
+  init i64 0
+
+function @note
+  abi
+    return void -> void
+  frame
+    stack_size 0
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    add @notes, 1
+    ret
+
+function @size_of
+  abi
+    param %p -> rdi : ptr
+    return i64 -> rax
+  frame
+    stack_size 0
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    mov rax, 0
+    cmp.ptr rdi, 0
+    je ^join
+
+  block ^load
+    load.i64 rax, [rdi+8]
+
+  block ^join
+    add rax, 1
+    ret rax
+
+function @either
+  abi
+    param %p -> rdi : ptr
+    param %d -> rsi : i64
+    return i64 -> rax
+  frame
+    stack_size 0
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    mov rax, rsi
+    cmp.ptr rdi, 0
+    je ^join
+
+  block ^load
+    load.i64 rax, [rdi]
+
+  block ^join
+    imul rax, 3
+    add rax, rsi
+    ret rax
+
+function @held
+  abi
+    param %s -> rdi : ptr
+    return i64 -> rax
+  frame
+    stack_size 0
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+
+  block ^entry
+    load.ptr rax, [rdi]
+    cmp.ptr rax, 0
+    je ^entry~join
+
+  block ^load
+    load.i64 rax, [rax+8]
+    ret rax
+
+  block ^entry~join
+    ret rax
+
+  block ^join
+    ret rax
+
+function @kept
+  abi
+    param %p -> rdi : ptr
+    return i64 -> rax
+  frame
+    stack_size 16
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    preserve rbx
+
+  block ^entry
+    mov rbx, rdi
+    cmp.ptr rbx, 0
+    jne ^load
+
+  block ^entry~join
+    mov rax, 0
+
+  block ^join
+    add rax, 2
+    ret rax
+
+  block ^load
+    call @note [args=()]
+    load.i64 rax, [rbx]
+    jmp ^join
+
+function @main
+  abi
+    return i32 -> rax
+  frame
+    stack_size 64
+    scratch_bytes 0
+    frame_pointer keep
+    epilogues duplicated
+    preserve rbx r12 r13 r14 r15
+    temp %e -> [rbp-8] : i64
+    temp %f -> [rbp-16] : i64
+
+  block ^entry
+    mov rbx, @cell
+    mov rdi, rbx
+    call @size_of [args=(rdi)]
+    zext.i32 r14, rax
+    mov rdi, 0
+    call @size_of [args=(rdi)]
+    zext.i32 r15, rax
+    mov rdi, rbx
+    mov rsi, 5
+    call @either [args=(rsi,rdi)]
+    zext.i32 r13, rax
+    mov rdi, 0
+    mov rsi, 5
+    call @either [args=(rsi,rdi)]
+    zext.i32 r12, rax
+    store.ptr @slot, rbx
+    lea rdi, @slot
+    call @held [args=(rdi)]
+    mov r10, rax
+    store.i64 [rbp-8], r10
+    lea rdi, @empty
+    call @held [args=(rdi)]
+    mov r10, rax
+    store.i64 [rbp-16], r10
+    mov rdi, rbx
+    call @kept [args=(rdi)]
+    zext.i32 rbx, rax
+    mov rdi, 0
+    call @kept [args=(rdi)]
+    add.u32 r14, r15
+    add.u32 r14, r13
+    add.u32 r14, r12
+    add.u32 r14, [rbp-8]
+    add.u32 r14, [rbp-16]
+    add.u32 r14, rbx
+    add.u32 rax, r14
+    add.u32 rax, @notes
+    ret rax

@@ -430,6 +430,7 @@ uint32_t FunctionSelector::layout_branches()
 	if (!addressed)
 	{
 		thread_decided_tests(*out_, program_);
+		hoist_edge_moves(*out_);
 		place_blocks(*out_);
 	}
 	else

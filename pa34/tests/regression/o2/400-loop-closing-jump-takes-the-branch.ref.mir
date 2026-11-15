@@ -30,11 +30,9 @@ function @scan
     epilogues duplicated
 
   block ^entry
+    mov rax, rdi
     cmp.u8 [rdi], 0
     jne ^second
-
-  block ^entry~done
-    mov rax, rdi
 
   block ^done
     mov rcx, rax
