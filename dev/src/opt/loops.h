@@ -77,6 +77,10 @@ struct Located
 Located locate(const lowir::FunctionBody& body, lowir::Value v);
 // The same up to the first step by a value: that step's result is the root.
 Located locate_steps(const lowir::FunctionBody& body, lowir::Value v);
+// The slot or global an address stays in, or none: through `addr`, pointer
+// copies, `index` steps of any size and phis whose every input stays in that
+// one object (a pointer that walks an array).
+lowir::Value address_object(const lowir::FunctionBody& body, lowir::Value v);
 
 // An address as a base, a constant offset and a multiple of `stride` (0: no
 // multiple), through `index` steps, pointer copies and a pointer phi stepping

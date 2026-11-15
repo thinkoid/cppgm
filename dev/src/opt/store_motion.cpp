@@ -147,7 +147,10 @@ bool StoreMotion::read_accesses(uint32_t loop)
 					return false;
 				const Value address = inst.ops[inst.op == Opcode::Load ? 0 : 1];
 				const Located located = locate(body_, address);
-				accesses_.push_back(Access{ i, place(loop, address, located), located.root, inst.type,
+				// (A pointer that walks one array steps from that array.)
+				const Value walked = named(located.root) ? located.root : address_object(body_, located.root);
+				const Value object = walked.is(ValueKind::None) ? located.root : walked;
+				accesses_.push_back(Access{ i, place(loop, address, located), object, inst.type,
 					inst.op == Opcode::Store, (inst.flags & IF_TYPED) != 0 });
 			}
 			else if (inst.op == Opcode::Call && calls_.size() < kLoopAccesses)

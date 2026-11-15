@@ -177,6 +177,48 @@ Located locate(const FunctionBody& body, Value v)
 	return out;
 }
 
+// Whether every definition v can take stays in `object` (the first slot
+// or global reached names it). A phi met again adds no other object.
+static bool stays_in_object(
+	const FunctionBody& body, Value v, std::vector<TempId>& open, unsigned& budget, Value& object)
+{
+	for (;;)
+	{
+		if (v.is(ValueKind::Slot) || v.is(ValueKind::Symbol))
+		{
+			if (object.is(ValueKind::None))
+				object = v;
+			return object == v;
+		}
+		if (!v.is(ValueKind::Temp) || v.index < body.parameter_count || body.temps[v.index].def == kNoId || budget == 0)
+			return false;
+		--budget;
+		const Instruction& def = body.instructions[body.temps[v.index].def];
+		if (def.op == Opcode::Addr || (def.op == Opcode::Copy && def.type.is_pointer()) || def.op == Opcode::Index)
+		{
+			v = def.ops[0];
+			continue;
+		}
+		if (def.op != Opcode::Phi)
+			return false;
+		if (std::find(open.begin(), open.end(), v.index) != open.end())
+			return true;
+		open.push_back(v.index);
+		for (uint32_t k = 0; k < def.extra_count; k += 2)
+			if (!stays_in_object(body, body.operands[def.extra_first + k + 1], open, budget, object))
+				return false;
+		return true;
+	}
+}
+
+Value address_object(const FunctionBody& body, Value v)
+{
+	std::vector<TempId> open;
+	unsigned budget = 24;
+	Value object = Value::none();
+	return stays_in_object(body, v, open, budget, object) ? object : Value::none();
+}
+
 static uint64_t common_factor(uint64_t a, uint64_t b)
 {
 	while (b != 0)

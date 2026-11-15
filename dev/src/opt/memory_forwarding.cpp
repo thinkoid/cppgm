@@ -157,6 +157,7 @@ private:
 	}
 	bool pointer_may_alias(const AddressFacts& a, uint64_t a_bytes, const AddressFacts& b, uint64_t b_bytes) const;
 	bool fields_apart(const AddressFacts& a, uint64_t a_bytes, const AddressFacts& b, uint64_t b_bytes) const;
+	Value object_of(const AddressFacts& f) const;
 	TempId allocation_of(const AddressFacts& f) const;
 	bool private_allocation(const AddressFacts& f) const;
 	bool result_apart(const AddressFacts& result, uint64_t bytes, const AddressFacts& other) const
@@ -243,6 +244,8 @@ private:
 	uint64_t result_bytes_ = 0;                           // explicitly exclusive first-parameter result storage
 	std::vector<AddressFacts> address_;                   // per temp
 	mutable std::vector<Strided> strided_;                // per temp once asked (known: base set)
+	mutable std::vector<Value> object_;                   // per temp once asked: the slot or global it stays in
+	mutable std::vector<uint8_t> object_asked_;           // per temp: object_ holds the answer
 	std::vector<uint8_t> escaped_;                        // per slot: address leaves the analysis
 	std::vector<uint8_t> passed_;                         // per slot: address an unkept call argument (empty: none)
 	bool any_passed_ = false;                             // some slot is passed_
@@ -394,14 +397,43 @@ bool MemoryForwarding::fields_apart(
 	return strided_apart(of(a), a_bytes, of(b), b_bytes);
 }
 
+// The slot or global a known address stays in (address_object for a
+// pointer temporary: one that walks an array is in that array), or none.
+Value MemoryForwarding::object_of(const AddressFacts& f) const
+{
+	if (f.base == ValueKind::Slot)
+		return Value::slot(f.index);
+	if (f.base == ValueKind::Symbol)
+		return Value::symbol(f.index);
+	if (object_asked_.size() < body_.temps.size())
+	{
+		object_asked_.resize(body_.temps.size(), 0);
+		object_.resize(body_.temps.size(), Value::none());
+	}
+	if (!object_asked_[f.index])
+	{
+		object_asked_[f.index] = 1;
+		object_[f.index] = address_object(body_, Value::temp(f.index));
+	}
+	return object_[f.index];
+}
+
 // may_alias for two known addresses of different objects, at least one
 // stepped from a pointer temporary: a pointer base may point anywhere but
-// into a private slot.
+// into a private slot, and one that stays in a slot or global is in no
+// other.
 bool MemoryForwarding::pointer_may_alias(
 	const AddressFacts& a, uint64_t a_bytes, const AddressFacts& b, uint64_t b_bytes) const
 {
 	if ((a.base == ValueKind::Slot && !escaped_[a.index]) || (b.base == ValueKind::Slot && !escaped_[b.index]))
 		return false;
+	const Value in_a = object_of(a);
+	if (!in_a.is(ValueKind::None))
+	{
+		const Value in_b = object_of(b);
+		if (!in_b.is(ValueKind::None) && !(in_a == in_b))
+			return false;
+	}
 	// A parameter held its value before this frame existed: it points into
 	// no slot, escaped or not.
 	if ((a.base == ValueKind::Slot && b.base == ValueKind::Temp && b.index < body_.parameter_count) ||

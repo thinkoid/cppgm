@@ -1,0 +1,79 @@
+global @seed : i32 = 42
+
+function @fill(%n : i64) -> i32 [binding=strong, no_inline=yes] {
+  slot $buf : obj<64x4>
+
+  block ^entry:
+    %b = addr $buf
+    %t2 = load typed i32 @seed
+    %t3 = binary and i64 %n, -4
+    branch %t3, ^unrolled_1, ^wide_tail_3
+
+  block ^unrolled_1:
+    %t4 = phi i32 [^unrolled_1: %t21, ^entry: %t2]
+    %t5 = phi i64 [^unrolled_1: %t23, ^entry: 0]
+    %t6 = phi ptr [^unrolled_1: %t22, ^entry: %b]
+    %t7 = binary mul i32 %t4, 5
+    %t8 = binary add i32 %t7, 7
+    %t9 = binary and i32 %t8, 1023
+    store typed i32 %t9, %t6
+    %t10 = index inbounds i32 %t6, 1
+    %t11 = binary mul i32 %t9, 5
+    %t12 = binary add i32 %t11, 7
+    %t13 = binary and i32 %t12, 1023
+    store typed i32 %t13, %t10
+    %t14 = index inbounds i32 %t6, 2
+    %t15 = binary mul i32 %t13, 5
+    %t16 = binary add i32 %t15, 7
+    %t17 = binary and i32 %t16, 1023
+    store typed i32 %t17, %t14
+    %t18 = index inbounds i32 %t6, 3
+    %t19 = binary mul i32 %t17, 5
+    %t20 = binary add i32 %t19, 7
+    %t21 = binary and i32 %t20, 1023
+    store typed i32 %t21, %t18
+    %t22 = index inbounds i32 %t6, 4
+    %t23 = binary add i64 %t5, 4
+    %t24 = cmp ne i64 %t3, %t23
+    branch %t24, ^unrolled_1, ^loop_exit_2
+
+  block ^loop_exit_2:
+    %t25 = cmp ult i64 %t23, %n
+    branch %t25, ^wide_tail_3, ^loop_exit_5
+
+  block ^wide_tail_3:
+    %t26 = phi i32 [^entry: %t2, ^loop_exit_2: %t21]
+    %t27 = phi i64 [^entry: 0, ^loop_exit_2: %t23]
+    %t28 = phi ptr [^entry: %b, ^loop_exit_2: %t22]
+    jump ^loop
+
+  block ^loop:
+    %s = phi i32 [^wide_tail_3: %t26, ^loop: %r]
+    %i = phi i64 [^wide_tail_3: %t27, ^loop: %i1]
+    %p = phi ptr [^wide_tail_3: %t28, ^loop: %p1]
+    %m = binary mul i32 %s, 5
+    %a = binary add i32 %m, 7
+    %r = binary and i32 %a, 1023
+    store typed i32 %r, %p
+    %p1 = index inbounds i32 %p, 1
+    %i1 = binary add i64 %i, 1
+    %more = cmp ult i64 %i1, %n
+    branch %more, ^loop, ^loop_exit_5
+
+  block ^loop_exit_5:
+    %t38 = phi i32 [^loop: %r, ^loop_exit_2: %t21]
+    store typed i32 %t38, @seed
+    %last = index inbounds i32 %b, 15
+    %v = load typed i32 %last
+    %first = load typed i32 %b
+    %sum = binary add i32 %v, %first
+    return i32 %sum
+}
+function @main() -> i32 [role=entry, binding=strong] {
+  block ^entry:
+    %a = call i32 @fill(16)
+    %s = load typed i32 @seed
+    %x = binary add i32 %a, %s
+    %rc = binary and i32 %x, 255
+    return i32 %rc
+}
