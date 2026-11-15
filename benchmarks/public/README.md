@@ -2,8 +2,8 @@
 
 The benchmarks build third-party programs with `cppgm`, `g++` and `clang++`
 and compare the results. **Public benchmarks** and **Self-build benchmarks**
-run independently on each push to `main` and each pull request, with separate time
-budgets, reports and artifacts.
+run independently on each push to `main` and on each pull request that changes the
+compiler or the files of the measurement, with separate time budgets, reports and artifacts.
 
 ## Files
 

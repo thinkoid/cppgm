@@ -107,7 +107,8 @@ class LLVMCITests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/llvm.yml').read_text()
         self.assertIn('pull_request:', workflow)
         self.assertIn('branches: [main]', workflow)
-        self.assertLess(workflow.index('make -C dev cppgm'), workflow.index('scripts/llvm_ci.py run'))
+        self.assertLess(workflow.index('uses: ./.github/actions/build-compiler'),
+                        workflow.index('scripts/llvm_ci.py run'))
         self.assertRegex(ci.COMMIT, r'\A[0-9a-f]{40}\Z')
         self.assertTrue(re.search(r'persist-credentials: false', workflow))
 

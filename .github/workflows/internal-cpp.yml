@@ -3,7 +3,14 @@ name: Internal C++ benchmarks
 on:
   push:
     branches: [main]
+  # A pull request that changes none of these files cannot change the results.
   pull_request:
+    paths:
+      - dev/**
+      - benchmarks/**
+      - scripts/**
+      - .github/actions/**
+      - .github/workflows/internal-cpp.yml
   workflow_dispatch:
     inputs:
       platform:
@@ -55,7 +62,7 @@ jobs:
       - name: Trust the mounted checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build compiler
-        run: make -C dev cppgm -j "$(nproc)"
+        uses: ./.github/actions/build-compiler
       - name: Cache pinned course source archive
         uses: actions/cache@v4
         with:

@@ -86,12 +86,27 @@ These controls constrain behavior rather than instruction selection.
 PA30's optional x86 target-feature checks run with `make test-target-features`
 (or `-nobuild`). They require POPCNT and are excluded from cumulative reports.
 
+## Measurement workflows
+
+The measurement workflows are Boost, Godot, simdjson, index-cpp, internal-cpp,
+Public benchmarks, Self-build benchmarks and Wasm32. Each one runs on a push
+to `main`, on a manual request, and on a pull request that changes `dev/`,
+`benchmarks/`, `scripts/`, `.github/actions/` or the workflow's own file. The
+Self-build workflow also runs for a change in `pa35/`, and the Wasm32 workflow
+for a change in `pa37/`. A new push to a pull request cancels that pull
+request's earlier run.
+
+These workflows and the Clang build make `dev/cppgm` with
+`.github/actions/build-compiler`. The action restores a build of the same
+`dev/` files by the same host compiler from the cache. Without one, it builds
+the compiler and saves the build. The Tests workflow always builds.
+
 <a id="boost-advisory-ci"></a>
 
 ## Boost correctness and performance CI
 
-The **Boost benchmarks** workflow runs on main pushes, pull requests and manual
-requests. It keeps the advisory's exact 17-suite Boost 1.92 selection: **1,818
+The **Boost benchmarks** workflow is a measurement workflow. It keeps the
+advisory's exact 17-suite Boost 1.92 selection: **1,818
 C++11 test declarations**, including expected failures and JSON's GDB
 pretty-printer integration. Performance builds use O3 with assertions enabled;
 GDB retains Og/debug settings for correctness only. cppgm, GCC and Clang validate the same original
@@ -107,8 +122,8 @@ compile/runtime badges and per-suite detail. The failure controls are in `make t
 
 ## Public benchmarks CI
 
-The **Public benchmarks** workflow runs on each push to `main` and each pull
-request. It builds pinned third-party programs with `cppgm`, `g++` and
+The **Public benchmarks** workflow is a measurement workflow. It builds pinned
+third-party programs with `cppgm`, `g++` and
 `clang++` at `-O0` and `-O3`. The output of each `cppgm` binary must match
 `g++`, or the job fails. A count that differs
 from `benchmarks/public/baseline.json` only warns. See

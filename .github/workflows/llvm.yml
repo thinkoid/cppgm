@@ -8,6 +8,7 @@ on:
       - dev/**
       - scripts/llvm_ci.py
       - scripts/benchmark_hosts.py
+      - .github/actions/**
       - .github/workflows/llvm.yml
   workflow_dispatch:
 
@@ -44,7 +45,7 @@ jobs:
       - name: Trust the mounted checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build compiler
-        run: make -C dev cppgm -j "$(nproc)"
+        uses: ./.github/actions/build-compiler
       - name: Build pinned Clang with cppgm and run the built compiler
         run: python3 scripts/llvm_ci.py run --output obj/llvm
       - name: Report

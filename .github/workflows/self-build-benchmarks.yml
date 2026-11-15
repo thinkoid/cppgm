@@ -3,7 +3,15 @@ name: Self-build benchmarks
 on:
   push:
     branches: [main]
+  # A pull request that changes none of these files cannot change the results.
   pull_request:
+    paths:
+      - dev/**
+      - benchmarks/**
+      - scripts/**
+      - pa35/**
+      - .github/actions/**
+      - .github/workflows/self-build-benchmarks.yml
   workflow_dispatch:
     inputs:
       platform:

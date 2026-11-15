@@ -3,7 +3,14 @@ name: index-cpp benchmarks
 on:
   push:
     branches: [main]
+  # A pull request that changes none of these files cannot change the results.
   pull_request:
+    paths:
+      - dev/**
+      - benchmarks/**
+      - scripts/**
+      - .github/actions/**
+      - .github/workflows/index-cpp.yml
   workflow_dispatch:
     inputs:
       platform:
@@ -55,7 +62,7 @@ jobs:
       - name: Trust the mounted checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build compiler
-        run: make -C dev cppgm -j "$(nproc)"
+        uses: ./.github/actions/build-compiler
       - name: Build, validate and measure all 50 workloads
         run: python3 scripts/index_cpp_ci.py run --output obj/index-cpp
       - name: Report

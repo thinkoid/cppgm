@@ -3,7 +3,14 @@ name: Public benchmarks
 on:
   push:
     branches: [main]
+  # A pull request that changes none of these files cannot change the results.
   pull_request:
+    paths:
+      - dev/**
+      - benchmarks/**
+      - scripts/**
+      - .github/actions/**
+      - .github/workflows/public-benchmarks.yml
   workflow_dispatch:
     inputs:
       platform:
@@ -60,7 +67,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Build compiler
-        run: make -C dev cppgm
+        uses: ./.github/actions/build-compiler
 
       - name: Cache pinned sources
         uses: actions/cache@v4

@@ -3,7 +3,15 @@ name: Wasm32 benchmarks
 on:
   push:
     branches: [main]
+  # A pull request that changes none of these files cannot change the results.
   pull_request:
+    paths:
+      - dev/**
+      - benchmarks/**
+      - scripts/**
+      - pa37/**
+      - .github/actions/**
+      - .github/workflows/wasm.yml
   workflow_dispatch:
     inputs:
       platform:
@@ -53,9 +61,10 @@ jobs:
           persist-credentials: false
       - name: Trust the mounted checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Build compiler and install pinned tools
+      - name: Build compiler
+        uses: ./.github/actions/build-compiler
+      - name: Install pinned tools
         run: |
-          make -C dev cppgm -j "$(nproc)"
           perl scripts/install_wasm_tools.pl --prefix obj/wasm-tools
           npm ci --ignore-scripts --prefix scripts/experimental
       - name: Measure full compiler rebuilds
@@ -109,7 +118,7 @@ jobs:
       - name: Trust the mounted checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Build compiler
-        run: make -C dev cppgm -j "$(nproc)"
+        uses: ./.github/actions/build-compiler
       - name: Install pinned engine and reference tools
         run: perl scripts/install_wasm_tools.pl --prefix obj/wasm-tools --benchmark-engine
       - name: Check host and guest resource limits

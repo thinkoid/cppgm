@@ -1,0 +1,48 @@
+name: Build the compiler
+description: >-
+  Build dev/cppgm with the job's host compiler, or restore an earlier build of the same compiler sources by the
+  same host compiler. The job's CXX, CPPGM_HOST_CXX and CPPGM_STDLIB_FLAGS select the host compiler.
+
+runs:
+  using: composite
+  steps:
+    # The build reads dev/ and the host compiler. The host configuration header names the host compiler's version,
+    # target and search directories, so its text is part of the key.
+    - name: Identify the host compiler
+      id: host
+      shell: bash
+      run: |
+        set -euo pipefail
+        host=${CPPGM_HOST_CXX:-${CXX:-g++}}
+        digest=$({
+          "${CXX:-g++}" --version | sed -n 1p
+          "$host" --version | sed -n 1p
+          printf '%s\n' "${CPPGM_STDLIB_FLAGS:-}" "${CC_FLAGS:-}" "${CPPGM_TEST_RUNNER:-}"
+          cd dev
+          CPPGM_BUILD_HOST_CXX="$host" CPPGM_STDLIB_FLAGS="${CPPGM_STDLIB_FLAGS:-}" perl gen_builtin_host_config.pl
+        } | sha256sum | cut -c1-24)
+        echo "digest=$digest" >> "$GITHUB_OUTPUT"
+    - name: Restore a build of these sources
+      id: cache
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          dev/cppgm
+          obj/generated
+        key: cppgm-${{ steps.host.outputs.digest }}-${{ hashFiles('dev/**') }}
+    - name: Build
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: make -C dev cppgm -j "$(nproc)"
+    # Saved here, not at the end of the job: a later failure of the job keeps the build for other runs.
+    - name: Save the build
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          dev/cppgm
+          obj/generated
+        key: ${{ steps.cache.outputs.cache-primary-key }}
+    - name: Show the compiler
+      shell: bash
+      run: dev/cppgm --version

@@ -5,7 +5,8 @@
 · [CI runs and artifacts](https://github.com/vishvananda/cppgm/actions/workflows/simdjson.yml)
 · [Initial analysis](../../docs/performance/simdjson-20261107.md)
 
-This reference-compiler benchmark runs on each push to `main` and each pull request. Successful
+This reference-compiler benchmark runs on each push to `main` and on each pull request that changes the
+compiler or the files of this measurement. Successful
 main results publish beside the public and index-cpp reports on the
 `benchmark-badges` branch, with history by measured commit. PR results appear
 in the job summary and its artifact. It is separate from the course's required

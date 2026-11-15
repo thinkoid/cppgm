@@ -3,8 +3,9 @@
 [Results by host](https://github.com/vishvananda/cppgm/blob/benchmark-badges/boost/o3/report.md)
 · [CI summaries and artifacts](https://github.com/vishvananda/cppgm/actions/workflows/boost.yml)
 
-This lane runs on main pushes, pull requests and manual requests. All three
-compilers validate **1,818 declarations in 17 suites** from the pinned Boost
+This lane runs on main pushes, manual requests and pull requests that change
+the compiler or the files of this measurement. All three compilers validate
+**1,818 declarations in 17 suites** from the pinned Boost
 1.92.0 archive: Accumulators, Asio, Container, Function, Fusion, JSON, MP11,
 MPL, Optional, Proto, QVM, Spirit Repository, TypeErasure, TypeTraits, UUID,
 Variant2 and Xpressive. The selection matches the previous advisory.

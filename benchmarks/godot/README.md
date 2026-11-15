@@ -3,8 +3,9 @@
 [Results by host](https://github.com/vishvananda/cppgm/blob/benchmark-badges/godot/report.md)
 · [CI runs and artifacts](https://github.com/vishvananda/cppgm/actions/workflows/godot.yml)
 
-This reference-compiler lane runs on pushes to main, pull requests and manual
-requests. It builds unmodified Godot 4.7.2, pinned to
+This reference-compiler lane runs on pushes to main, manual requests and pull
+requests that change the compiler or the files of this measurement. It builds
+unmodified Godot 4.7.2, pinned to
 `ed1daf0bf001b61586d9930840f2f1394092c079`, with cppgm, GCC and Clang. The full
 headless release template retains all default engine modules, 3D, physics and
 computed GDScript dispatch. Window, graphics and desktop-service dependencies
