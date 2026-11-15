@@ -2230,9 +2230,9 @@ FunctionEntity* Analyzer::earlier_function(const DeclaredName& name, Scope* wher
 				template_entities_.data(), static_cast<uint32_t>(template_entities_.size()));
 			const auto equivalent = [&](const FunctionList* node) {
 				const FunctionEntity* other = static_cast<const FunctionEntity*>(node->binding->entity);
-				if (!other->templated || other->owner != where ||
-					signature_of(other->signature) != signature_of(signature) || HeadOf(other) == nullptr ||
-					HeadOf(other)->shape != shape)
+				// The return type is part of a function template's signature.
+				if (!other->templated || other->owner != where || other->signature != signature ||
+					HeadOf(other) == nullptr || HeadOf(other)->shape != shape)
 					return false;
 				return template_constraints_equivalent(
 						   HeadOf(other), current_template_constraint(), template_list_, template_scope_) &&
