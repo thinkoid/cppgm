@@ -1,5 +1,5 @@
-<svg data-original-label="Wasm scalar runtime vs Clang; Intel(R) Xeon(R) 6975P-C; revision 116052803d2981c33ce1fab0c2a17d640d831a91" data-original-message="1.06×" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="Wasm scalar runtime vs Clang; Intel(R) Xeon(R) 6975P-C; revision 116052803d2981c33ce1fab0c2a17d640d831a91; measured 116052803d2981c33ce1fab0c2a17d640d831a91; 16 commits behind main: 1.06×*">
-  <title>Wasm scalar runtime vs Clang; Intel(R) Xeon(R) 6975P-C; revision 116052803d2981c33ce1fab0c2a17d640d831a91; measured 116052803d2981c33ce1fab0c2a17d640d831a91; 16 commits behind main: 1.06×*</title>
+<svg data-original-label="Wasm scalar runtime vs Clang; Intel(R) Xeon(R) 6975P-C; revision 116052803d2981c33ce1fab0c2a17d640d831a91" data-original-message="1.06×" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="Wasm scalar runtime vs Clang; Intel(R) Xeon(R) 6975P-C; revision 116052803d2981c33ce1fab0c2a17d640d831a91; measured 116052803d2981c33ce1fab0c2a17d640d831a91; 62 commits behind main: 1.06×*">
+  <title>Wasm scalar runtime vs Clang; Intel(R) Xeon(R) 6975P-C; revision 116052803d2981c33ce1fab0c2a17d640d831a91; measured 116052803d2981c33ce1fab0c2a17d640d831a91; 62 commits behind main: 1.06×*</title>
   <defs><clipPath id="badge"><rect width="120" height="24" rx="4"/></clipPath></defs>
   <g clip-path="url(#badge)">
     <rect width="64" height="24" fill="#555"/>
