@@ -195,25 +195,14 @@ bool Analyzer::member_template_arguments(
 
 ExprFacts* Analyzer::call(const syntax::CallExpr& expr, Scope* scope)
 {
-	if (!cxx20_ || unevaluated_ != 0 || immediate_context())
+	if (!cxx20_)
 		return call_form(expr, scope);
-	ImmediateUse use(immediate_use_);
 	ExprFacts* facts = call_form(expr, scope);
-	immediate_use_ = use.parent;
-	if (facts != nullptr && !failed())
+	if (facts != nullptr && facts->entity != nullptr && facts->entity->kind == EntityKind::Function)
 	{
-		const FunctionEntity* function = facts->entity != nullptr && facts->entity->kind == EntityKind::Function
-			? static_cast<const FunctionEntity*>(facts->entity)
-			: nullptr;
-		if (function != nullptr && function->is_consteval)
+		const FunctionEntity* function = static_cast<const FunctionEntity*>(facts->entity);
+		if (function->is_consteval)
 			immediate_invocation(expr, function);
-		else if (use.function != nullptr)
-		{
-			if (use.parent != nullptr)
-				use.parent->function = use.function;
-			else
-				error(expr.location, "an immediate function named outside an immediate invocation");
-		}
 	}
 	return facts;
 }

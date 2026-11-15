@@ -119,6 +119,12 @@ const Type* Analyzer::address_argument(const syntax::Expr& expr, const Type* tar
 	const syntax::Expr* named = address ? WithoutParentheses(static_cast<const syntax::UnaryExpr*>(e)->operand) : e;
 	const Entity* entity = named->kind == syntax::ExprKind::Id && named->facts != nullptr ? named->facts->entity
 																						  : nullptr;
+	if (entity != nullptr && entity->kind == EntityKind::Function &&
+		static_cast<const FunctionEntity*>(entity)->is_consteval)
+	{
+		substitution_error(expr.location, "an immediate function address is not a constant template argument");
+		return nullptr;
+	}
 	if (!address && entity != nullptr && entity->kind == EntityKind::Enumerator &&
 		static_cast<const EnumeratorEntity*>(entity)->argument != nullptr)
 		return static_cast<const EnumeratorEntity*>(entity)->argument;
@@ -256,7 +262,10 @@ const Type* Analyzer::converted_address(const Type* target, const Type* argument
 	const Type* source = argument->element;
 	Entity* entity = argument->entity;
 	const char* failure = nullptr;
-	if (!AddressArgument(argument))
+	if (entity != nullptr && entity->kind == EntityKind::Function &&
+		static_cast<const FunctionEntity*>(entity)->is_consteval)
+		failure = "an immediate function address is not a constant template argument";
+	else if (!AddressArgument(argument))
 		failure = "an integral template argument given for a pointer or reference parameter";
 	else if (!AddressParameterType(target))
 		failure = "a pointer or reference template argument given for an integral or enumeration parameter";

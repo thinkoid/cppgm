@@ -1042,6 +1042,8 @@ void Analyzer::record_constant_initializer(
 		!immediate_context() && unevaluated_ == 0;
 	if ((variable->is_constinit || immediate) && semantic())
 	{
+		if (immediate)
+			allow_immediate_names(initializer);
 		initialized = constant_initialization(variable, initializer);
 		if (initialized == nullptr)
 			error(initializer != nullptr ? initializer->location : 0,

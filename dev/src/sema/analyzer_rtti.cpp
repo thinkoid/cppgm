@@ -187,7 +187,7 @@ void Analyzer::replay_uses(size_t first)
 		switch (use.kind)
 		{
 		case DeferredUse::Kind::Function:
-			odr_use(const_cast<FunctionEntity*>(static_cast<const FunctionEntity*>(use.entity)), use.call);
+			odr_use(const_cast<FunctionEntity*>(static_cast<const FunctionEntity*>(use.entity)), use.call, use.expr);
 			break;
 		case DeferredUse::Kind::Local:
 			local_name(*use.expr, use.facts, use.entity, use.scope);

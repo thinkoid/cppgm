@@ -22,3 +22,15 @@ extern "C" unsigned long long immediate_wide()
 {
   return static_cast<unsigned long long>(wide() >> 64);
 }
+
+using ImmediateFunction = int (*)();
+consteval int answer() { return 42; }
+struct ImmediateTag {};
+consteval int operator+(ImmediateTag, ImmediateFunction f) { return f(); }
+struct ImmediateValue { int n; consteval ImmediateValue(ImmediateFunction f) : n(f()) {} };
+int take_immediate(ImmediateValue value) { return value.n; }
+extern "C" int immediate_address()
+{
+  ImmediateValue value(&answer);
+  return (ImmediateTag{} + &answer) + value.n + take_immediate(&answer);
+}

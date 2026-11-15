@@ -198,6 +198,7 @@ void Analyzer::analyze(const syntax::TranslationUnit& unit)
 			if (!function->deleted && !function->implicit && !function->defaulted && !InstantiationSuppressed(function))
 				instantiate_definition(function);
 		}
+		check_immediate_names();
 	}
 }
 

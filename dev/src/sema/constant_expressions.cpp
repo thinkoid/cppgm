@@ -1120,6 +1120,11 @@ bool ConstantInterpreter::discard(const syntax::Expr& expr)
 		return fail(e->location, "an expression outside constant evaluation");
 	if ((facts->flags & kImmediateValue) != 0)
 		return true;
+	if (IsVoid(facts->type) && (facts->flags & kOperatorCall) != 0)
+	{
+		Result result = Result();
+		return operator_call(*e, result);
+	}
 	if (IsVoid(facts->type) && e->kind == syntax::ExprKind::Call)
 	{
 		Result result = Result();

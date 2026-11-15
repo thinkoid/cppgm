@@ -193,7 +193,7 @@ void Analyzer::require_function_definition(FunctionEntity* function)
 	demanded_definitions_.push_back(function);
 }
 
-void Analyzer::odr_use(FunctionEntity* function, bool call)
+void Analyzer::odr_use(FunctionEntity* function, bool call, const syntax::Expr* designation)
 {
 	// 3.2p2: a function named by a potentially evaluated expression is
 	// odr-used. The edge goes to the definition being analyzed or, for code
@@ -205,16 +205,16 @@ void Analyzer::odr_use(FunctionEntity* function, bool call)
 	{
 		if (deferring())
 			defer_use(
-				DeferredUse{ DeferredUse::Kind::Function, call, nullptr, nullptr, function, nullptr, nullptr, 0 });
+				DeferredUse{ DeferredUse::Kind::Function, call, designation, nullptr, function, nullptr, nullptr, 0 });
 		return;
 	}
 	if (function->is_consteval)
 	{
 		if (!call && !immediate_context())
 		{
-			if (immediate_use_ != nullptr)
-				immediate_use_->function = function;
-			else
+			if (designation != nullptr)
+				note_immediate_name(*designation);
+			else if (!function->constructor)
 				error(0, "an immediate function named outside an immediate invocation");
 		}
 		if (function->instantiated && !function->definition_demanded && semantic())
@@ -567,7 +567,7 @@ ExprFacts* Analyzer::id_expression(const syntax::IdExpr& expr, Scope* scope)
 				return nullptr;
 			facts->type = set->binding->entity->type;
 			check_not_deleted(static_cast<const FunctionEntity*>(set->binding->entity), expr.location);
-			odr_use(static_cast<FunctionEntity*>(set->binding->entity));
+			odr_use(static_cast<FunctionEntity*>(set->binding->entity), false, &expr);
 		}
 		facts->type = facts->type != nullptr ? facts->type->canonical : nullptr;
 		return facts;
@@ -872,7 +872,7 @@ ExprFacts* Analyzer::binding_expression(
 		else if (!callee_name_)
 		{
 			check_not_deleted(function, expr.location);
-			odr_use(function);
+			odr_use(function, false, &expr);
 		}
 		return facts;
 	}
@@ -1299,7 +1299,7 @@ void Analyzer::resolve_overloaded(const syntax::Expr& expr, FunctionEntity* func
 	}
 	facts->entity = function;
 	facts->flags &= static_cast<uint32_t>(~kOverloadSet);
-	odr_use(function);
+	odr_use(function, false, &expr);
 }
 
 // ---------------------------------------------------------- operators
@@ -2140,7 +2140,7 @@ ExprFacts* Analyzer::address_of(const syntax::UnaryExpr& expr, Scope* scope)
 						return nullptr;
 					ExprFacts* inner = new_facts(*operand, function->type->canonical, ValueCategory::LValue);
 					inner->entity = function;
-					odr_use(function);
+					odr_use(function, false, &expr);
 					return new_facts(expr, types_.pointer(function->type->canonical), ValueCategory::PRValue);
 				}
 				if (!several)
@@ -2166,7 +2166,7 @@ ExprFacts* Analyzer::address_of(const syntax::UnaryExpr& expr, Scope* scope)
 				}
 				facts->type = types_.member_pointer(function->owner->entity->type, function->type->canonical);
 				(void)owner;
-				odr_use(function);
+				odr_use(function, false, &expr);
 				return facts;
 			}
 		}
@@ -3039,7 +3039,7 @@ ExprFacts* Analyzer::functional_cast(const syntax::FunctionalCastExpr& expr, Sco
 			error(expr.location, "no default constructor for the class");
 		check_not_deleted(constructor, expr.location);
 		facts->entity = constructor;
-		odr_use(constructor);
+		odr_use(constructor, true);
 		return facts;
 	}
 	// 5.2.3p2: void() is a void prvalue (void{} too, as CWG 2351 resolved).

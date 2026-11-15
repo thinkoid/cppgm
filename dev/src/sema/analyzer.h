@@ -755,7 +755,7 @@ private:
 	bool check_resolved(const syntax::Expr& expr);
 	bool resolve_lone_function(const syntax::Expr& expr);
 	void require_function_definition(FunctionEntity* function);
-	void odr_use(FunctionEntity* function, bool call = false);
+	void odr_use(FunctionEntity* function, bool call = false, const syntax::Expr* designation = nullptr);
 	// 8.4.3p2: naming a deleted function other than to declare it.
 	bool check_not_deleted(const FunctionEntity* function, uint32_t location);
 
@@ -1266,6 +1266,10 @@ private:
 		const syntax::CallExpr& rewritten, const syntax::Expr* callable, const syntax::Expr* object, Scope* scope);
 	ExprFacts* call_form(const syntax::CallExpr& expr, Scope* scope);
 	bool immediate_context() const;
+	void note_immediate_name(const syntax::Expr& expr);
+	void allow_immediate_names(const syntax::Expr& expr);
+	void allow_immediate_names(const syntax::Initializer* initializer);
+	void check_immediate_names();
 	void immediate_invocation(const syntax::Expr& expr, const FunctionEntity* function);
 	void check_immediate_conversion(const syntax::Expr& expr, const Conversion& conversion);
 	void check_immediate_subobject(const SubobjectInit& init, uint32_t location);
@@ -2173,18 +2177,17 @@ private:
 	bool flexible_given_ = false;
 	// Nonzero inside unevaluated operands (5p8): nothing is odr-used.
 	uint32_t unevaluated_;
-	// A name of an immediate function is permitted inside an immediate
-	// invocation. Calls resolve after their operands: defer an operand
-	// designation until that enclosing call has selected its function.
-	struct ImmediateUse
+	// Only actual immediate-function designations have a record. Their
+	// enclosing invocation may be selected after operand typing (including
+	// an overloaded operator or an implicit constructor conversion).
+	struct ImmediateName
 	{
-		ImmediateUse*& current;
-		ImmediateUse* parent;
-		const FunctionEntity* function = nullptr;
-		explicit ImmediateUse(ImmediateUse*& slot) : current(slot), parent(slot) { current = this; }
-		~ImmediateUse() { current = parent; }
+		const syntax::Expr* expression;
+		bool allowed;
 	};
-	ImmediateUse* immediate_use_ = nullptr;
+	PointerMap immediate_name_index_;
+	std::vector<ImmediateName> immediate_names_;
+	uint32_t outstanding_immediate_names_ = 0;
 	// Only actual immediate user conversions have an entry; ordinary
 	// expressions and interned conversion records carry no added payload.
 	PointerMap immediate_conversion_index_;

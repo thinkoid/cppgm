@@ -19,7 +19,10 @@ void Analyzer::immediate_invocation(const syntax::Expr& expr, const FunctionEnti
 {
 	if (!semantic() || unevaluated_ != 0 || immediate_context() || failed())
 		return;
-	if (!function->is_consteval || (expr.facts->flags & kImmediateValue) != 0)
+	if (!function->is_consteval)
+		return;
+	allow_immediate_names(expr);
+	if ((expr.facts->flags & kImmediateValue) != 0)
 		return;
 	ConstantInterpreter interpreter(*this);
 	const ConstValue* value = interpreter.evaluate_immediate(expr);
@@ -42,6 +45,7 @@ void Analyzer::check_immediate_conversion(const syntax::Expr& expr, const Conver
 {
 	if (!semantic() || unevaluated_ != 0 || immediate_context() || failed())
 		return;
+	allow_immediate_names(expr);
 	if (immediate_conversion(expr) != nullptr)
 		return;
 	ConstantInterpreter interpreter(*this);
@@ -64,6 +68,7 @@ const ConstValue* Analyzer::immediate_construction(const void* key) const
 void Analyzer::check_immediate_construction(const void* key, const Type* type, const syntax::Initializer* initializer,
 	const FunctionEntity* constructor, uint32_t location)
 {
+	allow_immediate_names(initializer);
 	if (immediate_construction(key) != nullptr)
 		return;
 	ConstantInterpreter interpreter(*this);
