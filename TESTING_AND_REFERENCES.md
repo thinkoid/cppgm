@@ -281,11 +281,14 @@ against their expected Wasm results. Neither lane compares against an external
 C compiler. PA38 is excluded from the default C++ report; CI runs it separately.
 
 The assignment export workflow builds Linux x86_64 reference tools and a
-separate WASI bundle containing all nine tools. The WASI job uses the pinned
-WASI SDK, compiles with cppgm at O3, runs the tools with Wasmtime, and compares
-the compiler's x86 and Wasm floating-point objects with the native compiler's
-output. It also runs the LowIR builder, optimizer, native backend and ABI tool.
-A failure prevents publication of the rolling reference bundles.
+separate WASI bundle containing all nine tools. `cppgm` compiles the Linux
+reference tools: the export builds the tools with the host compiler, then
+builds them again with that `cppgm` and installs the second build. The WASI
+job uses the pinned WASI SDK, compiles with cppgm at O3, runs the tools with
+Wasmtime, and compares the compiler's x86 and Wasm floating-point objects with
+the native compiler's output. It also runs the LowIR builder, optimizer,
+native backend and ABI tool. A failure prevents publication of the rolling
+reference bundles.
 
 `scripts/export_wasm_reference_binaries.py --help` lists the local build
 inputs. It requires a new build directory. The archive includes the command

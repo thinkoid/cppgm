@@ -706,22 +706,30 @@ reference_targets=(
   lowiropt
 )
 
+# The reference binaries are cppgm's own build of the tools: the host compiler
+# builds the tools, and that cppgm compiles them again. The host compiler links.
 echo "==> Building reference binaries"
-rm -rf "$repo_root/obj/export-reference-build"
+rm -rf "$repo_root/obj/export-reference-build" "$repo_root/obj/export-reference-self"
 make -s -C "$repo_root/dev" all \
   CXX="${CXX:-g++}" \
   CPPGM_HOST_CXX="${CPPGM_HOST_CXX:-${CXX:-g++}}" \
   CPPGM_STDLIB_FLAGS="${CPPGM_STDLIB_FLAGS:-}" \
   OBJ="$repo_root/obj/export-reference-build" \
   OBJECT_ROOT_DEFAULT_DEF=
+make -s -C "$repo_root/pa35" all \
+  CXX=../dev/cppgm \
+  CPPGM_HOST_CXX="${CPPGM_HOST_CXX:-${CXX:-g++}}" \
+  CPPGM_STDLIB_FLAGS="${CPPGM_STDLIB_FLAGS:-}" \
+  INCEPTION_OBJ_ROOT_BASE="$repo_root/obj/export-reference-self"
 
 mkdir -p "$dest/reference-binaries"
 for target in "${reference_targets[@]}"; do
-  if [ ! -x "$repo_root/dev/$target" ]; then
-    echo "export_student_repo: missing built reference binary: dev/$target" >&2
+  built="$repo_root/obj/export-reference-self/bin/selfhost/$target-self"
+  if [ ! -x "$built" ]; then
+    echo "export_student_repo: missing built reference binary: $built" >&2
     exit 1
   fi
-  install -m 0755 "$repo_root/dev/$target" "$dest/reference-binaries/$target"
+  install -m 0755 "$built" "$dest/reference-binaries/$target"
   ln -s "../reference-binaries/$target" "$dest/dev/$target-ref"
 done
 
