@@ -56,6 +56,7 @@ uint32_t CppgmLowir::signature(CppgmType result, const CppgmType* parameters, ui
 {
 	if (!ready())
 		return CPPGM_NO_ID;
+	const uint32_t result_record = resolve_record(result);
 	if (!valid_type(result) || (count != 0 && parameters == nullptr) || variadic > 1)
 	{
 		fail("invalid signature");
@@ -63,19 +64,24 @@ uint32_t CppgmLowir::signature(CppgmType result, const CppgmType* parameters, ui
 	}
 	lowir::Signature signature = {};
 	signature.result = type(result);
+	signature.boundary.result_classes = record_classes(result_record, 0);
 	signature.first_parameter = program.parameters.size();
 	signature.parameter_count = count;
 	signature.boundary.arity = variadic ? ir_model::CAM_VARIADIC : ir_model::CAM_FIXED;
 	for (uint32_t i = 0; i < count; ++i)
 	{
-		if (!valid_type(parameters[i]) || type(parameters[i]).is_void())
+		CppgmType bits = parameters[i];
+		const uint32_t record = resolve_record(bits);
+		if (!valid_type(bits) || type(bits).is_void())
 		{
 			fail("invalid parameter type");
 			return CPPGM_NO_ID;
 		}
 		lowir::Parameter parameter;
 		parameter.name = 0;
-		parameter.type = type(parameters[i]);
+		parameter.type = type(bits);
+		parameter.classes = record_classes(record, 0);
+		note_parameter_record(static_cast<uint32_t>(program.parameters.size()), record);
 		program.parameters.push_back(parameter);
 	}
 	return program.add_signature(signature);
@@ -113,6 +119,7 @@ bool CppgmLowir::global(uint32_t id, CppgmType bits, uint32_t binding, uint32_t 
 {
 	if (!ready())
 		return false;
+	resolve_record(bits);
 	if (id >= program.symbols.size() || program.symbols[id].kind != lowir::SymbolKind::Unresolved ||
 		!valid_type(bits) || binding > 3 || storage > 2 || declaration > 1 || (count != 0 && items == nullptr) ||
 		(declaration && (count != 0 || type(bits).is_void())))
@@ -126,12 +133,14 @@ bool CppgmLowir::global(uint32_t id, CppgmType bits, uint32_t binding, uint32_t 
 	for (uint32_t i = 0; i < count; ++i)
 	{
 		const CppgmDataItem& input = items[i];
-		if (input.kind > 2 || !valid_type(input.type) || (input.kind == 1 && input.symbol >= program.symbols.size()) ||
+		CppgmType item_type = input.type;
+		resolve_record(item_type);
+		if (input.kind > 2 || !valid_type(item_type) || (input.kind == 1 && input.symbol >= program.symbols.size()) ||
 			(input.kind == 2 && input.amount < 0))
 			return fail("invalid global data item");
 		lowir::DataItem item = {};
 		item.kind = static_cast<lowir::DataItemKind>(input.kind);
-		item.type = type(input.type);
+		item.type = type(item_type);
 		item.constant.kind = item.type.is_float() ? lowir::ValueKind::Float : lowir::ValueKind::Integer;
 		item.constant.float_kind = item.type.is_float() ? item.type.kind() : lowir::TypeKind::Void;
 		item.constant.bits = lowir::Literal{ input.bits.low, input.bits.high };
@@ -157,6 +166,8 @@ bool CppgmLowir::validate()
 	for (const lowir::Function& function : program.functions)
 		if (function.body && function.body->construction_state == 1)
 			return fail("uncommitted direct function body");
+	if (!records.empty())
+		state_record_facts();
 	lowir::apply_legacy_roles(program);
 	lowir::Diagnostic diagnostic;
 	if (!lowir::validate_constructed_program(program, diagnostic, false))

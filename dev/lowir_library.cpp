@@ -10,8 +10,8 @@ namespace {
 
 // Last-resort foreign boundary. Reporting uses a fixed buffer so bad_alloc
 // itself can be returned without allocating. Compiler errors never cross C.
-template<class Action>
-uint32_t invoke(CppgmLowir* module, uint32_t failure, Action action)
+template<class Result, class Action>
+Result invoke(CppgmLowir* module, Result failure, Action action)
 {
 	if (module == nullptr || module->error[0] != 0)
 		return failure;
@@ -120,6 +120,12 @@ uint32_t cppgm_lowir_boundary(CppgmLowir* module, CppgmType result, const CppgmP
 	const CppgmBoundary* boundary)
 {
 	return invoke(module, CPPGM_NO_ID, [&]() { return module->boundary(result, parameters, count, boundary); });
+}
+
+CppgmType cppgm_lowir_record(
+	CppgmLowir* module, uint64_t bytes, uint32_t alignment, const CppgmField* fields, uint32_t count)
+{
+	return invoke(module, CppgmType(0), [&]() { return module->record(bytes, alignment, fields, count); });
 }
 
 int cppgm_lowir_symbol_fact(CppgmLowir* module, uint32_t symbol, uint32_t key, uint32_t value)

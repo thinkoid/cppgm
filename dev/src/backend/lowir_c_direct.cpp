@@ -18,6 +18,8 @@ bool CppgmLowir::commit_body(uint32_t symbol, const CppgmBodyCounts& counts, uin
 		return false;
 	if (symbol >= program.symbols.size() || program.symbols[symbol].kind != lowir::SymbolKind::FunctionDefinition)
 		return fail("no open direct body");
+	if (!records.empty())
+		resolve_body_records(symbol, counts);
 	lowir::FunctionBuilder builder(program, symbol);
 	if (!builder.commit(counts, temp_count))
 		return fail(builder.construction_error());

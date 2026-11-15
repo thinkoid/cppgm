@@ -4,7 +4,8 @@
 
 #include "lowir/argument_facts.h"
 
-// Boundary, symbol and argument metadata of the C interface (ABI version 3).
+// Boundary, symbol and argument metadata of the C interface (ABI version 3;
+// record types since version 4).
 // A record is accepted when the LowIR text can state it (lowir.md), so a
 // written module reads back as the same program.
 
@@ -83,11 +84,22 @@ uint32_t CppgmLowir::boundary(
 {
 	if (!ready())
 		return CPPGM_NO_ID;
-	static const CppgmBoundary kPlain = {};
-	const CppgmBoundary& input = stated != nullptr ? *stated : kPlain;
+	CppgmBoundary input = stated != nullptr ? *stated : CppgmBoundary();
+	input.result_classes = record_classes(resolve_record(result), input.result_classes);
+	// The parameters with record types resolved, and their records.
+	std::vector<CppgmParameter> resolved;
+	std::vector<uint32_t> parameter_record;
+	if (parameters != nullptr)
+		resolved.assign(parameters, parameters + count);
+	for (CppgmParameter& parameter : resolved)
+	{
+		parameter_record.push_back(resolve_record(parameter.type));
+		if (parameter.pass == ir_model::PPM_DIRECT)
+			parameter.classes = record_classes(parameter_record.back(), parameter.classes);
+	}
 	const char* problem = count != 0 && parameters == nullptr ? "invalid signature" : boundary_problem(result, input);
 	for (uint32_t i = 0; problem == nullptr && i < count; ++i)
-		problem = parameter_problem(parameters[i], i, type(result));
+		problem = parameter_problem(resolved[i], i, type(result));
 	if (problem != nullptr)
 	{
 		fail(problem);
@@ -108,7 +120,7 @@ uint32_t CppgmLowir::boundary(
 	signature.boundary.result_shape = shape(input.result_shape_element, input.result_shape_count);
 	for (uint32_t i = 0; i < count; ++i)
 	{
-		const CppgmParameter& from = parameters[i];
+		const CppgmParameter& from = resolved[i];
 		lowir::Parameter parameter;
 		parameter.name = 0;
 		parameter.type = type(from.type);
@@ -117,6 +129,7 @@ uint32_t CppgmLowir::boundary(
 		parameter.classes = from.classes;
 		parameter.shape = shape(from.shape_element, from.shape_count);
 		parameter.object_bytes = from.object_bytes;
+		note_parameter_record(static_cast<uint32_t>(program.parameters.size()), parameter_record[i]);
 		program.parameters.push_back(parameter);
 	}
 	if (!lowir::valid_this_return(program, signature))

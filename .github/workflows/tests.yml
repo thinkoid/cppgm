@@ -171,6 +171,9 @@ jobs:
       - name: Check the metadata, assembly and debug additions of the LowIR library
         run: python3 scripts/tests/test_lowir_library_extensions.py
 
+      - name: Check the record types of the LowIR library
+        run: python3 scripts/tests/test_lowir_library_records.py
+
       - name: Check the standard directories of a named GCC installation
         run: python3 scripts/tests/test_host_headers.py
 

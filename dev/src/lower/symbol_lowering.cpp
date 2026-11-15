@@ -4,6 +4,7 @@
 #include <cstdio>
 
 #include "lex/identifier_table.h"
+#include "lowir/object_classes.h"
 #include "sema/analyzer.h"
 #include "sema/conversions.h"
 #include "sema/integral_arithmetic.h"
@@ -2660,45 +2661,13 @@ bool ProgramLowering::copied_trivially(const sema::ClassEntity* entity)
 	return trivial && usable;
 }
 
-namespace {
-
-// The psABI's classes (3.2.3) while an object's fields are merged into its
-// eightbytes.
-enum AbiClass : uint8_t
-{
-	AC_NO_CLASS,
-	AC_INTEGER,
-	AC_SSE,
-	AC_X87,
-	AC_X87UP,
-	AC_MEMORY,
-	AC_SSEUP
-};
-
-// psABI 3.2.3 step 4(c): the class of an eightbyte holding fields of
-// classes `a` and `b` (SSEUP only beside SSEUP or NO_CLASS; else as SSE).
-uint8_t MergedClass(uint8_t a, uint8_t b)
-{
-	if (a == b || b == AC_NO_CLASS)
-		return a;
-	if (a == AC_NO_CLASS)
-		return b;
-	if (a == AC_SSEUP)
-		a = AC_SSE;
-	if (b == AC_SSEUP)
-		b = AC_SSE;
-	if (a == b)
-		return a;
-	if (a == AC_MEMORY || b == AC_MEMORY)
-		return AC_MEMORY;
-	if (a == AC_INTEGER || b == AC_INTEGER)
-		return AC_INTEGER;
-	if (a == AC_X87 || a == AC_X87UP || b == AC_X87 || b == AC_X87UP)
-		return AC_MEMORY;
-	return AC_SSE;
-}
-
-} // namespace
+using lowir::AC_INTEGER;
+using lowir::AC_MEMORY;
+using lowir::AC_NO_CLASS;
+using lowir::AC_SSE;
+using lowir::AC_SSEUP;
+using lowir::AC_X87;
+using lowir::AC_X87UP;
 
 void ProgramLowering::classify_eightbytes(const sema::Type* type, uint64_t offset, uint8_t* classes)
 {
@@ -2710,7 +2679,7 @@ void ProgramLowering::classify_eightbytes(const sema::Type* type, uint64_t offse
 	// the object MEMORY.
 	const auto mark = [classes](uint64_t eightbyte, uint8_t cls) {
 		if (eightbyte < 2)
-			classes[eightbyte] = MergedClass(classes[eightbyte], cls);
+			classes[eightbyte] = lowir::merged_class(classes[eightbyte], cls);
 		else
 			classes[0] = AC_MEMORY;
 	};
@@ -2840,9 +2809,6 @@ uint8_t ProgramLowering::object_classes(const sema::Type* type)
 {
 	if (target_model::is_wasm(program_.target))
 		return 0;
-	static_assert(static_cast<unsigned>(AC_NO_CLASS) == lowir::EB_NONE &&
-			static_cast<unsigned>(AC_INTEGER) == lowir::EB_INTEGER && static_cast<unsigned>(AC_SSE) == lowir::EB_SSE,
-		"merged classes below MEMORY's are eightbyte classes");
 	// A member function pointer (an i128) is Itanium's pair of eightbytes,
 	// 8-aligned on the stack (an __int128 is 16-aligned).
 	if (object_mode_ && type->unqualified->kind == sema::TypeKind::MemberPointer &&
@@ -2871,14 +2837,7 @@ uint8_t ProgramLowering::object_classes(const sema::Type* type)
 	{
 		uint8_t classes[2] = { AC_NO_CLASS, AC_NO_CLASS };
 		classify_eightbytes(type, 0, classes);
-		// An SSEUP eightbyte after anything but SSE is SSE (step 5(d)).
-		if (classes[1] == AC_SSEUP && classes[0] != AC_SSE)
-			classes[1] = AC_SSE;
-		if (classes[0] == AC_X87 && classes[1] == AC_X87UP)
-			result = lowir::OC_STATED | lowir::OC_X87;
-		else if (classes[0] <= AC_SSE && (classes[1] <= AC_SSE || classes[1] == AC_SSEUP))
-			result = static_cast<uint8_t>(lowir::OC_STATED | classes[0] |
-				((classes[1] == AC_SSEUP ? static_cast<uint8_t>(lowir::EB_SSEUP) : classes[1]) << 2));
+		result = lowir::object_classes_value(classes[0], classes[1]);
 	}
 	object_classes_.set(entity, result);
 	return result;

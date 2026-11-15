@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdio>
+#include <unordered_map>
 
 #include "backend/lowir_c.h"
 #include "lowir/program.h"
@@ -13,6 +14,29 @@ struct CppgmLowir
 	std::vector<uint8_t> object;
 	// By NameId: the names cppgm_lowir_debug_file has returned.
 	std::vector<uint8_t> debug_files;
+	// Since ABI version 4 (lowir_c_records.cpp): record types by ID.
+	struct Record
+	{
+		CppgmType object;     // the obj type it stands for
+		uint32_t first_field; // its fields: [first_field, first_field + field_count) of `fields`
+		uint32_t field_count;
+		uint32_t placements; // for at most 16 bytes, its classes at each offset in `placements`, else CPPGM_NO_ID
+		uint8_t classes;     // classes= of a direct object of it, 0 for the default
+	};
+	std::vector<Record> records;
+	std::vector<CppgmField> fields;
+	// Per record of at most 16 bytes: the merged classes of its two
+	// eightbytes when it is at byte 0 to 15 of an object of 16 bytes.
+	std::vector<uint8_t> placements;
+	// By program parameter: 1 + the record of a parameter of a record type, or 0.
+	std::vector<uint32_t> parameter_records;
+	// By function symbol: the temporaries and slots of a committed body
+	// that have a record type, as (ID, record) pairs in ID order.
+	struct BodyRecords
+	{
+		std::vector<std::pair<uint32_t, uint32_t>> temps, slots;
+	};
+	std::unordered_map<uint32_t, BodyRecords> body_records;
 	char error[1024] = {};
 	bool validated = false;
 	bool consumed = false;
@@ -52,6 +76,23 @@ struct CppgmLowir
 	uint32_t debug_scope(uint32_t function, uint32_t parent);
 	bool debug_local(uint32_t function, uint32_t slot, uint32_t type, uint32_t scope, const char* name, uint32_t length,
 		const CppgmDebugLocation* declaration);
+	// Since ABI version 4 (lowir_c_records.cpp).
+	CppgmType record(uint64_t bytes, uint32_t alignment, const CppgmField* fields, uint32_t count);
+	// The record of a record type, or CPPGM_NO_ID for another type; a record
+	// type becomes the obj type it stands for.
+	uint32_t resolve_record(CppgmType& bits) const;
+	uint32_t resolve_record(lowir::Type& t) const;
+	// The classes a direct object of `record` has unless `stated` is nonzero.
+	uint8_t record_classes(uint32_t record, uint8_t stated) const
+	{
+		return stated != 0 || record == CPPGM_NO_ID ? stated : records[record].classes;
+	}
+	void note_parameter_record(uint32_t parameter, uint32_t record);
+	// Before a body's commit: its record types become obj types.
+	void resolve_body_records(uint32_t symbol, const CppgmBodyCounts& counts);
+	// Before validation: the classes of record objects past a variadic
+	// boundary's fixed parameters and of va_arg results.
+	void state_record_facts();
 	bool validate();
 	bool write(const char* path);
 	bool compile(uint32_t level, uint32_t pic);
@@ -60,6 +101,11 @@ struct CppgmLowir
 	lowir::FunctionBody* committed_body(uint32_t symbol);
 	// A location's record; false (after fail) for one the text form cannot hold.
 	bool location(const CppgmDebugLocation& from, lowir::DebugLocation& to);
+	static CppgmType type_bits(uint64_t bytes, uint32_t alignment);
+	// The merged classes of `record`'s eightbytes at byte `at` of an object
+	// of 16 bytes; `steps` are its fields' element sizes.
+	void place(const Record& record, const std::vector<uint64_t>& steps, uint64_t at, uint8_t* classes) const;
+	void merge_facts(lowir::FunctionBody& body, const std::vector<lowir::ArgumentFacts>& derived);
 };
 
 namespace backend {

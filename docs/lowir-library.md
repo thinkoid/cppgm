@@ -100,7 +100,7 @@ vocabulary's numbers are the generated enumerators of `lowir_c_vocabulary.h`:
 
 `cppgm_lowir_abi_version()` returns the library's `CPPGM_LOWIR_ABI_VERSION`.
 `cppgm_lowir_version()` returns the cppgm release of the library, such as
-`"0.9.1"`; `cppgm --version` prints the same release. Neither function needs a
+`"0.9.2"`; `cppgm --version` prints the same release. Neither function needs a
 module. A client that loads the library at run time compares
 `cppgm_lowir_abi_version()` with the version it was written for.
 `cppgm_lowir_create` accepts `CPPGM_LOWIR_ABI_VERSION_MIN` to
@@ -145,10 +145,41 @@ The library accepts a record when the LowIR text can state it. The text that
 additions of version 3, with the client
 [`scripts/tests/lowir_library_extensions.c`](../scripts/tests/lowir_library_extensions.c).
 
+## ABI version 4
+
+Version 4 adds record types to version 3 and changes nothing in it.
+`cppgm_lowir_record` takes an object's size, alignment and fields, and returns
+a type of kind `CPPGM_TYPE_RECORD`. A field is an offset, a type and an element
+count (0 is one). Its type is a scalar type or an earlier record type. Fields can
+overlap (a union). A field that is not at a multiple of its type's alignment
+makes a packed record.
+
+A record type can be used wherever the library takes a type: in signatures,
+boundaries, globals, data items, and the instruction and slot records of a body.
+The library replaces it with `obj<bytes x align>`. It passes and returns an
+object of a record type directly, with the classes that the System V psABI
+gives a C object with the same fields:
+
+| Use | Classes in the LowIR text |
+| --- | --- |
+| Parameter of a signature or boundary | parameter `classes=` |
+| Result of a signature or boundary | `result_classes=` |
+| Call argument after a variadic boundary's fixed parameters | call `classes=N:` |
+| `va_arg` result | `va_arg` `classes=` |
+
+A boundary parameter, a boundary result or an argument fact that states classes
+keeps them. An object of more than 16 bytes keeps the default classes, which
+pass and return it in memory. A record that C returns in memory, such as a packed
+record, has `result_classes=memory`: the caller passes the result address.
+The LowIR text has no record types. `cppgm_lowir_write` writes `obj` types
+and the classes. `python3 scripts/tests/test_lowir_library_records.py` links
+the library's object with C code that passes records of nine layouts, with the
+client [`scripts/tests/lowir_library_records.c`](../scripts/tests/lowir_library_records.c).
+
 The library does not expose Wasm object generation. PA27 owns the optional O0
 library lane and PA33 adds O1–O3;
 [the student contract](../pa27/lowir-library.md) describes the shared interface.
-The course lane does not use the additions of version 3.
+The course lane does not use the additions of versions 3 and 4.
 These checks remain outside default assignment reports. The myc integration and
 its timing comparisons are separate maintainer work, with no course dependency
 on Crystal or myc.
