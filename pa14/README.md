@@ -444,3 +444,13 @@ satisfaction and preserve substitution short-circuiting. A compound requirement
 `{ expression } noexcept -> Concept<Args...>;` checks the expression, then its
 non-throwing property, then the concept with `decltype((expression))` prepended
 to its explicit arguments. Its value category and cv-qualifiers are preserved.
+
+### C++20 implied `typename`
+
+In C++20 mode, a qualified name whose nested-name-specifier depends on a
+template parameter names a type without `typename` where only a type can
+appear: the decl-specifier-seq of a declaration at namespace or class scope,
+the parameters of a member function and of a function declared with a
+qualified name, the target of an alias-declaration, a trailing return type, a
+`new` type and the target type of a named cast. A block-scope declaration
+still needs `typename`, and so does every such name in an earlier mode.

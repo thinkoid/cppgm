@@ -7,13 +7,13 @@ template <class T> struct B {
 };
 template <class T> B<T>::value_type B<T>::make() { return T(); }
 template <class T> B<T>::In B<T>::in() { return In{T()}; }
-template <class T, T::value_type N = 3> struct K {
+template <class T> struct K {
   using base = B<T>;
   using alias = base::value_type;
-  T::value_type get() { return N; }
+  T::value_type get() { return 3; }
   static T::value_type s;
 };
-template <class T, T::value_type N> T::value_type K<T, N>::s = N;
+template <class T> T::value_type K<T>::s = 3;
 template <class T> T::value_type g(T) { return 0; }
 template <class T> struct L {
   void h(T::value_type v, int = 0);

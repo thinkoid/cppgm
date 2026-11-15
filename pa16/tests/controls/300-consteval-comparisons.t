@@ -51,7 +51,7 @@ int calls;
 int next() { return ++calls; }
 extern "C" int combined_comparisons() {
  calls = 0;
- auto x = next() <=> next();
+ std::strong_ordering x = next() <=> next();
  return calls != 2 || x.value != -1 || !(Box{2} > Box{1});
 }
 

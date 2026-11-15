@@ -371,3 +371,8 @@ function, template-head or expression records.
 A constrained parameter pack introduces one atomic fold constraint in C++20;
 do not apply C++26 fold-expanded ordering. Later assignments apply these rules
 to their partial specializations, alias and variable templates, and friends.
+
+The operands of a requires-clause are primary expressions. A name operand
+before `{` is an id-expression, and the brace opens the function body. The
+type of a non-type template parameter is a type-only context for PA14's
+implied `typename`.
