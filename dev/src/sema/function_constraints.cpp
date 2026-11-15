@@ -20,13 +20,16 @@ Scope* Analyzer::constraint_prototype(const DeclaratorInfo& info)
 	return prototype;
 }
 
-void Analyzer::attach_function_constraint(FunctionEntity* function, const DeclaratorInfo& info)
+void Analyzer::attach_function_constraint(
+	FunctionEntity* function, const DeclaratorInfo& info, const ClassEntity* befriending)
 {
 	const syntax::Expr* source = syntax::RequiresClause(info.function_suffix);
 	if (!cxx20_ || source == nullptr || function_constraint_index_.find(function) != PointerMap::kMissing)
 		return;
+	// A friend is templated by the class that declares it.
 	bool templated = function->templated;
-	for (const Scope* scope = function->owner; scope != nullptr; scope = scope->parent)
+	for (const Scope* scope = befriending != nullptr ? befriending->scope : function->owner; scope != nullptr;
+		scope = scope->parent)
 		if (scope->kind == ScopeKind::Class && scope->entity != nullptr)
 			templated = templated || static_cast<const ClassEntity*>(scope->entity)->templ != nullptr;
 	if (!templated)

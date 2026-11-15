@@ -393,4 +393,7 @@ specialization may keep the primary's argument pattern when its constraints
 make it more specialized. Preserve distinct constrained partials with equal
 patterns and use normalized atomic subsumption to order viable matches.
 Equivalent redeclarations may rename parameters. Constrained hidden friends
-remain hidden until their own namespace declaration makes them visible.
+remain hidden until their own namespace declaration makes them visible. A
+friend function defined in a class template may end with a requires-clause
+that names the class's parameters; each specialization checks it with its own
+arguments, and friends that differ only in that clause stay distinct.

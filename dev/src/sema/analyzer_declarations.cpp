@@ -2095,7 +2095,7 @@ Binding* Analyzer::declare_function(const Specifiers& specifiers, const Declarat
 	else if (templated)
 		merge_template_head(HeadOf(function), *template_list_, template_scope_, location);
 	if (cxx20_)
-		attach_function_constraint(function, info);
+		attach_function_constraint(function, info, befriending);
 	const bool was_defined = function->defined;
 	function->is_inline = function->is_inline || specifiers.is_inline || specifiers.is_constexpr;
 	function->defined = function->defined || definition || deleted;

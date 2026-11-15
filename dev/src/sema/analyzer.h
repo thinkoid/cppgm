@@ -680,7 +680,7 @@ private:
 	bool constraint_words(const syntax::Expr* expr, Scope* scope);
 	bool constraint_name_words(const syntax::Name& name, Scope* scope);
 	const ConstraintPredicate* function_constraint(const FunctionEntity*) const;
-	void attach_function_constraint(FunctionEntity*, const DeclaratorInfo&);
+	void attach_function_constraint(FunctionEntity*, const DeclaratorInfo&, const ClassEntity* befriending);
 	bool function_constraints_equivalent(const FunctionEntity*, const DeclaratorInfo&);
 	bool function_constraints_satisfied(const FunctionEntity*);
 	bool function_constraints_subsume(const FunctionEntity*, const FunctionEntity*);
