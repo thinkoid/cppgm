@@ -1696,7 +1696,9 @@ void CopyValue(
 	if (source.kind != ValueKind::Array && source.kind != ValueKind::Class)
 		return;
 	target.elements = arena.allocate_array<ConstValue>(source.count);
-	if ((source.flags & kSharedElements) != 0)
+	// Shared elements returned above without a map; the test repeats that
+	// for compilers that do not carry it here.
+	if ((source.flags & kSharedElements) != 0 && shared != nullptr && payloads != nullptr)
 	{
 		shared->set(source.elements, static_cast<uint32_t>(payloads->size()));
 		payloads->push_back(target.elements);
