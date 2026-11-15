@@ -23,6 +23,11 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels that pull request's earlier run. No other run is cancelled.
+concurrency:
+  group: internal-cpp-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   benchmarks:
     if: inputs.platform != 'intel'
