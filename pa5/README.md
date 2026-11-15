@@ -538,3 +538,8 @@ In C++20 mode, parse `consteval` among function and constructor specifiers,
 to `constexpr` in a lambda declarator. Retain these specifiers in the AST.
 PA6 checks declaration validity, PA16 checks immediate invocations and
 constant initialization, and PA20 supplies immediate lambda semantics.
+
+Retain a type-constraint before `auto` or `decltype(auto)` as one placeholder
+specifier. Keep its concept name and explicit arguments, and distinguish the
+two deduction rules. Generic and abbreviated parameters later use these parsed
+facts to introduce constrained template parameters without parsing them again.

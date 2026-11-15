@@ -765,6 +765,7 @@ bool SyntaxCloner::specifier(const DeclSpecifier& in, DeclSpecifier& out)
 		out.operand = expr(in.operand);
 		return out.operand != in.operand;
 	case DeclSpecKind::Name:
+	case DeclSpecKind::ConstrainedAuto:
 	case DeclSpecKind::Elaborated:
 		out.name = name(in.name);
 		return out.name != in.name;

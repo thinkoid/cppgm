@@ -473,6 +473,10 @@ void AstDumper::owned_specifier(const DeclSpecifier& specifier)
 {
 	switch (specifier.kind)
 	{
+	case DeclSpecKind::ConstrainedAuto:
+		line("constrained-placeholder-type",
+			RenderName(*specifier.name) + (specifier.keyword == TokenKind::KW_AUTO ? " auto" : " decltype(auto)"));
+		break;
 	case DeclSpecKind::Constinit:
 		line("decl-specifier", specifier.keyword == TokenKind::KW_CONSTINIT ? "constinit" : "__constinit");
 		break;

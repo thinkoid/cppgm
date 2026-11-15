@@ -136,6 +136,10 @@ void SyntaxRenderer::specifier(const DeclSpecifier& specifier)
 	case DeclSpecKind::Name:
 		name(*specifier.name, true);
 		break;
+	case DeclSpecKind::ConstrainedAuto:
+		name(*specifier.name, false);
+		text(specifier.keyword == TokenKind::KW_AUTO ? " auto" : " decltype(auto)");
+		break;
 	case DeclSpecKind::Constinit:
 		text(specifier.keyword == TokenKind::KW_CONSTINIT ? "constinit " : "__constinit ");
 		break;

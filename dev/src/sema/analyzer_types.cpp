@@ -287,6 +287,9 @@ void Analyzer::specifiers(const syntax::Slice<syntax::DeclSpecifier>& list, Scop
 				continue;
 			}
 			break;
+		case syntax::DeclSpecKind::ConstrainedAuto:
+			error(specifier.location, "a constrained placeholder requires a deduced declaration");
+			break;
 		case syntax::DeclSpecKind::Decltype:
 			named = decltype_type(*specifier.operand, scope);
 			// `unsigned _BitInt ( N )`: the sign specifier is the _BitInt's.

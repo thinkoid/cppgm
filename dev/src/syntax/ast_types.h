@@ -32,7 +32,10 @@ enum class DeclSpecKind : uint8_t
 	// type; `operand` counts bytes (keyword KW_SIZEOF) or lanes (any other).
 	Vector,
 	// GNU mode(identifier), applied to the complete declared type.
-	Mode
+	Mode,
+	// A type-constraint followed by auto or decltype(auto). `name` holds
+	// the constraint; `keyword` distinguishes the two placeholders.
+	ConstrainedAuto
 };
 
 struct DeclSpecifier

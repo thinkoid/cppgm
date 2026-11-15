@@ -826,6 +826,18 @@ bool Parser::parse_named_type_specifier(ListFrame<DeclSpecifier>& list, Specifie
 		specifier.kind = DeclSpecKind::Decltype;
 		specifier.operand = name->last().decltype_operand;
 	}
+	else if (cxx20_ && !typename_keyword && name_info.category == NameCategory::Concept &&
+		(at(TokenKind::KW_AUTO) ||
+			(at(TokenKind::KW_DECLTYPE) && at(TokenKind::OP_LPAREN, 1) && at(TokenKind::KW_AUTO, 2) &&
+				at(TokenKind::OP_RPAREN, 3))))
+	{
+		specifier.kind = DeclSpecKind::ConstrainedAuto;
+		specifier.keyword = tok().simple;
+		specifier.name = name;
+		const unsigned count = specifier.keyword == TokenKind::KW_AUTO ? 1 : 4;
+		for (unsigned i = 0; i < count; ++i)
+			next();
+	}
 	else
 	{
 		name->typename_keyword = typename_keyword;
