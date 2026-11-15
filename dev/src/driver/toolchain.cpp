@@ -331,6 +331,7 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 	invocation.preprocessor = base;
 	std::string value;
 	std::string forced_includes;
+	std::string gcc_install_dir;
 	bool nostdinc = false;
 	bool pthread = false;
 	bool optimize_size = false, popcnt_explicit = false;
@@ -369,6 +370,8 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 			invocation.preprocess_only = true;
 		else if (arg == "-nostdinc")
 			nostdinc = true;
+		else if (starts_with(arg, "--gcc-install-dir="))
+			gcc_install_dir = arg.substr(arg.find('=') + 1);
 		else if (starts_with(arg, "-Wl,-z,stack-size="))
 		{
 			const std::string size = arg.substr(18);
@@ -559,7 +562,10 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 	if (invocation.debug_optimization && invocation.debug_types)
 		invocation.optimizer.level = 0;
 	configure_source_language(invocation.source_language, invocation.standard, invocation.preprocessor);
-	add_host_environment(invocation.preprocessor, nostdinc || invocation.target != native::host_target());
+	std::string host_error;
+	if (!add_host_environment(invocation.preprocessor, nostdinc || invocation.target != native::host_target(),
+			gcc_install_dir, host_error))
+		throw InvocationError(host_error);
 	configure_target_runtime(invocation, nostdinc);
 	invocation.optimizer.has_gnu_sincos = target_model::has_gnu_sincos(invocation.target);
 	// Darwin objects are position independent even without an explicit -fPIC.

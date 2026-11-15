@@ -168,6 +168,9 @@ jobs:
       - name: Check optional typed LowIR library (PA27 and PA33)
         run: make test-lowir-library
 
+      - name: Check the standard directories of a named GCC installation
+        run: python3 scripts/tests/test_host_headers.py
+
       # Reads this build's dependency files, so it runs where the build is.
       - name: Check that the build uses the shipped scaffold files
         run: make audit-scaffold-usage

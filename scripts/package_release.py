@@ -26,8 +26,12 @@ README = '''# cppgm {tag} for {platform}
   third-stage build has the same bytes.
 - Host toolchain of this build (first stage, linker and standard library): {host}.
 
-Hosted compilation reads the standard headers and libraries of that host compiler at the paths of the build
-machine. Use the same host toolchain, or build from the source archive.
+Hosted compilation reads the standard headers of that host compiler at the paths of the build machine. A Linux
+package looks for another GCC installation when the C++ library headers are not at those paths: it uses the
+installation of `/usr/bin/g++`, or else the newest one that has the headers. `--gcc-install-dir=<dir>` names an
+installation (`<prefix>/lib/gcc/<triple>/<version>`). The predefined macros stay those of the build's host
+compiler. For another toolchain, pass `-nostdinc` and the header directories with `-isystem`, or build from the
+source archive.
 '''
 
 

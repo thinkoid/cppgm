@@ -1,7 +1,13 @@
 #include "driver/host_environment.h"
 
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include <algorithm>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "cppgm_builtin_host_config.h"
 #include "driver/wasm_environment.h"
@@ -168,7 +174,251 @@ const char* builtin_template_declarations()
 	return kBuiltinTemplateDeclarations;
 }
 
-void add_host_environment(PreprocessorOptions& options, bool nostdinc)
+namespace {
+
+bool IsDirectory(const std::string& path)
+{
+	struct stat status;
+	return stat(path.c_str(), &status) == 0 && S_ISDIR(status.st_mode);
+}
+
+// The names in `directory`, sorted; none if it cannot be read.
+std::vector<std::string> Entries(const std::string& directory)
+{
+	std::vector<std::string> names;
+	DIR* handle = opendir(directory.c_str());
+	if (handle == nullptr)
+		return names;
+	for (dirent* entry = readdir(handle); entry != nullptr; entry = readdir(handle))
+	{
+		if (entry->d_name[0] != '.')
+			names.push_back(entry->d_name);
+	}
+	closedir(handle);
+	std::sort(names.begin(), names.end());
+	return names;
+}
+
+// A GCC version as a directory names it: numbers joined by dots (15, 15.2.1).
+bool IsVersion(const std::string& name)
+{
+	if (name.empty() || name[0] == '.' || name[name.size() - 1] == '.')
+		return false;
+	for (const char c : name)
+	{
+		if (c != '.' && (c < '0' || c > '9'))
+			return false;
+	}
+	return true;
+}
+
+// Whether version `a` is older than `b`, number by number.
+bool OlderVersion(const std::string& a, const std::string& b)
+{
+	size_t i = 0;
+	size_t j = 0;
+	while (i < a.size() || j < b.size())
+	{
+		unsigned long x = 0;
+		unsigned long y = 0;
+		for (; i < a.size() && a[i] != '.'; ++i)
+			x = x * 10 + static_cast<unsigned long>(a[i] - '0');
+		for (; j < b.size() && b[j] != '.'; ++j)
+			y = y * 10 + static_cast<unsigned long>(b[j] - '0');
+		if (x != y)
+			return x < y;
+		i += i < a.size();
+		j += j < b.size();
+	}
+	return false;
+}
+
+// A GCC installation, <prefix>/<lib>/gcc/<triple>/<version> (GCC's
+// -print-search-dirs `install:`, Clang's --gcc-install-dir), with its C++
+// library's headers under <prefix>/include.
+struct GccInstallation
+{
+	std::string directory;
+	std::string prefix;
+	std::string triple;
+	std::string version;
+
+	std::string library() const { return prefix + "/include/c++/" + version; }
+	// The target's part of the library (bits/c++config.h): Debian's
+	// directory, or GCC's own; "" if neither is there.
+	std::string target_library() const
+	{
+		const std::string debian = prefix + "/include/" + triple + "/c++/" + version;
+		if (IsDirectory(debian))
+			return debian;
+		const std::string own = library() + "/" + triple;
+		return IsDirectory(own) ? own : std::string();
+	}
+	// The compiler's own headers and the whole library are there.
+	bool usable() const
+	{
+		return IsDirectory(directory + "/include") && IsDirectory(library()) && !target_library().empty();
+	}
+};
+
+bool ParseInstallation(std::string directory, GccInstallation& out)
+{
+	while (directory.size() > 1 && directory[directory.size() - 1] == '/')
+		directory.erase(directory.size() - 1);
+	// The last four slashes: before <version>, <triple>, gcc and <lib>.
+	size_t slash[4];
+	size_t at = directory.size();
+	for (size_t& found : slash)
+	{
+		at = at == 0 ? std::string::npos : directory.rfind('/', at - 1);
+		if (at == std::string::npos)
+			return false;
+		found = at;
+	}
+	if (directory.compare(slash[2] + 1, slash[1] - slash[2] - 1, "gcc") != 0)
+		return false;
+	out.directory = directory;
+	out.prefix = directory.substr(0, slash[3]);
+	out.triple = directory.substr(slash[1] + 1, slash[0] - slash[1] - 1);
+	out.version = directory.substr(slash[0] + 1);
+	return !out.triple.empty() && !out.version.empty();
+}
+
+// The GCC installation whose headers the build found: the owner of its
+// <installation>/include directory. False for a build with another
+// compiler's headers.
+bool BuiltInstallation(GccInstallation& out)
+{
+	static const char kInclude[] = "/include";
+	const size_t suffix = sizeof kInclude - 1;
+	for (const char* const* path = cppgm_builtin_host_config::kStandardIncludePaths; *path != nullptr; ++path)
+	{
+		const std::string directory = *path;
+		if (directory.size() > suffix && directory.compare(directory.size() - suffix, suffix, kInclude) == 0 &&
+			ParseInstallation(directory.substr(0, directory.size() - suffix), out))
+			return true;
+	}
+	return false;
+}
+
+// The build's C++ library directory: its first .../c++/<name> one.
+std::string BuiltLibrary()
+{
+	for (const char* const* path = cppgm_builtin_host_config::kStandardIncludePaths; *path != nullptr; ++path)
+	{
+		if (std::strstr(*path, "/c++/") != nullptr)
+			return *path;
+	}
+	return std::string();
+}
+
+// The version that /usr/bin/g++ names: Debian's g++ is a link to
+// g++-<version>. "" for a g++ that is not such a link.
+std::string DefaultCompilerVersion()
+{
+	std::string path = "/usr/bin/g++";
+	for (unsigned depth = 0; depth < 8; ++depth)
+	{
+		char target[1024];
+		const ssize_t size = readlink(path.c_str(), target, sizeof target);
+		if (size <= 0 || static_cast<size_t>(size) == sizeof target)
+			break;
+		const std::string link(target, static_cast<size_t>(size));
+		path = link[0] == '/' ? link : path.substr(0, path.rfind('/') + 1) + link;
+	}
+	const size_t dash = path.rfind('-');
+	const std::string version = dash == std::string::npos ? std::string() : path.substr(dash + 1);
+	return IsVersion(version) ? version : std::string();
+}
+
+// The system's GCC installation for the build's architecture that has the
+// C++ library's headers: the one of /usr/bin/g++, else the newest. Only
+// directories are read; no program runs.
+bool FindInstallation(const GccInstallation& built, GccInstallation& found)
+{
+	const std::string architecture = built.triple.substr(0, built.triple.find('-') + 1);
+	const std::string wanted = DefaultCompilerVersion();
+	const size_t triple_slash = built.directory.rfind('/', built.directory.rfind('/') - 1);
+	const std::string roots[] = { built.directory.substr(0, triple_slash), "/usr/lib/gcc", "/usr/lib64/gcc",
+		"/usr/local/lib/gcc", "/usr/local/lib64/gcc" };
+	bool any = false;
+	bool found_wanted = false;
+	for (size_t r = 0; r < sizeof roots / sizeof roots[0]; ++r)
+	{
+		if (r != 0 && roots[r] == roots[0])
+			continue;
+		for (const std::string& triple : Entries(roots[r]))
+		{
+			if (triple.compare(0, architecture.size(), architecture) != 0)
+				continue;
+			for (const std::string& version : Entries(roots[r] + "/" + triple))
+			{
+				GccInstallation candidate;
+				if (!IsVersion(version) || !ParseInstallation(roots[r] + "/" + triple + "/" + version, candidate) ||
+					!candidate.usable())
+					continue;
+				const bool is_wanted = !wanted.empty() &&
+					(version == wanted || version.compare(0, wanted.size() + 1, wanted + ".") == 0);
+				if (!any || (is_wanted && !found_wanted) ||
+					(is_wanted == found_wanted && OlderVersion(found.version, version)))
+				{
+					found = candidate;
+					found_wanted = is_wanted;
+					any = true;
+				}
+			}
+		}
+	}
+	return any;
+}
+
+// The build's directories with those of installation `built` replaced by
+// `use`'s, in GCC's order: the library's three, <installation>/include, and
+// <installation>/include-fixed (where there is one) after the first system
+// directory (/usr/local/include). The system directories stay.
+void InstallationDirectories(
+	const GccInstallation& built, const GccInstallation& use, std::vector<std::string>& directories)
+{
+	const std::string library = "/c++/" + built.version;
+	const std::string internal = built.directory + "/";
+	bool library_done = false;
+	bool internal_done = false;
+	bool fixed_done = false;
+	for (const char* const* path = cppgm_builtin_host_config::kStandardIncludePaths; *path != nullptr; ++path)
+	{
+		const std::string directory = *path;
+		const size_t at = directory.find(library);
+		const size_t end = at + library.size();
+		if (at != std::string::npos && (end == directory.size() || directory[end] == '/'))
+		{
+			if (!library_done)
+			{
+				directories.push_back(use.library());
+				directories.push_back(use.target_library());
+				directories.push_back(use.library() + "/backward");
+			}
+			library_done = true;
+		}
+		else if (directory.compare(0, internal.size(), internal) == 0)
+		{
+			if (!internal_done)
+				directories.push_back(use.directory + "/include");
+			internal_done = true;
+		}
+		else
+		{
+			directories.push_back(directory);
+			if (!fixed_done && IsDirectory(use.directory + "/include-fixed"))
+				directories.push_back(use.directory + "/include-fixed");
+			fixed_done = true;
+		}
+	}
+}
+
+} // namespace
+
+bool add_host_environment(
+	PreprocessorOptions& options, bool nostdinc, const std::string& gcc_install_dir, std::string& error)
 {
 	options.modes.language = options.language == SourceLanguage::C ? 0 : options.modes.language;
 	options.hosted = true;
@@ -181,9 +431,40 @@ void add_host_environment(PreprocessorOptions& options, bool nostdinc)
 	else
 		options.builtin_declarations += builtin_template_declarations();
 	if (nostdinc)
-		return;
+		return true;
+	GccInstallation built;
+	const bool gcc = BuiltInstallation(built);
+	const std::string library = BuiltLibrary();
+	if (!gcc_install_dir.empty())
+	{
+		GccInstallation named;
+		if (!gcc)
+			error = "--gcc-install-dir needs a cppgm built with GCC's headers";
+		else if (!ParseInstallation(gcc_install_dir, named))
+			error = "not a GCC installation directory (<prefix>/lib/gcc/<triple>/<version>): " + gcc_install_dir;
+		else if (!named.usable())
+			error = "no C++ library headers for the GCC installation " + named.directory + " (" + named.library() + ")";
+		if (!error.empty())
+			return false;
+		InstallationDirectories(built, named, options.system_include_paths);
+		return true;
+	}
+	const bool missing = !library.empty() && !IsDirectory(library);
+	GccInstallation found;
+	if (missing && gcc && FindInstallation(built, found))
+	{
+		InstallationDirectories(built, found, options.system_include_paths);
+		return true;
+	}
 	for (const char* const* path = cppgm_builtin_host_config::kStandardIncludePaths; *path != nullptr; ++path)
 		options.system_include_paths.push_back(*path);
+	if (missing)
+		options.missing_headers_note = "note: the standard headers this cppgm was built with are not on this system: " +
+			library +
+			(gcc ? "\nnote: no GCC installation with C++ library headers was found; name one with "
+				   "--gcc-install-dir=<dir>, or pass the header directories with -nostdinc -isystem <dir>"
+				 : "\nnote: pass the header directories with -nostdinc -isystem <dir>");
+	return true;
 }
 
 bool host_stdlib_selected(const std::string& name)

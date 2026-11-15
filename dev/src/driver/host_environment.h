@@ -8,13 +8,26 @@ namespace driver {
 // The hosted environment of cppgm's preprocess, compile and link modes
 // (PA26's hosted headers, PA30): the host C++ compiler's predefined macros
 // (gnu++11) and standard include directories, discovered once when cppgm
-// was built (dev/gen_builtin_host_config.pl) and baked in, so the answer
-// does not depend on the compiler installed where cppgm runs. Turns on
+// was built (dev/gen_builtin_host_config.pl) and baked in. Turns on
 // hosted mode, sets the builtin declarations and, unless `nostdinc`, appends the standard directories
 // after any -isystem ones. The host's macros announcing exceptions
 // (__EXCEPTIONS, __cpp_exceptions) and RTTI (__GXX_RTTI, __cpp_rtti) are
 // read only in the modes that have them (options.modes).
-void add_host_environment(PreprocessorOptions& options, bool nostdinc);
+//
+// The standard directories are the build's when its C++ library directory
+// is on this system. Otherwise a build with GCC's headers takes GCC's and
+// the library's directories from a GCC installation of this system
+// (<prefix>/lib/gcc/<triple>/<version>): the one of /usr/bin/g++, else the
+// newest that has the library's headers. `gcc_install_dir`
+// (--gcc-install-dir) names the installation instead. Only directories are
+// read: no program runs. When no installation is found, the build's
+// directories stay and an `#include <...>` that finds no file says so
+// (PreprocessorOptions::missing_headers_note). The predefined macros are
+// always the build's.
+//
+// False, with `error`, for a `gcc_install_dir` that cannot be used.
+bool add_host_environment(
+	PreprocessorOptions& options, bool nostdinc, const std::string& gcc_install_dir, std::string& error);
 
 // The selected target's platform macros, including the native host target.
 // Foreign SDK paths must be explicit; baked host paths are not a foreign SDK.

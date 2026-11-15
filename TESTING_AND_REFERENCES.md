@@ -345,7 +345,13 @@ another compiler built; equal inputs give equal bytes.
 `scripts/check_release_package.py` checks the contents of a package, compiles
 and runs a program with the packaged compiler, and links and runs a C client
 with the static and the shared library. A native package reads the standard
-headers of its build host's compiler; its README names that compiler.
+headers of its build host's compiler; its README names that compiler. When
+the C++ library headers of that GCC version are not on the system, the Linux
+package reads the headers of the GCC installation it finds there, or of the
+one that `--gcc-install-dir=<dir>` names. The workflow also runs the check in
+an Ubuntu 26.04 container, where the GCC version is not the build's.
+`scripts/tests/test_host_headers.py` checks the option with a built
+`dev/cppgm`.
 
 The workflow creates a draft only after all build jobs pass, uploads the
 complete asset set, then publishes it. An existing release is never

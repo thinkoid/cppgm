@@ -18,7 +18,8 @@
 //
 // Options: -c, -E, -o <file>, -I <dir>, -isystem <dir>, -D <name>[=<value>],
 // -U <name>, -L <dir>, -l <name> (each also joined), -include <file>,
-// -nostdinc, -x c++, --target <target> (or =),
+// -nostdinc, --gcc-install-dir=<dir> (the GCC installation whose headers
+// are the standard ones), -x c++, --target <target> (or =),
 // --sysroot <dir>, -resource-dir <dir>, -nostartfiles, -nodefaultlibs and
 // -nostdlib (Wasm target headers and supplied runtime selection),
 // -std=<c++11, c++14, c++17 or c++20, and their gnu and draft names> (__cplusplus;

@@ -531,6 +531,8 @@ void Preprocessor::include_file(const PPToken& directive, const std::string& nam
 	std::string path;
 	int32_t index;
 	SourceFile* file = find_include(name, angle, next, path, index);
+	if (file == nullptr && angle && !missing_headers_note_.empty())
+		throw PreprocessError(directive.begin, ("include file not found\n" + missing_headers_note_).c_str());
 	if (file == nullptr)
 		throw PreprocessError(directive.begin, "include file not found");
 	if (once_files_.count(file->identity()) != 0)

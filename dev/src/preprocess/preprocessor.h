@@ -54,6 +54,9 @@ struct PreprocessorOptions
 	bool popcnt = false;   // explicit -mpopcnt target capability
 	uint8_t sse_level = 0; // beyond SSE2: SSE3, SSSE3, SSE4.1, SSE4.2
 	std::vector<std::string> system_include_paths;
+	// Lines that follow the error of an `#include <...>` that finds no file,
+	// when the standard directories are not on this system; else empty.
+	std::string missing_headers_note;
 	std::string host_predefines;
 	// The builtin declarations a hosted translation unit is compiled with
 	// (`__builtin_va_list` ...), source text read after the predefined
@@ -253,6 +256,7 @@ private:
 	// start at system_paths_.
 	std::vector<std::string> include_paths_;
 	size_t system_paths_;
+	std::string missing_headers_note_;
 	bool hosted_;
 	bool assembler_;
 	FeatureModes modes_;

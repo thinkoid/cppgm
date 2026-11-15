@@ -113,9 +113,9 @@ Preprocessor::Preprocessor(const PreprocessorOptions& options, const std::string
 	  macro_query_(identifiers_), evaluator_(macro_query_, options.literals, options.plain_char_unsigned),
 	  definition_parser_(arena_, names_.va_args, options.hosted), predefined_(nullptr), command_line_begin_(0),
 	  command_line_end_(0), host_predefines_begin_(0), host_predefines_end_(0), builtin_begin_(0), builtin_end_(0),
-	  hosted_(options.hosted), assembler_(options.assembler), modes_(options.modes),
-	  wasm_attributes_(target_model::is_wasm(options.target)), directives_(0), skipped_directives_(0), includes_(0),
-	  guarded_skips_(0), finished_(false), pack_(0)
+	  missing_headers_note_(options.missing_headers_note), hosted_(options.hosted), assembler_(options.assembler),
+	  modes_(options.modes), wasm_attributes_(target_model::is_wasm(options.target)), directives_(0),
+	  skipped_directives_(0), includes_(0), guarded_skips_(0), finished_(false), pack_(0)
 {
 	modes_.language = options.language == SourceLanguage::C ? 0
 		: options.cplusplus == "202002L"                    ? 20

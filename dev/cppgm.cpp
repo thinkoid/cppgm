@@ -207,6 +207,7 @@ struct SourceOutputInvocation
 	// run_emit_lowir_mode). `-I`, `-D` and `-U` as the driver takes them.
 	bool hosted = false;
 	bool nostdinc = false;
+	string gcc_install_dir;
 	bool plain_char_unsigned = false;
 	bool popcnt = false;
 	bool popcnt_explicit = false;
@@ -387,6 +388,11 @@ SourceOutputInvocation parse_source_output_invocation(const vector<string>& args
 			invocation.nostdinc = true;
 			continue;
 		}
+		if (starts_with(args[i], "--gcc-install-dir="))
+		{
+			invocation.gcc_install_dir = args[i].substr(args[i].find('=') + 1);
+			continue;
+		}
 		if (args[i] == "-include")
 		{
 			consume_required_option_argument(args, i, "-include", "file");
@@ -512,7 +518,7 @@ bool consume_preprocess_option(const vector<string>& args, size_t& i)
 		consume_required_option_argument(args, i, "-include", "file");
 		return true;
 	}
-	if (args[i] == "-nostdinc")
+	if (args[i] == "-nostdinc" || starts_with(args[i], "--gcc-install-dir="))
 	{
 		return true;
 	}
@@ -731,6 +737,15 @@ PreprocessorOptions source_preprocessor_options()
 	return options;
 }
 
+// The host environment of an emit mode: the driver's (driver/host_environment.h).
+void add_host_environment(PreprocessorOptions& options, const SourceOutputInvocation& invocation)
+{
+	string error;
+	if (!driver::add_host_environment(options, invocation.nostdinc || invocation.target != native::host_target(),
+			invocation.gcc_install_dir, error))
+		throw InvocationError(error);
+}
+
 PreprocessorOptions source_preprocessor_options(const SourceOutputInvocation& invocation)
 {
 	PreprocessorOptions options = source_preprocessor_options();
@@ -744,7 +759,7 @@ PreprocessorOptions source_preprocessor_options(const SourceOutputInvocation& in
 	options.modes.rtti = invocation.rtti;
 	options.sse_level = invocation.sse_level;
 	if (invocation.hosted)
-		driver::add_host_environment(options, invocation.nostdinc || invocation.target != native::host_target());
+		add_host_environment(options, invocation);
 	driver::configure_target_environment(options, invocation.target);
 	if (invocation.wasm_atomics && target_model::is_wasm(invocation.target))
 	{
@@ -1109,7 +1124,7 @@ int run_emit_lowir_mode(vector<string> args)
 	// The LowIR view preprocesses in the host environment -c uses (PA33: a
 	// source the driver lanes compile includes host headers).
 	if (!options.hosted)
-		driver::add_host_environment(options, invocation.nostdinc || invocation.target != native::host_target());
+		add_host_environment(options, invocation);
 	lowir::Program program;
 	lower::ProgramLowering lowering(program);
 	// Definitions are written as they complete and their bodies released,
