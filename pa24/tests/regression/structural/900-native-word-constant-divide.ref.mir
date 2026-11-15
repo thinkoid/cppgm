@@ -16,11 +16,12 @@ function @signed_quotient
     epilogues shared
 
   block ^entry
-    mov r11, 8
-    mov rax, rdi
-    cqo.i32
-    idiv.i32 r11
-    ret rax
+    mov r11, rdi
+    sar r11, 63
+    shr r11, 61
+    add rdi, r11
+    sar rdi, 3
+    ret rdi
 
 function @signed_remainder
   abi
@@ -33,11 +34,13 @@ function @signed_remainder
     epilogues shared
 
   block ^entry
-    mov r11, 8
-    mov rax, rdi
-    cqo.i32
-    idiv.i32 r11
-    ret rdx
+    mov r11, rdi
+    sar r11, 63
+    shr r11, 61
+    add r11, rdi
+    and r11, -8
+    sub rdi, r11
+    ret rdi
 
 function @negative_quotient
   abi
@@ -50,11 +53,12 @@ function @negative_quotient
     epilogues shared
 
   block ^entry
-    mov r11, -3
-    mov rax, rdi
-    cqo.i32
-    idiv.i32 r11
-    ret rax
+    imul rax, rdi, 1431655766
+    sar rax, 32
+    mov rdx, rdi
+    sar rdx, 63
+    sub rdx, rax
+    ret rdx
 
 function @unsigned_quotient
   abi
@@ -67,10 +71,10 @@ function @unsigned_quotient
     epilogues shared
 
   block ^entry
-    mov r11, 3
+    mov r11, 2863311531
     mov rax, rdi
-    mov rdx, 0
-    div.i32 r11
+    imul rax, r11
+    shr rax, 33
     ret rax
 
 function @unsigned_max_divisor
@@ -84,11 +88,11 @@ function @unsigned_max_divisor
     epilogues shared
 
   block ^entry
-    mov r11, 4294967295
     mov rax, rdi
-    mov rdx, 0
-    div.i32 r11
-    ret rax
+    mov r11, -9223372034707292159
+    mul r11
+    shr rdx, 31
+    ret rdx
 
 function @unsigned_signed_op
   abi
@@ -101,11 +105,14 @@ function @unsigned_signed_op
     epilogues shared
 
   block ^entry
-    mov r11, 8
-    mov rax, rdi
-    cqo.i32
-    idiv.i32 r11
-    ret rax
+    mov r10, rdi
+    sext.i32 r10
+    mov rdi, r10
+    sar rdi, 63
+    shr rdi, 61
+    add rdi, r10
+    sar rdi, 3
+    ret rdi
 
 function @signed_unsigned_op
   abi
@@ -118,10 +125,12 @@ function @signed_unsigned_op
     epilogues shared
 
   block ^entry
-    mov r11, 3
-    mov rax, rdi
-    mov rdx, 0
-    div.i32 r11
+    mov r10, rdi
+    zext.i32 r10
+    mov r11, 2863311531
+    mov rax, r10
+    imul rax, r11
+    shr rax, 33
     ret rax
 
 function @negative_one
@@ -169,12 +178,13 @@ function @from_pointer
     epilogues shared
 
   block ^entry
-    load.i32 r8, [rdi]
-    mov r11, 8
-    mov rax, r8
-    cqo.i32
-    idiv.i32 r11
-    ret rax
+    load.i32 rdi, [rdi]
+    mov r11, rdi
+    sar r11, 63
+    shr r11, 61
+    add rdi, r11
+    sar rdi, 3
+    ret rdi
 
 function @main
   abi

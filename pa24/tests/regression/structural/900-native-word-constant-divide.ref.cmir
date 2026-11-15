@@ -16,11 +16,12 @@ function @signed_quotient
     epilogues shared
 
   block ^entry
-    mov <gpr0>, 8
-    mov rax, rdi
-    cqo.i32
-    idiv.i32 <gpr0>
-    ret rax
+    mov <gpr0>, rdi
+    sar <gpr0>, 63
+    shr <gpr0>, 61
+    add rdi, <gpr0>
+    sar rdi, 3
+    ret rdi
 
 function @signed_remainder
   abi
@@ -33,11 +34,13 @@ function @signed_remainder
     epilogues shared
 
   block ^entry
-    mov <gpr0>, 8
-    mov rax, rdi
-    cqo.i32
-    idiv.i32 <gpr0>
-    ret rdx
+    mov <gpr0>, rdi
+    sar <gpr0>, 63
+    shr <gpr0>, 61
+    add <gpr0>, rdi
+    and <gpr0>, -8
+    sub rdi, <gpr0>
+    ret rdi
 
 function @negative_quotient
   abi
@@ -50,11 +53,12 @@ function @negative_quotient
     epilogues shared
 
   block ^entry
-    mov <gpr0>, -3
-    mov rax, rdi
-    cqo.i32
-    idiv.i32 <gpr0>
-    ret rax
+    imul rax, rdi, 1431655766
+    sar rax, 32
+    mov rdx, rdi
+    sar rdx, 63
+    sub rdx, rax
+    ret rdx
 
 function @unsigned_quotient
   abi
@@ -67,10 +71,10 @@ function @unsigned_quotient
     epilogues shared
 
   block ^entry
-    mov <gpr0>, 3
+    mov <gpr0>, 2863311531
     mov rax, rdi
-    mov rdx, 0
-    div.i32 <gpr0>
+    imul rax, <gpr0>
+    shr rax, 33
     ret rax
 
 function @unsigned_max_divisor
@@ -84,11 +88,11 @@ function @unsigned_max_divisor
     epilogues shared
 
   block ^entry
-    mov <gpr0>, 4294967295
     mov rax, rdi
-    mov rdx, 0
-    div.i32 <gpr0>
-    ret rax
+    mov <gpr0>, -9223372034707292159
+    mul <gpr0>
+    shr rdx, 31
+    ret rdx
 
 function @unsigned_signed_op
   abi
@@ -101,11 +105,14 @@ function @unsigned_signed_op
     epilogues shared
 
   block ^entry
-    mov <gpr0>, 8
-    mov rax, rdi
-    cqo.i32
-    idiv.i32 <gpr0>
-    ret rax
+    mov <gpr1>, rdi
+    sext.i32 <gpr1>
+    mov rdi, <gpr1>
+    sar rdi, 63
+    shr rdi, 61
+    add rdi, <gpr1>
+    sar rdi, 3
+    ret rdi
 
 function @signed_unsigned_op
   abi
@@ -118,10 +125,12 @@ function @signed_unsigned_op
     epilogues shared
 
   block ^entry
-    mov <gpr0>, 3
-    mov rax, rdi
-    mov rdx, 0
-    div.i32 <gpr0>
+    mov <gpr1>, rdi
+    zext.i32 <gpr1>
+    mov <gpr0>, 2863311531
+    mov rax, <gpr1>
+    imul rax, <gpr0>
+    shr rax, 33
     ret rax
 
 function @negative_one
@@ -169,12 +178,13 @@ function @from_pointer
     epilogues shared
 
   block ^entry
-    load.i32 r8, [rdi]
-    mov <gpr0>, 8
-    mov rax, r8
-    cqo.i32
-    idiv.i32 <gpr0>
-    ret rax
+    load.i32 rdi, [rdi]
+    mov <gpr0>, rdi
+    sar <gpr0>, 63
+    shr <gpr0>, 61
+    add rdi, <gpr0>
+    sar rdi, 3
+    ret rdi
 
 function @main
   abi
@@ -184,88 +194,88 @@ function @main
     scratch_bytes 0
     frame_pointer keep
     epilogues shared
-    preserve <gpr1> <gpr2>
+    preserve <gpr2> <gpr3>
     slot $input -> [rbp-<off0>] : obj<16x8>
 
   block ^entry
-    lea <gpr1>, [rbp-<off0>]
-    store.i64 [<gpr1>], -2147483648
+    lea <gpr2>, [rbp-<off0>]
+    store.i64 [<gpr2>], -2147483648
     mov rdi, -2147483648
     call @signed_quotient [args=(rdi), unwind=no]
     sext.i32 rax
     cmp.i32 rax, -268435456
-    setne <gpr2>
-    movzx <gpr2>, <gpr2>
+    setne <gpr3>
+    movzx <gpr3>, <gpr3>
     mov rdi, 2147483647
     call @signed_quotient [args=(rdi), unwind=no]
     sext.i32 rax
     cmp.i32 rax, 268435455
     setne rax
     movzx rax, rax
-    or <gpr2>, rax
+    or <gpr3>, rax
     mov rdi, -31
     call @signed_quotient [args=(rdi), unwind=no]
     sext.i32 rax
     cmp.i32 rax, -3
     setne rax
     movzx rax, rax
-    or <gpr2>, rax
+    or <gpr3>, rax
     mov rdi, -31
     call @signed_remainder [args=(rdi), unwind=no]
     sext.i32 rax
     cmp.i32 rax, -7
     setne rax
     movzx rax, rax
-    or <gpr2>, rax
+    or <gpr3>, rax
     mov rdi, -2147483648
     call @negative_quotient [args=(rdi), unwind=no]
     sext.i32 rax
     cmp.i32 rax, 715827882
     setne rax
     movzx rax, rax
-    or <gpr2>, rax
+    or <gpr3>, rax
     mov rdi, 4294967295
     call @unsigned_quotient [args=(rdi), unwind=no]
     zext.i32 rax
     cmp.u32 rax, 1431655765
     setne rax
     movzx rax, rax
-    or <gpr2>, rax
+    or <gpr3>, rax
     mov rdi, 4294967295
     call @unsigned_max_divisor [args=(rdi), unwind=no]
     zext.i32 rax
     cmp.u32 rax, 1
     setne rax
     movzx rax, rax
-    or <gpr2>, rax
+    or <gpr3>, rax
     mov rdi, 4294967294
     call @unsigned_max_divisor [args=(rdi), unwind=no]
     zext.i32 rax
     cmp.u32 rax, 0
     setne rax
     movzx rax, rax
-    or <gpr2>, rax
+    or <gpr3>, rax
     mov rdi, 2147483648
     call @unsigned_signed_op [args=(rdi), unwind=no]
     zext.i32 rax
     cmp.u32 rax, 4026531840
     setne rax
     movzx rax, rax
-    or <gpr2>, rax
+    or <gpr3>, rax
     mov rdi, -1
     call @signed_unsigned_op [args=(rdi), unwind=no]
     sext.i32 rax
     cmp.i32 rax, 1431655765
     setne rax
     movzx rax, rax
-    or <gpr2>, rax
+    or <gpr3>, rax
     mov rdi, -2147483648
     call @negative_one [args=(rdi), unwind=no]
     sext.i32 rax
     cmp.i32 rax, -2147483648
     setne rax
     movzx rax, rax
-    or <gpr2>, rax
+    or <gpr3>, rax
     mov rdi, -2147483648
     mov rsi, -1
     call @dynamic [args=(rsi,rdi), unwind=no]
@@ -273,12 +283,12 @@ function @main
     cmp.i32 rax, -2147483648
     setne rax
     movzx rax, rax
-    or <gpr2>, rax
-    mov rdi, <gpr1>
+    or <gpr3>, rax
+    mov rdi, <gpr2>
     call @from_pointer [args=(rdi), unwind=no]
     sext.i32 rax
     cmp.i32 rax, -268435456
     setne rax
     movzx rax, rax
-    or <gpr2>, rax
-    ret <gpr2>
+    or <gpr3>, rax
+    ret <gpr3>

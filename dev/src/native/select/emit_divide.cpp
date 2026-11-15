@@ -260,7 +260,7 @@ DivideForm FunctionSelector::divide_form(const Instruction& inst, int64_t& divis
 		divisor = static_cast<int64_t>(low);
 		return DivideForm::UnsignedShift;
 	}
-	if (level_ < 1 || kind == TypeKind::I1)
+	if (kind == TypeKind::I1)
 		return DivideForm::Hardware;
 	// The divisor at the type's width, read at the operation's signedness.
 	const unsigned width = integer_width(kind);
@@ -415,8 +415,7 @@ void FunctionSelector::emit_divide_constant(const Instruction& inst, DivideForm 
 	}
 	else
 	{
-		const bool word = level_ >= 1 && narrow_integer(kind) && divisor > -(int64_t(1) << 31) &&
-			divisor < (int64_t(1) << 31);
+		const bool word = narrow_integer(kind) && divisor > -(int64_t(1) << 31) && divisor < (int64_t(1) << 31);
 		Reg from = kNoReg;
 		if (word)
 			from = emit_word_magic_divide(x, divisor, is_remainder(op), form == DivideForm::UnsignedMagic);
