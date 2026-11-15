@@ -283,7 +283,8 @@ bool copies_code(const FunctionContext& context)
 // scalar rounds again over what promotion exposed; the body is then
 // compacted so a caller copies only live code.
 void simplify_function(Program& program, SymbolId symbol, OptimizerStats& stats, const OptimizerOptions& options,
-	std::vector<uint8_t>& nounwind, const std::vector<uint8_t>& unwritten, uint32_t& return_table_names)
+	std::vector<uint8_t>& nounwind, const std::vector<uint8_t>& unwritten, uint32_t& return_table_names,
+	std::vector<uint32_t>& unrolled)
 {
 	const int level = options.level;
 	const bool addressed = !program.functions[program.symbols[symbol].detail].body->code_labels.empty();
@@ -361,9 +362,11 @@ void simplify_function(Program& program, SymbolId symbol, OptimizerStats& stats,
 		scalar_rounds(context);
 	again = RUN_PASS(remove_loops);
 	// Each run unrolls one level of a nest; the copies fold before the next.
+	const uint64_t rolled = instruction_count(context.body);
+	bool unrolling = false;
 	for (unsigned nest = 0; nest < kUnrollNest && copies_code(context) && RUN_PASS(unroll_loops); ++nest)
 	{
-		again = true;
+		again = unrolling = true;
 		if (nest + 1 == kUnrollNest)
 			break;
 		scalar_rounds(context);
@@ -373,6 +376,16 @@ void simplify_function(Program& program, SymbolId symbol, OptimizerStats& stats,
 		again = true;
 	if (again)
 		scalar_rounds(context);
+	// What the unrolled loops added (the inliner judges the function at
+	// its size with those loops as they were).
+	if (unrolling)
+	{
+		const uint64_t now = instruction_count(context.body);
+		if (unrolled.size() <= symbol)
+			unrolled.resize(program.symbols.size(), 0);
+		if (now > rolled)
+			unrolled[symbol] += static_cast<uint32_t>(now - rolled);
+	}
 	if (nounwind.size() <= symbol)
 		nounwind.resize(program.symbols.size(), 0); // a folded copy made after the start
 	nounwind[symbol] = proves_nounwind(context) ? 1 : 0;
@@ -941,14 +954,17 @@ void optimize_program(Program& program, const OptimizerOptions& options, Optimiz
 		std::vector<uint8_t> unwritten, moved;
 		initialize_statically(program, unwritten);
 		uint32_t return_table_names = 0;
+		std::vector<uint32_t> unrolled;
 		const std::function<void(SymbolId)> simplify = [&](SymbolId s) {
-			simplify_function(program, s, stats, options, nounwind, unwritten, return_table_names);
+			simplify_function(program, s, stats, options, nounwind, unwritten, return_table_names, unrolled);
 		};
-		// Pipeline-wide growth: each inlining policy copies at most the
-		// unit's input size (at least 10,240 instructions) in total, the
-		// ordinary policies twice that (template layers, as in tramp3d, are
-		// mostly small accessors: past the budget each stays a call, and a
-		// unit that runs out spends five times the instructions).
+		// Pipeline-wide growth: forced inlining copies at most the unit's
+		// input size (at least 10,240 instructions) in total, the ordinary
+		// policies and single-call inlining twice that each (template
+		// layers, as in tramp3d, are mostly small accessors, and a
+		// single-call callee is charged again with each caller that takes
+		// it: past the budget each stays a call, and a unit that runs out
+		// spends five times the instructions).
 		InlineBudgets budgets;
 		budgets.force_unit = stats.instructions_in > 10240 ? stats.instructions_in : 10240;
 		budgets.growth_unit = 2 * budgets.force_unit;
@@ -962,9 +978,9 @@ void optimize_program(Program& program, const OptimizerOptions& options, Optimiz
 			original.resize(program.symbols.size(), 0);
 			nounwind.resize(program.symbols.size(), 0);
 		}
-		run_inline_wave(program, options, stats, InlineWave::Once, budgets, original, nounwind, simplify);
+		run_inline_wave(program, options, stats, InlineWave::Once, budgets, original, unrolled, nounwind, simplify);
 		prune_unreachable(program, stats);
-		run_inline_wave(program, options, stats, InlineWave::Late, budgets, original, nounwind, simplify);
+		run_inline_wave(program, options, stats, InlineWave::Late, budgets, original, unrolled, nounwind, simplify);
 		if (level >= 2 && elide_private_allocations(program, stats, simplify))
 		{
 			original.resize(program.symbols.size(), 0);

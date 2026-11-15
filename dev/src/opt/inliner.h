@@ -40,11 +40,15 @@ struct InlineBudgets
 
 // Runs one wave. `simplify` cleans one function after inlining (and, in
 // the ordinary wave, every function once in callee-first order);
-// `original_size` holds each definition's input size by symbol and
-// `nounwind` the definitions proved nonthrowing so far.
+// `original_size` holds each definition's input size by symbol,
+// `unrolled_size` the instructions that unrolling its loops added, its
+// inlined callees' included (the ordinary allowance judges a callee without
+// them: the callee is as large as it would be with the loops unrolled in
+// the caller; a caller gains what its inlined callees hold) and `nounwind`
+// the definitions proved nonthrowing so far.
 void run_inline_wave(lowir::Program& program, const OptimizerOptions& options, OptimizerStats& stats, InlineWave wave,
-	InlineBudgets& budgets, const std::vector<uint32_t>& original_size, const std::vector<uint8_t>& nounwind,
-	const std::function<void(lowir::SymbolId)>& simplify);
+	InlineBudgets& budgets, const std::vector<uint32_t>& original_size, std::vector<uint32_t>& unrolled_size,
+	const std::vector<uint8_t>& nounwind, const std::function<void(lowir::SymbolId)>& simplify);
 
 // Materialize a call's by-address scalar arguments before substituting it.
 void materialize_call_arguments(

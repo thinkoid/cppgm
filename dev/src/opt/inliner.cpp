@@ -1659,10 +1659,12 @@ class InlineWaveRunner
 {
 public:
 	InlineWaveRunner(Program& program, const OptimizerOptions& options, OptimizerStats& stats, InlineWave wave,
-		InlineBudgets& budgets, const std::vector<uint32_t>& original_size, const std::vector<uint8_t>& nounwind,
-		const std::function<void(SymbolId)>& simplify, bool source_required = false)
+		InlineBudgets& budgets, const std::vector<uint32_t>& original_size, std::vector<uint32_t>& unrolled_size,
+		const std::vector<uint8_t>& nounwind, const std::function<void(SymbolId)>& simplify,
+		bool source_required = false)
 		: program_(program), options_(options), stats_(stats), wave_(wave), budgets_(budgets),
-		  original_size_(original_size), nounwind_(nounwind), simplify_(simplify), source_required_(source_required)
+		  original_size_(original_size), unrolled_size_(unrolled_size), nounwind_(nounwind), simplify_(simplify),
+		  source_required_(source_required)
 	{}
 
 	void run();
@@ -1691,6 +1693,7 @@ private:
 	InlineWave wave_;
 	InlineBudgets& budgets_;
 	const std::vector<uint32_t>& original_size_;
+	std::vector<uint32_t>& unrolled_size_;
 	const std::vector<uint8_t>& nounwind_;
 	const std::function<void(SymbolId)>& simplify_;
 	bool source_required_;
@@ -1874,7 +1877,12 @@ bool InlineWaveRunner::admit(
 		// call costs about as much.)
 		const bool past_budget = options_.level >= 2 && charge <= kSpentBudgetCharge &&
 			shapes_[caller_].size <= kSpentBudgetCaller;
-		if (unpriced == 0 && charge <= allowance + (loop_site ? removed : 0) && (charge <= budget_ || past_budget))
+		// (The allowance judges the callee without what its unrolled loops
+		// added, as an eighth of the copy at least; the budgets are charged
+		// all that is copied.)
+		const uint32_t added = callee < unrolled_size_.size() ? unrolled_size_[callee] : 0;
+		const uint32_t judged = std::max(charge > added ? charge - added : 0, charge / 8);
+		if (unpriced == 0 && judged <= allowance + (loop_site ? removed : 0) && (charge <= budget_ || past_budget))
 			return true;
 		if (wave_ == InlineWave::Late)
 			return false;
@@ -2396,6 +2404,14 @@ bool InlineWaveRunner::process(SymbolId caller)
 			else if (!partly)
 				--graph_.calls_in[g];
 			caller_loop_ = caller_loop_ || loop;
+			// (The caller now holds the callee's unrolled loops.)
+			if (!partly && copy == kNoId && callee < unrolled_size_.size() && unrolled_size_[callee] != 0)
+			{
+				const SymbolId into = graph_.functions[caller_];
+				if (unrolled_size_.size() <= into)
+					unrolled_size_.resize(program_.symbols.size(), 0);
+				unrolled_size_[into] += unrolled_size_[callee];
+			}
 			++stats_.calls_inlined;
 			stats_.inlined_instructions += size;
 			changed = true;
@@ -2505,10 +2521,10 @@ void InlineWaveRunner::run()
 } // namespace
 
 void run_inline_wave(Program& program, const OptimizerOptions& options, OptimizerStats& stats, InlineWave wave,
-	InlineBudgets& budgets, const std::vector<uint32_t>& original_size, const std::vector<uint8_t>& nounwind,
-	const std::function<void(SymbolId)>& simplify)
+	InlineBudgets& budgets, const std::vector<uint32_t>& original_size, std::vector<uint32_t>& unrolled_size,
+	const std::vector<uint8_t>& nounwind, const std::function<void(SymbolId)>& simplify)
 {
-	InlineWaveRunner runner(program, options, stats, wave, budgets, original_size, nounwind, simplify);
+	InlineWaveRunner runner(program, options, stats, wave, budgets, original_size, unrolled_size, nounwind, simplify);
 	runner.run();
 }
 
@@ -2519,10 +2535,11 @@ void run_source_inline_wave(Program& program, const std::function<void(SymbolId)
 	OptimizerStats stats;
 	InlineBudgets budgets;
 	budgets.force_unit = UINT64_MAX;
-	std::vector<uint32_t> original;
+	std::vector<uint32_t> original, unrolled;
 	std::vector<uint8_t> nounwind(program.symbols.size(), 0);
 
-	InlineWaveRunner runner(program, options, stats, InlineWave::Ordinary, budgets, original, nounwind, simplify, true);
+	InlineWaveRunner runner(
+		program, options, stats, InlineWave::Ordinary, budgets, original, unrolled, nounwind, simplify, true);
 	runner.run();
 }
 
