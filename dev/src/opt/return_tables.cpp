@@ -38,6 +38,7 @@ struct PhiIncoming
 
 struct PhiTable
 {
+	BlockId from; // the switch's block
 	BlockId join;
 	InstId phi;
 	Type selector, result;
@@ -384,6 +385,29 @@ bool ReturnTables::phi_candidate(BlockId block)
 			normalize_integer(selector, b_.literals[b_.operands[term.extra_first + k].index]).low,
 			normalize_integer(result, b_.literals[value.index]).low });
 	}
+	// Case values that go to the join with no arm between give the value the
+	// phi takes from the switch's block. With them in the table that edge is
+	// gone, so the default must not take it either. (A value that would widen
+	// the table's elements keeps its edge.)
+	const Value direct = join == kNoId || term.ops[1].index == join ? Value::none()
+																	: phi_incoming(b_, b_.instructions[phi], block);
+	if (direct.is(ValueKind::Integer))
+	{
+		const uint64_t bits = normalize_integer(result, b_.literals[direct.index]).low;
+		bool byte = true, powers = true;
+		for (const PhiIncoming& in : inputs)
+		{
+			byte = byte && in.bits <= 127;
+			powers = powers && in.bits != 0 && (in.bits & (in.bits - 1)) == 0;
+		}
+		const bool fits = (!byte && !powers) || (byte && bits <= 127) ||
+			(powers && bits != 0 && (bits & (bits - 1)) == 0);
+		for (uint32_t k = 0; k < term.extra_count && fits; k += 2)
+			if (b_.operands[term.extra_first + k + 1].index == join &&
+				b_.operands[term.extra_first + k].is(ValueKind::Integer))
+				inputs.push_back(PhiIncoming{ k, block,
+					normalize_integer(selector, b_.literals[b_.operands[term.extra_first + k].index]).low, bits });
+	}
 	if (inputs.size() < 4)
 		return false;
 	std::sort(inputs.begin(), inputs.end(),
@@ -421,7 +445,7 @@ bool ReturnTables::phi_candidate(BlockId block)
 	for (const PhiIncoming& in : inputs)
 		values[static_cast<size_t>(in.key - first)] = powers ? static_cast<uint64_t>(__builtin_ctzll(in.bits))
 															 : in.bits;
-	const PhiTable facts{ join, phi, selector, result, inputs, values, powers, byte };
+	const PhiTable facts{ block, join, phi, selector, result, inputs, values, powers, byte };
 	rewrite_phi_table(term, facts);
 	++c_.stats.folded;
 	return true;
@@ -499,6 +523,8 @@ void ReturnTables::rewrite_phi_table(const Instruction& term, const PhiTable& fa
 	{
 		b_.operands[term.extra_first + in.position + 1] = Value::block(lookup);
 		remove_phi_incoming(b_, join, in.from);
+		if (in.from == facts.from)
+			continue;
 		Instruction& end = b_.instructions[b_.blocks[in.from].last];
 		end.op = Opcode::Unreachable;
 		end.ops[0] = Value::none();

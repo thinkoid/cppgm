@@ -1,0 +1,94 @@
+global @__switch_results_0 : obj<13x1> [storage=readonly, binding=internal] = {
+  i8 65
+  i8 84
+  i8 67
+  i8 0
+  i8 71
+  i8 0
+  i8 0
+  i8 0
+  i8 65
+  i8 84
+  i8 67
+  i8 0
+  i8 71
+}
+global @__switch_results_1 : obj<5x1> [storage=readonly, binding=internal] = {
+  i8 5
+  i8 3
+  i8 8
+  i8 1
+  i8 5
+}
+
+function @complement(%c : i64, %seed : i64) -> i64 [no_inline=yes] {
+  block ^entry:
+    switch %c, ^otherwise, 2:^switch_case_3, 10:^switch_case_3, 3:^switch_case_3, 11:^switch_case_3, 4:^switch_case_3, 12:^switch_case_3, 6:^switch_case_3, 14:^switch_case_3
+
+  block ^otherwise:
+    %fallback = binary add i64 %seed, 1
+    jump ^merge
+
+  block ^merge:
+    %result = phi i64 [^otherwise: %fallback, ^switch_case_3: %t6]
+    return i64 %result
+
+  block ^switch_case_3:
+    %t3 = binary sub i64 %c, 2
+    %t4 = index i8 @__switch_results_0, %t3
+    %t5 = load i8 %t4
+    %t6 = convert sext i64 i8 %t5
+    jump ^merge
+}
+function @keeps_edge(%c : i64) -> i64 [no_inline=yes] {
+  block ^entry:
+    switch %c, ^merge, 0:^merge, 1:^switch_case_2, 5:^switch_case_2, 2:^switch_case_2, 3:^switch_case_2, 4:^switch_case_2
+
+  block ^merge:
+    %result = phi i64 [^entry: 9, ^switch_case_2: %t5]
+    return i64 %result
+
+  block ^switch_case_2:
+    %t2 = binary sub i64 %c, 1
+    %t3 = index i8 @__switch_results_1, %t2
+    %t4 = load i8 %t3
+    %t5 = convert sext i64 i8 %t4
+    jump ^merge
+}
+function @main() -> i32 [role=entry] {
+  block ^entry:
+    %a = call i64 @complement(2, 40)
+    %b = call i64 @complement(10, 40)
+    %c = call i64 @complement(11, 40)
+    %d = call i64 @complement(4, 40)
+    %e = call i64 @complement(14, 40)
+    %f = call i64 @complement(5, 40)
+    %g = call i64 @complement(15, 40)
+    %h = call i64 @complement(-1, 40)
+    %ab = binary add i64 %a, %b
+    %cd = binary add i64 %c, %d
+    %ef = binary add i64 %e, %f
+    %gh = binary add i64 %g, %h
+    %abcd = binary add i64 %ab, %cd
+    %efgh = binary add i64 %ef, %gh
+    %all = binary add i64 %abcd, %efgh
+    %i = call i64 @keeps_edge(0)
+    %j = call i64 @keeps_edge(1)
+    %k = call i64 @keeps_edge(5)
+    %l = call i64 @keeps_edge(4)
+    %m = call i64 @keeps_edge(6)
+    %ij = binary mul i64 %i, 10
+    %ijj = binary add i64 %j, %ij
+    %kk = binary mul i64 %ijj, 10
+    %kkk = binary add i64 %k, %kk
+    %ll = binary mul i64 %kkk, 10
+    %lll = binary add i64 %l, %ll
+    %mm = binary mul i64 %lll, 10
+    %mmm = binary add i64 %m, %mm
+    %t29 = cmp eq i64 %all, 475
+    %all_bit = select i32 %t29, 0, 1
+    %t31 = cmp eq i64 %mmm, 95519
+    %edge_bit = select i32 %t31, 0, 2
+    %status = binary or i32 %all_bit, %edge_bit
+    return i32 %status
+}

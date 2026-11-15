@@ -1,4 +1,5 @@
-global @__switch_results_0 : obj<4x1> [storage=readonly, binding=internal] = {
+global @__switch_results_0 : obj<5x1> [storage=readonly, binding=internal] = {
+  i8 7
   i8 3
   i8 9
   i8 4
@@ -7,19 +8,19 @@ global @__switch_results_0 : obj<4x1> [storage=readonly, binding=internal] = {
 
 function @lookup(%n : i64, %seed : i64) -> i64 [no_inline=yes] {
   block ^entry:
-    switch %n, ^otherwise, 0:^merge, 1:^switch_case_3, 2:^switch_case_3, 3:^switch_case_3, 4:^switch_case_3
+    %t1 = cmp ult i64 %n, 5
+    branch %t1, ^switch_case_3, ^otherwise
 
   block ^otherwise:
     %fallback = binary add i64 %seed, 1
     jump ^merge
 
   block ^merge:
-    %result = phi i64 [^otherwise: %fallback, ^entry: 7, ^switch_case_3: %t6]
+    %result = phi i64 [^otherwise: %fallback, ^switch_case_3: %t6]
     return i64 %result
 
   block ^switch_case_3:
-    %t3 = binary sub i64 %n, 1
-    %t4 = index i8 @__switch_results_0, %t3
+    %t4 = index i8 @__switch_results_0, %n
     %t5 = load i8 %t4
     %t6 = convert sext i64 i8 %t5
     jump ^merge
