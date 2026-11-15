@@ -97,6 +97,24 @@ TemplateParameterList* SyntaxCloner::lambda_template_parameters(const TemplatePa
 	return result;
 }
 
+Expr* SyntaxCloner::deferred_constraint(const Expr* source)
+{
+	if (source == nullptr || collecting_ != nullptr)
+		return expr(source);
+	// Keep the element selected by an enclosing expansion without expanding
+	// a clause's own packs before satisfaction reaches that operand.
+	class DeferredPacks : public PackExpander
+	{
+	public:
+		int32_t pack_length(const Identifier*) override { return -1; }
+		const Identifier* element_name(const Identifier* name, uint32_t) override { return name; }
+		void mismatch(uint32_t) override {}
+	} packs;
+	SyntaxCloner deferred(arena_, bodies_, &packs);
+	deferred.renames_ = renames_;
+	return deferred.expr(source);
+}
+
 LambdaExpr* SyntaxCloner::lambda(const LambdaExpr* source)
 {
 	LambdaExpr* result = Copy(arena_, source);
@@ -135,8 +153,8 @@ LambdaExpr* SyntaxCloner::lambda(const LambdaExpr* source)
 	if (source->constraints != nullptr)
 	{
 		result->constraints = Copy(arena_, source->constraints);
-		result->constraints->head = expr(source->constraints->head);
-		result->constraints->trailing = expr(source->constraints->trailing);
+		result->constraints->head = deferred_constraint(source->constraints->head);
+		result->constraints->trailing = deferred_constraint(source->constraints->trailing);
 	}
 	size_t initialized = 0;
 	for (const LambdaCapture& capture : source->captures)

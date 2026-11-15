@@ -665,6 +665,15 @@ bool Parser::parse_function_qualifiers(ListFrame<FunctionQualifier>& qualifiers,
 			if (qualifier.trailing == nullptr)
 				return false;
 		}
+		else if (cxx20_ && accept(TokenKind::KW_REQUIRES))
+		{
+			qualifier.kind = FunctionQualifierKind::Requires;
+			qualifier.noexcept_operand = parse_constraint_expression();
+			if (qualifier.noexcept_operand == nullptr)
+				return false;
+			qualifiers.push(qualifier);
+			return true;
+		}
 		else if (at_identifier(final_) || at_identifier(override_))
 		{
 			qualifier.kind = FunctionQualifierKind::Virt;

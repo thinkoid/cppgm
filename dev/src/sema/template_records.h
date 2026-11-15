@@ -93,6 +93,9 @@ struct TypeConstraint
 
 struct ConstraintPredicate : Entity
 {
+	const syntax::Expr* trailing = nullptr;
+	Scope* prototype = nullptr;
+	const Type* this_type = nullptr;
 	TemplateHead* head;
 	Scope* parameters;
 	const syntax::Expr* definition;

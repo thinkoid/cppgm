@@ -220,6 +220,9 @@ void Analyzer::implicit_comparison_equality(FunctionEntity* source, const ClassE
 	function->is_operator = true;
 	function->operator_token = TokenKind::OP_EQ;
 	function->befriending = source->befriending;
+	const uint32_t constraint = function_constraint_index_.find(source);
+	if (constraint != PointerMap::kMissing)
+		function_constraint_index_.set(function, constraint);
 	Binding* binding = new_binding(BindingKind::Function, equal, function, type);
 	binding->label = function->label;
 	binding->invisible = !function->member;

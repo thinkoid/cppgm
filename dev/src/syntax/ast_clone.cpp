@@ -864,7 +864,8 @@ TypeId* SyntaxCloner::type_id(const TypeId* type)
 bool SyntaxCloner::qualifier(const FunctionQualifier& in, FunctionQualifier& out)
 {
 	out = in;
-	out.noexcept_operand = expr(in.noexcept_operand);
+	out.noexcept_operand = in.kind == FunctionQualifierKind::Requires ? deferred_constraint(in.noexcept_operand)
+																	  : expr(in.noexcept_operand);
 	out.throw_types = pointers(in.throw_types, &SyntaxCloner::type_id);
 	out.trailing = type_id(in.trailing);
 	return out.noexcept_operand != nullptr || out.throw_types.data != in.throw_types.data ||
@@ -1724,8 +1725,7 @@ Decl* SyntaxCloner::decl(const Decl* decl)
 			ConstrainedTemplateDecl* constrained = copy(static_cast<const ConstrainedTemplateDecl*>(decl));
 			// A head clause is substituted only when satisfaction reaches its
 			// operands, using the declaration's captured instantiation scope.
-			SyntaxCloner deferred(arena_, bodies_);
-			constrained->constraint = deferred.expr(constrained->constraint);
+			constrained->constraint = deferred_constraint(constrained->constraint);
 			result = constrained;
 		}
 		else

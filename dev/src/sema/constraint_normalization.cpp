@@ -134,18 +134,19 @@ const ConstraintNode* Analyzer::normalized_constraint(const ConstraintPredicate*
 		return predicate->normalized;
 	predicate->normalization_state = FactState::InProgress;
 	TypeList arguments;
-	for (uint32_t i = 0; i < predicate->head->count; ++i)
+	for (uint32_t i = 0; predicate->head != nullptr && i < predicate->head->count; ++i)
 	{
 		const TemplateParameterEntity* parameter = predicate->head->parameters[i];
 		const Type* argument = synthesized_argument(parameter, i);
 		arguments.push_back(parameter->pack ? types_.pack(&argument, 1) : argument);
 	}
-	InstantiationContext context(
-		*this, enter_instantiation(instantiation_depth_ + 1, predicate->location), false, predicate->head->ordinal);
+	InstantiationContext context(*this, enter_instantiation(instantiation_depth_ + 1, predicate->location), false,
+		predicate->head != nullptr ? predicate->head->ordinal : NameLookup::kNoLimit);
 	// These are symbolic mappings, not evaluations of actual arguments.
 	template_depth_ = 1;
-	Scope* frame = instantiation_frame(
-		predicate->parameters, arguments.data(), static_cast<uint32_t>(arguments.size()), predicate->owner);
+	Scope* frame = predicate->head != nullptr ? instantiation_frame(predicate->parameters, arguments.data(),
+													static_cast<uint32_t>(arguments.size()), predicate->owner)
+											  : predicate->owner;
 	const ConstraintNode* result = nullptr;
 	const auto append = [&](const ConstraintNode* next) {
 		if (result == nullptr)
@@ -174,6 +175,14 @@ const ConstraintNode* Analyzer::normalized_constraint(const ConstraintPredicate*
 	}
 	if (predicate->definition != nullptr)
 		append(normalize_constraint(*predicate->definition, frame));
+	if (predicate->trailing != nullptr)
+	{
+		BodyContext body = BodyContext();
+		body.this_type = predicate->this_type;
+		body_ = &body;
+		append(normalize_constraint(*predicate->trailing, constraint_trailing_scope(predicate, arguments)));
+		body_ = nullptr;
+	}
 	predicate->normalized = result;
 	predicate->normalization_state = FactState::Done;
 	return predicate->normalized;
@@ -338,8 +347,11 @@ const ConstraintNode* Analyzer::normalize_constraint(const syntax::Expr& express
 
 bool Analyzer::constraints_subsume(const TemplateHead* first, const TemplateHead* second)
 {
-	const ConstraintPredicate* from = template_constraint(first);
-	const ConstraintPredicate* to = template_constraint(second);
+	return predicates_subsume(template_constraint(first), template_constraint(second));
+}
+
+bool Analyzer::predicates_subsume(const ConstraintPredicate* from, const ConstraintPredicate* to)
+{
 	if (to == nullptr || from == to)
 		return true;
 	if (from == nullptr)

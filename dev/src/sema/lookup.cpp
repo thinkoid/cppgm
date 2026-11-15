@@ -305,7 +305,7 @@ void NameLookup::declare(const Scope* scope, Binding* binding, bool tag_only)
 	}
 	else if (indexed_template)
 		slot = template_overloads_.find(key);
-	if (indexed_template && slot != nullptr && *slot != nullptr && (*slot)->binding->entity != function)
+	if (function->owner == scope && slot != nullptr && *slot != nullptr && (*slot)->binding->entity != function)
 		slot = template_variant(key, *slot, function);
 	// A function only friend declarations declared has a node the overload
 	// index finds but no set holds (argument-dependent lookup finds it

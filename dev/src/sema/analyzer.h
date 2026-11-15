@@ -379,7 +379,7 @@ private:
 	Binding* qualified_friend(
 		const Specifiers& specifiers, const DeclaratorInfo& info, Scope* scope, uint32_t location);
 	FunctionEntity* earlier_function(const DeclaredName& name, Scope* where, const Type* signature, bool templated,
-		bool& invisible, uint32_t location);
+		bool& invisible, const DeclaratorInfo& info);
 	FunctionEntity* c_redeclared_function(FunctionEntity* previous, const Identifier* name, Scope* where,
 		const Type* type, bool definition, uint32_t location);
 	void redeclare_function(FunctionEntity* function, const Specifiers& specifiers, const DeclaratorInfo& info,
@@ -678,6 +678,14 @@ private:
 	syntax::Expr* constraint_operand(const syntax::Expr& expr, Scope* scope);
 	bool constraint_words(const syntax::Expr* expr, Scope* scope);
 	bool constraint_name_words(const syntax::Name& name, Scope* scope);
+	const ConstraintPredicate* function_constraint(const FunctionEntity*) const;
+	void attach_function_constraint(FunctionEntity*, const DeclaratorInfo&);
+	bool function_constraints_equivalent(const FunctionEntity*, const DeclaratorInfo&);
+	bool function_constraints_satisfied(const FunctionEntity*);
+	bool function_constraints_subsume(const FunctionEntity*, const FunctionEntity*);
+	bool predicates_subsume(const ConstraintPredicate*, const ConstraintPredicate*);
+	Scope* constraint_prototype(const DeclaratorInfo&);
+	Scope* constraint_trailing_scope(const ConstraintPredicate*, const TypeList&);
 	bool atomic_constraint_satisfied(const syntax::Expr& expr, Scope* scope);
 	ClassEntity* deduction_template(const syntax::Slice<syntax::DeclSpecifier>& type, Scope* scope);
 	const Type* deduce_class_type(ClassEntity* templ, const syntax::Slice<syntax::Expr*>& arguments, Scope* scope,
@@ -2808,6 +2816,7 @@ private:
 	// Only constrained heads have an entry; neither head nor ordinary
 	// function layouts grow to carry optional constraint metadata.
 	PointerMap template_constraint_index_;
+	PointerMap function_constraint_index_;
 	std::vector<ConstraintPredicate*> template_constraints_;
 	FlatMap<DecltypeKey, const ConstraintNode*, DecltypeHash> constraint_atoms_;
 	FlatMap<SpecializationKey, ConstraintNormalization*, SpecializationHash> constraint_normalizations_;

@@ -2023,9 +2023,8 @@ Binding* Analyzer::declare_function(const Specifiers& specifiers, const Declarat
 	// template's return type does in its (1.3.18).
 	const Type* signature = templated || name.kind == syntax::NameComponentKind::Conversion ? declared_type(info.type)
 																							: signature_of(info.type);
-	FunctionEntity* function = pattern_friend
-		? nullptr
-		: earlier_function(name, where, signature, templated, invisible, location);
+	FunctionEntity* function = pattern_friend ? nullptr
+											  : earlier_function(name, where, signature, templated, invisible, info);
 	function = c_redeclared_function(function, name.key, where, info.type, definition, location);
 	if (c_language_ && !templated && !specifiers.is_static && where->kind == ScopeKind::Namespace)
 	{
@@ -2105,6 +2104,8 @@ Binding* Analyzer::declare_function(const Specifiers& specifiers, const Declarat
 	}
 	else if (templated)
 		merge_template_head(HeadOf(function), *template_list_, template_scope_, location);
+	if (cxx20_)
+		attach_function_constraint(function, info);
 	const bool was_defined = function->defined;
 	function->is_inline = function->is_inline || specifiers.is_inline || specifiers.is_constexpr;
 	function->defined = function->defined || definition || deleted;
@@ -2205,9 +2206,10 @@ Binding* Analyzer::qualified_friend(
 	return same->binding;
 }
 
-FunctionEntity* Analyzer::earlier_function(
-	const DeclaredName& name, Scope* where, const Type* signature, bool templated, bool& invisible, uint32_t location)
+FunctionEntity* Analyzer::earlier_function(const DeclaredName& name, Scope* where, const Type* signature,
+	bool templated, bool& invisible, const DeclaratorInfo& info)
 {
+	const uint32_t location = info.location;
 	// The function (or function template) an earlier declaration in the
 	// scope declared that this one redeclares, else null; a function a
 	// using-declaration introduced is hidden or conflicts.
@@ -2248,7 +2250,8 @@ FunctionEntity* Analyzer::earlier_function(
 					HeadOf(other)->shape != shape)
 					return false;
 				return template_constraints_equivalent(
-					HeadOf(other), current_template_constraint(), template_list_, template_scope_);
+						   HeadOf(other), current_template_constraint(), template_list_, template_scope_) &&
+					function_constraints_equivalent(other, info);
 			};
 			if (same != nullptr && !equivalent(same))
 				same = nullptr;
@@ -2260,6 +2263,19 @@ FunctionEntity* Analyzer::earlier_function(
 			for (const FunctionList* node = entry->functions; same == nullptr && node != nullptr; node = node->next)
 				if (equivalent(node))
 					same = node;
+		}
+		if (cxx20_ && !templated)
+		{
+			if (same != nullptr &&
+				!function_constraints_equivalent(static_cast<const FunctionEntity*>(same->binding->entity), info))
+				same = nullptr;
+			for (const FunctionList* node = entry->functions; same == nullptr && node != nullptr; node = node->next)
+			{
+				const FunctionEntity* other = static_cast<const FunctionEntity*>(node->binding->entity);
+				if (!other->templated && other->owner == where && other->signature == signature &&
+					function_constraints_equivalent(other, info))
+					same = node;
+			}
 		}
 		// The index holds a scope's own templates only: a base's member
 		// template a using-declaration introduced, of the same

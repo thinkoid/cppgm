@@ -137,14 +137,25 @@ bool Analyzer::predicate_satisfied(const ConstraintPredicate* definition, const 
 	concept_evaluations_.insert(key, evaluation);
 	// The cache key's concept owns a fixed lexical definition. Bound
 	// argument frames are overlays, and only fact-bearing syntax is copied.
-	InstantiationContext context(
-		*this, enter_instantiation(instantiation_depth_ + 1, location), false, definition->head->ordinal);
+	InstantiationContext context(*this, enter_instantiation(instantiation_depth_ + 1, location), false,
+		definition->head != nullptr ? definition->head->ordinal : NameLookup::kNoLimit);
 	SoftSubstitution substitution(*this);
-	Scope* frame = instantiation_frame(definition->parameters, key.arguments, key.count, definition->owner);
+	Scope* frame = definition->head != nullptr
+		? instantiation_frame(definition->parameters, key.arguments, key.count, definition->owner)
+		: definition->owner;
 	++unevaluated_;
 	evaluation->satisfied = type_constraints_satisfied(definition, arguments, frame);
 	if (evaluation->satisfied && definition->definition != nullptr)
 		evaluation->satisfied = constraint_satisfied(*definition->definition, frame);
+	if (evaluation->satisfied && definition->trailing != nullptr)
+	{
+		BodyContext body = BodyContext();
+		body.this_type = definition->this_type;
+		body_ = &body;
+		evaluation->satisfied = constraint_satisfied(
+			*definition->trailing, constraint_trailing_scope(definition, arguments));
+		body_ = nullptr;
+	}
 	evaluation->satisfied = evaluation->satisfied && !substitution.failed();
 	--unevaluated_;
 	evaluation->state = FactState::Done;

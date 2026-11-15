@@ -1076,8 +1076,8 @@ int Analyzer::function_template_order(
 		return -1;
 	if (cxx20_)
 	{
-		const bool first_subsumes = constraints_subsume(HeadOf(first), HeadOf(second));
-		const bool second_subsumes = constraints_subsume(HeadOf(second), HeadOf(first));
+		const bool first_subsumes = function_constraints_subsume(first, second);
+		const bool second_subsumes = function_constraints_subsume(second, first);
 		if (first_subsumes != second_subsumes)
 			return first_subsumes ? 1 : -1;
 	}
@@ -1136,6 +1136,14 @@ int Analyzer::compare_candidates(const Candidate& a, const Candidate& b, uint32_
 	// (14.5.6.2, over the parameters the call has arguments for; without
 	// an object argument, an operator's member candidate is ordered with
 	// its object parameter inserted, p3).
+	if (!better && !worse && cxx20_ && !a.from_template && !b.from_template &&
+		a.function->signature == b.function->signature)
+	{
+		const bool forward = function_constraints_subsume(a.function, b.function);
+		const bool backward = function_constraints_subsume(b.function, a.function);
+		if (forward != backward)
+			return forward ? 1 : -1;
+	}
 	if (!better && !worse && a.from_template != b.from_template)
 		return a.from_template ? -1 : 1;
 	if (!better && !worse && a.from_template && a.function->primary != nullptr && b.function->primary != nullptr &&
@@ -1301,6 +1309,8 @@ Resolution Analyzer::resolve(const syntax::Slice<syntax::Expr*>& call_arguments,
 				viable = candidate->default_arguments != nullptr && candidate->default_arguments[i] != nullptr &&
 					default_argument_visible(candidate, i);
 			if (!viable)
+				continue;
+			if (cxx20_ && !candidate->templated && !function_constraints_satisfied(candidate))
 				continue;
 			if (candidate->templated)
 			{

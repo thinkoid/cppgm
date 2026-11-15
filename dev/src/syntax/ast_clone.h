@@ -104,6 +104,7 @@ private:
 	Slice<Handler> handlers(const Slice<Handler>& list);
 	Slice<InitDeclarator> init_declarators(const Slice<InitDeclarator>& list);
 	CtorInitializer* ctor_initializer(const CtorInitializer* list);
+	Expr* deferred_constraint(const Expr* expr);
 	Expr* call_like(const Expr* expr);
 	// A requires-expression: its parameters, then its requirements.
 	Expr* requires_expression(const Expr* expr);
