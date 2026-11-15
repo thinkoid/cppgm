@@ -1496,6 +1496,8 @@ Expr* Parser::parse_lambda()
 		deferred.end = tokens_.position();
 		lambdas_.push_back(deferred);
 		lambda->body = nullptr;
+		// The parameters' scope ends with the lambda here too.
+		scopes_.set_current(saved);
 		return lambda;
 	}
 	scopes_.enter(body_scope);
