@@ -45,7 +45,7 @@ ahead of time. Personal test inputs and harnesses can live in `student.tests/`.
 See [PROJECT_LAYOUT.md](PROJECT_LAYOUT.md) for the assignment map,
 [TESTING_AND_REFERENCES.md](TESTING_AND_REFERENCES.md) for test and reference
 policy, and [AGENTS.md](AGENTS.md) for coding-agent instructions. The
-[offline reference guide](doc/REFERENCES.md) covers the C++11/14/17 drafts. The [offline CWG reference index](doc/cwg/INDEX.txt)
+[offline reference guide](doc/REFERENCES.md) covers the C++11/14/17 drafts; the handouts state the rules of the selected C++20 features. The [offline CWG reference index](doc/cwg/INDEX.txt)
 collects the cited decisions and related papers, including later corrections.
 
 ## Origins and license

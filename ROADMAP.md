@@ -36,6 +36,6 @@ transport.
 ## Required language and assembly profile
 
 The [required language profile](LANGUAGE_PROFILE.md) places the supported
-C++14/17 forms in their core lessons. The shared LowIR assembly transport is
+C++14/17 forms and the selected C++20 features in their core lessons. The shared LowIR assembly transport is
 introduced in PA8; integrated assembly follows PA28 host ABI work and precedes
 hosted compatibility. Normal reports include these required checks.

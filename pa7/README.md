@@ -423,3 +423,7 @@ false; an invalid requirement outside a templated declaration is an error.
 Check in source order and stop once satisfaction is known. Constraint `&&` and
 `||` short-circuit substitution as well as evaluation. Later template and
 constant-evaluation assignments apply these rules to their added source forms.
+
+The dump writes a requires-expression outside a template as
+`literal prvalue bool 1` when it is satisfied and `literal prvalue bool 0`
+when it is not. Its parameters and requirements have no dump lines.

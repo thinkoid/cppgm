@@ -130,7 +130,7 @@ rules.
 
 The [language profile](LANGUAGE_PROFILE.md) is required in the owning lessons.
 Mode-tagged checks run in normal tests and cumulative reports. A fixture's
-`NAME.cxx-standard` selects the same C++11/14/17 mode for implementation and
+`NAME.cxx-standard` selects the same C++11/14/17/20 mode for implementation and
 reference requests; driver cases can use their `.flags` file. No separate
 later-language validation command is needed.
 

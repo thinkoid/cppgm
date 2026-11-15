@@ -119,6 +119,10 @@ these strings to initialize arrays of `char` or `unsigned char`, but not
 by `__cpp_char8_t=202207L`. Cooked literal operators may take `char8_t` or
 `const char8_t*` with the usual size parameter.
 
+The length argument of a cooked string literal operator is a constant of type
+`std::size_t`. Pass it as a literal operand of the call, in every language
+mode; do not emit a conversion from `int`.
+
 PA11 writes a single concatenated LowIR program consisting of:
 
 - zero or more `global` definitions

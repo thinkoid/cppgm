@@ -353,7 +353,8 @@ The following are explicitly out of scope for PA14:
 - explicit specialization
 - full standard two-phase lookup
 - function-template partial ordering
-- substitution-failure candidate dropping and SFINAE
+- substitution-failure candidate dropping and SFINAE, except that an invalid
+  type or expression in a C++20 requirement makes that requirement false
 - full `constexpr` evaluation
 - alias templates and variable templates
 - hosted/vendor-only template traits and intrinsics
@@ -444,6 +445,10 @@ satisfaction and preserve substitution short-circuiting. A compound requirement
 `{ expression } noexcept -> Concept<Args...>;` checks the expression, then its
 non-throwing property, then the concept with `decltype((expression))` prepended
 to its explicit arguments. Its value category and cv-qualifiers are preserved.
+
+A concept's constraint-expression has type `bool`; check this at the
+definition, without a use. A concept-id and a requires-expression lower as the
+`u8` constant `1` or `0`.
 
 ### C++20 implied `typename`
 

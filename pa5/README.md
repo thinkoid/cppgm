@@ -219,8 +219,8 @@ during parsing rather than being preserved as opaque placeholder nodes.
 
 ### Required C++14/17 syntax
 
-The source driver accepts `-std=c++11`, `-std=c++14` and `-std=c++17`;
-the default stays C++11. Parse the forms in the
+The source driver accepts `-std=c++11`, `-std=c++14`, `-std=c++17` and
+`-std=c++20`; the default stays C++11. Parse the forms in the
 [required language profile](../LANGUAGE_PROFILE.md) into structured nodes.
 The C++20 mode recognizes `char8_t` as a simple-type-specifier; its type
 identity and conversions are taught in PA6 and PA7.
@@ -392,6 +392,8 @@ ellipsis ...
 pack-expansion <token>             OP_DOTS:...
 pack-expansion-expression
 sizeof-pack-expression <name>
+deduction-guide                    a `name`, the parameter-clause, then the type-id
+name <name>                        the template of a deduction-guide; the concept of a type-constraint
 ```
 
 Specifiers, declarators and initializers:
@@ -405,6 +407,7 @@ type-name <name>                   a name the parser knows as a type
 identifier <name>                  any other name
 cv-qualifier <token>
 decltype-specifier <text>
+qualified-type-name <name>         the member that a decl-specifier names after `decltype(...)::`
 constrained-placeholder-type <name> auto
 constrained-placeholder-type <name> decltype(auto)
 global-scope
@@ -417,6 +420,7 @@ array-suffix
 parameter-clause
 parameter-declaration
 function-qualifier <text>          `noexcept`, `throw()`, `throw(int,Y*)`
+ref-qualifier <token>              a function declarator's `&` or `&&`
 noexcept-specification
 trailing-return-type [<name>]      the payload repeats a return type that is one type-name
 initializer
@@ -487,7 +491,28 @@ lambda-expression
 lambda-introducer <text>
 lambda-declarator
 lambda-specifier <token>
+fold-expression                    its operands, in source order
 ```
+
+C++20 constraints:
+
+```text
+concept-definition <name>          the child of its template-declaration; one child, the constraint-expression
+requires-clause                    one child, the constraint-expression
+type-constraint                    first child of a constrained type-parameter; one child, a `name`
+requires-expression                a parameter-clause when the source has one, then the requirements
+simple-requirement                 one child, the expression
+type-requirement                   one child, the type-id
+compound-requirement               the expression, then `noexcept` and `return-constraint` when the source has them
+noexcept                           a compound-requirement's `noexcept`
+return-constraint <name>           the type-constraint after `->`
+nested-requirement                 one child, the constraint-expression
+```
+
+A concept's `<name>` has its explicit arguments joined: `Same<int&>`. A
+template-declaration's requires-clause follows its template-parameter-clause.
+A lambda's head requires-clause follows its template-parameter-clause, and its
+trailing requires-clause follows its lambda-declarator.
 
 The mode-tagged [modern syntax example](tests/spec/100-required-modern-syntax.t)
 and its [AST reference](tests/spec/100-required-modern-syntax.ref) show the
@@ -506,6 +531,8 @@ false; an invalid requirement outside a templated declaration is an error.
 Check in source order and stop once satisfaction is known. Constraint `&&` and
 `||` short-circuit substitution as well as evaluation. Later template and
 constant-evaluation assignments apply these rules to their added source forms.
+A requirement that starts with `{` is a compound requirement. PA5 parses and
+dumps the requirements; PA7 and later assignments check them.
 
 ### C++20 named concepts
 

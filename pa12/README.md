@@ -543,6 +543,10 @@ members delete the applicable defaulted comparison. Secondary defaulted
 comparisons require a usable rewritten comparison. These functions
 have ordinary analyzed bodies shared by native and Wasm lowering.
 
+A defaulted comparison of a class `C` is a const member with one `const C&`
+parameter, or a friend with two `const C&` parameters or two `C` parameters.
+Any other signature is an error.
+
 The comparison categories are class values passed and returned by value, and
 rewritten candidates can use conversion functions, so these tests are in
 cluster 400.

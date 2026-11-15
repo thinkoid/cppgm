@@ -269,11 +269,13 @@ The following are explicitly out of scope for PA15:
 - partial specialization
 - pointer, reference, member-pointer, class-type, and other non-integral
   non-type template parameters
-- SFINAE and substitution-failure candidate dropping
+- SFINAE and substitution-failure candidate dropping, except that an
+  unsatisfied C++20 associated constraint removes the candidate
 - full standard-conforming two-phase lookup
 - constexpr function evaluation
 - function-template deduction of non-type arguments
-- full function-template deduction and partial ordering
+- full function-template deduction and partial ordering, except ordering by
+  constraints between templates whose signatures are equivalent
 - alias templates and variable templates
 - hosted/vendor-only template traits and intrinsics
 - template metaprogramming that depends on unsupported PA10-PA14 language features
@@ -355,6 +357,12 @@ checks every element and accepts an empty pack. Check these constraints
 before publishing a specialization or retaining a candidate. Unsatisfied
 immediate substitution rejects the candidate without instantiating its body.
 Preserve the written order and short-circuit substitution.
+
+A redeclaration of a class template repeats equivalent constraints; a
+different requires-clause is an error. An operand of a requires-clause that
+does not have type `bool` is an error at the declaration, without a use. A
+concept has no associated constraints: a constrained template parameter or a
+requires-clause in its template head is an error.
 
 Keep different constrained overloads distinct, even when their function types
 agree. Equivalent
