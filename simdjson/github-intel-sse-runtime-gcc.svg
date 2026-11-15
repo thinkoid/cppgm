@@ -1,9 +1,9 @@
-<svg data-original-label="simdjson sse-runtime-gcc; Intel(R) Xeon(R) 6975P-C; revision d9ff17ff1c4afc36d90ba4a6551b659323cc65ec" data-original-message="0.99×" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="simdjson sse-runtime-gcc; Intel(R) Xeon(R) 6975P-C; revision d9ff17ff1c4afc36d90ba4a6551b659323cc65ec; measured d9ff17ff1c4afc36d90ba4a6551b659323cc65ec; 3 commits behind main: 0.99×">
-  <title>simdjson sse-runtime-gcc; Intel(R) Xeon(R) 6975P-C; revision d9ff17ff1c4afc36d90ba4a6551b659323cc65ec; measured d9ff17ff1c4afc36d90ba4a6551b659323cc65ec; 3 commits behind main: 0.99×</title>
+<svg data-original-label="simdjson sse-runtime-gcc; Intel(R) Xeon(R) 6975P-C; revision 393bcf16e6a1102a419fcfd176ee8b4bcb60b16a" data-original-message="0.99×" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="simdjson sse-runtime-gcc; Intel(R) Xeon(R) 6975P-C; revision 393bcf16e6a1102a419fcfd176ee8b4bcb60b16a; measured 393bcf16e6a1102a419fcfd176ee8b4bcb60b16a; 0 commits behind main: 0.99×">
+  <title>simdjson sse-runtime-gcc; Intel(R) Xeon(R) 6975P-C; revision 393bcf16e6a1102a419fcfd176ee8b4bcb60b16a; measured 393bcf16e6a1102a419fcfd176ee8b4bcb60b16a; 0 commits behind main: 0.99×</title>
   <defs><clipPath id="badge"><rect width="120" height="24" rx="4"/></clipPath></defs>
   <g clip-path="url(#badge)">
     <rect width="64" height="24" fill="#555"/>
-    <rect x="64" width="56" height="24" fill="#265b2a"/>
+    <rect x="64" width="56" height="24" fill="#255b2a"/>
   </g>
   <text x="32" y="16.5" fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="12" font-weight="700" textLength="52" lengthAdjust="spacingAndGlyphs">CI Intel</text>
   <text x="92" y="16.5" fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="12" font-weight="700" letter-spacing="1" textLength="39" lengthAdjust="spacingAndGlyphs">0.99×</text>
