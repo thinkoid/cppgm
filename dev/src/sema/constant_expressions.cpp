@@ -300,7 +300,8 @@ bool ConstantInterpreter::rvalue(const syntax::Expr& expr, ConstValue& out)
 			out = IntegerValue(type, facts->value);
 		return true;
 	}
-	if ((facts->flags & kOperatorCall) != 0 && e->kind != syntax::ExprKind::Call)
+	if ((facts->flags & kOperatorCall) != 0 && e->kind != syntax::ExprKind::Call &&
+		(facts->category != ValueCategory::PRValue || ClassOf(facts->type) == nullptr))
 	{
 		if (facts->category != ValueCategory::PRValue)
 		{
