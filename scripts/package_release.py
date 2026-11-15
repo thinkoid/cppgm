@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package the built tools and the LowIR library of a release for one platform."""
+"""Package the self-compiled tools and LowIR library of a release for one platform."""
 import argparse
 import gzip
 import hashlib
@@ -13,6 +13,8 @@ import tarfile
 TOOLS = ['cppgm', 'pptoken', 'posttoken', 'ppexpr', 'preproc', 'abimangle', 'lowir', 'lowiropt', 'lowir2native']
 PLATFORMS = {'linux-x86_64': 'libcppgm_lowir.so', 'macos-x86_64': 'libcppgm_lowir.dylib'}
 VERSION = re.compile(r'v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta|alpha)[0-9]+)?')
+# The object root of scripts/build_release_tools.sh.
+STAGE = 'obj/release'
 
 README = '''# cppgm {tag} for {platform}
 
@@ -20,7 +22,9 @@ README = '''# cppgm {tag} for {platform}
 - `lib/`, `include/`: the LowIR library and its C headers (`lowir_interface.h`). See `docs/lowir-library.md` in
   the source archive.
 - Source revision: {revision}.
-- Host compiler of this build: {host}.
+- Compiler of the tools and the library: cppgm at this revision. The tools are its second-stage build; the
+  third-stage build has the same bytes.
+- Host toolchain of this build (first stage, linker and standard library): {host}.
 
 Hosted compilation reads the standard headers and libraries of that host compiler at the paths of the build
 machine. Use the same host toolchain, or build from the source archive.
@@ -45,10 +49,28 @@ def headers(source):
     return sorted(found)
 
 
-def members(root, tag, platform, revision, host):
+def self_compiled(root, stage):
+    """Check that cppgm compiled the stage's tools and the library: nothing else is packaged."""
+    for tool in TOOLS:
+        second = stage / 'bin/selfhost' / (tool + '-self')
+        third = stage / 'bin/inception' / (tool + '-inception')
+        missing = [str(path) for path in (second, third) if not path.is_file()]
+        if missing:
+            raise FileNotFoundError('build these before packaging: ' + ', '.join(missing))
+        if second.read_bytes() != third.read_bytes():
+            raise ValueError('%s: the second-stage and third-stage builds differ' % tool)
+    # The library's build records its compiler in the first line of this file.
+    stamp = root / 'dev/.lowir-library-toolchain'
+    compiler = (stamp.read_text().splitlines() or [''])[0] if stamp.is_file() else ''
+    if not compiler or (root / 'dev' / compiler).resolve() != (stage / 'bin/selfhost/cppgm-self').resolve():
+        raise ValueError("the LowIR library is not a build of the stage's cppgm: " + (compiler or 'no build record'))
+
+
+def members(root, stage, tag, platform, revision, host):
     """(archive path, bytes, mode) for each packaged file, in archive order."""
     dev = root / 'dev'
-    files = [('bin/' + tool, dev / tool, 0o755) for tool in TOOLS]
+    self_compiled(root, stage)
+    files = [('bin/' + tool, stage / 'bin/selfhost' / (tool + '-self'), 0o755) for tool in TOOLS]
     files += [('lib/libcppgm_lowir.a', dev / 'libcppgm_lowir.a', 0o644),
               ('lib/' + PLATFORMS[platform], dev / PLATFORMS[platform], 0o755),
               ('include/lowir_interface.h', dev / 'src/lowir_interface.h', 0o644),
@@ -63,13 +85,13 @@ def members(root, tag, platform, revision, host):
     return sorted(result + [('README.md', text.encode(), 0o644)])
 
 
-def package(root, tag, platform, destination, host):
+def package(root, tag, platform, destination, host, stage=STAGE):
     version_tag(tag)
     if platform not in PLATFORMS:
         raise ValueError('expected a platform: ' + ', '.join(sorted(PLATFORMS)))
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
     prefix = 'cppgm-%s-%s' % (tag, platform)
-    content = members(root, tag, platform, revision, host)
+    content = members(root, root / stage, tag, platform, revision, host)
     destination.mkdir(parents=True, exist_ok=True)
     archive = destination / (prefix + '.tar.gz')
     # Names, order, owners and times are fixed: equal inputs give equal bytes.
@@ -80,7 +102,8 @@ def package(root, tag, platform, destination, host):
                     entry = tarfile.TarInfo(prefix + '/' + name)
                     entry.size, entry.mode, entry.mtime = len(data), mode, 0
                     tar.addfile(entry, io.BytesIO(data))
-    record = dict(schema=1, tag=tag, platform=platform, source_sha=revision, host_compiler=host, archive=archive.name,
+    record = dict(schema=2, tag=tag, platform=platform, source_sha=revision, compiler='cppgm ' + revision,
+                  host_compiler=host, archive=archive.name,
                   sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
                   files={name: hashlib.sha256(data).hexdigest() for name, data, _ in content})
     with (destination / (prefix + '-provenance.json')).open('x') as output:
@@ -93,6 +116,7 @@ if __name__ == '__main__':
     parser.add_argument('--tag', required=True)
     parser.add_argument('--platform', required=True, choices=sorted(PLATFORMS))
     parser.add_argument('--host', required=True, help="the host compiler's version line")
+    parser.add_argument('--stage', default=STAGE, help='the object root of scripts/build_release_tools.sh')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    print(package(Path(__file__).resolve().parents[1], args.tag, args.platform, args.output, args.host))
+    print(package(Path(__file__).resolve().parents[1], args.tag, args.platform, args.output, args.host, args.stage))

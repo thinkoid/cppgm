@@ -9,8 +9,11 @@ on:
     paths:
       - '.github/workflows/release.yml'
       - '.github/workflows/export-wasm-references.yml'
+      - 'scripts/build_release_tools.sh'
       - 'scripts/package_release.py'
       - 'scripts/check_release_package.py'
+      - 'dev/lowir_library.mk'
+      - 'pa35/Makefile'
       - 'scripts/export_release_source.py'
       - 'scripts/select_macos_llvm.sh'
 
@@ -46,10 +49,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends binutils build-essential git gzip perl tar
-      - name: Build the tools and the LowIR library
-        run: |
-          make -C dev -j4 all CXX=g++ CPPGM_HOST_CXX=g++
-          make -C dev -j4 lowir-library CXX=g++ CPPGM_HOST_CXX=g++
+      - name: Build the tools and the LowIR library with cppgm
+        run: bash scripts/build_release_tools.sh g++
       - name: Package and check the release files
         run: |
           set -euo pipefail
@@ -82,10 +83,8 @@ jobs:
         run: bash scripts/install_macos_llvm.sh 21
       - name: Select Homebrew LLVM
         run: bash scripts/select_macos_llvm.sh 21
-      - name: Build the tools and the LowIR library
-        run: |
-          make -C dev -j4 all CXX="$CXX" CPPGM_HOST_CXX="$CPPGM_HOST_CXX"
-          make -C dev -j4 lowir-library CXX="$CXX" CPPGM_HOST_CXX="$CPPGM_HOST_CXX"
+      - name: Build the tools and the LowIR library with cppgm
+        run: bash scripts/build_release_tools.sh "$CPPGM_HOST_CXX"
       - name: Package and check the release files
         run: |
           set -euo pipefail
@@ -135,7 +134,7 @@ jobs:
           cat > release-notes.md <<'NOTES'
           Packages of the `cppgm` compiler, its eight stage tools and the LowIR library for Linux x86-64 and Intel macOS, the same nine tools as WASI modules, and the source archive.
 
-          The native packages hold `bin/`, `lib/libcppgm_lowir` (static and shared) and `include/`. Hosted compilation uses the host compiler and standard library that the package's README names; build from the source archive for another host.
+          The native packages hold `bin/`, `lib/libcppgm_lowir` (static and shared) and `include/`. cppgm compiled these tools and the library: they are its second-stage build, and the third-stage build has the same bytes. Hosted compilation uses the host compiler and standard library that the package's README names; build from the source archive for another host.
 
           The WASI package holds all nine tools and a frozen header and SDK filesystem. The modules run in a WASI host or with the browser adapter; they are not standalone web pages.
 

@@ -74,8 +74,11 @@ def check(archive, host_cxx, cc, work):
         raise ValueError('the program built by the packaged compiler printed other text')
     (work / 'client.c').write_text(CLIENT)
     run([cc, '-std=c11', '-I', root / 'include', '-c', work / 'client.c', '-o', work / 'client.o'])
-    run([host_cxx, work / 'client.o', root / 'lib/libcppgm_lowir.a', '-pthread', '-o', work / 'client'])
-    run([work / 'client'])
+    # The shared library is found by its own name on the client's run path.
+    for name, library in (('static', [root / 'lib/libcppgm_lowir.a']),
+                          ('shared', ['-L', root / 'lib', '-lcppgm_lowir', '-Wl,-rpath,%s' % (root / 'lib')])):
+        run([host_cxx, work / 'client.o', *library, '-pthread', '-o', work / name])
+        run([work / name], cwd=work)
     return version.splitlines()[0] if version else ''
 
 

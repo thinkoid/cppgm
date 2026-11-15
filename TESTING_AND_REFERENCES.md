@@ -308,16 +308,26 @@ provenance records and SHA256SUMS:
 
 | File | Contents |
 | --- | --- |
-| `cppgm-<tag>-linux-x86_64.tar.gz` | The nine tools, `libcppgm_lowir` (static and shared) and its headers, built with GCC on Ubuntu 24.04 |
-| `cppgm-<tag>-macos-x86_64.tar.gz` | The same files, built with Homebrew LLVM 21 on Intel macOS |
+| `cppgm-<tag>-linux-x86_64.tar.gz` | The nine tools, `libcppgm_lowir` (static and shared) and its headers, compiled by `cppgm`; the host toolchain is GCC on Ubuntu 24.04 |
+| `cppgm-<tag>-macos-x86_64.tar.gz` | The same files; the host toolchain is Homebrew LLVM 21 on Intel macOS |
 | `cppgm-<tag>-wasm32-wasip1.tar.gz` | The nine tools as WASI modules, with the frozen header and SDK filesystem |
 | `cppgm-<tag>-source.tar.gz` | The tagged source |
 
-`scripts/package_release.py` makes a native package from a built `dev/`
-directory; equal inputs give equal bytes. `scripts/check_release_package.py`
-checks its contents, compiles and runs a program with the packaged compiler,
-and links a C client with the packaged library. A native package reads the
-standard headers of its build host's compiler; its README names that compiler.
+`cppgm` compiles the tools and the library of a native package.
+`scripts/build_release_tools.sh` builds them in three stages under
+`obj/release`: the host compiler builds the nine tools, that `cppgm` builds
+them again (stage two), and stage two's `cppgm` builds them a third time. The
+stage-two and stage-three files must be equal. Stage two's `cppgm` also
+compiles the LowIR library. The host compiler links each stage and supplies
+the standard library.
+
+`scripts/package_release.py` packages the stage-two tools and that library.
+It rejects a tool without an equal stage-three build and a library that
+another compiler built; equal inputs give equal bytes.
+`scripts/check_release_package.py` checks the contents of a package, compiles
+and runs a program with the packaged compiler, and links and runs a C client
+with the static and the shared library. A native package reads the standard
+headers of its build host's compiler; its README names that compiler.
 
 The workflow creates a draft only after all build jobs pass, uploads the
 complete asset set, then publishes it. An existing release is never
@@ -333,7 +343,7 @@ commit must be checked out. For a local export and package:
 
 ```sh
 python3 scripts/export_release_source.py --tag v0.9.0 --output /tmp/cppgm-v0.9.0-release
-make -C dev all lowir-library
+bash scripts/build_release_tools.sh g++
 python3 scripts/package_release.py --tag v0.9.0 --platform linux-x86_64 \
   --host "$(g++ --version | sed -n 1p)" --output /tmp/cppgm-v0.9.0-release
 python3 scripts/check_release_package.py /tmp/cppgm-v0.9.0-release/cppgm-v0.9.0-linux-x86_64.tar.gz

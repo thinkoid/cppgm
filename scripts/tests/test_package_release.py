@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A release package holds the built tools, the LowIR library and its headers, with fixed bytes."""
+"""A release package holds the self-compiled tools, the LowIR library and its headers, with fixed bytes."""
 import json
 from pathlib import Path
 import subprocess
@@ -16,12 +16,16 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def tree(root):
-    """A committed source tree with stand-ins for the built files."""
+    """A committed source tree with stand-ins for the files of scripts/build_release_tools.sh."""
     (root / 'dev/src').mkdir(parents=True)
-    for tool in release.TOOLS:
-        (root / 'dev' / tool).write_text('tool ' + tool)
+    stage = root / release.STAGE
+    for directory, suffix in (('selfhost', '-self'), ('inception', '-inception')):
+        (stage / 'bin' / directory).mkdir(parents=True)
+        for tool in release.TOOLS:
+            (stage / 'bin' / directory / (tool + suffix)).write_text('tool ' + tool)
     for name in ['libcppgm_lowir.a', 'libcppgm_lowir.so', 'libcppgm_lowir.dylib']:
         (root / 'dev' / name).write_text('library ' + name)
+    (root / 'dev/.lowir-library-toolchain').write_text('%s\ng++\n' % (stage / 'bin/selfhost/cppgm-self'))
     (root / 'dev/src/lowir_interface.h').write_text('#include "lowir_records.h"\n#include <stdint.h>\n')
     (root / 'dev/src/lowir_records.h').write_text('#include "lowir_model.h"\n')
     (root / 'dev/src/lowir_model.h').write_text('// model\n')
@@ -51,9 +55,12 @@ class PackageRelease(unittest.TestCase):
             self.assertEqual(names['lib/libcppgm_lowir.a'].mode, 0o644)
             self.assertEqual({member.mtime for member in names.values()}, {0})
             self.assertIn('g++ 13', text)
+            self.assertIn('Compiler of the tools and the library: cppgm at this revision', text)
             record = json.loads((root / 'a/cppgm-v0.9.0-linux-x86_64-provenance.json').read_text())
             self.assertEqual(record['source_sha'],
                              subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip())
+            self.assertEqual(record['compiler'], 'cppgm ' + record['source_sha'])
+            self.assertEqual(record['host_compiler'], 'g++ 13')
             self.assertEqual(sorted(record['files']), sorted(names))
             with self.assertRaises(FileExistsError):
                 release.package(root, 'v0.9.0', 'linux-x86_64', root / 'a', 'g++ 13')
@@ -65,8 +72,8 @@ class PackageRelease(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             tree(root)
-            (root / 'dev/lowiropt').unlink()
-            with self.assertRaisesRegex(FileNotFoundError, 'lowiropt'):
+            (root / release.STAGE / 'bin/selfhost/lowiropt-self').unlink()
+            with self.assertRaisesRegex(FileNotFoundError, 'lowiropt-self'):
                 release.package(root, 'v0.9.0', 'linux-x86_64', root / 'a', 'g++ 13')
             for tag in ['v9', 'v8.1', 'assignments-v9', 'main', '../v0.9.0', 'v0.9.0;command']:
                 with self.assertRaises(ValueError):
@@ -74,12 +81,42 @@ class PackageRelease(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'platform'):
                 release.package(root, 'v0.9.0', 'windows-x86_64', root / 'b', 'g++ 13')
 
+    def test_only_a_self_compiled_build_is_packaged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tree(root)
+            stage = root / release.STAGE
+            # A host compiler's build in dev/ is not a package input.
+            for tool in release.TOOLS:
+                (root / 'dev' / tool).write_text('host build of ' + tool)
+            with tarfile.open(release.package(root, 'v0.9.0', 'linux-x86_64', root / 'a', 'g++ 13')) as archive:
+                self.assertEqual(archive.extractfile('cppgm-v0.9.0-linux-x86_64/bin/preproc').read(), b'tool preproc')
+            (stage / 'bin/inception/preproc-inception').write_text('another build')
+            with self.assertRaisesRegex(ValueError, 'preproc: the second-stage and third-stage builds differ'):
+                release.package(root, 'v0.9.0', 'linux-x86_64', root / 'b', 'g++ 13')
+            (stage / 'bin/inception/preproc-inception').write_text('tool preproc')
+            (stage / 'bin/inception/abimangle-inception').unlink()
+            with self.assertRaisesRegex(FileNotFoundError, 'abimangle-inception'):
+                release.package(root, 'v0.9.0', 'linux-x86_64', root / 'b', 'g++ 13')
+            (stage / 'bin/inception/abimangle-inception').write_text('tool abimangle')
+            for text in ('g++\ng++\n', '../cppgm\ng++\n', ''):
+                (root / 'dev/.lowir-library-toolchain').write_text(text)
+                with self.assertRaisesRegex(ValueError, "not a build of the stage's cppgm"):
+                    release.package(root, 'v0.9.0', 'linux-x86_64', root / 'b', 'g++ 13')
+            (root / 'dev/.lowir-library-toolchain').unlink()
+            with self.assertRaisesRegex(ValueError, 'no build record'):
+                release.package(root, 'v0.9.0', 'linux-x86_64', root / 'b', 'g++ 13')
+            # The record may name the compiler from the dev directory.
+            (root / 'dev/.lowir-library-toolchain').write_text('../obj/release/bin/selfhost/cppgm-self\ng++\n')
+            release.package(root, 'v0.9.0', 'linux-x86_64', root / 'b', 'g++ 13')
+
     def test_workflow_releases_semantic_versions_for_three_targets(self):
         workflow = (ROOT / '.github/workflows/release.yml').read_text()
         self.assertIn("tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']", workflow)
         self.assertNotIn("'v[0-9]*'", workflow)
         for part in ('--platform linux-x86_64', '--platform macos-x86_64', 'export-wasm-references.yml',
                      'scripts/export_release_source.py', 'scripts/check_release_package.py', 'macos-26-intel',
+                     'bash scripts/build_release_tools.sh g++', 'bash scripts/build_release_tools.sh "$CPPGM_HOST_CXX"',
                      'gh release create'):
             self.assertIn(part, workflow)
         # Only a tag push publishes; a pull request builds and checks the same packages.
