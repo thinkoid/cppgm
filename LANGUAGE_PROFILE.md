@@ -31,6 +31,7 @@ return-deduction extensions remain available in the course's C++11 mode.
 | Selection initializer statements | C++17 | PA10 |
 | `if constexpr` | C++17 | PA19, after substitution and constant evaluation |
 | `decltype(auto)`, generic lambdas, initialized captures | C++14+ | PA20; failure cleanup PA21 |
+| Explicit lambda template heads, mixed invented parameters, head/trailing constraints, lambdas in unevaluated operands | C++20 | PA5 syntax; PA20 closure/template/constexpr ownership; PA21 failure cleanup |
 | `[*this]`, constexpr closures, structured bindings, fixed-enum direct lists | C++17 | PA20; failure cleanup PA21 |
 | `noexcept` function-type identity/conversion | C++17 | PA6/PA7; ABI PA9; deduction PA18; host checks PA32 |
 | General GNU source assembly and shared LowIR assembly | GNU extension | PA8 transport; PA29 binding, integrated encoding and object behavior |

@@ -1395,16 +1395,25 @@ Expr* Parser::parse_lambda()
 	Scope* body_scope = saved;
 	const bool saved_template = pending_template_;
 	pending_template_ = false;
-	if (hosted_ && at(TokenKind::OP_LT))
+	if ((hosted_ || cxx20_) && at(TokenKind::OP_LT))
 	{
 		// `[captures] < template-parameter-list >` (C++20's templated
 		// lambda): its parameters' names are seen by the rest.
 		body_scope = scopes_.push(ScopeKind::Template, nullptr);
 		lambda->template_parameters = parse_template_parameter_clause();
-		if (lambda->template_parameters == nullptr)
+		if (lambda->template_parameters == nullptr || lambda->template_parameters->parameters.empty())
 		{
+			fail();
 			scopes_.set_current(saved);
 			return nullptr;
+		}
+		lambda->explicit_template_parameter_count = lambda->template_parameters->parameters.size;
+		if (accept(TokenKind::KW_REQUIRES))
+		{
+			lambda->constraints = make<LambdaConstraints>();
+			lambda->constraints->head = parse_constraint_expression();
+			if (lambda->constraints->head == nullptr)
+				return nullptr;
 		}
 	}
 	lambda->clause_token = static_cast<uint32_t>(tokens_.unit_position());
@@ -1415,23 +1424,30 @@ Expr* Parser::parse_lambda()
 		if (lambda->parameters == nullptr)
 			return nullptr;
 		body_scope = parameter_scope_;
+		scopes_.set_current(body_scope);
 		invent_lambda_parameters(*lambda);
 		// GNU attributes may come before the specifiers.
 		if (!collect_attributes(lambda->attributes))
 			return nullptr;
 		while (at(TokenKind::KW_MUTABLE) || at(TokenKind::KW_CONSTEXPR) || at(TokenKind::KW_CONSTEVAL))
 		{
+			const bool mutable_specifier = at(TokenKind::KW_MUTABLE);
 			const bool immediate = at(TokenKind::KW_CONSTEVAL);
-			bool& specifier = at(TokenKind::KW_MUTABLE) ? lambda->is_mutable
-				: immediate                             ? lambda->is_consteval
-														: lambda->is_constexpr;
+			const bool specifier = mutable_specifier ? lambda->is_mutable
+				: immediate                          ? lambda->is_consteval
+													 : lambda->is_constexpr;
 			if (specifier || (immediate && lambda->is_constexpr) ||
 				(at(TokenKind::KW_CONSTEXPR) && lambda->is_consteval))
 			{
 				fail();
 				return nullptr;
 			}
-			specifier = true;
+			if (mutable_specifier)
+				lambda->is_mutable = true;
+			else if (immediate)
+				lambda->is_consteval = true;
+			else
+				lambda->is_constexpr = true;
 			next();
 		}
 		if (accept(TokenKind::KW_NOEXCEPT))
@@ -1460,6 +1476,19 @@ Expr* Parser::parse_lambda()
 			if (lambda->trailing == nullptr)
 				return nullptr;
 		}
+	}
+	if (accept(TokenKind::KW_REQUIRES))
+	{
+		if (!lambda->has_declarator || lambda->template_parameters == nullptr)
+		{
+			fail();
+			return nullptr;
+		}
+		if (lambda->constraints == nullptr)
+			lambda->constraints = make<LambdaConstraints>();
+		lambda->constraints->trailing = parse_constraint_expression();
+		if (lambda->constraints->trailing == nullptr)
+			return nullptr;
 	}
 	pending_template_ = saved_template;
 	// Captured names are values in the body, including initialized captures

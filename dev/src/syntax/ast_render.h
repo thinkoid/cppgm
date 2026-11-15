@@ -52,7 +52,7 @@ private:
 	void function_body(const FunctionBody& body);
 	void handlers(const Slice<Handler>& handlers);
 	void condition(const Condition& condition);
-	void template_parameters(const TemplateParameterList& list);
+	void template_parameters(const TemplateParameterList& list, bool lambda = false);
 
 	std::string& out_;
 	// Chain nodes whose left operand is being rendered (see expression).

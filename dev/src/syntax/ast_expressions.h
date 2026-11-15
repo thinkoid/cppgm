@@ -267,18 +267,26 @@ struct LambdaCapture
 	Initializer* initializer;
 };
 
+struct LambdaConstraints
+{
+	Expr* head = nullptr;
+	Expr* trailing = nullptr;
+};
+
 struct LambdaExpr : Expr
 {
 	// OP_AMP or OP_ASS when has_default.
 	TokenKind capture_default;
-	bool has_default;
-	bool has_declarator;
-	bool is_mutable;
-	bool is_constexpr;
-	bool is_consteval;
-	bool has_noexcept;
+	bool has_default : 1;
+	bool has_declarator : 1;
+	bool is_mutable : 1;
+	bool is_constexpr : 1;
+	bool is_consteval : 1;
+	bool has_noexcept : 1;
 	// A dynamic-exception-specification, its type-ids in throw_types.
-	bool has_throw;
+	bool has_throw : 1;
+	// Packed flags leave the explicit source count in the existing flag block.
+	uint32_t explicit_template_parameter_count = 0;
 	Slice<LambdaCapture> captures;
 	ParameterClause* parameters;
 	Expr* noexcept_operand;
@@ -293,9 +301,10 @@ struct LambdaExpr : Expr
 	// (ProgramLowering::append_closure_label).
 	uint32_t clause_token = 0;
 	uint32_t body_token = 0;
-	// C++20's template-parameter-list after the lambda-introducer (hosted
-	// compilations): the call operator is a member function template.
+	// The explicit and invented template parameters of the call operator.
 	TemplateParameterList* template_parameters = nullptr;
+	// Only constrained lambda declarators allocate this payload.
+	LambdaConstraints* constraints = nullptr;
 	// Generic lambda parameters keep their written auto specifiers above;
 	// this signature replaces each auto with its invented template type.
 	ParameterClause* generic_parameters = nullptr;

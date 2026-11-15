@@ -807,6 +807,17 @@ void SyntaxRenderer::operand(const Expr& expr)
 void SyntaxRenderer::lambda(const LambdaExpr& lambda)
 {
 	lambda_introducer(lambda);
+	if (lambda.explicit_template_parameter_count != 0)
+	{
+		TemplateParameterList source = *lambda.template_parameters;
+		source.parameters.size = lambda.explicit_template_parameter_count;
+		template_parameters(source, true);
+	}
+	if (lambda.constraints != nullptr && lambda.constraints->head != nullptr)
+	{
+		text(" requires ");
+		expression(*lambda.constraints->head);
+	}
 	if (lambda.has_declarator)
 	{
 		parameters(*lambda.parameters);
@@ -842,6 +853,11 @@ void SyntaxRenderer::lambda(const LambdaExpr& lambda)
 			text("->");
 			type_id(*lambda.trailing);
 		}
+	}
+	if (lambda.constraints != nullptr && lambda.constraints->trailing != nullptr)
+	{
+		text(" requires ");
+		expression(*lambda.constraints->trailing);
 	}
 	statement(*lambda.body);
 }
@@ -1083,9 +1099,9 @@ void SyntaxRenderer::function_body(const FunctionBody& body)
 		handlers(body.try_block->handlers);
 }
 
-void SyntaxRenderer::template_parameters(const TemplateParameterList& list)
+void SyntaxRenderer::template_parameters(const TemplateParameterList& list, bool lambda)
 {
-	text("template<");
+	text(lambda ? "<" : "template<");
 	for (uint32_t i = 0; i < list.parameters.size; ++i)
 	{
 		const TemplateParameter& parameter = *list.parameters[i];

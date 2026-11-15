@@ -122,6 +122,9 @@ private:
 	Slice<const std::pair<const Identifier*, uint32_t>> copied_parameter_packs(size_t first);
 	Slice<BaseSpecifier> bases(const Slice<BaseSpecifier>& list);
 	UsingDecl* using_declaration(const UsingDecl* declaration);
+	LambdaExpr* lambda(const LambdaExpr* lambda);
+	TemplateParameterList* lambda_template_parameters(const TemplateParameterList* list);
+	size_t shadow_lambda_parameters(const TemplateParameterList* list);
 	Slice<LambdaCapture> captures(const Slice<LambdaCapture>& list);
 	Slice<MemInitializer> mem_initializers(const Slice<MemInitializer>& list);
 	void shadow(const Declarator* declarator, int32_t length);

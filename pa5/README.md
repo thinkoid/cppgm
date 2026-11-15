@@ -543,3 +543,10 @@ Retain a type-constraint before `auto` or `decltype(auto)` as one placeholder
 specifier. Keep its concept name and explicit arguments, and distinguish the
 two deduction rules. Generic and abbreviated parameters later use these parsed
 facts to introduce constrained template parameters without parsing them again.
+
+### C++20 explicit lambda template heads
+
+Retain the lambda's explicit template parameter list and its head and trailing
+requires-clauses separately. A generic lambda's written `auto` parameters
+remain source syntax; append their invented template parameters after the
+explicit list for semantic analysis. AST dumps show the explicit source head.

@@ -43,7 +43,8 @@ enum AbiNodeKind : std::uint8_t
 									//   a = an inheriting constructor's base class type (CI1/CI2)
 	ABI_NODE_CONVERSION_NAME,       // a = target type
 	ABI_NODE_LITERAL_OPERATOR_NAME, // a = suffix STRING
-	ABI_NODE_CLOSURE_NAME,          // a = closure number + 1 (0 omitted), list = lambda-sig types, VARIADIC: z
+	ABI_NODE_CLOSURE_NAME,          // a = closure number + 1 (0 omitted), c = explicit head count,
+									// list = template declarations then lambda-sig types, VARIADIC: z
 	ABI_NODE_UNNAMED_TYPE_NAME,     // a = number + 1 (0 omitted)
 	ABI_NODE_DECOMPOSITION_NAME,    // list = a structured binding declaration's names (source-name
 									//   STRINGs; DC <source-name>+ E, 5.1.4)
@@ -218,8 +219,10 @@ public:
 	AbiNode conversion_name(AbiNode type);
 	AbiNode literal_operator_name(AbiNode suffix);
 	// `number` is the Itanium closure number plus one, 0 when omitted;
-	// a variadic lambda's lambda-sig ends with its ellipsis (z).
-	AbiNode closure_name(const AbiNode* signature, std::size_t count, std::uint32_t number, bool variadic = false);
+	// The list starts with explicit_parameters template declarations, then
+	// parameter types; a variadic lambda ends with its ellipsis (z).
+	AbiNode closure_name(const AbiNode* signature, std::size_t count, std::uint32_t number, bool variadic = false,
+		std::uint32_t explicit_parameters = 0);
 	AbiNode unnamed_type_name(std::uint32_t number);
 	AbiNode decomposition_name(const AbiNode* names, std::size_t count);
 	AbiNode template_id(AbiNode templ, const AbiNode* args, std::size_t count);

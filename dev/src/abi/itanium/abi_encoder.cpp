@@ -566,13 +566,16 @@ void AbiEncoder::encode_unqualified(AbiNode name)
 		break;
 	case ABI_NODE_CLOSURE_NAME:
 		put("Ul");
-		for (std::uint32_t i = 0; i < unqualified.list_size; ++i)
+		for (std::uint32_t i = 0; i < unqualified.c; ++i)
+			encode_template_param_decl(graph_.list(data.b)[i]);
+		for (std::uint32_t i = unqualified.c; i < unqualified.list_size; ++i)
 			encode_type(graph_.list(data.b)[i]);
-		// <lambda-sig> ::= <parameter type>+, the ellipsis's z among them
+		// Explicit template declarations precede the parameter types;
+		// a variadic signature includes its ellipsis's z among them
 		// (5.1.8; `[](...)` is Ulz E, as GCC and Clang name it).
 		if ((unqualified.flags & ABI_FLAG_VARIADIC) != 0)
 			put('z');
-		else if (unqualified.list_size == 0)
+		else if (unqualified.list_size == unqualified.c)
 			put('v');
 		put('E');
 		if (unqualified.a != 0)

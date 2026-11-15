@@ -969,6 +969,18 @@ void AstDumper::lambda(const LambdaExpr& lambda)
 	std::string introducer;
 	SyntaxRenderer(introducer).lambda_introducer(lambda);
 	line("lambda-introducer", introducer);
+	if (lambda.explicit_template_parameter_count != 0)
+	{
+		TemplateParameterList source = *lambda.template_parameters;
+		source.parameters.size = lambda.explicit_template_parameter_count;
+		template_parameter_clause(&source);
+	}
+	if (lambda.constraints != nullptr && lambda.constraints->head != nullptr)
+	{
+		open("requires-clause");
+		expression(*lambda.constraints->head);
+		close();
+	}
 	if (lambda.has_declarator)
 	{
 		open("lambda-declarator");
@@ -1002,6 +1014,12 @@ void AstDumper::lambda(const LambdaExpr& lambda)
 			type_id(*lambda.trailing);
 			close();
 		}
+		close();
+	}
+	if (lambda.constraints != nullptr && lambda.constraints->trailing != nullptr)
+	{
+		open("requires-clause");
+		expression(*lambda.constraints->trailing);
 		close();
 	}
 	statement(*lambda.body);

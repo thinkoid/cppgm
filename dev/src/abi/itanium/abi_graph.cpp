@@ -580,11 +580,13 @@ AbiNode AbiGraph::literal_operator_name(AbiNode suffix)
 	return unary(ABI_NODE_LITERAL_OPERATOR_NAME, suffix);
 }
 
-AbiNode AbiGraph::closure_name(const AbiNode* signature, std::size_t count, std::uint32_t number, bool variadic)
+AbiNode AbiGraph::closure_name(
+	const AbiNode* signature, std::size_t count, std::uint32_t number, bool variadic, std::uint32_t explicit_parameters)
 {
 	AbiNodeData data = make_data(ABI_NODE_CLOSURE_NAME);
 	data.a = number;
 	data.flags = variadic ? ABI_FLAG_VARIADIC : 0;
+	data.c = explicit_parameters;
 	return intern(data, signature, count);
 }
 

@@ -630,7 +630,10 @@ braced-init-list:
 	OP_LBRACE initializer-clause-list? OP_COMMA? OP_RBRACE
 
 lambda-expression:
-	lambda-introducer lambda-declarator? compound-statement
+	lambda-introducer lambda-template-head? lambda-declarator? requires-clause? compound-statement
+
+lambda-template-head:
+	template-parameter-clause requires-clause?
 
 lambda-declarator:
 	parameter-clause KW_MUTABLE? (KW_CONSTEXPR | KW_CONSTEVAL)? noexcept-specification? trailing-return-type?

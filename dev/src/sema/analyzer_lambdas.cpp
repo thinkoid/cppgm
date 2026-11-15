@@ -54,11 +54,11 @@ ExprFacts* Analyzer::lambda_expression(const syntax::LambdaExpr& expr, Scope* sc
 {
 	if (expr.is_constexpr && !cxx17_)
 		error(expr.location, "a constexpr lambda requires C++17");
-	// p2: no lambda-expression appears in an unevaluated operand (sizeof's,
-	// decltype's, noexcept's; an auto variable's initializer is none, see
-	// deduced_type).
-	if (unevaluated_ != 0)
-		error(expr.location, "a lambda-expression in an unevaluated operand");
+	// Until C++20, a lambda-expression cannot appear in an unevaluated
+	// operand. C++20 still checks the body, but does not emit the closure
+	// or capture storage for that use.
+	if (unevaluated_ != 0 && !cxx20_)
+		error(expr.location, "a lambda-expression in an unevaluated operand requires C++20");
 	if (template_depth_ != 0)
 		error(expr.location, "a lambda in a template definition is analyzed in its instantiations");
 	// One closure type per lambda-expression (p3): an expression typed
@@ -179,7 +179,7 @@ ExprFacts* Analyzer::lambda_expression(const syntax::LambdaExpr& expr, Scope* sc
 ExprFacts* Analyzer::templated_lambda(
 	ClassEntity* closure, ClosureFacts* facts, const syntax::LambdaExpr& expr, Scope* scope)
 {
-	// C++20's templated lambda (hosted compilations): the closure as a
+	// A generic or explicitly templated lambda: the closure as a
 	// lambda's (p3, p19), its call operator a member function template
 	// (templated_closure_call) whose specializations' bodies are analyzed
 	// where calls instantiate them, with the captures fixed here.
@@ -235,13 +235,13 @@ FunctionEntity* Analyzer::templated_closure_call(
 	// closure's members are laid out.
 	struct Built
 	{
-		syntax::TemplateDecl templ;
+		syntax::ConstrainedTemplateDecl templ;
 		syntax::FunctionDecl function;
 		syntax::Declarator declarator;
 		syntax::Name name;
 		syntax::NameComponent component;
 		syntax::DeclaratorSuffix suffix;
-		syntax::FunctionQualifier qualifiers[4];
+		syntax::FunctionQualifier qualifiers[5];
 		syntax::DeclSpecifier specifiers[2];
 		syntax::ParameterClause none;
 		syntax::Decl* list[1];
@@ -278,6 +278,11 @@ FunctionEntity* Analyzer::templated_closure_call(
 		qualifiers[count].kind = syntax::FunctionQualifierKind::TrailingReturn;
 		qualifiers[count++].trailing = expr.trailing;
 	}
+	if (expr.constraints != nullptr && expr.constraints->trailing != nullptr)
+	{
+		qualifiers[count].kind = syntax::FunctionQualifierKind::Requires;
+		qualifiers[count++].noexcept_operand = expr.constraints->trailing;
+	}
 	built->suffix.kind = syntax::DeclaratorSuffixKind::Function;
 	built->suffix.parameters = expr.generic_parameters != nullptr ? expr.generic_parameters
 		: expr.parameters != nullptr                              ? expr.parameters
@@ -285,6 +290,7 @@ FunctionEntity* Analyzer::templated_closure_call(
 	built->suffix.qualifiers = syntax::Slice<syntax::FunctionQualifier>{ qualifiers, count };
 	built->declarator.location = expr.location;
 	built->declarator.name = &built->name;
+	built->declarator.attributes = expr.attributes;
 	built->declarator.suffixes = syntax::Slice<syntax::DeclaratorSuffix>{ &built->suffix, 1 };
 	built->specifiers[0].kind = syntax::DeclSpecKind::Keyword;
 	built->specifiers[0].keyword = TokenKind::KW_AUTO;
@@ -296,7 +302,9 @@ FunctionEntity* Analyzer::templated_closure_call(
 	built->function.specifiers = syntax::Slice<syntax::DeclSpecifier>{ built->specifiers, cxx17_ ? 2u : 1u };
 	built->function.declarator = &built->declarator;
 	built->function.body.body = expr.body;
-	built->templ.kind = syntax::DeclKind::Template;
+	built->templ.constraint = expr.constraints != nullptr ? expr.constraints->head : nullptr;
+	built->templ.kind = built->templ.constraint != nullptr ? syntax::DeclKind::ConstrainedTemplate
+														   : syntax::DeclKind::Template;
 	built->templ.location = expr.location;
 	built->templ.parameters = expr.template_parameters;
 	built->templ.declaration = &built->function;
@@ -1210,6 +1218,11 @@ void Analyzer::number_closure(ClassEntity* closure, ClosureFacts* facts)
 	SmallList<const Type*, 8> key;
 	if (member_specification && static_cast<const ClassEntity*>(owner->entity)->templ == nullptr)
 		key.push_back(owner->entity->type);
+	if (facts->lambda != nullptr && facts->lambda->explicit_template_parameter_count != 0)
+	{
+		const TemplateHead* head = HeadOf(graph_.closure_call(closure));
+		key.push_back(template_shape(head->parameters, facts->lambda->explicit_template_parameter_count));
+	}
 	for (uint32_t i = 0; i < call->param_count; ++i)
 		key.push_back(call->params[i]);
 	const Type* signature = types_.pack(key.data(), key.size());
@@ -1220,7 +1233,7 @@ void Analyzer::number_closure(ClassEntity* closure, ClosureFacts* facts)
 	if ((member_specification || member_initializer) && body_->closure_context != nullptr)
 	{
 		const ClosureContextKey probe = ClosureContextKey{ body_->closure_context, body_->default_argument,
-			call->variadic ? variadic : types_.pack(call->params, call->param_count) };
+			call->variadic ? variadic : signature };
 		uint32_t* count = closure_context_numbers_.find(probe);
 		const uint32_t earlier = count == nullptr ? 0 : (*count)++;
 		if (count == nullptr)
@@ -1307,6 +1320,10 @@ const Type* Analyzer::deduced_result(ExprFacts* facts, uint32_t location, const 
 void Analyzer::deduce_function_result(FunctionEntity* function, const Type* result)
 {
 	const Type* old = function->type;
+	// Preserve the declared placeholder signature for substitution and ABI
+	// encoding when deduction changes a primary function template's type.
+	if (function->templated && function->placeholder_result && function->templ->definition_type == nullptr)
+		function->templ->definition_type = old;
 	function->type = types_.function(
 		result, old->params, old->param_count, old->variadic, old->function_cv, old->ref, old->owner);
 	function->signature = signature_of(function->type);

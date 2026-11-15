@@ -61,6 +61,9 @@ slow path to avoid.
 The builtin fact word `char8` denotes C++20's distinct `char8_t` type and
 encodes as `Du`. It is not the `uchar` builtin, even though both store an
 unsigned byte.
+The builtin words `auto` and `decltype-auto` encode the declared return
+placeholders `Da` and `Dc`; a function template retains these in its ABI
+signature after its return type is deduced.
 
 The code tables in `abi_mangle.h` cover builtin types, standard substitutions,
 terminals and operators. Substitution, the structure of each encoding,

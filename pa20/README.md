@@ -334,3 +334,17 @@ A lambda declared with `consteval` has an immediate call operator. Apply
 PA16's immediate invocation and function-address restrictions to its calls
 and its conversion to a function pointer, including instantiated generic
 call operators. `constexpr` and `consteval` cannot appear together.
+### C++20 explicit lambda templates
+
+A lambda may declare explicit type, non-type and template template parameters.
+Its call operator is a real member template of that closure. Support explicit
+`operator()<Args...>` calls, defaults and mixed explicit/invented parameters.
+Use the existing template substitution, constraint and specialization machinery.
+Keep head and trailing constraints separate and check them before demanding
+the selected body. C++20 also permits lambdas in unevaluated operands.
+
+When an enclosing template is instantiated, clone fact-bearing lambda head
+defaults, constraints and signatures. Inner template parameters own their
+names and packs, including names that shadow an outer function parameter pack;
+only the lambda's own call specializations expand them. Captures retain the
+same storage, lifetime and constexpr rules as the other closure forms here.

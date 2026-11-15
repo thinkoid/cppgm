@@ -1092,42 +1092,7 @@ Expr* SyntaxCloner::call_like(const Expr* expr)
 		return result;
 	}
 	case ExprKind::Lambda:
-	{
-		// The lambda's function parameter packs are named only in it; a
-		// copy that expands them keeps their lengths for its analysis.
-		const LambdaExpr* lambda = static_cast<const LambdaExpr*>(expr);
-		LambdaExpr* result = copy(lambda);
-		result->captures = captures(lambda->captures);
-		// A templated lambda's own parameter packs are its call operator's
-		// specializations' to expand.
-		const size_t shadows = shadows_.size();
-		if (lambda->template_parameters != nullptr)
-			shadow_template_packs(lambda->template_parameters);
-		const size_t packs = parameter_packs_.size();
-		result->parameters = parameter_clause(result->parameters);
-		result->generic_parameters = parameter_clause(result->generic_parameters);
-		if (parameter_packs_.size() > packs)
-		{
-			result->pattern_parameters = lambda->parameters;
-			result->parameter_packs = copied_parameter_packs(packs);
-		}
-		result->noexcept_operand = this->expr(result->noexcept_operand);
-		result->throw_types = pointers(lambda->throw_types, &SyntaxCloner::type_id);
-		result->trailing = type_id(result->trailing);
-		size_t initialized = 0;
-		for (const LambdaCapture& capture : lambda->captures)
-			if (capture.initializer != nullptr)
-			{
-				renames_.insert(renames_.begin(), std::make_pair(capture.name, capture.name));
-				shadows_.push_back(std::make_pair(capture.name, -1));
-				++initialized;
-			}
-		result->body = compound(result->body);
-		renames_.erase(renames_.begin(), renames_.begin() + initialized);
-		parameter_packs_.resize(packs);
-		shadows_.resize(shadows);
-		return result;
-	}
+		return lambda(static_cast<const LambdaExpr*>(expr));
 	default:
 	{
 		BracedInitList* result = copy(static_cast<const BracedInitList*>(expr));

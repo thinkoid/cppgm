@@ -1563,7 +1563,11 @@ AbiNode ProgramLowering::abi_type_node(const sema::Type* type)
 			bare->entity);
 		const AbiNode placeholder = parameter->expression != nullptr ? placeholder_type(parameter)
 																	 : abi_mangle::ABI_NONE;
-		if (placeholder != abi_mangle::ABI_NONE)
+		if (bare == analyzer_->auto_placeholder())
+			node = abi_graph_.builtin(abi_mangle::ABI_BUILTIN_TYPE_AUTO);
+		else if (bare == analyzer_->decltype_auto_placeholder())
+			node = abi_graph_.builtin(abi_mangle::ABI_BUILTIN_TYPE_DECLTYPE_AUTO);
+		else if (placeholder != abi_mangle::ABI_NONE)
 			node = placeholder;
 		else if (parameter->qualifier != nullptr)
 		{
@@ -1788,6 +1792,16 @@ AbiNode ProgramLowering::type_unqualified_name(const sema::Entity* entity)
 			return anonymous_name(closure);
 		const sema::Type* call = lambda->type->canonical;
 		const size_t base = abi_scratch_.size();
+		const sema::ClosureFacts* facts = graph_->closure_facts(closure);
+		const uint32_t explicit_parameters = facts != nullptr && facts->lambda != nullptr
+			? facts->lambda->explicit_template_parameter_count
+			: 0;
+		const sema::TemplateHead* head = sema::HeadOf(lambda);
+		for (uint32_t i = 0; i < explicit_parameters; ++i)
+		{
+			const AbiNode declaration = declaration_node(head->parameters[i]);
+			abi_scratch_.push_back(declaration);
+		}
 		for (uint32_t i = 0; i < call->param_count; ++i)
 		{
 			const AbiNode parameter = abi_type(call->params[i]);
@@ -1797,12 +1811,12 @@ AbiNode ProgramLowering::type_unqualified_name(const sema::Entity* entity)
 		// (closure_context_scope), and write a variadic lambda's ellipsis
 		// (z), numbering its closure apart (Analyzer::number_closure); the
 		// course's LowIR names neither.
-		const sema::ClosureFacts* facts = object_mode_ ? graph_->closure_facts(closure) : nullptr;
-		const uint32_t number = facts == nullptr ? closure->local_discriminator
-			: facts->context != nullptr          ? facts->context_number
-												 : facts->closure_number;
-		const AbiNode name = abi_graph_.closure_name(
-			abi_scratch_.data() + base, call->param_count, number, facts != nullptr && call->variadic);
+		const sema::ClosureFacts* numbering = object_mode_ ? facts : nullptr;
+		const uint32_t number = numbering == nullptr ? closure->local_discriminator
+			: numbering->context != nullptr          ? numbering->context_number
+													 : numbering->closure_number;
+		const AbiNode name = abi_graph_.closure_name(abi_scratch_.data() + base, abi_scratch_.size() - base, number,
+			numbering != nullptr && call->variadic, explicit_parameters);
 		abi_scratch_.resize(base);
 		return name;
 	}
@@ -2119,7 +2133,12 @@ AbiNode ProgramLowering::function_encoding(const sema::FunctionEntity* function,
 		name = abi_graph_.template_id(name, abi_scratch_.data() + base, abi_scratch_.size() - base);
 		abi_scratch_.resize(base);
 		if (!function->constructor && !function->destructor && !function->conversion)
-			result = abi_type(unmangled_placeholder(type->element) ? specialized->element : type->element);
+		{
+			const sema::Type* declared = primary->placeholder_result && primary->templ->definition_type != nullptr
+				? primary->templ->definition_type->canonical->element
+				: type->element;
+			result = abi_type(unmangled_placeholder(declared) ? specialized->element : declared);
+		}
 	}
 	const size_t base = abi_scratch_.size();
 	for (uint32_t i = 0; i < type->param_count; ++i)

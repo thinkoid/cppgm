@@ -56,6 +56,9 @@ public:
 
 	void analyze(const syntax::TranslationUnit& unit);
 	bool c_source() const { return c_source_; }
+	// The two distinguished placeholder types retained in declared signatures.
+	const Type* auto_placeholder() const { return auto_placeholder_; }
+	const Type* decltype_auto_placeholder() const { return decltype_auto_placeholder_; }
 	void set_source_language(SourceLanguage language, bool extensions = false)
 	{
 		c_source_ = language == SourceLanguage::C;
