@@ -8,10 +8,12 @@ translation-unit
           parameter-key KW_CLASS:class
           identifier T
     concept-definition Integral
-      builtin-trait-expression __is_integral
-        type-id
-          type-specifier-seq
-            type-name T
+      binary-expression OP_GT:>
+        sizeof-expression
+          type-id
+            type-specifier-seq
+              type-name T
+        literal 1
   template-declaration
     template-parameter-clause
       template-parameter-list
@@ -22,13 +24,7 @@ translation-unit
           parameter-key KW_CLASS:class
           identifier U
     concept-definition Same
-      builtin-trait-expression __is_same
-        type-id
-          type-specifier-seq
-            type-name T
-        type-id
-          type-specifier-seq
-            type-name U
+      keyword-literal KW_TRUE:true
   template-declaration
     template-parameter-clause
       template-parameter-list
