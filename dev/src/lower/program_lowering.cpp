@@ -824,10 +824,12 @@ void ProgramLowering::emit_definition(
 		program_.symbols[symbol].metadata.binding = ir_model::SBM_INTERNAL;
 	// An explicit instantiation definition roots what it instantiates
 	// (14.7.2p5: a prior explicit specialization is not instantiated). A
-	// base entry another object may name is a root; an internal one is
-	// kept by what refers to it.
+	// strong base entry another object may name is a root; a weak one is
+	// defined by each object that names it, and an internal one is kept by
+	// what refers to it.
 	const bool internal = program_.symbols[symbol].metadata.binding == ir_model::SBM_INTERNAL;
-	if ((variant == EntryVariant::Base && !function->is_constexpr && !internal) ||
+	if ((variant == EntryVariant::Base && !function->is_constexpr && !internal &&
+			program_.symbols[symbol].metadata.binding != ir_model::SBM_WEAK) ||
 		rooted_destructors_.find(function) != PointerMap::kMissing ||
 		(!copy && function->explicit_instantiation && (function->instantiated || !function->is_inline)))
 		program_.symbols[symbol].metadata.flags |= lowir::SF_OBJECT_ROOT;
