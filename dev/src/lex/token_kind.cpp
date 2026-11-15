@@ -162,6 +162,7 @@ const SimpleSpelling kSimpleSpellings[] = {
 	// Append later-mode spellings so earlier spellings keep their index
 	// and their probe position in the shared read-only table.
 	{ "requires", TokenKind::KW_REQUIRES },
+	{ "concept", TokenKind::KW_CONCEPT },
 };
 
 // "reinterpret_cast" is the longest simple spelling.

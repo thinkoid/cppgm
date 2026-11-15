@@ -1147,6 +1147,7 @@ Expr* SyntaxCloner::expr(const Expr* expr)
 	Expr* result = nullptr;
 	switch (expr->kind)
 	{
+	case ExprKind::Concept:
 	case ExprKind::Id:
 	{
 		IdExpr* id = copy(static_cast<const IdExpr*>(expr));
@@ -1718,6 +1719,12 @@ Decl* SyntaxCloner::decl(const Decl* decl)
 	{
 		LinkageDecl* result = copy(static_cast<const LinkageDecl*>(decl));
 		result->declarations = pointers(result->declarations, &SyntaxCloner::decl);
+		return result;
+	}
+	case DeclKind::Concept:
+	{
+		ConceptDecl* result = copy(static_cast<const ConceptDecl*>(decl));
+		result->constraint = expr(result->constraint);
 		return result;
 	}
 	case DeclKind::Alias:

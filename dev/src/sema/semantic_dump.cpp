@@ -159,6 +159,10 @@ void DumpWriter::binding(const Binding* binding, unsigned depth)
 		line_ += ' ';
 		AppendTypeSpelling(binding->type, line_);
 		break;
+	case BindingKind::Concept:
+		line_ += "concept ";
+		line_ += BindingName(binding);
+		break;
 	case BindingKind::Enumerator:
 		line_ += "enumerator ";
 		line_ += BindingName(binding);

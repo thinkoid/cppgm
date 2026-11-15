@@ -48,7 +48,8 @@ enum class EntityKind : uint8_t
 	Parameter,
 	TemplateParameter,
 	// An alias template (14.5.7).
-	AliasTemplate
+	AliasTemplate,
+	Concept
 };
 
 // What a declaration denotes. Several declarations (bindings) can denote

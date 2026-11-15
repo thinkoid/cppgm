@@ -73,6 +73,8 @@ Decl* Parser::parse_declaration(DeclContext context, Attribute* leading)
 			break;
 		case TokenKind::KW_USING:
 			return parse_using();
+		case TokenKind::KW_CONCEPT:
+			return parse_concept_definition();
 		case TokenKind::KW_TEMPLATE:
 			if (at(TokenKind::OP_LT, 1))
 				return parse_template_declaration(context);

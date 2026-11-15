@@ -51,7 +51,8 @@ enum class BindingKind : uint8_t
 	TemplateValue,
 	// Lookup only.
 	Namespace,
-	NamespaceAlias
+	NamespaceAlias,
+	Concept
 };
 
 // One declaration of a name: it binds the name in a scope to an entity and

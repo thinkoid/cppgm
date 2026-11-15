@@ -97,6 +97,7 @@ bool ConstantMemo::expression(const syntax::Expr* expr, const FunctionEntity* fu
 	{
 	case syntax::ExprKind::Literal:
 	case syntax::ExprKind::KeywordLiteral:
+	case syntax::ExprKind::Concept:
 	case syntax::ExprKind::Requires:
 		return true;
 	case syntax::ExprKind::Id:

@@ -453,8 +453,8 @@ ClassEntity* Analyzer::class_template_of(const Entity* entity)
 
 // ------------------------------------------------------------ arguments
 
-bool Analyzer::template_arguments(
-	const syntax::NameComponent& component, Scope* scope, TypeList& out, const TemplateHead* head)
+bool Analyzer::template_arguments(const syntax::NameComponent& component, Scope* scope, TypeList& out,
+	const TemplateHead* head, const Type* leading_type)
 {
 	// 14.3: each argument a type (14.3.1) or an integral constant value
 	// (14.3.2), dependent ones kept as such. With the template's head, a
@@ -463,6 +463,8 @@ bool Analyzer::template_arguments(
 	// constant, 5.19p3; a reference parameter's object, a pointer
 	// parameter's overload set, 14.3.2p1, p5).
 	out.clear();
+	if (leading_type != nullptr)
+		out.push_back(leading_type);
 	for (const syntax::TemplateArgument& argument : component.arguments)
 	{
 		// A type-id's pack declarator (`T...`) makes its type an expansion.

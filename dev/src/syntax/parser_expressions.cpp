@@ -1213,7 +1213,7 @@ Expr* Parser::primary_from_name(Name* name, NameInfo& info, uint32_t start)
 		fail();
 		return nullptr;
 	}
-	IdExpr* id = make<IdExpr>(ExprKind::Id, start);
+	IdExpr* id = make<IdExpr>(info.category == NameCategory::Concept ? ExprKind::Concept : ExprKind::Id, start);
 	id->name = name;
 	return id;
 }

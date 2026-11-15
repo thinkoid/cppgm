@@ -23,7 +23,8 @@ enum class NameCategory : uint8_t
 	Type,
 	TypeTemplate,
 	FunctionTemplate,
-	Namespace
+	Namespace,
+	Concept
 };
 
 inline uint8_t CategoryBit(NameCategory category)

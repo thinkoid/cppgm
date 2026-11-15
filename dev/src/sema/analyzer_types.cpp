@@ -722,7 +722,8 @@ LookupResult Analyzer::lookup_name(const syntax::Name& name, Scope* scope, Looku
 	}
 	// A template-id (14.2) names a class template specialization (a
 	// function template's is resolved by its use).
-	if (last.has_arguments && last_prefix_.dependent == nullptr && result.binding->kind != BindingKind::Function)
+	if (last.has_arguments && last_prefix_.dependent == nullptr && result.binding->kind != BindingKind::Function &&
+		result.binding->kind != BindingKind::Concept)
 	{
 		// The arguments' own lookups leave this name's prefix as it was.
 		const NamePrefix prefix = last_prefix_;

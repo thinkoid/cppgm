@@ -378,6 +378,7 @@ private:
 	Expr* parse_postfix_suffixes(Expr* expr);
 	Expr* parse_primary_expression();
 	Expr* parse_requires_expression();
+	Decl* parse_concept_definition();
 	bool parse_requirement(Requirement& requirement);
 	Expr* parse_generic_selection();
 	Expr* parse_parenthesized_or_cast();

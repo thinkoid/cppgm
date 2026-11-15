@@ -121,7 +121,18 @@ bool Analyzer::requirements_satisfied(const syntax::RequiresExpr& expr, Scope* s
 		if (requirement.is_noexcept && may_throw(*requirement.expression, 0))
 			return false;
 		if (requirement.return_constraint != nullptr)
-			error(requirement.location, "return type constraint requires a concept");
+		{
+			// A compound requirement tests decltype((operand)), retaining
+			// cv-qualifiers and the operand's value category.
+			const Type* type = facts->category == ValueCategory::PRValue
+				? facts->type
+				: types_.reference(facts->type, facts->category == ValueCategory::XValue);
+			const ConstraintStatus status = concept_constraint(*requirement.return_constraint, type, scope);
+			if (status == ConstraintStatus::Dependent)
+				return defer();
+			if (status == ConstraintStatus::Unsatisfied)
+				return false;
+		}
 	}
 	return true;
 }

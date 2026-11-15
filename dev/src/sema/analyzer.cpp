@@ -291,6 +291,7 @@ template TemplateParameterEntity* Analyzer::new_entity<TemplateParameterEntity>(
 template Entity* Analyzer::new_entity<Entity>(EntityKind, const Identifier*, Scope*, const Type*);
 template AliasTemplateEntity* Analyzer::new_entity<AliasTemplateEntity>(
 	EntityKind, const Identifier*, Scope*, const Type*);
+template ConceptEntity* Analyzer::new_entity<ConceptEntity>(EntityKind, const Identifier*, Scope*, const Type*);
 
 const char* Analyzer::copy_label(const char* text, size_t length)
 {
@@ -389,6 +390,8 @@ void Analyzer::declaration(const syntax::Decl& decl, Scope* scope)
 		return explicit_instantiation(static_cast<const syntax::ExplicitInstantiationDecl&>(decl), scope);
 	case syntax::DeclKind::Template:
 		return template_declaration(static_cast<const syntax::TemplateDecl&>(decl), scope);
+	case syntax::DeclKind::Concept:
+		return concept_declaration(static_cast<const syntax::ConceptDecl&>(decl), scope);
 	case syntax::DeclKind::Class:
 	case syntax::DeclKind::Enum:
 	{

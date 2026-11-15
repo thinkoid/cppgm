@@ -30,6 +30,7 @@ declaration:
 	alias-declaration
 	explicit-instantiation-declaration
 	template-declaration
+	concept-definition
 	class-declaration
 	enum-declaration
 	static-assert-declaration
@@ -834,3 +835,6 @@ requirement:
 
 return-type-requirement:
 	OP_ARROW id-expression
+
+concept-definition:
+	KW_CONCEPT TT_IDENTIFIER OP_ASS logical-or-expression OP_SEMICOLON

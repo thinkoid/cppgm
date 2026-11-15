@@ -58,7 +58,8 @@ bool IsOverloadableOperator(TokenKind kind)
 
 bool IsTemplateCategory(NameCategory category)
 {
-	return category == NameCategory::TypeTemplate || category == NameCategory::FunctionTemplate;
+	return category == NameCategory::TypeTemplate || category == NameCategory::FunctionTemplate ||
+		category == NameCategory::Concept;
 }
 
 bool MemberTemplateSuffix(const ParseToken& token)
@@ -1120,6 +1121,7 @@ bool Parser::is_type(const Name* name, const NameInfo& info)
 		return true;
 	case NameCategory::Value:
 	case NameCategory::FunctionTemplate:
+	case NameCategory::Concept:
 	case NameCategory::Namespace:
 		return false;
 	case NameCategory::None:

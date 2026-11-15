@@ -184,6 +184,14 @@ void AstDumper::declaration(const Decl& decl)
 		line("target", RenderName(*static_cast<const UsingDecl&>(decl).target));
 		close();
 		break;
+	case DeclKind::Concept:
+	{
+		const ConceptDecl& definition = static_cast<const ConceptDecl&>(decl);
+		open("concept-definition", Spelling(definition.name));
+		expression(*definition.constraint);
+		close();
+		break;
+	}
 	case DeclKind::Alias:
 	{
 		const AliasDecl& alias = static_cast<const AliasDecl&>(decl);
@@ -1062,6 +1070,7 @@ void AstDumper::operand(const Expr& expr)
 	// Chain nodes are handled by expression().
 	switch (expr.kind)
 	{
+	case ExprKind::Concept:
 	case ExprKind::Id:
 		line("id-expression", RenderName(*static_cast<const IdExpr&>(expr).name));
 		break;

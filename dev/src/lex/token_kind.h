@@ -134,7 +134,8 @@
 	X(OP_COMMA) \
 	X(OP_ARROWSTAR) \
 	X(OP_ARROW) \
-	X(KW_REQUIRES)
+	X(KW_REQUIRES) \
+	X(KW_CONCEPT)
 // clang-format on
 
 enum class TokenKind : uint8_t
@@ -147,7 +148,7 @@ enum class TokenKind : uint8_t
 
 inline bool IsCxx20Keyword(TokenKind kind)
 {
-	return kind == TokenKind::KW_CHAR8_T || kind == TokenKind::KW_REQUIRES;
+	return kind == TokenKind::KW_CHAR8_T || kind >= TokenKind::KW_REQUIRES;
 }
 
 // The course's term name, e.g. "KW_AUTO" or "OP_LAND".

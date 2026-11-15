@@ -259,6 +259,8 @@ ExprFacts* Analyzer::typed(const syntax::Expr& expr, Scope* scope)
 	{
 	case syntax::ExprKind::Sizeof:
 	case syntax::ExprKind::TypeTrait:
+	case syntax::ExprKind::Requires:
+	case syntax::ExprKind::Concept:
 		// Fixed result type, but a dependent queried type makes the value
 		// dependent. A fixed-type parameter in sizeof(N) does not (14.6.2.3).
 		names_.set_value_parameter_uses(values + (names_.dependent_uses() != uses));
@@ -305,6 +307,8 @@ ExprFacts* Analyzer::typed_form(const syntax::Expr& expr, Scope* scope)
 	{
 	case syntax::ExprKind::Id:
 		return id_expression(static_cast<const syntax::IdExpr&>(expr), scope);
+	case syntax::ExprKind::Concept:
+		return concept_reference(static_cast<const syntax::IdExpr&>(expr), scope);
 	case syntax::ExprKind::LabelAddress:
 	{
 		if (body_ == nullptr || body_->function == nullptr)

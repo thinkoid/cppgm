@@ -25,7 +25,8 @@ enum class DeclKind : uint8_t
 	BitField,
 	Access,
 	Asm,
-	DeductionGuide
+	DeductionGuide,
+	Concept
 };
 
 struct Decl
@@ -93,6 +94,12 @@ struct TemplateDecl : Decl
 {
 	TemplateParameterList* parameters;
 	Decl* declaration;
+};
+
+struct ConceptDecl : Decl
+{
+	const Identifier* name;
+	Expr* constraint;
 };
 
 // A class-specifier or elaborated class declaration standing alone.

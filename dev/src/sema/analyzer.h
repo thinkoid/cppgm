@@ -621,6 +621,13 @@ private:
 	ExprFacts* functional_cast(const syntax::FunctionalCastExpr& expr, Scope* scope);
 	ExprFacts* generic_selection(const syntax::GenericExpr& expr, Scope* scope);
 	ExprFacts* requires_expression(const syntax::RequiresExpr& expr, Scope* scope);
+	void concept_declaration(const syntax::ConceptDecl& decl, Scope* scope);
+	ExprFacts* concept_reference(const syntax::IdExpr& expr, Scope* scope);
+	bool concept_satisfied(const ConceptEntity* definition, const TypeList& arguments, uint32_t location);
+	bool concept_arguments(const ConceptEntity* definition, const syntax::NameComponent& component, Scope* scope,
+		TypeList& arguments, const Type* leading_type = nullptr);
+	ConstraintStatus concept_result(const ConceptEntity* definition, const TypeList& arguments, uint32_t location);
+	ConstraintStatus concept_constraint(const syntax::Name& name, const Type* type, Scope* scope);
 	bool requirement_parameters(const syntax::RequiresExpr& expr, Scope*& scope);
 	bool requirements_satisfied(const syntax::RequiresExpr& expr, Scope* scope);
 	bool constraint_satisfied(const syntax::Expr& expr, Scope* scope);
@@ -743,8 +750,8 @@ private:
 	static bool InstanceMemberTemplate(const Scope* scope);
 	static bool has_dependent_bases(const Scope* scope);
 	static ClassEntity* class_template_of(const Entity* entity);
-	bool template_arguments(
-		const syntax::NameComponent& component, Scope* scope, TypeList& out, const TemplateHead* head = nullptr);
+	bool template_arguments(const syntax::NameComponent& component, Scope* scope, TypeList& out,
+		const TemplateHead* head = nullptr, const Type* leading_type = nullptr);
 	const Type* template_argument(const syntax::TemplateArgument& argument, Scope* scope, uint32_t location,
 		const Type* target = nullptr, bool unknown = false);
 	const Type* template_value(
@@ -2712,6 +2719,10 @@ private:
 	// The class and function template specializations declared so far,
 	// by template and (canonical) arguments; owned by the unit's analysis.
 	FlatMap<SpecializationKey, Entity*, SpecializationHash> specializations_;
+	// Immutable concept definition + canonical arguments, within this
+	// target's unit. Definitions cannot be redeclared, so entries do not
+	// invalidate; explicit in-progress state detects recursive satisfaction.
+	FlatMap<SpecializationKey, ConceptEvaluation*, SpecializationHash> concept_evaluations_;
 	// The function template specializations whose types are being
 	// substituted, innermost last, each with the depth of class template
 	// instantiations (class_instantiations_) it began in (see specialize).

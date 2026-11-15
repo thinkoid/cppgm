@@ -177,10 +177,11 @@ void NameScopes::declare(Scope* scope, const Identifier* name, NameBinding bindi
 	// 3.4.5p1: after `.` or `->` a template-id names a member template of
 	// the object's class or a class template of the context, never a
 	// namespace-scope function template (`std::count`, `std::min`).
-	if (binding.category == NameCategory::TypeTemplate ||
+	if (binding.category == NameCategory::TypeTemplate || binding.category == NameCategory::Concept ||
 		(binding.category == NameCategory::FunctionTemplate && member))
 		marks_[name->id] |= kTemplate;
-	if (binding.category == NameCategory::FunctionTemplate && scope->kind == ScopeKind::Namespace)
+	if ((binding.category == NameCategory::FunctionTemplate || binding.category == NameCategory::Concept) &&
+		scope->kind == ScopeKind::Namespace)
 		marks_[name->id] |= kNamespaceTemplateValue;
 	if (member)
 		touch_name(name->id);

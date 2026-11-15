@@ -63,6 +63,28 @@ struct DeductionHeadOrigins
 	const TemplateHead* inner;
 };
 
+// A concept owns its parsed definition and lexical parameter scope. It has
+// no object or emitted specialization; concept-ids cache satisfaction only.
+struct ConceptEntity : Entity
+{
+	TemplateHead* head;
+	Scope* parameters;
+	const syntax::Expr* definition;
+};
+
+struct ConceptEvaluation
+{
+	FactState state;
+	bool satisfied;
+};
+
+enum class ConstraintStatus : uint8_t
+{
+	Unsatisfied,
+	Satisfied,
+	Dependent
+};
+
 inline bool HasDefault(const TemplateHead* head, uint32_t index)
 {
 	return head->defaults[index] != nullptr || head->default_values[index] != nullptr;

@@ -423,3 +423,15 @@ false; an invalid requirement outside a templated declaration is an error.
 Check in source order and stop once satisfaction is known. Constraint `&&` and
 `||` short-circuit substitution as well as evaluation. Later template and
 constant-evaluation assignments apply these rules to their added source forms.
+
+### C++20 named concepts
+
+A concept is a namespace-scope template definition with a boolean constraint;
+it is not a variable or an emitted specialization. A concept-id is a bool
+prvalue. Reuse template argument matching, defaults, parameter packs and the
+constant-evaluation layer introduced by this assignment and its prerequisites.
+Cache satisfaction by concept identity and canonical arguments, detect recursive
+satisfaction and preserve substitution short-circuiting. A compound requirement
+`{ expression } noexcept -> Concept<Args...>;` checks the expression, then its
+non-throwing property, then the concept with `decltype((expression))` prepended
+to its explicit arguments. Its value category and cv-qualifiers are preserved.

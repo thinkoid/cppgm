@@ -187,11 +187,14 @@ bool ConstantEvaluator::eval(const syntax::Expr& expr, Constant& value)
 	}
 	case syntax::ExprKind::Paren:
 		return eval(*static_cast<const syntax::ParenExpr&>(expr).inner, value);
+	case syntax::ExprKind::Concept:
 	case syntax::ExprKind::Requires:
 	{
 		const ExprFacts* facts = analyzer_.typed(expr, scope_);
 		if (facts == nullptr || (facts->flags & kValueDependentUse) != 0)
-			return fail(expr.location, "a value-dependent requires-expression");
+			return fail(expr.location,
+				expr.kind == syntax::ExprKind::Concept ? "a value-dependent concept-id"
+													   : "a value-dependent requires-expression");
 		value = boolean(facts->value != 0);
 		return true;
 	}

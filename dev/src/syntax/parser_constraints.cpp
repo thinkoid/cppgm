@@ -4,6 +4,27 @@
 
 namespace syntax {
 
+Decl* Parser::parse_concept_definition()
+{
+	ConceptDecl* decl = make<ConceptDecl>(DeclKind::Concept, location());
+	next();
+	if (!at_identifier())
+	{
+		fail();
+		return nullptr;
+	}
+	decl->name = tok().identifier;
+	next();
+	if (!expect(TokenKind::OP_ASS))
+		return nullptr;
+	decl->constraint = parse_binary(3);
+	if (decl->constraint == nullptr || !expect(TokenKind::OP_SEMICOLON))
+		return nullptr;
+	scopes_.declare(declaration_scope(), decl->name, NameBinding{ NameCategory::Concept, false, nullptr });
+	pending_template_ = false;
+	return decl;
+}
+
 Expr* Parser::parse_requires_expression()
 {
 	NestingGuard nesting(*this);

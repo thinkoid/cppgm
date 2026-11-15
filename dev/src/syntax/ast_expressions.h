@@ -42,7 +42,9 @@ enum class ExprKind : uint8_t
 	Fold,
 	// C11 generic selection; its controlling expression is unevaluated.
 	Generic,
-	Requires
+	Requires,
+	// A concept-id has IdExpr's written name and a boolean satisfaction fact.
+	Concept
 };
 
 struct Expr

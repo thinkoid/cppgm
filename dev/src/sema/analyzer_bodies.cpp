@@ -1688,6 +1688,9 @@ void Analyzer::expression_names(const syntax::Expr& expr, Scope* scope, bool une
 	std::vector<PendingExpr>& work = expression_work_;
 	switch (expr.kind)
 	{
+	case syntax::ExprKind::Concept:
+		concept_reference(static_cast<const syntax::IdExpr&>(expr), scope);
+		return;
 	case syntax::ExprKind::Requires:
 		requires_expression(static_cast<const syntax::RequiresExpr&>(expr), scope);
 		return;

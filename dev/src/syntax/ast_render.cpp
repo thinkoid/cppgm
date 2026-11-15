@@ -528,6 +528,7 @@ void SyntaxRenderer::operand(const Expr& expr)
 	// Chain nodes are handled by expression().
 	switch (expr.kind)
 	{
+	case ExprKind::Concept:
 	case ExprKind::Id:
 		name(*static_cast<const IdExpr&>(expr).name, true);
 		break;
@@ -1152,6 +1153,16 @@ void SyntaxRenderer::declaration(const Decl& decl)
 		name(*declaration.target, true);
 		if (declaration.pack)
 			text("...");
+		text(";");
+		break;
+	}
+	case DeclKind::Concept:
+	{
+		const ConceptDecl& definition = static_cast<const ConceptDecl&>(decl);
+		text("concept ");
+		identifier(definition.name);
+		text("=");
+		expression(*definition.constraint);
 		text(";");
 		break;
 	}
