@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "lowir/argument_facts.h"
 #include "lowir/literals.h"
 #include "lowir/assembly_writer.h"
 #include "lowir/assembly.h"
@@ -45,14 +46,6 @@ const SpelledTable<UnaryOp, kUnaryOpCount> kUnaryWords;
 const SpelledTable<BinaryOp, kBinaryOpCount> kBinaryWords;
 const SpelledTable<ComparePredicate, kComparePredicateCount> kCompareWords;
 const SpelledTable<ConvertOp, kConvertOpCount> kConvertWords;
-
-// The size whose eightbytes a value's classes name (append_object_classes).
-uint64_t classes_bytes(Type type)
-{
-	if (type.is_object())
-		return type.bytes;
-	return type.kind() == TypeKind::I128 || type.kind() == TypeKind::F80 ? 16 : (integer_bits(type.kind()) + 7) / 8;
-}
 
 bool bare_object_name(const char* name)
 {
@@ -266,7 +259,7 @@ void Writer::item(bool& open, MetadataKey key, const char* value)
 void Writer::classes_item(bool& open, MetadataKey key, uint8_t classes, Type type)
 {
 	scratch_.clear();
-	append_object_classes(scratch_, classes, classes_bytes(type));
+	append_object_classes(scratch_, classes, object_classes_bytes(type));
 	item(open, key, scratch_.c_str());
 }
 
@@ -363,7 +356,7 @@ void Writer::parameters(const Signature& signature, bool definition)
 		if (parameter[i].classes != 0)
 		{
 			key(open, MetadataKey::Classes);
-			append_object_classes(out_, parameter[i].classes, classes_bytes(parameter[i].type));
+			append_object_classes(out_, parameter[i].classes, object_classes_bytes(parameter[i].type));
 		}
 		if (parameter[i].shape.element != AggregateElement::None)
 		{

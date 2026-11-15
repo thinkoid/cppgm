@@ -1,5 +1,7 @@
 #include "lowir/text_parser.h"
 
+#include "lowir/debug_validation.h"
+
 namespace lowir {
 namespace text {
 
@@ -80,53 +82,11 @@ void Parser::finish_debug()
 {
 	if (!program_.debug)
 		return;
-	finish_debug_scopes();
-	const DebugInfo& debug = *program_.debug;
-	std::vector<uint8_t> visited(debug.types.size(), 0);
-	visited[0] = 2;
-	for (uint32_t id = 1; id < debug.types.size(); ++id)
-	{
-		const DebugType& type = debug.types[id];
-		if (type.parent >= debug.types.size() || type.type >= debug.types.size())
-			fail_at(debug_positions_[id], "undefined debug parent or type");
-		if (type.parent != 0)
-		{
-			const DebugKind parent = debug.types[type.parent].kind;
-			if (parent != DebugKind::Structure && parent != DebugKind::Union && parent != DebugKind::Enumeration &&
-				parent != DebugKind::Namespace && parent != DebugKind::Subroutine && parent != DebugKind::Method)
-				fail_at(debug_positions_[id], "debug parent cannot contain children");
-		}
-		uint32_t at = id;
-		while (visited[at] == 0)
-		{
-			visited[at] = 1;
-			at = debug.types[at].parent;
-			if (at >= debug.types.size())
-				fail_at(debug_positions_[id], "undefined debug parent");
-		}
-		if (visited[at] == 1)
-			fail_at(debug_positions_[id], "cyclic debug parents");
-		at = id;
-		while (visited[at] == 1)
-		{
-			visited[at] = 2;
-			at = debug.types[at].parent;
-		}
-	}
-	for (SymbolId id = 0; id < debug.functions.size(); ++id)
-	{
-		if (debug.functions[id].locals.empty())
-			continue;
-		if (id >= program_.symbols.size() || program_.symbols[id].kind != SymbolKind::FunctionDefinition)
-			fail_at(symbol_uses_[id], "debug locals require a defined function");
-		const Function& function = program_.functions[program_.symbols[id].detail];
-		if (!function.body)
-			fail_at(symbol_uses_[id], "debug locals require an available function body");
-		const FunctionBody& body = *function.body;
-		for (const DebugLocal& local : debug.functions[id].locals)
-			if (local.slot >= body.slots.size() || local.type >= debug.types.size())
-				fail_at(symbol_uses_[id], "undefined debug local slot or type");
-	}
+	link_debug_scopes(program_);
+	DebugDiagnostic diagnostic;
+	if (!validate_debug_info(program_, diagnostic))
+		fail_at(diagnostic.type != 0 ? debug_positions_[diagnostic.type] : symbol_uses_[diagnostic.function],
+			diagnostic.message);
 }
 
 } // namespace text

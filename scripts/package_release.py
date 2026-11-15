@@ -13,6 +13,8 @@ import tarfile
 TOOLS = ['cppgm', 'pptoken', 'posttoken', 'ppexpr', 'preproc', 'abimangle', 'lowir', 'lowiropt', 'lowir2native']
 PLATFORMS = {'linux-x86_64': 'libcppgm_lowir.so', 'macos-x86_64': 'libcppgm_lowir.dylib'}
 VERSION = re.compile(r'v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta|alpha)[0-9]+)?')
+# The tag the Release workflow gives a pull request's packages.
+TRIAL_TAG = 'v0.0.0'
 # The object root of scripts/build_release_tools.sh.
 STAGE = 'obj/release'
 
@@ -39,6 +41,12 @@ def version_tag(tag):
     if not VERSION.fullmatch(tag):
         raise ValueError('expected a release tag such as v0.9.0 or v1.2.3-rc1')
     return tag
+
+
+def source_version(root):
+    """CPPGM_VERSION of dev/src/support/version.h."""
+    text = (root / 'dev/src/support/version.h').read_text()
+    return re.search(r'^#define CPPGM_VERSION "([^"]+)"$', text, re.MULTILINE).group(1)
 
 
 def headers(source):
@@ -91,6 +99,10 @@ def members(root, stage, tag, platform, revision, host):
 
 def package(root, tag, platform, destination, host, stage=STAGE):
     version_tag(tag)
+    # The trial tag of a pull request names no release.
+    if tag != TRIAL_TAG and tag != 'v' + source_version(root):
+        raise ValueError('the tag %s is not the source version v%s (dev/src/support/version.h)'
+                         % (tag, source_version(root)))
     if platform not in PLATFORMS:
         raise ValueError('expected a platform: ' + ', '.join(sorted(PLATFORMS)))
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()

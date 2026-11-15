@@ -38,7 +38,8 @@ class LibraryExportTests(unittest.TestCase):
                               '_Static_assert(CPPGM_OP_RETURN == 46, "existing return ABI");\n'
                               '_Static_assert(CPPGM_OP_UNREACHABLE == 47, "existing terminator ABI");\n'
                               'int main(void) {\n'
-                              'CppgmLowir* m = cppgm_lowir_create(CPPGM_LOWIR_ABI_VERSION, 0);\n'
+                              'if (cppgm_lowir_abi_version() != CPPGM_LOWIR_ABI_VERSION) return 2;\n'
+                              'CppgmLowir* m = cppgm_lowir_create(CPPGM_LOWIR_ABI_VERSION, CPPGM_TARGET_LINUX);\n'
                               'if (m || !cppgm_lowir_error(m)[0]) return 1;\n'
                               'cppgm_lowir_destroy(m); return 0; }\n')
             obj = root / "client.o"

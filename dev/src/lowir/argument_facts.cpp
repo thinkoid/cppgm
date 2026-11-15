@@ -4,6 +4,16 @@
 
 namespace lowir {
 
+bool text_holds_object_classes(Type type, uint8_t classes)
+{
+	// A value that is not eightbyte classes is written as a word of its own
+	// or as its number.
+	if ((classes & ir_model::OC_STATED) == 0 || (classes & ~(ir_model::OC_STATED | 15)) != 0)
+		return true;
+	const uint64_t bytes = object_classes_bytes(type);
+	return bytes == 0 || bytes > 8 || ir_model::eightbyte_class(classes, 1) == ir_model::EB_NONE;
+}
+
 bool valid_aggregate_shape(Type type, ir_model::AggregateShape shape)
 {
 	using ir_model::AggregateElement;

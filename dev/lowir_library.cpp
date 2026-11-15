@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "src/support/internal_error.h"
+#include "src/support/version.h"
 
 namespace {
 
@@ -33,14 +34,25 @@ uint32_t invoke(CppgmLowir* module, uint32_t failure, Action action)
 
 extern "C" {
 
+uint32_t cppgm_lowir_abi_version(void)
+{
+	return CPPGM_LOWIR_ABI_VERSION;
+}
+
+const char* cppgm_lowir_version(void)
+{
+	return CPPGM_VERSION;
+}
+
 CppgmLowir* cppgm_lowir_create(uint32_t version, uint32_t target)
 {
-	if (version != CPPGM_LOWIR_ABI_VERSION || target > 1)
+	if (version < CPPGM_LOWIR_ABI_VERSION_MIN || version > CPPGM_LOWIR_ABI_VERSION || target > CPPGM_TARGET_MACOS)
 		return nullptr;
 	try
 	{
 		std::unique_ptr<CppgmLowir> module(new CppgmLowir());
-		module->program.target = target == 0 ? target_model::Target::Linux : target_model::Target::MacOS;
+		module->program.target = target == CPPGM_TARGET_LINUX ? target_model::Target::Linux
+															  : target_model::Target::MacOS;
 		module->program.explicit_target = true;
 		module->program.object_facts = true;
 		return module.release();
@@ -102,6 +114,75 @@ int cppgm_lowir_body_commit(CppgmLowir* module, uint32_t symbol, const CppgmBody
 	return invoke(module, 0, [&]() {
 		return counts != nullptr ? module->commit_body(symbol, *counts, temp_count) : module->fail("null body counts");
 	});
+}
+
+uint32_t cppgm_lowir_boundary(CppgmLowir* module, CppgmType result, const CppgmParameter* parameters, uint32_t count,
+	const CppgmBoundary* boundary)
+{
+	return invoke(module, CPPGM_NO_ID, [&]() { return module->boundary(result, parameters, count, boundary); });
+}
+
+int cppgm_lowir_symbol_fact(CppgmLowir* module, uint32_t symbol, uint32_t key, uint32_t value)
+{
+	return invoke(module, 0, [&]() { return module->symbol_fact(symbol, key, value); });
+}
+
+int cppgm_lowir_symbol_name(CppgmLowir* module, uint32_t symbol, uint32_t key, const char* name, uint32_t length)
+{
+	return invoke(module, 0, [&]() { return module->symbol_name(symbol, key, name, length); });
+}
+
+int cppgm_lowir_body_argument_facts(CppgmLowir* module, uint32_t symbol, const CppgmArgumentFact* facts, uint32_t count)
+{
+	return invoke(module, 0, [&]() { return module->argument_facts(symbol, facts, count); });
+}
+
+uint32_t cppgm_lowir_assembly(CppgmLowir* module, const CppgmAssembly* assembly)
+{
+	return invoke(module, CPPGM_NO_ID, [&]() {
+		if (assembly != nullptr)
+			return module->assembly(*assembly);
+		module->fail("null assembly template");
+		return CPPGM_NO_ID;
+	});
+}
+
+uint32_t cppgm_lowir_debug_file(CppgmLowir* module, const char* name, uint32_t length)
+{
+	return invoke(module, CPPGM_NO_ID, [&]() { return module->debug_file(name, length); });
+}
+
+int cppgm_lowir_function_location(CppgmLowir* module, uint32_t symbol, const CppgmDebugLocation* location)
+{
+	return invoke(module, 0, [&]() { return module->function_location(symbol, location); });
+}
+
+int cppgm_lowir_body_locations(
+	CppgmLowir* module, uint32_t symbol, const CppgmDebugLocation* locations, uint32_t count, const uint32_t* indices)
+{
+	return invoke(module, 0, [&]() { return module->body_locations(symbol, locations, count, indices); });
+}
+
+uint32_t cppgm_lowir_debug_type(CppgmLowir* module, const CppgmDebugType* type)
+{
+	return invoke(module, CPPGM_NO_ID, [&]() {
+		if (type != nullptr)
+			return module->debug_type(*type);
+		module->fail("null debug type");
+		return CPPGM_NO_ID;
+	});
+}
+
+uint32_t cppgm_lowir_debug_scope(CppgmLowir* module, uint32_t function, uint32_t parent)
+{
+	return invoke(module, CPPGM_NO_ID, [&]() { return module->debug_scope(function, parent); });
+}
+
+int cppgm_lowir_debug_local(CppgmLowir* module, uint32_t function, uint32_t slot, uint32_t type, uint32_t scope,
+	const char* name, uint32_t length, const CppgmDebugLocation* declaration)
+{
+	return invoke(
+		module, 0, [&]() { return module->debug_local(function, slot, type, scope, name, length, declaration); });
 }
 
 int cppgm_lowir_validate(CppgmLowir* module)

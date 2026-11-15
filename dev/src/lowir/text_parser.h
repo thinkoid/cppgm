@@ -135,7 +135,6 @@ private:
 	void parse_debug_type();
 	void parse_debug_local();
 	void parse_debug_scope();
-	void finish_debug_scopes();
 	uint32_t scope_base_ = 0;
 	void finish_debug();
 	uint32_t debug_base_ = 0;

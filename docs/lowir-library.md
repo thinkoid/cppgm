@@ -31,13 +31,15 @@ g++ producer.o dev/libcppgm_lowir.a -pthread -o producer
 
 ## Producer sequence
 
-1. Create a module with `CPPGM_LOWIR_ABI_VERSION` and its target: Linux ELF (0)
-   or macOS Mach-O (1). Both targets use the x86-64 object backend.
+1. Create a module with `CPPGM_LOWIR_ABI_VERSION` and its target:
+   `CPPGM_TARGET_LINUX` (ELF) or `CPPGM_TARGET_MACOS` (Mach-O). Both targets use
+   the x86-64 object backend.
 2. Intern top-level symbols once; IDs support forward references. Add function
    signatures from numeric type records. Define local functions directly and
    declare unresolved externals before compilation. A declaration can also be
    upgraded to a definition with the same signature ID. Functions use C language
-   linkage. Conventional entry/init/fini roles are applied as by the text reader.
+   linkage unless `cppgm_lowir_symbol_fact` states another. Conventional
+   entry/init/fini roles are applied as by the text reader.
 3. Supply structured global initializers. For each function, reserve writable
    instruction, operand, literal, slot and layout buffers with
    `cppgm_lowir_body_reserve`. Write records directly into those library-owned
@@ -55,7 +57,8 @@ g++ producer.o dev/libcppgm_lowir.a -pthread -o producer
 The authoritative records and batched construction contract live in the shipped
 LowIR scaffold, `dev/src/lowir_records.h` and `dev/src/lowir_interface.h`. The compiler builder, optimizer,
 backends and foreign API use these same types. C uses the fixed-width projection
-of the same declarations; its enum constants are generated from `lowir_model.h`.
+of the same declarations; its enum constants are generated from `lowir_model.h`,
+`ir_symbol_model.h` and `asm_model.h` (`dev/src/lowir_c_vocabulary.h`).
 No duplicate private/wire layouts, per-instruction adapter or offset matching is
 needed. ABI version 2 replaces the prototype copying body API. C/C++ producers
 write typed records directly; foreign FFI producers use corresponding stores.
@@ -86,10 +89,66 @@ it. Exceptions from the compiler are contained at the foreign boundary.
 A failed creation returns null. The object buffer lives until module destruction;
 compilation is allowed once.
 
-This first ABI covers the native GM producer's needs. It does not yet expose
-Wasm object generation, assembly templates, debug information, or the complete
-C++ aggregate ABI metadata. PA27 owns the optional O0 library lane and PA33 adds O1–O3;
+## Names and versions
+
+Every number that an argument or a record field takes has a name. The
+vocabulary's numbers are the generated enumerators of `lowir_c_vocabulary.h`:
+`CPPGM_TYPE_*`, `CPPGM_OP_*`, `CPPGM_VALUE_*`, `CPPGM_FLAG_*`, `CPPGM_DATA_*`,
+`CPPGM_BINDING_*`, `CPPGM_STORAGE_*`, `CPPGM_ARITY_*` and the others.
+`lowir_interface.h` names the rest: `CPPGM_TARGET_*`, `CPPGM_FUNCTION_*`,
+`CPPGM_GLOBAL_*` and `CPPGM_CODE_*`.
+
+`cppgm_lowir_abi_version()` returns the library's `CPPGM_LOWIR_ABI_VERSION`.
+`cppgm_lowir_version()` returns the cppgm release of the library, such as
+`"0.9.1"`; `cppgm --version` prints the same release. Neither function needs a
+module. A client that loads the library at run time compares
+`cppgm_lowir_abi_version()` with the version it was written for.
+`cppgm_lowir_create` accepts `CPPGM_LOWIR_ABI_VERSION_MIN` to
+`CPPGM_LOWIR_ABI_VERSION`.
+
+## ABI version 3
+
+Version 3 adds functions and records to version 2. It changes no function or
+record of version 2: a version 2 client works with a version 3 library.
+
+| Addition | Functions | LowIR text |
+| --- | --- | --- |
+| Boundary metadata | `cppgm_lowir_boundary` | `arity=`, `effects=`, `unwind=`, `return=`, `repeatable=`, `noalias_result=`, `this_return=`, `result_classes=`, `result_shape=`; parameter `pass=`, `alias=`, `object_bytes=`, `classes=`, `shape=` |
+| Symbol metadata | `cppgm_lowir_symbol_fact`, `cppgm_lowir_symbol_name` | `role=`, `linkage=`, `binding=`, `storage=`, `tls_for=`, `keep_alias=` to `cold=`; `object=`, `section=` |
+| Argument facts | `cppgm_lowir_body_argument_facts` | call `classes=N:`, `argument_type=N:`, `argument_shape=N:`; `va_arg` `classes=`, `shape=` |
+| Assembly templates | `cppgm_lowir_assembly` | `assembly @name ... { ... }`, invoked by an `asm` instruction |
+| Debug information | `cppgm_lowir_debug_file`, `cppgm_lowir_function_location`, `cppgm_lowir_body_locations`, `cppgm_lowir_debug_type`, `cppgm_lowir_debug_scope`, `cppgm_lowir_debug_local` | `!dbg(file, line, column, scope)`, `debug_type`, `debug_scope`, `debug_local` |
+
+`cppgm_lowir_boundary` returns a signature ID, as `cppgm_lowir_signature` does.
+Use it for a function, or for a call that sets `CPPGM_FLAG_SIGNATURE`.
+`CPPGM_CLASSES(first, second)` makes the `classes=` value of a direct object
+from the classes of its two eightbytes.
+
+State symbol metadata after `cppgm_lowir_function` or `cppgm_lowir_global`
+declares the symbol. State argument facts and instruction locations after
+`cppgm_lowir_body_commit`; both name an instruction by its position in the
+instruction buffer.
+
+An `asm` instruction has `CPPGM_OP_ASM`, type void, the template ID in
+`immediate` and its arguments in the operand pool. [The assembly
+boundary](../pa29/assembly.md) describes the template records. Assembly-defined
+functions and ordered module assembly are not in the library.
+
+Debug type and scope IDs count from 1, and 0 is absent. The object has line
+tables when locations exist. It has source types, lexical blocks and locals when
+a debug type, scope or local exists.
+
+The library accepts a record when the LowIR text can state it. The text that
+`cppgm_lowir_write` writes then reads back as the same program:
+`cppgm -c module.lowir` makes the object that `cppgm_lowir_compile` makes.
+`python3 scripts/tests/test_lowir_library_extensions.py` checks this for the
+additions of version 3, with the client
+[`scripts/tests/lowir_library_extensions.c`](../scripts/tests/lowir_library_extensions.c).
+
+The library does not expose Wasm object generation. PA27 owns the optional O0
+library lane and PA33 adds O1–O3;
 [the student contract](../pa27/lowir-library.md) describes the shared interface.
+The course lane does not use the additions of version 3.
 These checks remain outside default assignment reports. The myc integration and
 its timing comparisons are separate maintainer work, with no course dependency
 on Crystal or myc.

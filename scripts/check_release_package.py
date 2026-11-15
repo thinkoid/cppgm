@@ -21,14 +21,17 @@ int main() {
   return total(values) == 10 ? 0 : 1;
 }
 '''
+# Prints the release the library states.
 CLIENT = '''#include "lowir_interface.h"
 #include <stdio.h>
 int main(void) {
-  CppgmLowir* module = cppgm_lowir_create(CPPGM_LOWIR_ABI_VERSION, 0);
+  if (cppgm_lowir_abi_version() != CPPGM_LOWIR_ABI_VERSION) return 2;
+  CppgmLowir* module = cppgm_lowir_create(CPPGM_LOWIR_ABI_VERSION, CPPGM_TARGET_LINUX);
   if (!module) return 1;
   int valid = cppgm_lowir_validate(module);
   if (!valid) fprintf(stderr, "%s\\n", cppgm_lowir_error(module));
   cppgm_lowir_destroy(module);
+  puts(cppgm_lowir_version());
   return valid ? 0 : 1;
 }
 '''
@@ -55,7 +58,7 @@ def check(archive, host_cxx, cc, work):
     platform = next((p for p in package_release.PLATFORMS if stem.endswith('-' + p)), None)
     if platform is None or not archive.name.endswith('.tar.gz'):
         raise ValueError('expected cppgm-<tag>-<platform>.tar.gz: ' + archive.name)
-    package_release.version_tag(stem[len('cppgm-'):-len(platform) - 1])
+    tag = package_release.version_tag(stem[len('cppgm-'):-len(platform) - 1])
     with tarfile.open(archive) as tar:
         listed = set(member.name for member in tar.getmembers())
         wanted = set(stem + '/' + name for name in required(platform))
@@ -66,6 +69,10 @@ def check(archive, host_cxx, cc, work):
         tar.extractall(work, **(dict(filter='data') if hasattr(tarfile, 'data_filter') else {}))
     root = work / stem
     version = run([root / 'bin/cppgm', '--version'])
+    # `cppgm <release> (...)`: the release of the tag, which the library states too.
+    release = version.split()[1] if version.startswith('cppgm ') else ''
+    if not release or (tag != package_release.TRIAL_TAG and 'v' + release != tag):
+        raise ValueError('the packaged compiler states another release than %s: %s' % (tag, version.strip()))
     (work / 'program.cpp').write_text(PROGRAM)
     # The packaged compiler makes the object; the host compiler links it with its standard library.
     run([root / 'bin/cppgm', '-std=c++17', '-O2', '-c', work / 'program.cpp', '-o', work / 'program.o'])
@@ -78,7 +85,8 @@ def check(archive, host_cxx, cc, work):
     for name, library in (('static', [root / 'lib/libcppgm_lowir.a']),
                           ('shared', ['-L', root / 'lib', '-lcppgm_lowir', '-Wl,-rpath,%s' % (root / 'lib')])):
         run([host_cxx, work / 'client.o', *library, '-pthread', '-o', work / name])
-        run([work / name], cwd=work)
+        if run([work / name], cwd=work).strip() != release:
+            raise ValueError('the %s library states another release than %s' % (name, release))
     return version.splitlines()[0] if version else ''
 
 

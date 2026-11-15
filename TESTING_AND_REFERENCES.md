@@ -319,7 +319,11 @@ Tags have two schemes:
   repository has the matching `vN` tag on its export commit. These tags
   trigger no workflow.
 - Semantic version tags such as `v0.9.0` and `v1.2.3-rc1` mark compiler
-  releases and trigger the Release workflow.
+  releases and trigger the Release workflow. The tag is `v` and the
+  `CPPGM_VERSION` of `dev/src/support/version.h`: set that version in the
+  commit to tag. `cppgm --version` and the library's `cppgm_lowir_version()`
+  state it, and `scripts/package_release.py` rejects another tag (the trial
+  tag `v0.0.0` of a pull request excepted).
 
 The Release workflow builds and checks these files, then publishes them with
 provenance records and SHA256SUMS:
@@ -344,7 +348,8 @@ It rejects a tool without an equal stage-three build and a library that
 another compiler built; equal inputs give equal bytes.
 `scripts/check_release_package.py` checks the contents of a package, compiles
 and runs a program with the packaged compiler, and links and runs a C client
-with the static and the shared library. A native package reads the standard
+with the static and the shared library. The compiler and both libraries must
+state the release of the tag. A native package reads the standard
 headers of its build host's compiler; its README names that compiler. When
 the C++ library headers of that GCC version are not on the system, the Linux
 package reads the headers of the GCC installation it finds there, or of the

@@ -3,6 +3,7 @@
 #include <cstring>
 #include <mutex>
 
+#include "lowir/debug_validation.h"
 #include "lowir/validator.h"
 #include "lowir/text_writer.h"
 #include "native/object/object_compiler.h"
@@ -88,8 +89,11 @@ bool CppgmLowir::function(uint32_t id, uint32_t signature, uint32_t binding, uin
 		return fail("invalid function declaration");
 	lowir::Symbol& symbol = program.symbols[id];
 	if (symbol.kind == lowir::SymbolKind::Unresolved)
+	{
 		program.declare_function(
 			id, definition ? lowir::SymbolKind::FunctionDefinition : lowir::SymbolKind::FunctionDeclaration, signature);
+		symbol.metadata.linkage = ir_model::LLM_C;
+	}
 	else
 	{
 		if (symbol.kind != lowir::SymbolKind::FunctionDeclaration || !definition)
@@ -100,7 +104,6 @@ bool CppgmLowir::function(uint32_t id, uint32_t signature, uint32_t binding, uin
 		symbol.kind = lowir::SymbolKind::FunctionDefinition;
 		function.body.reset(new lowir::FunctionBody());
 	}
-	symbol.metadata.linkage = ir_model::LLM_C;
 	symbol.metadata.binding = static_cast<ir_model::SymbolBindingMode>(binding);
 	return true;
 }
@@ -161,6 +164,17 @@ bool CppgmLowir::validate()
 			(diagnostic.inst == lowir::kNoId ? std::string()
 											 : " (instruction " + std::to_string(diagnostic.inst) + ")"))
 				.c_str());
+	if (program.debug)
+	{
+		lowir::link_debug_scopes(program);
+		lowir::DebugDiagnostic debug;
+		if (!lowir::validate_debug_info(program, debug))
+			return fail((std::string(debug.message) +
+				(debug.type != 0
+						? " (debug type " + std::to_string(debug.type) + ")"
+						: " (function @" + std::string(program.spelling(program.symbols[debug.function].name)) + ")"))
+					.c_str());
+	}
 	validated = true;
 	return true;
 }

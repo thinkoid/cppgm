@@ -348,6 +348,7 @@ HARNESS_TESTS = \
 	scripts/tests/test_cppgm_cmake_wrapper.py \
 	scripts/tests/test_dev_makefile_obj_isolation.py \
 	scripts/tests/test_host_headers.py \
+	scripts/tests/test_lowir_library_extensions.py \
 	scripts/tests/test_warning_policy.py \
 	scripts/tests/test_test_platform.py \
 	scripts/tests/test_dump_host_eh_object_facts_pl.py \

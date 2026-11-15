@@ -17,7 +17,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def tree(root):
     """A committed source tree with stand-ins for the files of scripts/build_release_tools.sh."""
-    (root / 'dev/src').mkdir(parents=True)
+    (root / 'dev/src/support').mkdir(parents=True)
+    (root / 'dev/src/support/version.h').write_text('#pragma once\n#define CPPGM_VERSION "0.9.0"\n')
     stage = root / release.STAGE
     for directory, suffix in (('selfhost', '-self'), ('inception', '-inception')):
         (stage / 'bin' / directory).mkdir(parents=True)
@@ -67,6 +68,10 @@ class PackageRelease(unittest.TestCase):
             mac = release.package(root, 'v0.9.0', 'macos-x86_64', root / 'c', 'clang 21')
             with tarfile.open(mac) as archive:
                 self.assertIn('cppgm-v0.9.0-macos-x86_64/lib/libcppgm_lowir.dylib', archive.getnames())
+            # A release tag is the source version; a pull request's trial tag names no release.
+            with self.assertRaisesRegex(ValueError, 'the tag v0.9.5 is not the source version v0.9.0'):
+                release.package(root, 'v0.9.5', 'linux-x86_64', root / 'd', 'g++ 13')
+            release.package(root, release.TRIAL_TAG, 'linux-x86_64', root / 'd', 'g++ 13')
 
     def test_missing_build_output_and_other_names_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

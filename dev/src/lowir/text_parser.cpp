@@ -737,9 +737,7 @@ uint8_t Parser::parse_object_classes(Type type)
 {
 	// lowir.md "Object ABI Conventions": a direct object of at most 16
 	// bytes, or its two-integer scalar carrier with eight-byte stack alignment.
-	const uint64_t bytes = type.is_object()                             ? type.bytes
-		: type.kind() == TypeKind::I128 || type.kind() == TypeKind::F80 ? 16
-																		: (integer_bits(type.kind()) + 7) / 8;
+	const uint64_t bytes = object_classes_bytes(type);
 	const bool wide_carrier = type.kind() == TypeKind::I128;
 	if (!program_.object_facts && ((!type.is_object() && !wide_carrier) || bytes > 16))
 		fail("classes metadata requires a direct object of matching size");
