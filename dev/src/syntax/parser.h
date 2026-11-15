@@ -370,7 +370,7 @@ private:
 	// Continuations of an expression whose primary expression is parsed.
 	Expr* continue_assignment_expression(Expr* primary);
 	Expr* continue_expression(Expr* primary);
-	Expr* primary_from_name(Name* name, NameInfo& info, uint32_t start);
+	Expr* primary_from_name(Name* name, NameInfo& info, uint32_t start, bool constraint_operand = false);
 	Expr* parenthesized_from_name(uint32_t start);
 	Expr* parse_cast_expression();
 	Expr* parse_unary_expression();
@@ -379,6 +379,7 @@ private:
 	Expr* parse_primary_expression();
 	Expr* parse_requires_expression();
 	Expr* parse_constraint_expression(bool conjunction = false);
+	Expr* parse_constraint_operand();
 	Name* parse_type_constraint();
 	Decl* parse_concept_definition();
 	bool parse_requirement(Requirement& requirement);

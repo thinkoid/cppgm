@@ -1169,7 +1169,7 @@ Expr* Parser::parse_id_expression_or_cast()
 	return primary_from_name(name, info, start);
 }
 
-Expr* Parser::primary_from_name(Name* name, NameInfo& info, uint32_t start)
+Expr* Parser::primary_from_name(Name* name, NameInfo& info, uint32_t start, bool constraint_operand)
 {
 	const bool typename_keyword = name->typename_keyword;
 	const bool lone_decltype = !name->global && name->components.size == 1 &&
@@ -1181,7 +1181,7 @@ Expr* Parser::primary_from_name(Name* name, NameInfo& info, uint32_t start)
 	const bool known_type = typename_keyword || lone_decltype || info.category == NameCategory::Type ||
 		info.category == NameCategory::TypeTemplate;
 	if ((at(TokenKind::OP_LPAREN) && known_type) ||
-		(at(TokenKind::OP_LBRACE) && info.category != NameCategory::Concept))
+		(at(TokenKind::OP_LBRACE) && info.category != NameCategory::Concept && !constraint_operand))
 	{
 		FunctionalCastExpr* cast = make<FunctionalCastExpr>(ExprKind::FunctionalCast, start);
 		DeclSpecifier* type = make<DeclSpecifier>();

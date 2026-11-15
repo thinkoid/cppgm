@@ -1,5 +1,6 @@
 #include "syntax/parser.h"
 
+#include "lex/gnu_builtins.h"
 #include "support/small_list.h"
 
 namespace syntax {
@@ -43,12 +44,26 @@ Decl* Parser::parse_concept_definition()
 	return decl;
 }
 
+Expr* Parser::parse_constraint_operand()
+{
+	// The operands are primary expressions, so a name is an id-expression:
+	// braces after it open the constrained function's body and do not
+	// construct a value of a type that the name might denote.
+	GnuTrait trait;
+	if (!at(TokenKind::OP_COLON2) && (!at_identifier() || (at_trait(trait) && !IsGnuTypeTransform(trait))))
+		return parse_primary_expression();
+	const uint32_t start = location();
+	NameInfo info;
+	Name* name = parse_name(NameMode::Expression, info);
+	return name == nullptr ? nullptr : primary_from_name(name, info, start, true);
+}
+
 Expr* Parser::parse_constraint_expression(bool conjunction)
 {
 	// A requires-clause uses primary expressions joined by && and ||.
 	// Calls and comparisons must be parenthesized; a concept-id and a
 	// requires-expression are already primary expressions.
-	Expr* left = conjunction ? parse_primary_expression() : parse_constraint_expression(true);
+	Expr* left = conjunction ? parse_constraint_operand() : parse_constraint_expression(true);
 	if (left == nullptr)
 		return nullptr;
 	const TokenKind op = conjunction ? TokenKind::OP_LAND : TokenKind::OP_LOR;
@@ -56,7 +71,7 @@ Expr* Parser::parse_constraint_expression(bool conjunction)
 	{
 		const ParseToken token = tok();
 		next();
-		Expr* right = conjunction ? parse_primary_expression() : parse_constraint_expression(true);
+		Expr* right = conjunction ? parse_constraint_operand() : parse_constraint_expression(true);
 		if (right == nullptr)
 			return nullptr;
 		BinaryExpr* binary = make<BinaryExpr>(ExprKind::Binary, left->location);
