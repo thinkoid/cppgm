@@ -405,6 +405,8 @@ type-name <name>                   a name the parser knows as a type
 identifier <name>                  any other name
 cv-qualifier <token>
 decltype-specifier <text>
+constrained-placeholder-type <name> auto
+constrained-placeholder-type <name> decltype(auto)
 global-scope
 type-id
 declarator
@@ -540,7 +542,9 @@ PA6 checks declaration validity, PA16 checks immediate invocations and
 constant initialization, and PA20 supplies immediate lambda semantics.
 
 Retain a type-constraint before `auto` or `decltype(auto)` as one placeholder
-specifier. Keep its concept name and explicit arguments, and distinguish the
+specifier, the `constrained-placeholder-type` node. Its payload is the
+type-constraint as a `<name>`, one space, then `auto` or `decltype(auto)`.
+Keep its concept name and explicit arguments, and distinguish the
 two deduction rules. Generic and abbreviated parameters later use these parsed
 facts to introduce constrained template parameters without parsing them again.
 
@@ -550,3 +554,5 @@ Retain the lambda's explicit template parameter list and its head and trailing
 requires-clauses separately. A generic lambda's written `auto` parameters
 remain source syntax; append their invented template parameters after the
 explicit list for semantic analysis. AST dumps show the explicit source head.
+An explicit head has at least one template parameter: `[]<>() {}` is a
+syntax error.

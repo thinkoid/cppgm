@@ -217,6 +217,7 @@ decl-specifier:
 	qualified-type-name
 	elaborated-type-specifier
 	decltype-specifier
+	constrained-placeholder-type
 	cv-qualifier
 	KW_TYPEDEF
 	KW_EXTERN
@@ -300,6 +301,10 @@ namespace-name:
 decltype-specifier:
 	KW_DECLTYPE OP_LPAREN KW_AUTO OP_RPAREN
 	KW_DECLTYPE OP_LPAREN expression OP_RPAREN
+
+constrained-placeholder-type:
+	type-constraint KW_AUTO
+	type-constraint KW_DECLTYPE OP_LPAREN KW_AUTO OP_RPAREN
 
 init-declarator-list:
 	init-declarator (OP_COMMA init-declarator)*
@@ -633,7 +638,7 @@ lambda-expression:
 	lambda-introducer lambda-template-head? lambda-declarator? requires-clause? compound-statement
 
 lambda-template-head:
-	template-parameter-clause requires-clause?
+	OP_LT template-parameter-list close-angle-bracket requires-clause?
 
 lambda-declarator:
 	parameter-clause KW_MUTABLE? (KW_CONSTEXPR | KW_CONSTEVAL)? noexcept-specification? trailing-return-type?

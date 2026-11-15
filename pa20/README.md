@@ -341,13 +341,24 @@ Its call operator is a real member template of that closure. Support explicit
 `operator()<Args...>` calls, defaults and mixed explicit/invented parameters.
 Use the existing template substitution, constraint and specialization machinery.
 Keep head and trailing constraints separate and check them before demanding
-the selected body. C++20 also permits lambdas in unevaluated operands.
+the selected body. A trailing requires-clause needs a templated call operator:
+reject it on a lambda with no explicit head and no `auto` parameter outside a
+template. C++20 also permits lambdas in unevaluated operands.
 
 When an enclosing template is instantiated, clone fact-bearing lambda head
 defaults, constraints and signatures. Inner template parameters own their
 names and packs, including names that shadow an outer function parameter pack;
 only the lambda's own call specializations expand them. Captures retain the
 same storage, lifetime and constexpr rules as the other closure forms here.
+
+The closure type's mangled name states the explicit head before the parameter
+types of its signature: `Ty` for a type parameter, `Tn` and its type for a
+non-type parameter, `Tt`, the nested parameters and `E` for a template
+template parameter, and `Tp` before a parameter pack. So
+`[]<class T>(T)` is `UlTyT_E_`, `[]<int N>()` is `UlTnivE_` and
+`[]<class... T>(T...)` is `UlTpTyDpT_E_`. The parameters that written `auto`
+invents add nothing there. Closures with equal signatures share one
+numbering: `UlTyT_E_`, then `UlTyT_E0_`.
 
 ### C++20 abbreviated function templates
 
