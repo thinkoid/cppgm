@@ -1,6 +1,12 @@
 # cppgm-extended
 
 [![Tests](https://github.com/vishvananda/cppgm-extended/actions/workflows/tests.yml/badge.svg)](https://github.com/vishvananda/cppgm-extended/actions/workflows/tests.yml)
+[![Upstream C++11 correctness](https://github.com/vishvananda/cppgm-extended/actions/workflows/upstream-cxx11.yml/badge.svg)](https://github.com/vishvananda/cppgm-extended/actions/workflows/upstream-cxx11.yml)
+[![Clang build](https://github.com/vishvananda/cppgm-extended/actions/workflows/llvm.yml/badge.svg)](https://github.com/vishvananda/cppgm-extended/actions/workflows/llvm.yml)
+[![Intel macOS port](https://github.com/vishvananda/cppgm-extended/actions/workflows/macos.yml/badge.svg)](https://github.com/vishvananda/cppgm-extended/actions/workflows/macos.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![C++: 11 | 14 | 17](https://img.shields.io/badge/C%2B%2B-11%20%7C%2014%20%7C%2017-00599C.svg)](LANGUAGE_PROFILE.md)
+[![Targets: Linux x86-64 | Intel macOS](https://img.shields.io/badge/targets-Linux%20x86--64%20%7C%20Intel%20macOS-lightgrey.svg)](#caveats)
 
 A C++ compiler course designed for agents, with 37 cumulative assignments from
 preprocessing to native code, optimization and self-hosting. This repository
