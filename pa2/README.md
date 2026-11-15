@@ -545,6 +545,17 @@ The course mapping for simple tokens is given below, and this has also been tran
 	simple xor_eq OP_XORASS
 	simple xor OP_XOR
 
+In C++20 mode, six more spellings are simple tokens. The starter code has the
+table above without them. Earlier modes read the five words as identifiers and
+`<=>` as `<=` followed by `>`:
+
+	simple char8_t KW_CHAR8_T
+	simple concept KW_CONCEPT
+	simple consteval KW_CONSTEVAL
+	simple constinit KW_CONSTINIT
+	simple requires KW_REQUIRES
+	simple <=> OP_SPACESHIP
+
 ### Design Tips (Optional)
 
 These design tips are optional, and only suggest one way to complete this assignment.

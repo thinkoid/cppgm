@@ -40,6 +40,12 @@ from `char` and `unsigned char`. Preserve that identity in declarations,
 pointers, references and overload signatures. It is not a keyword in earlier
 modes.
 
+C++20 mode also checks the declarations that `consteval` can appear in.
+Reject `consteval` together with `constexpr` in one declaration, `consteval`
+on a variable and `consteval` on a destructor. A redeclaration of a function
+must repeat the `consteval` or `constexpr` of its first declaration. PA16
+evaluates the calls of these functions.
+
 ### Starter Kit
 
 The PA6 starter kit contains:

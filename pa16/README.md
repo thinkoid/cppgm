@@ -75,8 +75,8 @@ and immediate-function escalation are outside this profile.
 
 `constinit` requires constant initialization and static or thread storage.
 It does not add `const`, make a mutable variable usable in constant expressions,
-or require a literal class type. Reuse the initialization rules of the hosted
-`__constinit` extension. Both new words remain identifiers in C++11–17;
+or require a literal class type. PA30's hosted `__constinit` extension uses
+the same rules. Both new words remain identifiers in C++11–17;
 `__cpp_consteval` is `201811L` and `__cpp_constinit` is `201907L` in C++20.
 Immediate lambda call operators compose with PA20's closure rules.
 
