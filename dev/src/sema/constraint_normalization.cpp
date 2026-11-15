@@ -135,9 +135,15 @@ const ConstraintNode* Analyzer::normalized_constraint(const ConstraintPredicate*
 	predicate->normalization_state = FactState::InProgress;
 	TypeList arguments;
 	for (uint32_t i = 0; i < predicate->head->count; ++i)
-		arguments.push_back(synthesized_argument(predicate->head->parameters[i], i));
+	{
+		const TemplateParameterEntity* parameter = predicate->head->parameters[i];
+		const Type* argument = synthesized_argument(parameter, i);
+		arguments.push_back(parameter->pack ? types_.pack(&argument, 1) : argument);
+	}
 	InstantiationContext context(
 		*this, enter_instantiation(instantiation_depth_ + 1, predicate->location), false, predicate->head->ordinal);
+	// These are symbolic mappings, not evaluations of actual arguments.
+	template_depth_ = 1;
 	Scope* frame = instantiation_frame(
 		predicate->parameters, arguments.data(), static_cast<uint32_t>(arguments.size()), predicate->owner);
 	const ConstraintNode* result = nullptr;
@@ -190,6 +196,7 @@ const ConstraintNode* Analyzer::normalize_type_constraint(const syntax::Name& so
 	normalization->state = FactState::InProgress;
 	InstantiationContext context(
 		*this, enter_instantiation(instantiation_depth_ + 1, source.location), false, definition->head->ordinal);
+	template_depth_ = 1;
 	Scope* frame = instantiation_frame(
 		definition->parameters, arguments.data(), static_cast<uint32_t>(arguments.size()), definition->owner);
 	normalization->node = normalize_constraint(*definition->definition, frame);
@@ -309,7 +316,7 @@ const ConstraintNode* Analyzer::normalize_constraint(const syntax::Expr& express
 		const size_t base = decltype_words_.size();
 		decltype_words_.push_back(reinterpret_cast<uintptr_t>(expr));
 		syntax::SyntaxCloner cloner(arena_, true);
-		if (!decltype_words(cloner.expr(expr), current.scope))
+		if (!constraint_words(cloner.expr(expr), current.scope))
 			error(expr->location, "unsupported atomic constraint structure");
 		DecltypeKey key{ decltype_words_.data() + base, static_cast<uint32_t>(decltype_words_.size() - base) };
 		if (const ConstraintNode* const* known = constraint_atoms_.find(key))

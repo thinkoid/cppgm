@@ -141,12 +141,10 @@ bool Analyzer::predicate_satisfied(const ConstraintPredicate* definition, const 
 		*this, enter_instantiation(instantiation_depth_ + 1, location), false, definition->head->ordinal);
 	SoftSubstitution substitution(*this);
 	Scope* frame = instantiation_frame(definition->parameters, key.arguments, key.count, definition->owner);
-	FrameExpander expander(*this, frame);
-	syntax::SyntaxCloner cloner(arena_, true, expander.get());
 	++unevaluated_;
 	evaluation->satisfied = type_constraints_satisfied(definition, arguments, frame);
 	if (evaluation->satisfied && definition->definition != nullptr)
-		evaluation->satisfied = constraint_satisfied(*cloner.expr(definition->definition), frame);
+		evaluation->satisfied = constraint_satisfied(*definition->definition, frame);
 	evaluation->satisfied = evaluation->satisfied && !substitution.failed();
 	--unevaluated_;
 	evaluation->state = FactState::Done;

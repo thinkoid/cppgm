@@ -1,8 +1,36 @@
-#include "sema/analyzer.h"
+#include "sema/template_packs.h"
+
+#include "syntax/ast_clone.h"
 
 #include "sema/instantiation_context.h"
 
 namespace sema {
+
+syntax::Expr* Analyzer::constraint_operand(const syntax::Expr& expr, Scope* scope)
+{
+	FrameExpander expander(*this, scope);
+	syntax::SyntaxCloner cloner(arena_, true, expander.get());
+	if (expr.kind != syntax::ExprKind::Requires)
+		return cloner.expr(&expr);
+	const syntax::RequiresExpr& source = static_cast<const syntax::RequiresExpr&>(expr);
+	syntax::RequiresExpr* copy = arena_.allocate_array<syntax::RequiresExpr>(1);
+	*copy = source;
+	copy->facts = nullptr;
+	copy->parameters = cloner.parameter_clause(source.parameters);
+	if (!cloner.parameter_packs().empty())
+	{
+		copy->pattern_parameters = source.parameters;
+		using Pack = std::pair<const Identifier*, uint32_t>;
+		copy->parameter_packs.size = static_cast<uint32_t>(cloner.parameter_packs().size());
+		Pack* packs = arena_.allocate_array<Pack>(copy->parameter_packs.size);
+		for (uint32_t i = 0; i < copy->parameter_packs.size; ++i)
+			packs[i] = cloner.parameter_packs()[i];
+		copy->parameter_packs.data = packs;
+	}
+	// Requirements are reached in lexical order, and nested constraints
+	// short-circuit before their own operands are substituted.
+	return copy;
+}
 
 ExprFacts* Analyzer::requires_expression(const syntax::RequiresExpr& expr, Scope* scope)
 {
@@ -100,7 +128,9 @@ bool Analyzer::requirements_satisfied(const syntax::RequiresExpr& expr, Scope* s
 	{
 		if (requirement.kind == syntax::RequirementKind::Type)
 		{
-			const Type* type = type_id(*requirement.type, scope);
+			FrameExpander expander(*this, scope);
+			syntax::SyntaxCloner cloner(arena_, true, expander.get());
+			const Type* type = type_id(*cloner.type_id(requirement.type), scope);
 			if (type == nullptr || failed())
 				return false;
 			if (template_depth_ != 0 && dependent_type(type))
@@ -115,10 +145,11 @@ bool Analyzer::requirements_satisfied(const syntax::RequiresExpr& expr, Scope* s
 				return false;
 			continue;
 		}
-		const ExprFacts* facts = typed_value(*requirement.expression, scope);
+		const syntax::Expr* operand = constraint_operand(*requirement.expression, scope);
+		const ExprFacts* facts = typed_value(*operand, scope);
 		if (facts == nullptr || failed())
 			return false;
-		if (requirement.is_noexcept && may_throw(*requirement.expression, 0))
+		if (requirement.is_noexcept && may_throw(*operand, 0))
 			return false;
 		if (requirement.return_constraint != nullptr)
 		{
@@ -160,13 +191,13 @@ bool Analyzer::constraint_satisfied(const syntax::Expr& expr, Scope* scope)
 		}
 		bool value;
 		if (soft_substitution_ == 0)
-			value = atomic_constraint_satisfied(*current, scope);
+			value = atomic_constraint_satisfied(*constraint_operand(*current, scope), scope);
 		else
 		{
 			// A failed atom is false, without poisoning a disjunction's
 			// other operand. Hard errors in demanded bodies still diagnose.
 			SoftSubstitution substitution(*this);
-			value = atomic_constraint_satisfied(*current, scope) && !substitution.failed();
+			value = atomic_constraint_satisfied(*constraint_operand(*current, scope), scope) && !substitution.failed();
 		}
 		current = nullptr;
 		while (!pending.empty())

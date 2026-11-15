@@ -1752,7 +1752,10 @@ Decl* SyntaxCloner::decl(const Decl* decl)
 		if (decl->kind == DeclKind::ConstrainedTemplate)
 		{
 			ConstrainedTemplateDecl* constrained = copy(static_cast<const ConstrainedTemplateDecl*>(decl));
-			constrained->constraint = expr(constrained->constraint);
+			// A head clause is substituted only when satisfaction reaches its
+			// operands, using the declaration's captured instantiation scope.
+			SyntaxCloner deferred(arena_, bodies_);
+			constrained->constraint = deferred.expr(constrained->constraint);
 			result = constrained;
 		}
 		else

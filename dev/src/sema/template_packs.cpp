@@ -855,6 +855,8 @@ Scope* Analyzer::parameter_pack_scope(Scope* parent, const syntax::ParameterClau
 				BindingKind::TypeAlias, pack.first, nullptr, types_.pack(parameters + position, pack.second));
 			scope->has_parameter_packs = true;
 			binding->hidden = true;
+			// Deferred requirement operands discover these packs by scope.
+			print_in(scope, binding);
 			declare_in(scope, binding);
 		}
 		position += pack.second;

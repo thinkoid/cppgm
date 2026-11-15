@@ -358,10 +358,13 @@ Preserve the written order and short-circuit substitution.
 
 Keep different constrained overloads distinct, even when their function types
 agree. Equivalent
-redeclarations may rename parameters. For ordering, normalize named concepts
+redeclarations may rename parameters or qualify the same concept differently.
+Substitute a head clause only as satisfaction reaches its operands, including
+when enclosing class-template instantiations bind packs. For ordering, normalize named concepts
 to their original atomic expressions with canonical parameter mappings.
 Subsumption uses atomic identity, not equal spelling or equal boolean values;
 unused concept parameters do not make otherwise identical atoms distinct.
+Preserve symbolic pack and non-type argument mappings during normalization.
 Constraint metadata and normalization caches must not enlarge ordinary
 function, template-head or expression records.
 

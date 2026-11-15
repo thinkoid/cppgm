@@ -182,7 +182,15 @@ bool Analyzer::name_words(
 	// dependent (see placeholder_words).
 	std::vector<uint64_t>& words = decltype_words_;
 	const size_t name_start = words.size();
-	words.push_back(Word(kWordName, (name.components.size << 1) | (name.global ? 1 : 0)));
+	const Entity* concept_entity = nullptr;
+	if (constraint_keying_ && resolve)
+	{
+		const LookupResult found = lookup_name(name, scope, LookupFilter::Ordinary);
+		if (found.found() && !found.ambiguous && found.binding->kind == BindingKind::Concept)
+			concept_entity = found.binding->entity;
+	}
+	words.push_back(
+		Word(kWordName, concept_entity != nullptr ? 2 : (name.components.size << 1) | (name.global ? 1 : 0)));
 	// A callee whose explicit template arguments may resolve it (see
 	// resolved_specialization): its function template and the position of
 	// its words; the last component's arguments and their dependence.
@@ -191,10 +199,15 @@ bool Analyzer::name_words(
 	size_t last_arguments = 0;
 	size_t qualifier_arguments = 0;
 	bool dependent_arguments = false;
-	for (uint32_t i = 0; i < name.components.size; ++i)
+	for (uint32_t i = concept_entity != nullptr ? name.components.size - 1 : 0; i < name.components.size; ++i)
 	{
 		const syntax::NameComponent& component = name.components[i];
-		if (component.kind == syntax::NameComponentKind::Operator)
+		if (concept_entity != nullptr)
+		{
+			words.push_back(kWordEntity);
+			words.push_back(PointerWord(concept_entity));
+		}
+		else if (component.kind == syntax::NameComponentKind::Operator)
 			words.push_back(
 				Word(kWordName, (static_cast<uint64_t>(component.op) << 1) | (component.array_form ? 1 : 0)));
 		else if (component.kind != syntax::NameComponentKind::Identifier)
@@ -315,7 +328,7 @@ bool Analyzer::name_words(
 			// A value argument is its value, or the placeholder of its
 			// value-dependent expression (itself keyed, see template_value).
 			const Type* type = templ != nullptr ? (expansion ? types_.expansion(templ) : templ)->canonical : nullptr;
-			if (type == nullptr && argument.pack)
+			if (type == nullptr && argument.pack && !constraint_keying_)
 				return false;
 			if (type == nullptr && argument.type == nullptr)
 			{
@@ -345,7 +358,7 @@ bool Analyzer::name_words(
 			}
 		}
 	}
-	return !resolve || !name.qualified() ||
+	return concept_entity != nullptr || !resolve || !name.qualified() ||
 		resolution_words(name, scope, name.last().has_arguments ? last_arguments : 0, dependent_arguments, name_start,
 			qualifier_arguments);
 }

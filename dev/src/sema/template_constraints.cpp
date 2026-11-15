@@ -7,6 +7,28 @@
 
 namespace sema {
 
+namespace {
+struct ConstraintKeying
+{
+	bool& state;
+	bool previous;
+	explicit ConstraintKeying(bool& value) : state(value), previous(value) { state = true; }
+	~ConstraintKeying() { state = previous; }
+};
+} // namespace
+
+bool Analyzer::constraint_words(const syntax::Expr* expr, Scope* scope)
+{
+	ConstraintKeying keying(constraint_keying_);
+	return decltype_words(expr, scope);
+}
+
+bool Analyzer::constraint_name_words(const syntax::Name& name, Scope* scope)
+{
+	ConstraintKeying keying(constraint_keying_);
+	return name_words(name, scope, true);
+}
+
 const ConstraintPredicate* Analyzer::template_constraint(const TemplateHead* head) const
 {
 	if (!cxx20_ || head == nullptr)
@@ -93,9 +115,9 @@ bool Analyzer::template_constraints_equivalent(
 			earlier->type_constraints[index].index != i)
 			return false;
 		const size_t base = decltype_words_.size();
-		bool known = name_words(*earlier->type_constraints[index].name, earlier->parameters, true);
+		bool known = constraint_name_words(*earlier->type_constraints[index].name, earlier->parameters);
 		const size_t middle = decltype_words_.size();
-		known = known && name_words(*next, scope, true);
+		known = known && constraint_name_words(*next, scope);
 		const bool equal = known && decltype_words_.size() - middle == middle - base &&
 			std::equal(decltype_words_.begin() + static_cast<std::ptrdiff_t>(base),
 				decltype_words_.begin() + static_cast<std::ptrdiff_t>(middle),
@@ -157,9 +179,9 @@ bool Analyzer::constraints_equivalent(const syntax::Expr* first, Scope* earlier,
 	// canonical positions and names by lexical declaration identity.
 	std::vector<uint64_t>& words = decltype_words_;
 	const size_t base = words.size();
-	bool known = decltype_words(first, earlier);
+	bool known = constraint_words(first, earlier);
 	const size_t middle = words.size();
-	known = known && decltype_words(next, scope);
+	known = known && constraint_words(next, scope);
 	const bool equivalent = known && words.size() - middle == middle - base &&
 		std::equal(words.begin() + static_cast<std::ptrdiff_t>(base),
 			words.begin() + static_cast<std::ptrdiff_t>(middle), words.begin() + static_cast<std::ptrdiff_t>(middle));

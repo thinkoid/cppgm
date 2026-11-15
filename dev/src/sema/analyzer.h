@@ -672,6 +672,9 @@ private:
 	bool requirement_parameters(const syntax::RequiresExpr& expr, Scope*& scope);
 	bool requirements_satisfied(const syntax::RequiresExpr& expr, Scope* scope);
 	bool constraint_satisfied(const syntax::Expr& expr, Scope* scope);
+	syntax::Expr* constraint_operand(const syntax::Expr& expr, Scope* scope);
+	bool constraint_words(const syntax::Expr* expr, Scope* scope);
+	bool constraint_name_words(const syntax::Name& name, Scope* scope);
 	bool atomic_constraint_satisfied(const syntax::Expr& expr, Scope* scope);
 	ClassEntity* deduction_template(const syntax::Slice<syntax::DeclSpecifier>& type, Scope* scope);
 	const Type* deduce_class_type(ClassEntity* templ, const syntax::Slice<syntax::Expr*>& arguments, Scope* scope,
@@ -1961,6 +1964,7 @@ private:
 	// (a dependent callee by its spelling, see equivalent_representative);
 	// whether a placeholder's own key named one by its lookup.
 	bool equivalence_keying_ = false;
+	bool constraint_keying_ = false;
 	bool keyed_callee_lookup_ = false;
 	// Whether it names a dependent callee at all (found or not).
 	bool keyed_callee_ = false;
