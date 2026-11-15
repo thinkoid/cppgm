@@ -1,5 +1,5 @@
-<svg data-original-label="Wasm scalar runtime vs Clang; AMD EPYC 7763 64-Core Processor; revision f9e97b328c0796c85c317bee205ca89a663490b1" data-original-message="1.02×" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="Wasm scalar runtime vs Clang; AMD EPYC 7763 64-Core Processor; revision f9e97b328c0796c85c317bee205ca89a663490b1; measured f9e97b328c0796c85c317bee205ca89a663490b1; 0 commits behind main: 1.02×">
-  <title>Wasm scalar runtime vs Clang; AMD EPYC 7763 64-Core Processor; revision f9e97b328c0796c85c317bee205ca89a663490b1; measured f9e97b328c0796c85c317bee205ca89a663490b1; 0 commits behind main: 1.02×</title>
+<svg data-original-label="Wasm scalar runtime vs Clang; AMD EPYC 7763 64-Core Processor; revision f9e97b328c0796c85c317bee205ca89a663490b1" data-original-message="1.02×" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="Wasm scalar runtime vs Clang; AMD EPYC 7763 64-Core Processor; revision f9e97b328c0796c85c317bee205ca89a663490b1; measured f9e97b328c0796c85c317bee205ca89a663490b1; 2 commits behind main: 1.02×">
+  <title>Wasm scalar runtime vs Clang; AMD EPYC 7763 64-Core Processor; revision f9e97b328c0796c85c317bee205ca89a663490b1; measured f9e97b328c0796c85c317bee205ca89a663490b1; 2 commits behind main: 1.02×</title>
   <defs><clipPath id="badge"><rect width="120" height="24" rx="4"/></clipPath></defs>
   <g clip-path="url(#badge)">
     <rect width="64" height="24" fill="#555"/>
