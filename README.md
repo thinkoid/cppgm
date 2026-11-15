@@ -6,7 +6,7 @@
 [![Intel macOS port](https://github.com/vishvananda/cppgm-extended/actions/workflows/macos.yml/badge.svg)](https://github.com/vishvananda/cppgm-extended/actions/workflows/macos.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![C++: 11 | 14 | 17](https://img.shields.io/badge/C%2B%2B-11%20%7C%2014%20%7C%2017-00599C.svg)](LANGUAGE_PROFILE.md)
-[![Targets: Linux x86-64 | Intel macOS](https://img.shields.io/badge/targets-Linux%20x86--64%20%7C%20Intel%20macOS-lightgrey.svg)](#caveats)
+[![Targets: Linux x86-64 | Intel macOS | wasm32](https://img.shields.io/badge/targets-Linux%20x86--64%20%7C%20Intel%20macOS%20%7C%20wasm32-lightgrey.svg)](#caveats)
 
 A C++ compiler course designed for agents, with 37 cumulative assignments from
 preprocessing to native code, optimization and self-hosting. This repository
@@ -169,8 +169,9 @@ Methods: [public programs](benchmarks/public/README.md) ([O0 and per-host result
 ## Caveats
 
 - The [required C++11/14/17 profile](LANGUAGE_PROFILE.md) covers selected features, not full conformance to every edition.
-- Native targets are Linux x86-64 and Intel macOS. [PA37](pa37/README.md) adds the wasm32 backend; its implementation is in progress.
-- [Integrated assembly](pa29/README.md) is required before hosted compatibility; its documented ISA profile remains bounded.
+- C++20 and C have partial support. The profile lists the selected C++20 features; C sources compile in the `c17` and `gnu17` modes.
+- Targets are Linux x86-64, Intel macOS and wasm32 (`wasm32-unknown-unknown` and `wasm32-wasip1`, [PA37](pa37/README.md)).
+- [Integrated assembly](pa29/README.md) is complete for its documented x86-64 profile; it is not a general assembler.
 - No C++ standard library is bundled; use a host-installed library.
 - The compiler may contain bugs.
 - Code generation may be poor for unfamiliar program shapes.
