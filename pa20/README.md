@@ -358,3 +358,14 @@ in parameter order, including packs, without adding a template nesting level.
 Use the same invention for generic lambdas. Keep the written syntax available;
 only the normalized signature needs a copy, and the body remains shared.
 Abbreviated function names are template names for later explicit template calls.
+
+### C++20 constrained placeholders
+
+A variable, a function's declared or trailing return type and a lambda's
+trailing return type may be written `C auto`, `C<Args...> auto` or
+`C decltype(auto)`. Deduce the type as for the plain placeholder, then check
+the concept with the deduced type prepended to its written arguments. Reject
+the declaration or the return statement when the constraint is not satisfied.
+A specialization of a templated function or static data member checks the
+constraint with its own deduced type. A block-scope declaration may begin
+with the type-constraint.

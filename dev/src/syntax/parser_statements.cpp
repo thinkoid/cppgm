@@ -445,6 +445,12 @@ bool Parser::statement_starts_declaration(bool& tentative)
 	if (!type && info.category == NameCategory::None && at_identifier() && !at_identifier(final_) &&
 		!at_identifier(override_))
 		type = true;
+	// C++20: a type-constraint and its placeholder begin a declaration.
+	if (info.category == NameCategory::Concept && cxx20_ &&
+		(at(TokenKind::KW_AUTO) ||
+			(at(TokenKind::KW_DECLTYPE) && at(TokenKind::OP_LPAREN, 1) && at(TokenKind::KW_AUTO, 2) &&
+				at(TokenKind::OP_RPAREN, 3))))
+		return true;
 	if (!type || at(TokenKind::OP_LBRACE))
 		return false;
 	tentative = at(TokenKind::OP_LPAREN);

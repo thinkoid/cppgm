@@ -288,7 +288,10 @@ void Analyzer::specifiers(const syntax::Slice<syntax::DeclSpecifier>& list, Scop
 			}
 			break;
 		case syntax::DeclSpecKind::ConstrainedAuto:
-			error(specifier.location, "a constrained placeholder requires a deduced declaration");
+			// The placeholder; its deduction checks the type-constraint
+			// (see check_placeholder_constraint).
+			named = specifier.keyword == TokenKind::KW_AUTO ? auto_placeholder_ : decltype_auto_placeholder_;
+			out.type_specifier = &specifier;
 			break;
 		case syntax::DeclSpecKind::Decltype:
 			named = decltype_type(*specifier.operand, scope);

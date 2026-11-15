@@ -369,6 +369,8 @@ const Type* Analyzer::list_deduced_type(const Specifiers& specifiers, const Type
 	if (auto_deduced_ != nullptr && replacing->canonical != auto_deduced_->canonical)
 		error(location, "auto deduced as different types by one declaration's declarators (7.1.6.4p7)");
 	auto_deduced_ = replacing;
+	if (__builtin_expect(specifiers.type_specifier != nullptr, 0))
+		check_placeholder_constraint(specifiers.type_specifier, replacing, scope, location);
 	return replaced_auto(declared, replacing, specifiers.cv);
 }
 

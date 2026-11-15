@@ -1129,6 +1129,8 @@ FunctionEntity* Analyzer::closure_call(ClassEntity* closure, const syntax::Lambd
 		EntityKind::Function, operator_key(TokenKind::OP_LPAREN), closure->scope, type);
 	call->label = "operator()";
 	call->signature = signature_of(type);
+	if (__builtin_expect(expr.trailing != nullptr && cxx20_, 0))
+		note_placeholder_constraint(call, result_placeholder(nullptr, &suffix));
 	call->member = true;
 	call->is_operator = true;
 	call->operator_token = TokenKind::OP_LPAREN;
@@ -1260,8 +1262,14 @@ void Analyzer::number_closure(ClassEntity* closure, ClosureFacts* facts)
 
 const Type* Analyzer::return_deduction(ExprFacts* facts, uint32_t location, const syntax::Expr* operand)
 {
+	const bool constrained = __builtin_expect(!placeholder_constraints_.empty(), 0);
 	if (body_->placeholder == decltype_auto_placeholder_)
-		return decltype_result(*operand, *facts);
+	{
+		const Type* result = decltype_result(*operand, *facts);
+		if (constrained)
+			check_result_constraint(result, location);
+		return result;
+	}
 	// The result a return statement's operand deduces. A lambda's (5.1.2p4
 	// as CWG 1048 revised it, the auto rules GCC and Clang apply in C++11):
 	// its type after the array-to-pointer and function-to-pointer
@@ -1272,7 +1280,10 @@ const Type* Analyzer::return_deduction(ExprFacts* facts, uint32_t location, cons
 	if (graph_.closure_call(static_cast<const ClassEntity*>(function->owner->entity)) == function)
 	{
 		const Type* result = decayed(facts);
-		return IsVoid(result) ? types_.fundamental(FundamentalType::Void) : result->canonical;
+		result = IsVoid(result) ? types_.fundamental(FundamentalType::Void) : result->canonical;
+		if (constrained)
+			check_result_constraint(result, location);
+		return result;
 	}
 	const Type* declared = body_->placeholder;
 	TypeList deduced;
@@ -1282,10 +1293,14 @@ const Type* Analyzer::return_deduction(ExprFacts* facts, uint32_t location, cons
 		// 7.1.6.4p7 (C++14): a void operand deduces void for a plain auto.
 		if (declared->unqualified != auto_placeholder_)
 			error(location, "a void return deduces no reference or pointer to auto");
+		if (constrained)
+			check_result_constraint(facts->type, location);
 		return types_.fundamental(FundamentalType::Void);
 	}
 	if (!deduce_argument(declared, facts->type, facts->category, 0, deduced) || deduced[0] == nullptr)
 		error(location, "the return statement deduces no return type (7.1.6.4p7)");
+	if (constrained)
+		check_result_constraint(deduced[0], location);
 	return replaced_auto(declared, deduced[0], 0)->canonical;
 }
 
@@ -1302,6 +1317,8 @@ const Type* Analyzer::deduced_result(ExprFacts* facts, uint32_t location, const 
 		: nullptr;
 	if (result == nullptr)
 		error(location, "a return without a value deduces no reference or pointer to auto");
+	if (facts == nullptr && __builtin_expect(!placeholder_constraints_.empty(), 0) && body_->placeholder != nullptr)
+		check_result_constraint(result, location);
 	// 10.4p3: an abstract class is no return type.
 	if (semantic() && template_depth_ == 0)
 		check_abstract_object(result, location);

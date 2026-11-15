@@ -923,6 +923,7 @@ void Analyzer::declare_declarator(
 		{
 			facts->auto_type = declared_auto;
 			facts->auto_cv = specifiers.cv;
+			note_placeholder_constraint(facts, specifiers.type_specifier);
 		}
 	}
 	if (hosted_ && info.type->kind == TypeKind::Array && info.type->bound == 0 && init.declared->entity != nullptr &&
@@ -1018,6 +1019,8 @@ const Type* Analyzer::deduced_type(const Specifiers& specifiers, const Type* dec
 		if (auto_deduced_ != nullptr && result->canonical != auto_deduced_->canonical)
 			error(location, "decltype(auto) deduced as different types by one declaration's declarators");
 		auto_deduced_ = result;
+		if (__builtin_expect(specifiers.type_specifier != nullptr, 0))
+			check_placeholder_constraint(specifiers.type_specifier, result, scope, location);
 		return result;
 	}
 	if (expression->kind == syntax::ExprKind::BracedInit)
@@ -1093,6 +1096,8 @@ const Type* Analyzer::deduced_type(const Specifiers& specifiers, const Type* dec
 		(template_depth_ == 0 || (!dependent_type(replacing) && !dependent_type(auto_deduced_))))
 		error(location, "auto deduced as different types by one declaration's declarators (7.1.6.4p7)");
 	auto_deduced_ = replacing;
+	if (__builtin_expect(specifiers.type_specifier != nullptr, 0))
+		check_placeholder_constraint(specifiers.type_specifier, replacing, scope, location);
 	return replaced_auto(declared, replacing, specifiers.cv);
 }
 
@@ -2384,6 +2389,8 @@ FunctionEntity* Analyzer::new_function(const Specifiers& specifiers, const Decla
 	function->templated = templated;
 	function->signature = signature;
 	function->placeholder_result = holds_auto(info.type->element);
+	if (__builtin_expect(function->placeholder_result && cxx20_, 0))
+		note_placeholder_constraint(function, result_placeholder(specifiers.type_specifier, info.function_suffix));
 	function->member = where->kind == ScopeKind::Class;
 	function->is_static = function->member && specifiers.is_static;
 	function->is_constexpr = specifiers.is_constexpr;

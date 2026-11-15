@@ -2818,6 +2818,19 @@ private:
 	// function layouts grow to carry optional constraint metadata.
 	PointerMap template_constraint_index_;
 	PointerMap function_constraint_index_;
+	// Constrained placeholders (`C auto`): the specifier that a function's
+	// declared return type or a variable template's deduced type was
+	// written with, by FunctionEntity or VariableTemplateFacts. Sparse.
+	PointerMap placeholder_constraint_index_;
+	std::vector<const syntax::DeclSpecifier*> placeholder_constraints_;
+	void note_placeholder_constraint(const void* owner, const syntax::DeclSpecifier* specifier);
+	const syntax::DeclSpecifier* placeholder_constraint(const void* owner) const;
+	static const syntax::DeclSpecifier* result_placeholder(
+		const syntax::DeclSpecifier* written, const syntax::DeclaratorSuffix* suffix);
+	void check_placeholder_constraint(
+		const syntax::DeclSpecifier* specifier, const Type* deduced, Scope* scope, uint32_t location);
+	// A return statement deduced `deduced` for the body's placeholder.
+	void check_result_constraint(const Type* deduced, uint32_t location);
 	std::vector<ConstraintPredicate*> template_constraints_;
 	FlatMap<DecltypeKey, const ConstraintNode*, DecltypeHash> constraint_atoms_;
 	FlatMap<SpecializationKey, ConstraintNormalization*, SpecializationHash> constraint_normalizations_;

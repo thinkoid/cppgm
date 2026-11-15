@@ -238,6 +238,7 @@ void Analyzer::variable_partial_specialization(const Specifiers& specifiers, con
 	{
 		facts->auto_type = info.type;
 		facts->auto_cv = specifiers.cv;
+		note_placeholder_constraint(facts, specifiers.type_specifier);
 	}
 	// Indexed as a class template's partial specialization is (see
 	// partial_index_key), else the last of the unindexed ones.
@@ -412,6 +413,8 @@ bool Analyzer::instantiate_variable_specialization(VariableEntity* variable)
 				Specifiers specifiers = Specifiers();
 				specifiers.cv = source->auto_cv;
 				specifiers.is_static = true;
+				if (__builtin_expect(!placeholder_constraints_.empty(), 0))
+					specifiers.type_specifier = placeholder_constraint(source);
 				variable->type = auto_variable_type(
 					variable, specifiers, source->auto_type, initializer, frame, source->location);
 			}
