@@ -449,11 +449,27 @@ class ExportedDevMakefileTests(unittest.TestCase):
         for stdout_name in tracked_stdout:
             status_name = stdout_name.removesuffix(".stdout") + ".exit_status"
             status = (REPO_ROOT / status_name).read_text().strip()
-            self.assertEqual(
+            self.assertIn(
                 status,
-                "EXIT_SUCCESS",
+                ("EXIT_SUCCESS", "0"),
                 f"failed-case diagnostic must be export-owned: {stdout_name}",
             )
+
+    def test_export_preserves_both_success_status_formats(self):
+        script = EXPORT_SCRIPT.read_text()
+        start = script.index("is_failed_stdout_diagnostic() {")
+        end = script.index("\n}", start) + 2
+        command = script[start:end] + '\nis_failed_stdout_diagnostic "$1" "$2"'
+        with tempfile.TemporaryDirectory() as directory:
+            status_path = Path(directory) / "case.ref.exit_status"
+            for status in ("EXIT_SUCCESS", "0", "EXIT_FAILURE", "1", "70"):
+                with self.subTest(status=status):
+                    status_path.write_text(status + "\n")
+                    result = subprocess.run(
+                        ["bash", "-c", command, "export-status", directory, "case.ref.stdout"],
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, int(status in ("EXIT_SUCCESS", "0")))
 
 
 if __name__ == "__main__":

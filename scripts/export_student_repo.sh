@@ -170,7 +170,7 @@ is_failed_stdout_diagnostic() {
   [ -f "$status_path" ] || return 1
   local status
   status=$(tr -d '[:space:]' < "$status_path")
-  [ "$status" != "EXIT_SUCCESS" ]
+  [ "$status" != "EXIT_SUCCESS" ] && [ "$status" != "0" ]
 }
 
 verify_regenerated_reference_outputs() {
