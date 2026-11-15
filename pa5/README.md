@@ -526,3 +526,8 @@ parentheses. A type template parameter may use a named concept in place of
 Retain the concept name and its explicit arguments for later semantic analysis.
 Keep this uncommon syntax separate so ordinary template declarations and
 parameters stay compact on both native and wasm32 targets.
+### C++20 comparison syntax
+
+Retain `<=>` as a binary operator and in operator-function names. It
+associates to the left, between shift and relational precedence. Keep
+its source operands for semantic analysis, including defaulted declarations.

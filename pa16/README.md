@@ -435,3 +435,17 @@ satisfaction and preserve substitution short-circuiting. A compound requirement
 `{ expression } noexcept -> Concept<Args...>;` checks the expression, then its
 non-throwing property, then the concept with `decltype((expression))` prepended
 to its explicit arguments. Its value category and cv-qualifiers are preserved.
+
+### C++20 comparison constant evaluation
+
+Evaluate the recorded three-way comparison and rewritten candidates through
+the shared constant evaluator. Read the real category objects and honor
+short-circuit subobject order, array loops, conversions, constexpr
+eligibility and non-throwing facts for defaulted comparisons.
+
+### C++20 comparison templates
+
+Instantiate defaulted and rewritten comparisons using the same typed
+operator resolution as ordinary functions. An unavailable or deleted
+comparison fails an immediate requirement; it must not make the enclosing
+class template invalid before the comparison is demanded.

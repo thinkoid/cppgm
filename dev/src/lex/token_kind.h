@@ -135,7 +135,8 @@
 	X(OP_ARROWSTAR) \
 	X(OP_ARROW) \
 	X(KW_REQUIRES) \
-	X(KW_CONCEPT)
+	X(KW_CONCEPT) \
+	X(OP_SPACESHIP)
 // clang-format on
 
 enum class TokenKind : uint8_t
@@ -148,7 +149,14 @@ enum class TokenKind : uint8_t
 
 inline bool IsCxx20Keyword(TokenKind kind)
 {
-	return kind == TokenKind::KW_CHAR8_T || kind >= TokenKind::KW_REQUIRES;
+	return kind == TokenKind::KW_CHAR8_T || (kind >= TokenKind::KW_REQUIRES && kind <= TokenKind::KW_CONCEPT);
+}
+
+inline bool IsComparisonOperatorToken(TokenKind kind)
+{
+	return kind == TokenKind::OP_EQ || kind == TokenKind::OP_NE || kind == TokenKind::OP_LT ||
+		kind == TokenKind::OP_GT || kind == TokenKind::OP_LE || kind == TokenKind::OP_GE ||
+		kind == TokenKind::OP_SPACESHIP;
 }
 
 // The course's term name, e.g. "KW_AUTO" or "OP_LAND".

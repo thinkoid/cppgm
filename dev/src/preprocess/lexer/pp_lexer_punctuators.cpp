@@ -16,7 +16,7 @@ struct PunctuatorSpelling
 // [lex.operators] 2.13 preprocessing-op-or-punc spellings made of
 // punctuation, grouped by first character and ordered longest first so the
 // first match is the longest one. Lists end with a null spelling.
-const PunctuatorSpelling* PunctuatorCandidates(int32_t first)
+const PunctuatorSpelling* PunctuatorCandidates(int32_t first, bool cxx20)
 {
 	static const PunctuatorSpelling kLeftBrace[] = { CPPGM_PUNCTUATOR("{", OP_LBRACE), { nullptr, 0 } };
 	static const PunctuatorSpelling kRightBrace[] = { CPPGM_PUNCTUATOR("}", OP_RBRACE), { nullptr, 0 } };
@@ -58,6 +58,10 @@ const PunctuatorSpelling* PunctuatorCandidates(int32_t first)
 	static const PunctuatorSpelling kLess[] = { CPPGM_PUNCTUATOR("<<=", OP_LSHIFTASS),
 		CPPGM_PUNCTUATOR("<<", OP_LSHIFT), CPPGM_PUNCTUATOR("<=", OP_LE), CPPGM_PUNCTUATOR("<%", OP_LBRACE),
 		CPPGM_PUNCTUATOR("<:", OP_LSQUARE), CPPGM_PUNCTUATOR("<", OP_LT), { nullptr, 0 } };
+	static const PunctuatorSpelling kLess20[] = { CPPGM_PUNCTUATOR("<=>", OP_SPACESHIP),
+		CPPGM_PUNCTUATOR("<<=", OP_LSHIFTASS), CPPGM_PUNCTUATOR("<<", OP_LSHIFT), CPPGM_PUNCTUATOR("<=", OP_LE),
+		CPPGM_PUNCTUATOR("<%", OP_LBRACE), CPPGM_PUNCTUATOR("<:", OP_LSQUARE), CPPGM_PUNCTUATOR("<", OP_LT),
+		{ nullptr, 0 } };
 	static const PunctuatorSpelling kGreater[] = { CPPGM_PUNCTUATOR(">>=", OP_RSHIFTASS),
 		CPPGM_PUNCTUATOR(">>", OP_RSHIFT), CPPGM_PUNCTUATOR(">=", OP_GE), CPPGM_PUNCTUATOR(">", OP_GT),
 		{ nullptr, 0 } };
@@ -111,7 +115,7 @@ const PunctuatorSpelling* PunctuatorCandidates(int32_t first)
 	case '=':
 		return kEquals;
 	case '<':
-		return kLess;
+		return cxx20 ? kLess20 : kLess;
 	case '>':
 		return kGreater;
 	default:
@@ -277,7 +281,7 @@ unsigned PlainPunctuator(const PlainBytes& bytes, const PunctuatorSpelling*& can
 
 uint8_t PPLexer::try_lex_punctuator()
 {
-	const PunctuatorSpelling* candidates = PunctuatorCandidates(cur_.code_point);
+	const PunctuatorSpelling* candidates = PunctuatorCandidates(cur_.code_point, cxx20_);
 	if (candidates == nullptr)
 		return kNoPunctuator;
 
@@ -345,7 +349,7 @@ bool PPLexer::is_character_prefix() const
 	const char* spelling;
 	uint32_t length;
 	current_spelling(spelling, length);
-	return (utf8_characters_ && length == 2 && spelling[0] == 'u' && spelling[1] == '8') ||
+	return (cxx20_ && length == 2 && spelling[0] == 'u' && spelling[1] == '8') ||
 		SpellingIn(spelling, length, kCharacterPrefixes);
 }
 

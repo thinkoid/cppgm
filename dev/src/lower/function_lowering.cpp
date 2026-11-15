@@ -223,7 +223,7 @@ void FunctionLowering::lower_definition()
 	const uint32_t location = body != nullptr ? body->body->location : 0;
 	// 12.8p31: a local that every return statement returns is constructed
 	// in an indirect result's destination.
-	if (result_destination_.kind != lowir::ValueKind::None && body != nullptr && !function_->defaulted &&
+	if (result_destination_.kind != lowir::ValueKind::None && body != nullptr && sema::UsesFunctionBody(function_) &&
 		!body->try_block)
 	{
 		bool single = true;
@@ -297,7 +297,7 @@ void FunctionLowering::lower_definition()
 	// variant members, 12.4p8).
 	if (function_->destructor && destructor_stores_tables())
 		store_vptr(location);
-	if (body != nullptr && !function_->defaulted)
+	if (body != nullptr && sema::UsesFunctionBody(function_))
 		compound(*body->body);
 	body_target_ = lowir::kNoId;
 	// A constructor's function-try-block body leaves its subobjects'
@@ -356,7 +356,7 @@ void FunctionLowering::destructor_body(uint32_t location, bool calls_complete)
 	{
 		if (destructor_stores_tables())
 			store_vptr(location);
-		if (body != nullptr && !function_->defaulted)
+		if (body != nullptr && sema::UsesFunctionBody(function_))
 			compound(*body->body);
 	}
 	body_entry_ = body_target_;

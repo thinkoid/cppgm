@@ -125,9 +125,9 @@ Preprocessor::Preprocessor(const PreprocessorOptions& options, const std::string
 	expander_.set_input(&source_);
 	source_.set_hosted(hosted_);
 	source_.set_conditional_escapes(options.gnu_c());
-	source_.set_utf8_characters(options.cplusplus == "202002L");
+	source_.set_cxx20(options.cplusplus == "202002L");
 	expander_.set_conditional_escapes(options.gnu_c());
-	expander_.set_utf8_characters(options.cplusplus == "202002L");
+	expander_.set_cxx20(options.cplusplus == "202002L");
 	evaluator_.set_conditional_escapes(options.gnu_c());
 	evaluator_.set_cxx20(options.cplusplus == "202002L");
 	const bool separators = hosted_ || options.literals != NumberDialect::Cxx11;

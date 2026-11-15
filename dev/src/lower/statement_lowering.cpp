@@ -2004,7 +2004,7 @@ void FunctionLowering::scan_body()
 	// A function-try-block's statement is the context of the labels in its
 	// body and handlers, as a try statement's (15p2: a goto there leaves
 	// none of its regions).
-	if (body != nullptr && !function_->defaulted)
+	if (body != nullptr && sema::UsesFunctionBody(function_))
 		count_returns(body->try_block ? static_cast<const syntax::Stmt&>(*body->try_block) : *body->body, live);
 }
 

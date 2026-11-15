@@ -107,6 +107,13 @@ bool ConstantInterpreter::materialize(const syntax::Expr& expr, const ConstPlace
 		? static_cast<const FunctionEntity*>(facts->entity)
 		: nullptr;
 	const Type* type = facts->type;
+	if (e->kind == syntax::ExprKind::Binary &&
+		(facts->flags & (kRewrittenComparison | kUserConverted)) == kRewrittenComparison)
+		return materialize(*facts->replacement, target);
+	if (e->kind == syntax::ExprKind::Binary &&
+		static_cast<const syntax::BinaryExpr*>(e)->op == TokenKind::OP_SPACESHIP &&
+		(facts->flags & (kOperatorCall | kUserConverted)) == 0)
+		return materialize_comparison(static_cast<const syntax::BinaryExpr&>(*e), target);
 	syntax::Initializer view = syntax::Initializer();
 	view.location = e->location;
 	if (facts->category != ValueCategory::PRValue)

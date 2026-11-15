@@ -252,6 +252,7 @@ enum AbiTerminalKind : std::uint8_t
 	ABI_TERMINAL_ARROW,
 	ABI_TERMINAL_CALL,
 	ABI_TERMINAL_INDEX,
+	ABI_TERMINAL_THREE_WAY,
 	ABI_TERMINAL_COUNT
 };
 
@@ -275,7 +276,7 @@ inline const AbiTerminalEntry& abi_terminal_entry(AbiTerminalKind kind)
 		{ "right-shift-assign", "rS" }, { "equal", "eq" }, { "not-equal", "ne" }, { "less", "lt" }, { "greater", "gt" },
 		{ "less-equal", "le" }, { "greater-equal", "ge" }, { "logical-not", "nt" }, { "logical-and", "aa" },
 		{ "logical-or", "oo" }, { "increment", "pp" }, { "decrement", "mm" }, { "comma", "cm" },
-		{ "member-pointer", "pm" }, { "arrow", "pt" }, { "call", "cl" }, { "index", "ix" } };
+		{ "member-pointer", "pm" }, { "arrow", "pt" }, { "call", "cl" }, { "index", "ix" }, { "three-way", "ss" } };
 	return kTerminals[kind];
 }
 

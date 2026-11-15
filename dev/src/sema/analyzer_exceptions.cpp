@@ -1088,6 +1088,9 @@ bool Analyzer::may_throw(const syntax::Expr& expr, uint32_t depth)
 	// do not count.
 	const syntax::Expr* e = WithoutParentheses(&expr);
 	const ExprFacts* facts = e->facts;
+	if (e->kind == syntax::ExprKind::Binary && facts != nullptr &&
+		(facts->flags & (kRewrittenComparison | kUserConverted)) == kRewrittenComparison)
+		return may_throw(*facts->replacement, depth + 1);
 	if (facts == nullptr || depth > 256)
 		return false;
 	check_stack(e->location);

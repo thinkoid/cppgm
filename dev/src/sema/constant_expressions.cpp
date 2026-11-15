@@ -249,6 +249,9 @@ bool ConstantInterpreter::rvalue(const syntax::Expr& expr, ConstValue& out)
 	if (!step(e->location))
 		return false;
 	TypeTable& types = analyzer_.types_;
+	if (e->kind == syntax::ExprKind::Binary &&
+		(facts->flags & (kRewrittenComparison | kUserConverted)) == kRewrittenComparison)
+		return rvalue(*facts->replacement, out);
 	if ((facts->flags & kUserConverted) != 0)
 	{
 		Result result = Result();
@@ -781,6 +784,9 @@ bool ConstantInterpreter::glvalue(const syntax::Expr& expr, ConstPlace& out)
 		return fail(e->location, "an expression outside constant evaluation");
 	if (!step(e->location))
 		return false;
+	if (e->kind == syntax::ExprKind::Binary &&
+		(facts->flags & (kRewrittenComparison | kUserConverted)) == kRewrittenComparison)
+		return glvalue(*facts->replacement, out);
 	if ((facts->flags & kUserConverted) != 0)
 	{
 		// A conversion function's reference result designates its referent.
@@ -1162,7 +1168,7 @@ bool ConstantInterpreter::binary(const syntax::BinaryExpr& expr, ConstValue& out
 		spine.push_back(node);
 		const syntax::Expr* left = WithoutParentheses(node->left);
 		if (left->kind != syntax::ExprKind::Binary || !IsChainable(static_cast<const syntax::BinaryExpr*>(left)->op) ||
-			(left->facts->flags & kOperatorCall) != 0)
+			(left->facts->flags & (kOperatorCall | kRewrittenComparison)) != 0)
 			break;
 		node = static_cast<const syntax::BinaryExpr*>(left);
 	}
@@ -1353,12 +1359,18 @@ bool ConstantInterpreter::comparison(const syntax::BinaryExpr& expr, const Const
 	if (!apply_standard(*expr.left, WithoutParentheses(expr.left)->facts->conversion, left) ||
 		!operand(*expr.right, right))
 		return false;
+	return scalar_comparison(expr.op, left, right, out, expr.location);
+}
+
+bool ConstantInterpreter::scalar_comparison(
+	TokenKind op, ConstValue left, ConstValue right, ConstValue& out, uint32_t location)
+{
 	const Type* boolean = analyzer_.types_.fundamental(FundamentalType::Bool);
 	if (left.kind == ValueKind::Array || right.kind == ValueKind::Array)
 	{
 		// GNU complex values (of the common complex type).
 		bool result = false;
-		if (!complex_equal(expr.op == TokenKind::OP_EQ, left, right, result, expr.location))
+		if (!complex_equal(op == TokenKind::OP_EQ, left, right, result, location))
 			return false;
 		out = IntegerValue(boolean, result ? 1 : 0);
 		return true;
@@ -1369,7 +1381,7 @@ bool ConstantInterpreter::comparison(const syntax::BinaryExpr& expr, const Const
 		// designate the same member of the same subobject (unspecified for
 		// a virtual member function's).
 		const Type* common = left.kind == ValueKind::MemberPointer ? left.type : right.type;
-		if (!convert_scalar(left, common, expr.location) || !convert_scalar(right, common, expr.location))
+		if (!convert_scalar(left, common, location) || !convert_scalar(right, common, location))
 			return false;
 		const Entity* a = static_cast<const Entity*>(left.address.entity);
 		const Entity* b = static_cast<const Entity*>(right.address.entity);
@@ -1377,40 +1389,40 @@ bool ConstantInterpreter::comparison(const syntax::BinaryExpr& expr, const Const
 										static_cast<const FunctionEntity*>(a)->is_virtual) ||
 			(b != nullptr && b->kind == EntityKind::Function && static_cast<const FunctionEntity*>(b)->is_virtual);
 		if (virtual_member && a != nullptr && b != nullptr)
-			return fail(expr.location, "an unspecified comparison of pointers to virtual member functions");
+			return fail(location, "an unspecified comparison of pointers to virtual member functions");
 		const bool equal = a == b && (a == nullptr || left.address.offset == right.address.offset);
-		out = IntegerValue(boolean, (expr.op == TokenKind::OP_EQ) == equal ? 1 : 0);
+		out = IntegerValue(boolean, (op == TokenKind::OP_EQ) == equal ? 1 : 0);
 		return true;
 	}
 	if (left.kind == ValueKind::Pointer || right.kind == ValueKind::Pointer)
 	{
 		if (left.kind == ValueKind::Integer && left.bits == 0)
-			convert_scalar(left, right.type, expr.location);
+			convert_scalar(left, right.type, location);
 		if (right.kind == ValueKind::Integer && right.bits == 0)
-			convert_scalar(right, left.type, expr.location);
+			convert_scalar(right, left.type, location);
 		if (left.kind != ValueKind::Pointer || right.kind != ValueKind::Pointer)
-			return fail(expr.location, "a comparison of a pointer with a non-pointer");
+			return fail(location, "a comparison of a pointer with a non-pointer");
 		if ((left.root == RootKind::Unknown || right.root == RootKind::Unknown) && left.root != RootKind::Null &&
 			right.root != RootKind::Null && (left.root != right.root || left.address.entity != right.address.entity))
-			return fail(expr.location, "a comparison of unspecified object identities");
+			return fail(location, "a comparison of unspecified object identities");
 		const bool same_object = left.root == right.root && left.count == right.count && left.extra == right.extra &&
 			(left.address.entity == right.address.entity || same_literal(left, right));
-		if (expr.op == TokenKind::OP_EQ || expr.op == TokenKind::OP_NE)
+		if (op == TokenKind::OP_EQ || op == TokenKind::OP_NE)
 		{
 			const bool equal = same_object && left.address.offset == right.address.offset;
-			out = IntegerValue(boolean, (expr.op == TokenKind::OP_EQ) == equal ? 1 : 0);
+			out = IntegerValue(boolean, (op == TokenKind::OP_EQ) == equal ? 1 : 0);
 			return true;
 		}
 		// 5.9p2: an order only within one complete object, between elements
 		// of one array or members of one access control.
 		const Type* root = nullptr;
 		if (!same_object || left.root == RootKind::Null || left.root == RootKind::Function ||
-			!root_type(PlaceOf(left, left.type->element), root, expr.location) ||
+			!root_type(PlaceOf(left, left.type->element), root, location) ||
 			!ordered(root, left.address.offset, right.address.offset, 0))
-			return fail(expr.location, "an unspecified pointer comparison");
+			return fail(location, "an unspecified pointer comparison");
 		out = IntegerValue(boolean,
 			IntegralCompare(
-				expr.op, true, static_cast<uint64_t>(left.address.offset), static_cast<uint64_t>(right.address.offset))
+				op, true, static_cast<uint64_t>(left.address.offset), static_cast<uint64_t>(right.address.offset))
 				? 1
 				: 0);
 		return true;
@@ -1418,19 +1430,19 @@ bool ConstantInterpreter::comparison(const syntax::BinaryExpr& expr, const Const
 	if (left.kind == ValueKind::Binary128 || right.kind == ValueKind::Binary128)
 	{
 		const Type* common = left.kind == ValueKind::Binary128 ? left.type : right.type;
-		if (!convert_scalar(left, common, expr.location) || !convert_scalar(right, common, expr.location))
+		if (!convert_scalar(left, common, location) || !convert_scalar(right, common, location))
 			return false;
-		out = IntegerValue(boolean, Binary128Comparison(expr.op, left, right));
+		out = IntegerValue(boolean, Binary128Comparison(op, left, right));
 		return true;
 	}
 	if (left.kind == ValueKind::Floating || right.kind == ValueKind::Floating)
 	{
 		const Type* common = left.kind == ValueKind::Floating ? left.type : right.type;
-		if (!convert_scalar(left, common, expr.location) || !convert_scalar(right, common, expr.location))
+		if (!convert_scalar(left, common, location) || !convert_scalar(right, common, location))
 			return false;
 		const long double a = left.floating, b = right.floating;
 		bool result = false;
-		switch (expr.op)
+		switch (op)
 		{
 		case TokenKind::OP_EQ:
 			result = a == b;
@@ -1455,14 +1467,14 @@ bool ConstantInterpreter::comparison(const syntax::BinaryExpr& expr, const Const
 		return true;
 	}
 	if (left.kind != ValueKind::Integer || right.kind != ValueKind::Integer)
-		return fail(expr.location, "a comparison of values that are not scalars");
+		return fail(location, "a comparison of values that are not scalars");
 	const bool is_signed = KindOf(left.type).is_signed;
 	if (IsWideIntegral(left.type) || IsWideIntegral(right.type))
 	{
-		out = IntegerValue(boolean, WideCompare(expr.op, is_signed, WideInteger(left), WideInteger(right)) ? 1 : 0);
+		out = IntegerValue(boolean, WideCompare(op, is_signed, WideInteger(left), WideInteger(right)) ? 1 : 0);
 		return true;
 	}
-	out = IntegerValue(boolean, IntegralCompare(expr.op, is_signed, left.bits, right.bits) ? 1 : 0);
+	out = IntegerValue(boolean, IntegralCompare(op, is_signed, left.bits, right.bits) ? 1 : 0);
 	return true;
 }
 

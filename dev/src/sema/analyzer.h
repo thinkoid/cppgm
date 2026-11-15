@@ -422,6 +422,21 @@ private:
 	void function_definition(const syntax::FunctionDecl& decl, Scope* scope);
 	void special_member(const syntax::SpecialMemberDecl& decl, Scope* scope);
 	void default_definition(FunctionEntity* function, bool first, uint32_t location);
+	bool default_comparison(FunctionEntity* function, bool first, uint32_t location);
+	void implicit_comparison_equality(FunctionEntity* source, const ClassEntity* cls, uint32_t location);
+	void analyze_comparison_body(
+		FunctionEntity* function, const syntax::CompoundStmt& body, Scope* scope, bool declared_constexpr);
+	void comparison_body(FunctionEntity* function, syntax::CompoundStmt& body, Scope* scope);
+	syntax::Expr* comparison_object(FunctionEntity* function, unsigned index, Scope* scope, uint32_t location);
+	syntax::Expr* comparison_fallback(
+		const Type* result, syntax::Expr* left, syntax::Expr* right, Scope* scope, uint32_t location);
+	syntax::Expr* comparison_cast(syntax::Expr* operand, const Type* type, uint32_t location);
+	void comparison_scalar(FunctionEntity* function, const Type* type, syntax::Expr* left, syntax::Expr* right,
+		Scope* scope, std::vector<syntax::Stmt*>& statements, uint32_t location, uint8_t& category, bool& eligible,
+		bool& nothrow);
+	void comparison_elements(FunctionEntity* function, const Type* type, syntax::Expr* left, syntax::Expr* right,
+		Scope* scope, std::vector<syntax::Stmt*>& statements, uint32_t location, uint8_t& category, bool& eligible,
+		bool& nothrow, uint32_t depth = 0);
 	void bit_field_declaration(const syntax::BitFieldDecl& decl, Scope* scope);
 	void require_definition_types(const Type* type, uint32_t location);
 	void define_function(FunctionEntity* function, const Type* type, const syntax::ParameterClause* parameters,
@@ -595,6 +610,10 @@ private:
 	ExprFacts* complex_arithmetic(const syntax::BinaryExpr& expr, const Type* lt, const Type* rt);
 	ExprFacts* vector_arithmetic(const syntax::BinaryExpr& expr, const Type* lt, const Type* rt, bool integral_only);
 	ExprFacts* comparison(const syntax::BinaryExpr& expr, ExprFacts* left, ExprFacts* right);
+	ExprFacts* three_way_comparison(const syntax::BinaryExpr& expr, Scope* scope);
+	const ClassEntity* comparison_category(unsigned category, uint32_t location);
+	const syntax::Expr* comparison_value(
+		const ClassEntity* category, const char* value, Scope* scope, uint32_t location);
 	bool scalar_splats(const syntax::Expr& scalar, const Type* type, const Type* lane);
 	ExprFacts* member_pointer_access(const syntax::BinaryExpr& expr, ExprFacts* left, ExprFacts* right);
 	ExprFacts* assignment(const syntax::BinaryExpr& expr, Scope* scope);
@@ -1287,6 +1306,14 @@ private:
 	// selects, or null for the built-in operator.
 	ExprFacts* overloaded_operator(const syntax::Expr& expr, TokenKind op, const syntax::Slice<syntax::Expr*>& operands,
 		bool postfix, Scope* scope);
+	bool operator_function_candidates(TokenKind op, const syntax::Slice<syntax::Expr*>& operands, bool postfix,
+		bool members_only, bool class_operand, uint8_t rewriting);
+	ExprFacts* selected_operator(const syntax::Expr& expr, TokenKind op, const syntax::Slice<syntax::Expr*>& operands,
+		const Candidate& chosen, Scope* scope);
+	ExprFacts* overloaded_comparison(const syntax::Expr& expr, TokenKind op,
+		const syntax::Slice<syntax::Expr*>& operands, Scope* scope, bool class_operand);
+	ExprFacts* rewritten_comparison(const syntax::Expr& expr, TokenKind op,
+		const syntax::Slice<syntax::Expr*>& operands, const Candidate& chosen, Scope* scope);
 	void operator_conversions(
 		const syntax::Slice<syntax::Expr*>& operands, FunctionEntity* selected, const Candidate& chosen, Scope* scope);
 	ExprFacts* binary_operator(const syntax::BinaryExpr& expr, Scope* scope);

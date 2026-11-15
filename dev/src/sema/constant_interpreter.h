@@ -205,6 +205,8 @@ private:
 	bool arithmetic(const syntax::BinaryExpr& expr, const ConstValue& left, ConstValue& out);
 	bool pointer_arithmetic(const syntax::BinaryExpr& expr, const ConstValue* left, ConstValue& out);
 	bool comparison(const syntax::BinaryExpr& expr, const ConstValue& left, ConstValue& out);
+	bool scalar_comparison(TokenKind op, ConstValue left, ConstValue right, ConstValue& out, uint32_t location);
+	bool materialize_comparison(const syntax::BinaryExpr& expr, const ConstPlace& target);
 	bool logical(const syntax::BinaryExpr& expr, ConstValue& out);
 	bool assignment(const syntax::BinaryExpr& expr, ConstPlace& out);
 	bool compound_assignment(const syntax::BinaryExpr& expr, ConstPlace& out);

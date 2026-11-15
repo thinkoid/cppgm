@@ -136,6 +136,13 @@ struct Conversion
 	const Conversion* after;
 };
 
+// Built-in <=> resolves the real standard category objects once.
+struct ThreeWayComparison
+{
+	const Type* operand;
+	const syntax::Expr* values[4]; // less, equal/equivalent, greater, unordered
+};
+
 // ExprFacts::flags.
 enum : uint32_t
 {
@@ -227,6 +234,8 @@ enum : uint32_t
 	// Kind-specific use of the same bit: sizeof a C runtime array, whose
 	// type is retained in `target` rather than a folded integer `value`.
 	kRuntimeSize = kRuntimeCheck,
+	// Binary comparison only: its separately typed equivalent.
+	kRewrittenComparison = kRuntimeCheck,
 	// A braced-init-list initializing std::initializer_list<E>: the array
 	// `const E[N]` (`target`) its elements initialize, and the object
 	// referring to it (8.5.4p5).
@@ -315,6 +324,10 @@ struct ExprFacts
 		const Type* target;
 		// kUserConverted: the converted operand's own facts.
 		const ExprFacts* original;
+		// Built-in three-way comparison, identified by its operator token.
+		const ThreeWayComparison* comparison;
+		// A rewritten C++20 comparison (kRewrittenComparison).
+		const syntax::Expr* replacement;
 	};
 
 	Constant constant() const { return Constant{ value, type }; }

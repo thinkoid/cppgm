@@ -32,7 +32,8 @@ bool IsComparisonOperator(TokenKind op)
 // a condition's operator function returning a class, 6.4p4).
 bool BuiltinOperator(const syntax::Expr* expr)
 {
-	return expr->facts == nullptr || (expr->facts->flags & (sema::kOperatorCall | sema::kUserConverted)) == 0;
+	return expr->facts == nullptr ||
+		(expr->facts->flags & (sema::kOperatorCall | sema::kUserConverted | sema::kRewrittenComparison)) == 0;
 }
 
 // A built-in `&&` or `||`.

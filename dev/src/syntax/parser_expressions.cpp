@@ -179,16 +179,16 @@ int Parser::binary_precedence(TokenKind& op, uint32_t& width)
 	{
 	case TokenKind::OP_DOTSTAR:
 	case TokenKind::OP_ARROWSTAR:
-		return 13;
+		return 14;
 	case TokenKind::OP_STAR:
 	case TokenKind::OP_DIV:
 	case TokenKind::OP_MOD:
-		return 12;
+		return 13;
 	case TokenKind::OP_PLUS:
 	case TokenKind::OP_MINUS:
-		return 11;
+		return 12;
 	case TokenKind::OP_LSHIFT:
-		return 10;
+		return 11;
 	case TokenKind::OP_GT:
 		// In a template argument list the first non-nested `>` (or `>>`)
 		// closes the list (14.2p3).
@@ -198,9 +198,11 @@ int Parser::binary_precedence(TokenKind& op, uint32_t& width)
 		{
 			op = TokenKind::OP_RSHIFT;
 			width = 2;
-			return 10;
+			return 11;
 		}
 		return 9;
+	case TokenKind::OP_SPACESHIP:
+		return 10;
 	case TokenKind::OP_LT:
 	case TokenKind::OP_LE:
 	case TokenKind::OP_GE:

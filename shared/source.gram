@@ -509,13 +509,16 @@ equality-operator:
 	OP_NE
 
 relational-expression:
-	shift-expression (relational-operator shift-expression)*
+	compare-expression (relational-operator compare-expression)*
 
 relational-operator:
 	OP_LT
 	OP_GT
 	OP_LE
 	OP_GE
+
+compare-expression:
+	shift-expression (OP_SPACESHIP shift-expression)*
 
 shift-expression:
 	additive-expression (shift-operator additive-expression)*
@@ -740,6 +743,7 @@ operator-token:
 	OP_NE
 	OP_LE
 	OP_GE
+	OP_SPACESHIP
 	OP_LAND
 	OP_LOR
 	OP_INC

@@ -316,6 +316,9 @@ RValue FunctionLowering::rvalue(const syntax::Expr& expr)
 	const sema::ExprFacts* facts = e->facts;
 	if (facts == nullptr || facts->type == nullptr)
 		throw LoweringError(e->location, "an expression without semantic facts");
+	if (e->kind == syntax::ExprKind::Binary &&
+		(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted)) == sema::kRewrittenComparison)
+		return rvalue(*facts->replacement);
 	if ((facts->flags & sema::kUserConverted) != 0)
 		return converted_operand(*e);
 	if ((facts->flags & (sema::kFolded | sema::kStaticConstant)) != 0 && e->kind == syntax::ExprKind::Member)
@@ -637,6 +640,9 @@ Place FunctionLowering::glvalue(const syntax::Expr& expr)
 			member_object(static_cast<const syntax::MemberExpr&>(*e));
 		return non_odr_place(static_cast<const sema::VariableEntity*>(facts->entity), facts->type, e->location);
 	}
+	if (e->kind == syntax::ExprKind::Binary &&
+		(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted)) == sema::kRewrittenComparison)
+		return glvalue(*facts->replacement);
 	if ((facts->flags & sema::kUserConverted) != 0)
 	{
 		// A conversion function's reference result designates its referent.
@@ -1575,7 +1581,8 @@ RValue FunctionLowering::binary_expression(const syntax::BinaryExpr& expr)
 		// float, rounded once: bfloat_arithmetic) is a leaf of the chain.
 		const syntax::Expr* left = WithoutParentheses(node->left);
 		if (left->kind != syntax::ExprKind::Binary || !IsChainable(static_cast<const syntax::BinaryExpr*>(left)->op) ||
-			(left->facts->flags & (sema::kOperatorCall | sema::kTypeIdentity | sema::kUserConverted)) != 0 ||
+			(left->facts->flags &
+				(sema::kOperatorCall | sema::kTypeIdentity | sema::kUserConverted | sema::kRewrittenComparison)) != 0 ||
 			bfloat_operation(*left))
 			break;
 		node = static_cast<const syntax::BinaryExpr*>(left);
@@ -1810,10 +1817,16 @@ RValue FunctionLowering::comparison(const syntax::BinaryExpr& expr, const RValue
 		return vector_compare(expr, left, right);
 	if (type->unqualified->kind == sema::TypeKind::Complex)
 		return logical_result(complex_equal(expr.op == TokenKind::OP_EQ, type, left, right), expr.facts->type);
+	return scalar_comparison(expr.op, type, left, right, expr.facts->type);
+}
+
+RValue FunctionLowering::scalar_comparison(
+	TokenKind op, const sema::Type* type, const RValue& left, const RValue& right, const sema::Type* result)
+{
 	const bool pointer = IsPointerType(type) || IsNullptrType(type);
 	const bool is_unsigned = pointer || (!sema::IsFloating(type) && !IsSigned(type));
 	lowir::ComparePredicate predicate = lowir::ComparePredicate::Eq;
-	switch (expr.op)
+	switch (op)
 	{
 	case TokenKind::OP_EQ:
 		predicate = lowir::ComparePredicate::Eq;
@@ -1841,7 +1854,7 @@ RValue FunctionLowering::comparison(const syntax::BinaryExpr& expr, const RValue
 		return soft_compare(predicate, SoftFloatOf(type), left, right);
 	return logical_result(
 		compare(predicate, pointer ? left.type : ComparisonType(left.type, lowering_.storage_type(type)), left, right),
-		expr.facts->type);
+		result);
 }
 
 Place FunctionLowering::assignment(const syntax::BinaryExpr& expr)

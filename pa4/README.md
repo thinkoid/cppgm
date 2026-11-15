@@ -174,3 +174,9 @@ pasting, stringizing and controlling expressions. Stringizing retains the
 separator spelling; evaluating an integer uses its value. This extends
 PA1–PA3's numeric contracts without requiring hosted include discovery.
 
+
+### C++20 three-way preprocessing
+
+In C++20 mode, `<=>` is one preprocessing punctuator, including when
+formed by token pasting. Preserve that token through macro expansion.
+Earlier modes retain their existing punctuation boundaries.

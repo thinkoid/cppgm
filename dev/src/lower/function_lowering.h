@@ -1778,6 +1778,9 @@ private:
 	RValue pointer_difference(
 		const RValue& left, const RValue& right, const sema::Type* pointer_type, uint32_t location);
 	RValue comparison(const syntax::BinaryExpr& expr, const RValue* left_value);
+	RValue scalar_comparison(
+		TokenKind op, const sema::Type* type, const RValue& left, const RValue& right, const sema::Type* result);
+	void materialize_comparison(const syntax::BinaryExpr& expr, lowir::Value object);
 	Place assignment(const syntax::BinaryExpr& expr);
 	Place compound_assignment(const syntax::BinaryExpr& expr);
 	RValue unary_expression(const syntax::UnaryExpr& expr);

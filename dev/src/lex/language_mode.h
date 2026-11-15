@@ -19,7 +19,7 @@ struct LanguageMode
 		PPLexerOptions options;
 		options.digit_separators = literals != NumberDialect::Cxx11;
 		options.binary_exponents = literals == NumberDialect::Cxx17;
-		options.utf8_characters = std::strcmp(cplusplus, "202002L") == 0;
+		options.cxx20 = std::strcmp(cplusplus, "202002L") == 0;
 		return options;
 	}
 };

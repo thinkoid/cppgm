@@ -239,7 +239,7 @@ void Analyzer::class_builtin_candidates(TokenKind op, const syntax::Slice<syntax
 				sequences_[first + i].target = parameters[i];
 			}
 			if (viable)
-				candidates_.push_back(Candidate{ nullptr, first, false });
+				candidates_.push_back(Candidate{ nullptr, first, false, 0 });
 			else
 				sequences_.resize(first);
 		}
@@ -451,6 +451,7 @@ uint32_t Analyzer::builtin_operator(TokenKind op, const syntax::Slice<syntax::Ex
 	case TokenKind::OP_LT:
 	case TokenKind::OP_GT:
 	case TokenKind::OP_LE:
+	case TokenKind::OP_SPACESHIP:
 	case TokenKind::OP_GE:
 	case TokenKind::OP_EQ:
 	case TokenKind::OP_NE:
@@ -610,6 +611,10 @@ ExprFacts* Analyzer::overloaded_operator(
 		return nullptr;
 	// 13.5.3-13.5.6: assignment, subscripting and member access through ->
 	// are member functions only.
+	if (cxx20_ && operands.size == 2 &&
+		(op == TokenKind::OP_EQ || op == TokenKind::OP_NE || op == TokenKind::OP_LT || op == TokenKind::OP_LE ||
+			op == TokenKind::OP_GT || op == TokenKind::OP_GE || op == TokenKind::OP_SPACESHIP))
+		return overloaded_comparison(expr, op, operands, scope, class_operand);
 	const bool members_only = op == TokenKind::OP_ASS || op == TokenKind::OP_LSQUARE || op == TokenKind::OP_ARROW;
 	operator_candidates(operator_key(op), operands, members_only, scope);
 	if (failed())
@@ -628,9 +633,121 @@ ExprFacts* Analyzer::overloaded_operator(
 	graph_.candidates += set.size();
 	const Type* left = operands[0]->facts->type;
 	const Type* right = count > 1 ? operands[1]->facts->type : nullptr;
+	const bool same_enumeration_list = operator_function_candidates(
+		op, operands, postfix, members_only, class_operand, 0);
+	// 13.3.1.2p3 bullet 3: class operands' built-in candidates (13.6)
+	// through their conversion functions.
+	if (converted_builtins)
+		class_builtin_candidates(op, operands, postfix);
+	if (candidates_.empty())
+		return nullptr;
+	// 13.3.1.2p3 bullet 3: operands of enumeration but no class type also
+	// have the built-in candidates (13.6), the best of which competes as a
+	// candidate of no function.
+	if (!class_operand && left != nullptr && (count == 1 || right != nullptr))
+	{
+		const Type* parameters[2] = { nullptr, nullptr };
+		if (builtin_operator(op, operands, postfix, same_enumeration_list, parameters) == count)
+		{
+			const uint32_t first = static_cast<uint32_t>(sequences_.size());
+			sequences_.resize(first + count);
+			bool viable = true;
+			for (uint32_t i = 0; viable && i < count; ++i)
+				viable = implicit_sequence(*operands[i], parameters[i], sequences_[first + i]);
+			if (viable)
+				candidates_.push_back(Candidate{ nullptr, first, false, 0 });
+			else
+				sequences_.resize(first);
+		}
+	}
+	size_t best = 0;
+	for (size_t i = 1; i < candidates_.size(); ++i)
+	{
+		if (compare_candidates(candidates_[i], candidates_[best], count, false) > 0)
+			best = i;
+	}
+	for (size_t i = 0; i < candidates_.size(); ++i)
+	{
+		if (i != best && compare_candidates(candidates_[best], candidates_[i], count, false) <= 0)
+		{
+			substitution_error(expr.location, "ambiguous overloaded operator");
+			return nullptr;
+		}
+	}
+	const Candidate chosen = candidates_[best];
+	FunctionEntity* selected = chosen.function;
+	if (selected == nullptr)
+	{
+		// The built-in operator: a class operand becomes its conversion
+		// function's result (13.3.1.2p7).
+		std::vector<const FunctionEntity*>& converters = converter_scratch_;
+		converters.clear();
+		for (uint32_t i = 0; i < count; ++i)
+			converters.push_back(sequences_[chosen.first + i].rank == ConversionRank::UserDefined
+					? sequences_[chosen.first + i].constructor
+					: nullptr);
+		for (uint32_t i = 0; i < count; ++i)
+		{
+			if (converters[i] != nullptr && !converters[i]->constructor)
+				convert_class_operand(*operands[i], converters[i]);
+		}
+		return nullptr;
+	}
+	return selected_operator(expr, op, operands, chosen, scope);
+}
+
+ExprFacts* Analyzer::selected_operator(const syntax::Expr& expr, TokenKind op,
+	const syntax::Slice<syntax::Expr*>& operands, const Candidate& chosen, Scope* scope)
+{
+	FunctionEntity* selected = chosen.function;
+	check_not_deleted(selected, expr.location);
+	if (!require_deduced(selected, expr.location))
+		return nullptr;
+	const bool member = selected->member && !selected->is_static;
+	// Clause 11: a member operator function is named in the left operand's
+	// class (13.3.1.2p3, 11.2p5), its member of an unambiguous base
+	// subobject there (10.2, 5.2.5p5).
+	if (member)
+	{
+		const ClassEntity* cls = ClassOf(operands[0]->facts->type);
+		const LookupResult members = names_.qualified(cls->scope, operator_key(op), LookupFilter::Ordinary);
+		check_function_access(selected, members.found() ? members.functions : nullptr, cls, cls, scope, expr.location);
+		if (!member_subobject(expr, selected, cls, cls, expr.location))
+			return nullptr;
+	}
+	operator_conversions(operands, selected, chosen, scope);
+	if (failed())
+		return nullptr;
+	if (ExprFacts* identity = type_identity(expr, op, operands, selected))
+		return identity;
+	odr_use(selected, true);
+	if (!selected->nothrow)
+		++potentially_throwing_;
+	ValueCategory category;
+	const Type* result = result_category(selected->type->canonical->element, category);
+	ExprFacts* facts = new_facts(expr, result, category);
+	facts->entity = selected;
+	facts->flags |= kDirectCall | kOperatorCall;
+	// An operator expression names no qualified-id: a virtual member
+	// operator function's final overrider is called (5.2.2p1).
+	if (member && selected->is_virtual)
+		facts->flags |= kVirtualCall;
+	return facts;
+}
+
+bool Analyzer::operator_function_candidates(TokenKind op, const syntax::Slice<syntax::Expr*>& operands, bool postfix,
+	bool members_only, bool class_operand, uint8_t rewriting)
+{
+	std::vector<FunctionEntity*>& set = operator_set_;
+	const uint32_t count = operands.size;
+	const Type* left = operands[0]->facts->type;
+	const Type* right = count > 1 ? operands[1]->facts->type : nullptr;
 	bool same_enumeration_list = false;
 	for (FunctionEntity* candidate : set)
 	{
+		if (cxx20_ && body_ != nullptr && candidate == body_->function && candidate->defaulted &&
+			candidate->operator_token != TokenKind::OP_EQ && candidate->operator_token != TokenKind::OP_SPACESHIP)
+			continue;
 		if (IgnoredByOverloadResolution(candidate))
 			continue;
 		// Filter a fixed parameter count before deduction can instantiate an
@@ -699,99 +816,9 @@ ExprFacts* Analyzer::overloaded_operator(
 			sequences_.resize(first);
 			continue;
 		}
-		candidates_.push_back(Candidate{ function, first, candidate->templated });
+		candidates_.push_back(Candidate{ function, first, candidate->templated, rewriting });
 	}
-	// 13.3.1.2p3 bullet 3: class operands' built-in candidates (13.6)
-	// through their conversion functions.
-	if (converted_builtins)
-		class_builtin_candidates(op, operands, postfix);
-	if (candidates_.empty())
-		return nullptr;
-	// 13.3.1.2p3 bullet 3: operands of enumeration but no class type also
-	// have the built-in candidates (13.6), the best of which competes as a
-	// candidate of no function.
-	if (!class_operand && left != nullptr && (count == 1 || right != nullptr))
-	{
-		const Type* parameters[2] = { nullptr, nullptr };
-		if (builtin_operator(op, operands, postfix, same_enumeration_list, parameters) == count)
-		{
-			const uint32_t first = static_cast<uint32_t>(sequences_.size());
-			sequences_.resize(first + count);
-			bool viable = true;
-			for (uint32_t i = 0; viable && i < count; ++i)
-				viable = implicit_sequence(*operands[i], parameters[i], sequences_[first + i]);
-			if (viable)
-				candidates_.push_back(Candidate{ nullptr, first, false });
-			else
-				sequences_.resize(first);
-		}
-	}
-	size_t best = 0;
-	for (size_t i = 1; i < candidates_.size(); ++i)
-	{
-		if (compare_candidates(candidates_[i], candidates_[best], count, false) > 0)
-			best = i;
-	}
-	for (size_t i = 0; i < candidates_.size(); ++i)
-	{
-		if (i != best && compare_candidates(candidates_[best], candidates_[i], count, false) <= 0)
-		{
-			substitution_error(expr.location, "ambiguous overloaded operator");
-			return nullptr;
-		}
-	}
-	const Candidate chosen = candidates_[best];
-	FunctionEntity* selected = chosen.function;
-	if (selected == nullptr)
-	{
-		// The built-in operator: a class operand becomes its conversion
-		// function's result (13.3.1.2p7).
-		std::vector<const FunctionEntity*>& converters = converter_scratch_;
-		converters.clear();
-		for (uint32_t i = 0; i < count; ++i)
-			converters.push_back(sequences_[chosen.first + i].rank == ConversionRank::UserDefined
-					? sequences_[chosen.first + i].constructor
-					: nullptr);
-		for (uint32_t i = 0; i < count; ++i)
-		{
-			if (converters[i] != nullptr && !converters[i]->constructor)
-				convert_class_operand(*operands[i], converters[i]);
-		}
-		return nullptr;
-	}
-	check_not_deleted(selected, expr.location);
-	if (!require_deduced(selected, expr.location))
-		return nullptr;
-	const bool member = selected->member && !selected->is_static;
-	// Clause 11: a member operator function is named in the left operand's
-	// class (13.3.1.2p3, 11.2p5), its member of an unambiguous base
-	// subobject there (10.2, 5.2.5p5).
-	if (member)
-	{
-		const ClassEntity* cls = ClassOf(operands[0]->facts->type);
-		const LookupResult members = names_.qualified(cls->scope, operator_key(op), LookupFilter::Ordinary);
-		check_function_access(selected, members.found() ? members.functions : nullptr, cls, cls, scope, expr.location);
-		if (!member_subobject(expr, selected, cls, cls, expr.location))
-			return nullptr;
-	}
-	operator_conversions(operands, selected, chosen, scope);
-	if (failed())
-		return nullptr;
-	if (ExprFacts* identity = type_identity(expr, op, operands, selected))
-		return identity;
-	odr_use(selected, true);
-	if (!selected->nothrow)
-		++potentially_throwing_;
-	ValueCategory category;
-	const Type* result = result_category(selected->type->canonical->element, category);
-	ExprFacts* facts = new_facts(expr, result, category);
-	facts->entity = selected;
-	facts->flags |= kDirectCall | kOperatorCall;
-	// An operator expression names no qualified-id: a virtual member
-	// operator function's final overrider is called (5.2.2p1).
-	if (member && selected->is_virtual)
-		facts->flags |= kVirtualCall;
-	return facts;
+	return same_enumeration_list;
 }
 
 void Analyzer::operator_conversions(

@@ -589,3 +589,9 @@ and values needing multiple UTF-8 code units. UTF-8 string concatenation keeps
 its combined encoding and terminating zero. Earlier modes retain `char8_t`
 as an identifier and UTF-8 strings as arrays of `char`.
 
+
+### C++20 three-way comparison token
+
+In C++20 mode, classify `<=>` as `OP_SPACESHIP`. Earlier modes continue
+to read the two tokens `<=` and `>`. Preserve longest-token rules and
+keep this operator distinct from the later-mode keywords.

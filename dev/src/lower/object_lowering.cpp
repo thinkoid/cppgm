@@ -880,6 +880,19 @@ void FunctionLowering::materialize_prvalue(const syntax::Expr& expr, lowir::Valu
 		return;
 	}
 	const sema::ExprFacts* facts = e->facts;
+	if (e->kind == syntax::ExprKind::Binary &&
+		(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted)) == sema::kRewrittenComparison)
+	{
+		materialize_prvalue(*facts->replacement, object, location);
+		return;
+	}
+	if (e->kind == syntax::ExprKind::Binary &&
+		static_cast<const syntax::BinaryExpr*>(e)->op == TokenKind::OP_SPACESHIP &&
+		(facts->flags & (sema::kOperatorCall | sema::kUserConverted)) == 0)
+	{
+		materialize_comparison(static_cast<const syntax::BinaryExpr&>(*e), object);
+		return;
+	}
 	const sema::FunctionEntity* constructor = facts != nullptr && facts->entity != nullptr &&
 			facts->entity->kind == sema::EntityKind::Function
 		? static_cast<const sema::FunctionEntity*>(facts->entity)
@@ -1105,6 +1118,17 @@ lowir::Value FunctionLowering::temporary_object(const syntax::Expr& expr, bool p
 	// A comma's left operand is evaluated before the temporary its right
 	// operand makes (5.18p1; the course's form).
 	const syntax::Expr* e = WithoutParentheses(&expr);
+	if (e->kind == syntax::ExprKind::Binary &&
+		(e->facts->flags & (sema::kRewrittenComparison | sema::kUserConverted)) == sema::kRewrittenComparison)
+	{
+		for (const syntax::Expr* path : persistent_path_)
+			if (path == e)
+			{
+				persistent_path_.push_back(e->facts->replacement);
+				break;
+			}
+		return temporary_object(*e->facts->replacement, persistent, kind);
+	}
 	if (e->kind == syntax::ExprKind::Generic)
 		return temporary_object(*static_cast<const syntax::GenericExpr&>(*e).selected, persistent, kind);
 	if (e->kind == syntax::ExprKind::Binary && static_cast<const syntax::BinaryExpr*>(e)->op == TokenKind::OP_COMMA &&

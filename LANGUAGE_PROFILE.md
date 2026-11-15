@@ -17,6 +17,7 @@ return-deduction extensions remain available in the course's C++11 mode.
 | Binary literals, digit separators | C++14+ | PA1–PA4 token/value/macro boundaries |
 | Hexadecimal floating literals | C++17 | PA1–PA4; GNU compiler modes also retain existing extensions |
 | Distinct `char8_t`, UTF-8 code-unit literals, narrow-array initialization from UTF-8 strings | C++20 | PA1–PA4 token/value/macro boundaries; PA6/PA7 types and conversions; PA9 ABI; PA11 initialization and literal operators |
+| Three-way comparison, rewritten candidates and defaulted comparisons | C++20 | PA2/PA4 tokens and macros; PA5 syntax; PA9 ABI; PA11 class/subobject comparisons; PA16 constexpr and earlier template instantiation |
 | Named concepts, boolean concept-ids, compound return-type requirements | C++20 | PA5 syntax; PA14 lookup and type arguments; PA15 value arguments and packs; PA16 constexpr calls; PA17 variable templates |
 | Requires-expressions with simple, type, `noexcept` compound and nested requirements | C++20 | PA5 syntax; PA7 non-template checks; PA14 substitution; PA15 packs; PA16 constant evaluation; PA17 variable templates |
 | Nested namespaces, attribute using-prefixes | C++17 | PA5 syntax, PA6 lookup; vendor effects PA30 |

@@ -42,6 +42,7 @@ bool IsOverloadableOperator(TokenKind kind)
 	case TokenKind::OP_EQ:
 	case TokenKind::OP_NE:
 	case TokenKind::OP_LE:
+	case TokenKind::OP_SPACESHIP:
 	case TokenKind::OP_GE:
 	case TokenKind::OP_LAND:
 	case TokenKind::OP_LOR:

@@ -216,7 +216,7 @@ bool FunctionLowering::detached_body()
 		}
 	}
 	const syntax::FunctionBody* body = function_->body;
-	if (body == nullptr || function_->defaulted || body->body == nullptr)
+	if (body == nullptr || !sema::UsesFunctionBody(function_) || body->body == nullptr)
 		return false;
 	bool alive = false;
 	return body_unwinds(*body->body, alive);

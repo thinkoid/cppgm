@@ -2708,6 +2708,11 @@ void Analyzer::special_member(const syntax::SpecialMemberDecl& decl, Scope* scop
 
 void Analyzer::default_definition(FunctionEntity* function, bool first, uint32_t location)
 {
+	if (cxx20_ && function->is_operator && IsComparisonOperatorToken(function->operator_token))
+	{
+		default_comparison(function, first, location);
+		return;
+	}
 	// 8.4.2p1: only a special member function may be explicitly defaulted
 	// (a default or copy or move constructor, a copy or move assignment
 	// operator, a destructor), with the implicit declaration's type but

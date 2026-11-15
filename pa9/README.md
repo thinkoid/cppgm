@@ -478,3 +478,8 @@ symbols. From then on the compiler's symbols must equal what `abimangle`
 produces for the same entities; one encoder serving both is the direct way to
 keep them equal, and later class, template, native-object, exception, and
 hosted-runtime assignments extend the same facts.
+
+### C++20 three-way operator ABI
+
+The `three-way` operator terminal denotes `<=>` and uses Itanium code
+`ss`. It is a binary operator, counting a member function's implicit object.

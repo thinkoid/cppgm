@@ -648,6 +648,13 @@ struct ClosureFacts
 	uint32_t body_token;
 };
 
+// Defaulted comparisons have analyzed ordinary bodies. Special members
+// retain their subobject plans instead of a statement body.
+inline bool UsesFunctionBody(const FunctionEntity* function)
+{
+	return !function->defaulted || (function->is_operator && IsComparisonOperatorToken(function->operator_token));
+}
+
 // A literal operator's name is `operator"" ` and its ud-suffix (the lookup
 // key semantic analysis interns for it).
 const char kLiteralOperatorPrefix[] = "operator\"\" ";

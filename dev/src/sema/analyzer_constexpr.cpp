@@ -749,7 +749,8 @@ void Analyzer::check_defaulted_constexpr(FunctionEntity* function, uint32_t loca
 	// operator never is in C++11 (7.1.5p3: a C++11 constexpr body is one
 	// return statement), under -std=c++14 as its 12.8p26 makes it; a
 	// destructor never is.
-	if (!function->is_constexpr || function->deleted)
+	if (!function->is_constexpr || function->deleted ||
+		(function->is_operator && IsComparisonOperatorToken(function->operator_token)))
 		return;
 	bool implicit_constexpr = false;
 	if (function->constructor && function->copy_kind != CopyKind::None)

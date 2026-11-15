@@ -27,8 +27,16 @@ namespace {
 
 const syntax::Expr* WithoutParentheses(const syntax::Expr* expr)
 {
-	while (expr->kind == syntax::ExprKind::Paren)
-		expr = static_cast<const syntax::ParenExpr*>(expr)->inner;
+	for (;;)
+	{
+		if (expr->kind == syntax::ExprKind::Paren)
+			expr = static_cast<const syntax::ParenExpr*>(expr)->inner;
+		else if (expr->kind == syntax::ExprKind::Binary && expr->facts != nullptr &&
+			(expr->facts->flags & (sema::kRewrittenComparison | sema::kUserConverted)) == sema::kRewrittenComparison)
+			expr = expr->facts->replacement;
+		else
+			break;
+	}
 	return expr;
 }
 
@@ -121,6 +129,11 @@ bool FunctionLowering::may_throw(const syntax::Expr* root)
 				break;
 			}
 			facts = facts->original;
+			if (e->kind == syntax::ExprKind::Binary && (facts->flags & sema::kRewrittenComparison) != 0)
+			{
+				e = facts->replacement;
+				facts = e->facts;
+			}
 		}
 		const bool operator_call = facts != nullptr && (facts->flags & sema::kOperatorCall) != 0 &&
 			call_may_throw(static_cast<const sema::FunctionEntity*>(facts->entity));
@@ -1130,7 +1143,14 @@ bool FunctionLowering::creates_temporaries(
 		// A class operand converted by a conversion function is evaluated
 		// as its own facts say (a prvalue's temporary is its object).
 		if ((facts->flags & sema::kUserConverted) != 0)
+		{
 			facts = facts->original;
+			if (e->kind == syntax::ExprKind::Binary && (facts->flags & sema::kRewrittenComparison) != 0)
+			{
+				e = facts->replacement;
+				facts = e->facts;
+			}
+		}
 		const bool own = object != nullptr && expr == root;
 		// So is an array prvalue's temporary array (`A{...}`, or a list a
 		// reference to an array binds, array_temporary).
@@ -2079,7 +2099,7 @@ bool FunctionLowering::definition_statements_may_throw()
 		}
 	}
 	const syntax::FunctionBody* body = function_->body;
-	return body != nullptr && !function_->defaulted && statement_may_throw(*body->body);
+	return body != nullptr && sema::UsesFunctionBody(function_) && statement_may_throw(*body->body);
 }
 
 bool FunctionLowering::plan_may_throw(const sema::SubobjectInit* inits, uint32_t count)

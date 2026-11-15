@@ -1165,6 +1165,8 @@ int Analyzer::compare_candidates(const Candidate& a, const Candidate& b, uint32_
 				return -1;
 		}
 	}
+	if (!better && !worse && a.comparison != b.comparison)
+		return a.comparison < b.comparison ? 1 : -1;
 	return 0;
 }
 
@@ -1336,7 +1338,7 @@ Resolution Analyzer::resolve(const syntax::Slice<syntax::Expr*>& call_arguments,
 				sequences_.resize(first);
 				continue;
 			}
-			candidates_.push_back(Candidate{ function, first, candidate->templated });
+			candidates_.push_back(Candidate{ function, first, candidate->templated, 0 });
 			if (templates && !candidate->templated)
 			{
 				bool all = !with_object || PerfectSequence(sequences_[first], object);

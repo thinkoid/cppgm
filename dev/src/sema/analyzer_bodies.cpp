@@ -199,8 +199,15 @@ bool Analyzer::function_body(FunctionEntity* function, const Type* type, const s
 			context.this_type = types_.pointer(types_.qualified(function->owner->entity->type, type->function_cv));
 		body_ = &context;
 	}
+	const bool declared_constexpr = function->is_constexpr;
+	if (function->defaulted && function->is_operator && IsComparisonOperatorToken(function->operator_token) &&
+		body.body != nullptr && body.body->items.empty() && template_depth_ == 0 && semantic())
+	{
+		comparison_body(function, *body.body, scope);
+		type = function->type;
+	}
 	const uint32_t body_location = body.body != nullptr ? body.body->location : 0;
-	if (semantic())
+	if (semantic() && !function->deleted)
 		check_constexpr_function(function, type, body_location);
 	// 7.1.5p3-p4: a constexpr function's or constructor's function-body is
 	// a compound-statement, not a function-try-block.
@@ -252,7 +259,12 @@ bool Analyzer::function_body(FunctionEntity* function, const Type* type, const s
 	{
 		if (body.try_block)
 			context.try_parent = scope;
-		compound(*body.body, scope, true);
+		if (function->defaulted && function->is_operator && IsComparisonOperatorToken(function->operator_token))
+		{
+			analyze_comparison_body(function, *body.body, scope, declared_constexpr);
+		}
+		else
+			compound(*body.body, scope, true);
 		// A hosted wrapper's reserved builtin call in a context with no
 		// full-expression of its own above (see define_function): the rest
 		// of the compound statement was skipped (see deferrable_statement)

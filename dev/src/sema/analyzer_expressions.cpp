@@ -1379,6 +1379,8 @@ ExprFacts* Analyzer::combine(const syntax::BinaryExpr& expr, Scope* scope)
 	if (!check_resolved(*expr.right))
 		return nullptr;
 	ExprFacts* right = facts_of(*expr.right);
+	if (expr.op == TokenKind::OP_SPACESHIP)
+		return three_way_comparison(expr, scope);
 	if (IsComparison(expr.op))
 		return comparison(expr, left, right);
 	return arithmetic(expr, left, right);

@@ -207,7 +207,7 @@ bool FunctionLowering::deleting_inlines_body(uint32_t location)
 	// empty body, no member to destroy); otherwise it calls the complete
 	// entry.
 	const syntax::FunctionBody* body = function_->body;
-	if (body != nullptr && !function_->defaulted && (body->try_block || !body->body->items.empty()))
+	if (body != nullptr && sema::UsesFunctionBody(function_) && (body->try_block || !body->body->items.empty()))
 		return false;
 	if (VirtualBaseCount(sema::ClassOf(function_->owner->entity->type)) != 0)
 		return false;
