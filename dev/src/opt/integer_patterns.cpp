@@ -315,6 +315,25 @@ bool IntegerPatterns::narrow_truncation(Instruction& inst)
 		inst.type.kind() == TypeKind::I1)
 		return false;
 	const Instruction* def = producer(inst.ops[0]);
+	// (A negation or a complement of one extension likewise.)
+	if (def != nullptr && def->op == Opcode::Unary && def->type.is_integer() &&
+		(static_cast<UnaryOp>(def->sub) == UnaryOp::Neg || static_cast<UnaryOp>(def->sub) == UnaryOp::BitNot))
+	{
+		const Instruction* wide = producer(def->ops[0]);
+		if (wide == nullptr || wide->op != Opcode::Convert ||
+			(static_cast<ConvertOp>(wide->sub) != ConvertOp::SExt &&
+				static_cast<ConvertOp>(wide->sub) != ConvertOp::ZExt) ||
+			!wide->ops[0].is(ValueKind::Temp) || body_.temps[wide->ops[0].index].type != inst.type)
+			return false;
+		Instruction rewritten = make_instruction(Opcode::Unary, inst.type);
+		rewritten.sub = def->sub;
+		rewritten.ops[0] = wide->ops[0];
+		rewritten.result = inst.result;
+		rewritten.next = inst.next;
+		rewritten.location = inst.location;
+		inst = rewritten;
+		return true;
+	}
 	if (def == nullptr || def->op != Opcode::Binary || !def->type.is_integer())
 		return false;
 	const BinaryOp op = static_cast<BinaryOp>(def->sub);

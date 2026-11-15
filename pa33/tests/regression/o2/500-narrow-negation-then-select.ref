@@ -1,0 +1,52 @@
+function @signed_value(%v : i8, %lit : i32) -> i8 [no_inline=yes] {
+  block ^entry:
+    %sign = binary and i32 %lit, 1
+    %t = unary neg i8 %v
+    %t3 = select i8 %sign, %t, %v
+    return i8 %t3
+}
+function @complement(%b : u8) -> u8 [no_inline=yes] {
+  block ^entry:
+    %r = unary bitnot u8 %b
+    return u8 %r
+}
+function @other_type(%b : i8) -> u8 [no_inline=yes] {
+  block ^entry:
+    %w = convert sext i32 i8 %b
+    %o = unary neg i32 %w
+    %r = convert trunc u8 i32 %o
+    return u8 %r
+}
+function @unextended(%b : i32) -> i8 [no_inline=yes] {
+  block ^entry:
+    %o = unary neg i32 %b
+    %r = convert trunc i8 i32 %o
+    return i8 %r
+}
+function @main() -> i32 [role=entry] {
+  block ^entry:
+    %a = call i8 @signed_value(5, 7)
+    %b = call i8 @signed_value(5, 6)
+    %c = call i8 @signed_value(-128, 1)
+    %d = call u8 @complement(240)
+    %e = call u8 @other_type(-3)
+    %f = call i8 @unextended(300)
+    %t7 = cmp eq i8 %a, -5
+    %a_bit = select i32 %t7, 0, 1
+    %t9 = cmp eq i8 %b, 5
+    %b_bit = select i32 %t9, 0, 2
+    %t11 = cmp eq i8 %c, -128
+    %c_bit = select i32 %t11, 0, 4
+    %t13 = cmp eq u8 %d, 15
+    %d_bit = select i32 %t13, 0, 8
+    %t15 = cmp eq u8 %e, 3
+    %e_bit = select i32 %t15, 0, 16
+    %t17 = cmp eq i8 %f, -44
+    %f_bit = select i32 %t17, 0, 32
+    %ab = binary or i32 %a_bit, %b_bit
+    %cd = binary or i32 %c_bit, %d_bit
+    %ef = binary or i32 %e_bit, %f_bit
+    %abcd = binary or i32 %ab, %cd
+    %status = binary or i32 %ef, %abcd
+    return i32 %status
+}
