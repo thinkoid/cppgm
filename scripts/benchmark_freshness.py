@@ -173,7 +173,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('target', type=Path)
     parser.add_argument('--revision', required=True)
-    parser.add_argument('--repo', default='vishvananda/cppgm-extended')
+    parser.add_argument('--repo', default='vishvananda/cppgm')
     args = parser.parse_args()
     from wasm_benchmark_results import seed
     for row in keep_newest(args.target, args.repo):

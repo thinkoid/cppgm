@@ -369,7 +369,7 @@ unqualified.
 ## Rebase onto PR135
 
 The experiment was rebased onto the published [LLVM optimization series,
-PR135](https://github.com/vishvananda/cppgm-extended/pull/135), head
+PR135](https://github.com/vishvananda/cppgm/pull/135), head
 `4fa32a6b478dfd8ee7393f5121be28019bd52039`. Compiler commit `70b53fa0f`
 retains the Wasm implementation, sharing changes and bounded local dispatch.
 The pre-rebase tip remains at `backup/wasi-before-pr135-20261113`.

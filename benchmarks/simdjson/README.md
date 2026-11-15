@@ -1,8 +1,8 @@
 # simdjson scalar and SSE comparison
 
-[Results by host](https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/simdjson/report.md)
-· [Last EPYC results](https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/simdjson/epyc/report.md)
-· [CI runs and artifacts](https://github.com/vishvananda/cppgm-extended/actions/workflows/simdjson.yml)
+[Results by host](https://github.com/vishvananda/cppgm/blob/benchmark-badges/simdjson/report.md)
+· [Last EPYC results](https://github.com/vishvananda/cppgm/blob/benchmark-badges/simdjson/epyc/report.md)
+· [CI runs and artifacts](https://github.com/vishvananda/cppgm/actions/workflows/simdjson.yml)
 · [Initial analysis](../../docs/performance/simdjson-20261107.md)
 
 This reference-compiler benchmark runs on each push to `main` and each pull request. Successful

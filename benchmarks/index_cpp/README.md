@@ -1,6 +1,6 @@
 # index-cpp compatibility check
 
-[CI results by host](https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/index-cpp/report.md)
+[CI results by host](https://github.com/vishvananda/cppgm/blob/benchmark-badges/index-cpp/report.md)
 retain separate EPYC and GitHub Intel measurements. The dedicated Intel host's
 `intel` path is separate from `github-intel`; compare CPU models and commits.
 

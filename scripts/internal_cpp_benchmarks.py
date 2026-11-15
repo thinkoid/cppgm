@@ -40,7 +40,7 @@ def fetch_inputs(cache, destination):
     archive = cache / (SOURCE + '.tar.gz')
     if not archive.exists():
         temporary = archive.with_suffix('.download')
-        url = 'https://codeload.github.com/vishvananda/cppgm-extended/tar.gz/' + SOURCE
+        url = 'https://codeload.github.com/vishvananda/cppgm/tar.gz/' + SOURCE
         with urllib.request.urlopen(url, timeout=120) as source, temporary.open('wb') as out:
             shutil.copyfileobj(source, out)
         if digest(temporary) != ARCHIVE_SHA256:
@@ -243,7 +243,7 @@ def publish(args):
         for name in ('results.json', 'metadata.json'):
             shutil.copyfile(args.artifact / name, destination / name)
         from internal_cpp_results import write
-        url = 'https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/' + str(destination.relative_to(args.target))
+        url = 'https://github.com/vishvananda/cppgm/blob/benchmark-badges/' + str(destination.relative_to(args.target))
         write(document, destination, benchmark_hosts.environment(host), args.run_url, url)
         (destination / 'report.md').write_text(report(document) + f'\n[CI run]({args.run_url}) · '
             '[Shared comparison records](records.json)\n\n'
@@ -261,7 +261,7 @@ def seed(target):
         save(destination / 'results.json', document)
         save(destination / 'metadata.json', document['metadata'])
         (destination / 'report.md').write_text(report(document) + '\nHistorical local snapshot; '
-            '[original report](https://github.com/vishvananda/cppgm-extended/blob/main/docs/performance/preview/internal.md).\n')
+            '[original report](https://github.com/vishvananda/cppgm/blob/main/docs/performance/preview/internal.md).\n')
     badges(root)
 
 

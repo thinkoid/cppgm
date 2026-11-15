@@ -1,7 +1,7 @@
 # Godot build and headless performance
 
-[Results by host](https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/godot/report.md)
-· [CI runs and artifacts](https://github.com/vishvananda/cppgm-extended/actions/workflows/godot.yml)
+[Results by host](https://github.com/vishvananda/cppgm/blob/benchmark-badges/godot/report.md)
+· [CI runs and artifacts](https://github.com/vishvananda/cppgm/actions/workflows/godot.yml)
 
 This reference-compiler lane runs on pushes to main, pull requests and manual
 requests. It builds unmodified Godot 4.7.2, pinned to

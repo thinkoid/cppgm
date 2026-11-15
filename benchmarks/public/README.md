@@ -85,9 +85,9 @@ a `cppgm++` count differs from `baseline.json`:
 
 ## Reading the README table
 
-The [EPYC report](https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/epyc/report.md),
-[dedicated Intel report](https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/intel/report.md)
-and [GitHub Intel report](https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/github-intel/report.md)
+The [EPYC report](https://github.com/vishvananda/cppgm/blob/benchmark-badges/epyc/report.md),
+[dedicated Intel report](https://github.com/vishvananda/cppgm/blob/benchmark-badges/intel/report.md)
+and [GitHub Intel report](https://github.com/vishvananda/cppgm/blob/benchmark-badges/github-intel/report.md)
 list every program's O0, O3 and frontend compile CPU times for all three
 compilers, with higher-is-better speed ratios. Each links its separate
 `self-build.md` report for compiler rebuild times and paired self-build blocks.
@@ -184,8 +184,8 @@ The Public benchmarks workflow runs on GitHub's Linux pool by default, which
 can supply EPYC or Intel CPUs. Automatic runs publish to `epyc` or `github-intel`
 according to the measured CPU. The dedicated Intel runner uses `intel`;
 publishing any host preserves the other hosts and the legacy EPYC URLs.
-[EPYC provenance](https://raw.githubusercontent.com/vishvananda/cppgm-extended/benchmark-badges/epyc/provenance.json)
-and [Intel provenance](https://raw.githubusercontent.com/vishvananda/cppgm-extended/benchmark-badges/intel/provenance.json) record the exact CPU,
+[EPYC provenance](https://raw.githubusercontent.com/vishvananda/cppgm/benchmark-badges/epyc/provenance.json)
+and [Intel provenance](https://raw.githubusercontent.com/vishvananda/cppgm/benchmark-badges/intel/provenance.json) record the exact CPU,
 compiler commit, toolchains and workflow URL. The README shows the measured
 commit because the hosts' latest measurements can be from different commits.
 A run of a commit that is an ancestor of the commit a host shows does not
@@ -231,7 +231,7 @@ It builds the unchanged, pinned upstream C++17 program with cppgm, GCC and
 Clang and requires all 50 checksum workloads to pass. This reference-only
 lane does not add C++17 requirements to student assignments.
 
-[index-cpp reports by host](https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/index-cpp/report.md)
+[index-cpp reports by host](https://github.com/vishvananda/cppgm/blob/benchmark-badges/index-cpp/report.md)
 show each workload, higher-is-better GCC and Clang speed ratios, compile
 cost, code size and A/A timing warnings. Its aggregate is separate from the
 public-suite badges. Main runs retain comparisons and raw observation JSON

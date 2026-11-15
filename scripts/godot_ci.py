@@ -281,7 +281,7 @@ def publish(args):
         raise ValueError('provenance differs from the measured results')
     platform = benchmark_hosts.publication_platform(metadata['cpu'], getattr(args, 'platform', 'github'))
     import godot_results
-    base = 'https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/godot/'
+    base = 'https://github.com/vishvananda/cppgm/blob/benchmark-badges/godot/'
     history = 'history/' + args.revision + '/' + platform
     with tempfile.TemporaryDirectory() as temporary:
         normalized = Path(temporary) / 'standard'

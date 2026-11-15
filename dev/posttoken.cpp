@@ -1,5 +1,5 @@
 // (C) 2013 CPPGM Foundation www.cppgm.org.  All rights reserved.
-// Revised for cppgm-extended; see NOTICE.
+// Revised for cppgm; see NOTICE.
 
 #include <iostream>
 #include <stdexcept>

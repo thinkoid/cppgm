@@ -1,6 +1,6 @@
 # Repository guide
 
-This is the complete cppgm-extended compiler solution and the source of its
+This is the complete cppgm compiler solution and the source of its
 student export. The course has 37 cumulative assignments; see [ROADMAP.md](ROADMAP.md).
 Follow [spec.md](spec.md) for the compiler architecture, including parsing
 source once, consuming typed facts and avoiding speculative work on hot paths.

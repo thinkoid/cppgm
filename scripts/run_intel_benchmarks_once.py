@@ -53,7 +53,7 @@ def dispatch_command(args, revision, label):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--repo', default='vishvananda/cppgm-extended')
+    parser.add_argument('--repo', default='vishvananda/cppgm')
     parser.add_argument('--ref', default='main', help='revision containing the workflow')
     parser.add_argument('--revision', default='main', help='trusted compiler revision to measure')
     parser.add_argument('--directory', type=Path, help='new directory for runner files and logs')

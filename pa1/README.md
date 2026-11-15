@@ -1,6 +1,6 @@
 ## CPPGM Programming Assignment 1 (pptoken)
 
-Adapted from the original CPPGM material; revised for cppgm-extended.
+Adapted from the original CPPGM material; revised for cppgm.
 See [NOTICE](../NOTICE) for attribution.
 
 ### Overview

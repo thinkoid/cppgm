@@ -166,7 +166,7 @@ def publish(args, documents):
         raise ValueError('publication requires both O0 and O3')
     platform = benchmark_hosts.publication_platform(metadata['cpu'], args.platform)
     environment = benchmark_hosts.environment(platform)
-    base = 'https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/wasm/'
+    base = 'https://github.com/vishvananda/cppgm/blob/benchmark-badges/wasm/'
     history = 'history/' + args.revision + '/' + platform
     host_metadata = dict(metadata, optimization='mixed',
                          flags={d['metadata']['optimization']: d['metadata']['flags'] for d in documents})
@@ -267,7 +267,7 @@ def seed_selfbuild(target):
     benchmark_hosts.library_index(directory, 'WASI compiler self-build hosts')
     if not any((directory / host / 'metadata.json').exists() for host in HOSTS):
         (directory / 'report.md').write_text('# WASI compiler self-build hosts\n\nNot measured yet. '
-            '[Method](https://github.com/vishvananda/cppgm-extended/blob/main/scripts/experimental/README.md'
+            '[Method](https://github.com/vishvananda/cppgm/blob/main/scripts/experimental/README.md'
             '#full-compiler-benchmark).\n')
 
 
@@ -292,7 +292,7 @@ def seed(target):
     benchmark_hosts.library_index(directory, 'Wasm32 benchmark hosts')
     if not any((directory / host / 'metadata.json').exists() for host in HOSTS):
         (directory / 'report.md').write_text('# Wasm32 benchmark hosts\n\nNot measured yet. '
-            '[Workloads and measurement method](https://github.com/vishvananda/cppgm-extended/blob/main/pa37/benchmarks/README.md).\n')
+            '[Workloads and measurement method](https://github.com/vishvananda/cppgm/blob/main/pa37/benchmarks/README.md).\n')
 
 
 def main():

@@ -108,7 +108,7 @@ def prepare(artifact, target, platform, revision, run_url, legacy_epyc=False, co
         badges['self-revision'] = revision_badge
     rendered = {name: badge_svg(data) for name, data in badges.items()}
     heading = {'intel': 'Intel Xeon (dedicated)', 'github-intel': 'Intel (GitHub)', 'epyc': 'AMD EPYC'}[platform]
-    source = 'https://github.com/vishvananda/cppgm-extended/commit/' + revision
+    source = 'https://github.com/vishvananda/cppgm/commit/' + revision
     note = (f'Measured compiler: [`{revision[:9]}`]({source}) · [CI run]({run_url})')
     files = {}
     if document is not None:

@@ -26,8 +26,8 @@ Run locally after building the compiler:
 python3 scripts/internal_cpp_benchmarks.py run --output obj/internal --jobs 4
 ```
 
-Published [host results](https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/internal/report.md)
+Published [host results](https://github.com/vishvananda/cppgm/blob/benchmark-badges/internal/report.md)
 retain each host's last measurement. The initial dedicated Intel entry preserves
 the [historical qualified snapshot](../../docs/performance/preview/internal.md)
-until a fresh run replaces it. The [measurement-age table](https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/freshness.md)
+until a fresh run replaces it. The [measurement-age table](https://github.com/vishvananda/cppgm/blob/benchmark-badges/freshness.md)
 identifies old revisions, including that initial entry.

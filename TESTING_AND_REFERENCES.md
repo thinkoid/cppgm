@@ -98,7 +98,7 @@ GDB retains Og/debug settings for correctness only. cppgm, GCC and Clang validat
 B2 oracles; missing tests and compiler crashes fail the check.
 
 [Scope, timing method and reproduction](benchmarks/boost/README.md) ·
-[Published results by host](https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/boost/o3/report.md).
+[Published results by host](https://github.com/vishvananda/cppgm/blob/benchmark-badges/boost/o3/report.md).
 Compile CPU excludes B2, configuration probes, library dependencies, C, linking and GDB.
 Paired native test replays measure runtime separately, repeating short programs
 and retaining A/A calibration. PR results

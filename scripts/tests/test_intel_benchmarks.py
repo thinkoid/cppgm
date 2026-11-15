@@ -22,7 +22,7 @@ class IntelBenchmarkTests(unittest.TestCase):
                 patch.object(launcher, 'github', return_value={'sha': 'a' * 40}) as api, \
                 patch.object(launcher.subprocess, 'run') as run, contextlib.redirect_stdout(io.StringIO()) as output:
             launcher.main()
-        api.assert_called_once_with('repos/vishvananda/cppgm-extended/commits/main')
+        api.assert_called_once_with('repos/vishvananda/cppgm/commits/main')
         run.assert_not_called()
         plan = json.loads(output.getvalue())
         self.assertEqual(plan['revision'], 'a' * 40)

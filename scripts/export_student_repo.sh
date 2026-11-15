@@ -766,7 +766,7 @@ pa_ref_pairs=(
 source_sha=$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || echo unknown)
 source_short_sha=$(git -C "$repo_root" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 reference_bundle_name=${CPPGM_REFERENCE_BUNDLE_NAME:-cppgm-reference-binaries-linux-x86_64-${source_short_sha}.tar.gz}
-reference_bundle_url=${CPPGM_REFERENCE_BUNDLE_URL:-https://github.com/vishvananda/cppgm-extended/releases/download/reference-binaries/${reference_bundle_name}}
+reference_bundle_url=${CPPGM_REFERENCE_BUNDLE_URL:-https://github.com/vishvananda/cppgm/releases/download/reference-binaries/${reference_bundle_name}}
 reference_bundle_out=${CPPGM_REFERENCE_BUNDLE_OUT:-$repo_root/obj/export-reference-bundles/${reference_bundle_name}}
 
 write_reference_manifest() {

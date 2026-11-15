@@ -43,7 +43,7 @@ def publish(result, target, revision):
     count = f"{result['passed']:,} / {result['total']:,}"
     (directory / 'tests.svg').write_text(badge_svg(dict(
         label='Internal assignment tests', message=count, color='15803d')))
-    source = ('https://github.com/vishvananda/cppgm-extended/commit/' + revision)
+    source = ('https://github.com/vishvananda/cppgm/commit/' + revision)
     (directory / 'report.md').write_text(
         '# Internal assignment tests\n\n' + count + ' passed.\n\n' +
         f"Compiler: [`{revision[:9]}`]({source}) · [CI report]({result['run_url']})\n\n" +

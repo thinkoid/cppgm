@@ -197,5 +197,5 @@ jobs:
             echo "Assignment export is unchanged."
             exit 0
           fi
-          git commit -m "Export assignments from cppgm-extended ${{ steps.export.outputs.short_sha }}"
+          git commit -m "Export assignments from cppgm ${{ steps.export.outputs.short_sha }}"
           git push origin main

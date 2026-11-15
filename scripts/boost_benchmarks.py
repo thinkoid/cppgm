@@ -327,7 +327,7 @@ def publish(args):
     relative = 'boost/o3' if optimized(document) else 'boost'
     directory = args.target / relative
     history = 'history/' + args.revision + '/' + host
-    base = 'https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/' + relative + '/' + history
+    base = 'https://github.com/vishvananda/cppgm/blob/benchmark-badges/' + relative + '/' + history
     with tempfile.TemporaryDirectory() as temp:
         standard = Path(temp) / 'standard'
         boost_results.generate(args.artifact, standard, benchmark_hosts.environment(host),

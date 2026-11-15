@@ -1,7 +1,7 @@
 # Boost compilation and native test runtime
 
-[Results by host](https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/boost/o3/report.md)
-· [CI summaries and artifacts](https://github.com/vishvananda/cppgm-extended/actions/workflows/boost.yml)
+[Results by host](https://github.com/vishvananda/cppgm/blob/benchmark-badges/boost/o3/report.md)
+· [CI summaries and artifacts](https://github.com/vishvananda/cppgm/actions/workflows/boost.yml)
 
 This lane runs on main pushes, pull requests and manual requests. All three
 compilers validate **1,818 declarations in 17 suites** from the pinned Boost
@@ -43,7 +43,7 @@ The runtime speedup is the median reference/cppgm ratio of paired block CPU
 means. Reports flag A/A drift or paired-block spread above 5%; these unit tests
 measure native test execution, including startup, rather than application
 steady-state throughput. Histories keep CPU models and measured revisions
-separate. O3 results have their own URLs; [historical debug results](https://github.com/vishvananda/cppgm-extended/blob/benchmark-badges/boost/report.md) retain their original labels.
+separate. O3 results have their own URLs; [historical debug results](https://github.com/vishvananda/cppgm/blob/benchmark-badges/boost/report.md) retain their original labels.
 
 Source adaptations apply identically to all compilers, with original and
 adapted hashes recorded. Volatile breakpoint anchors and no-inline debugger settings keep JSON's comment-based
