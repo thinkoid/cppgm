@@ -199,6 +199,11 @@ make -C cppgm/dev cppgm CXX=g++ CPPGM_HOST_CXX=g++
 Select Clang with `CXX=clang++ CPPGM_HOST_CXX=clang++`. `CC` does not select
 the C++ host compiler. Use the same host toolchain throughout a build.
 
+A [release](https://github.com/vishvananda/cppgm/releases) has packages of the
+tools and the LowIR library for Linux x86-64 and Intel macOS, the tools as
+WASI modules, and a source archive. See
+[reference and version exports](TESTING_AND_REFERENCES.md#reference-and-version-exports).
+
 Intel macOS support and its optional checks are described in
 [the macOS guide](docs/intel-macos.md).
 
