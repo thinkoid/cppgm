@@ -1,0 +1,45 @@
+function @make(%kind : i32) -> obj<16x8> [result_classes=sse_sse] {
+  slot $value : obj<16x8>
+  slot $result : obj<16x8>
+
+  block ^entry:
+    store i32 %kind, $value
+    switch %kind, ^done, 1:^integer, 2:^floating, 3:^boolean
+
+  block ^integer:
+    %integer_base = addr $value
+    %integer_field = index inbounds i8 %integer_base, 4
+    store i32 25, %integer_field
+    jump ^done
+
+  block ^floating:
+    %floating_base = addr $value
+    %floating_field = index inbounds i8 %floating_base, 4
+    store f64 2.5, %floating_field
+    jump ^done
+
+  block ^boolean:
+    %boolean_base = addr $value
+    %boolean_field = index inbounds i8 %boolean_base, 4
+    store i1 1, %boolean_field
+    jump ^done
+
+  block ^done:
+    %t7 = addr $value
+    %t8 = index i8 [projection=field] %t7, 4
+    %t9 = load i32 %t8
+    %t10 = index i8 [projection=field] %t7, 8
+    %t11 = load i64 %t10
+    %t12 = addr $result
+    store i32 %kind, %t12
+    %t13 = index i8 [projection=field] %t12, 4
+    store i32 %t9, %t13
+    %t14 = index i8 [projection=field] %t12, 8
+    store i64 %t11, %t14
+    %returned = load obj<16x8> $result
+    return obj<16x8> %returned
+}
+function @main() -> i32 [role=entry] {
+  block ^entry:
+    return i32 25
+}

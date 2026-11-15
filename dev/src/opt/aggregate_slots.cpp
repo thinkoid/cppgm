@@ -487,7 +487,8 @@ void AggregateSlots::mark_recurrent_fields()
 // with integer fillers across every copied or zeroed span.
 // A filler at `gap` (below `end`) in `slot`: a typed field that a copy
 // partner has there (its type, so copies between the two match field for
-// field), else void.
+// field), else void. An i1 field holds one bit of its byte, so a copy
+// through it would lose the others.
 Type AggregateSlots::hinted_filler(SlotId slot, uint64_t gap, uint64_t end) const
 {
 	for (const SlotCopy& copy : copies_)
@@ -506,7 +507,7 @@ Type AggregateSlots::hinted_filler(SlotId slot, uint64_t gap, uint64_t end) cons
 			const uint64_t bytes = storage_bytes(f.type);
 			if (static_cast<int64_t>(f.offset) == at && (bytes <= 8 || f.type.is_vector()) &&
 				(bytes & (bytes - 1)) == 0 && gap + bytes <= end && gap % bytes == 0 &&
-				f.type.kind() != TypeKind::F80 && !f.type.is_object())
+				f.type.kind() != TypeKind::F80 && f.type.kind() != TypeKind::I1 && !f.type.is_object())
 				return f.type;
 		}
 	}
