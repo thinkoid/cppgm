@@ -50,6 +50,8 @@ jobs:
       CXX: g++-15
       CPPGM_HOST_CXX: g++-15
       CPPGM_WARNINGS_AS_ERRORS: "1"
+      # The one statement of the pinned package snapshot: the source list and the cache key use it.
+      UBUNTU_SNAPSHOT: 20261107T000000Z
 
     steps:
       - name: Initialize retained setup evidence
@@ -60,6 +62,15 @@ jobs:
           printf '%s\n' 'ubuntu@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c' \
             > "$RUNNER_TEMP/cxx11/environment/container.txt"
 
+      # The snapshot never changes, so its package lists and archives are cached. A cached run
+      # reads nothing from the snapshot service; apt still checks each archive against the signed lists.
+      # Raise the key's last part when the installed packages change: a saved cache is never updated.
+      - name: Restore the snapshot's package lists and archives
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/cxx11-apt
+          key: cxx11-apt-${{ env.UBUNTU_SNAPSHOT }}-${{ matrix.suite }}-v1
+
       - name: Install snapshot-pinned compiler and metadata tools
         run: |
           set -euo pipefail
@@ -68,16 +79,26 @@ jobs:
           # the named compiler packages. Release expiry is irrelevant to a fixed snapshot.
           cat > "$RUNNER_TEMP/cxx11/environment/ubuntu.sources" <<'SOURCES'
           Types: deb
-          URIs: https://snapshot.ubuntu.com/ubuntu/20261107T000000Z/
+          URIs: https://snapshot.ubuntu.com/ubuntu/${{ env.UBUNTU_SNAPSHOT }}/
           Suites: resolute resolute-updates resolute-security
           Components: main universe
           Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
           Check-Valid-Until: no
           SOURCES
+          apt_cache="$RUNNER_TEMP/cxx11-apt"
+          mkdir -p "$apt_cache/lists/partial" "$apt_cache/archives/partial"
           apt_options=(-o "Dir::Etc::sourcelist=$RUNNER_TEMP/cxx11/environment/ubuntu.sources"
                        -o Dir::Etc::sourceparts=-
-                       -o Acquire::https::CaInfo=/usr/local/share/cppgm-ci/host-ca-certificates.crt)
-          apt-get "${apt_options[@]}" update
+                       -o Acquire::https::CaInfo=/usr/local/share/cppgm-ci/host-ca-certificates.crt
+                       -o "Dir::State::lists=$apt_cache/lists"
+                       -o "Dir::Cache::archives=$apt_cache/archives"
+                       -o Acquire::Retries=5)
+          if [ -e "$apt_cache/lists-complete" ]; then
+            echo "Using the cached package lists of the snapshot."
+          else
+            apt-get "${apt_options[@]}" update
+            touch "$apt_cache/lists-complete"
+          fi
           apt-get "${apt_options[@]}" install -y --no-install-recommends \
             ca-certificates git make python3 \
             g++-15=15.2.0-16ubuntu1 \
