@@ -4,86 +4,86 @@ All original oracles passed for all three compilers. Seconds are child CPU, one 
 
 | Test | Kind | Compile cppgm | GCC | Clang | Test cppgm | GCC | Clang |
 |---|---|---:|---:|---:|---:|---:|---:|
-| test_include1.test | RUN | 0.453386 | 0.944296 | 1.514148 | 0.000704 | 0.000685 | 0.001792 |
-| test_uuid.test | RUN | 0.266007 | 0.763163 | 1.075503 | 0.001859 | 0.001815 | 0.001890 |
-| test_uuid_no_simd.test | RUN | 0.265163 | 0.727931 | 0.910918 | 0.001813 | 0.001641 | 0.001568 |
-| test_uuid_2.test | RUN | 0.188374 | 0.548763 | 0.694213 | 0.001566 | 0.001726 | 0.001779 |
-| test_uuid_3.test | RUN | 0.158686 | 0.399414 | 0.581243 | 0.001864 | 0.001800 | 0.001539 |
-| test_alignment.test | RUN | 0.151428 | 0.350206 | 0.485700 | 0.001858 | 0.001745 | 0.001961 |
-| test_alignment_2.test | RUN | 0.147040 | 0.345260 | 0.525710 | 0.001561 | 0.001475 | 0.001726 |
-| test_attribute_packed.test | RUN | 0.156807 | 0.346903 | 0.526566 | 0.001808 | 0.001687 | 0.001461 |
-| test_pragma_pack.test | RUN | 0.142841 | 0.352277 | 0.475557 | 0.001594 | 0.001739 | 0.001747 |
-| test_data.test | RUN | 0.177248 | 0.637929 | 0.701813 | 0.001845 | 0.001558 | 0.001832 |
-| test_comparison.test | RUN | 0.243818 | 0.734856 | 0.874506 | 0.001854 | 0.001734 | 0.002091 |
-| test_comparison_no_simd.test | RUN | 0.230666 | 0.849762 | 0.886091 | 0.001828 | 0.001890 | 0.001836 |
-| test_io.test | RUN | 0.316830 | 1.407217 | 1.453955 | 0.001960 | 0.001892 | 0.002127 |
-| test_io_no_simd.test | RUN | 0.279169 | 1.355311 | 1.358402 | 0.001662 | 0.001788 | 0.001834 |
-| test_io_2.test | RUN | 0.239415 | 1.407346 | 1.043243 | 0.001770 | 0.001766 | 0.001861 |
-| test_io_2_no_simd.test | RUN | 0.215143 | 1.346910 | 0.942657 | 0.001864 | 0.001974 | 0.001836 |
-| test_to_chars.test | RUN | 0.223448 | 0.891701 | 0.937000 | 0.001959 | 0.001874 | 0.002048 |
-| test_to_chars_no_simd.test | RUN | 0.206738 | 0.898389 | 0.917611 | 0.001853 | 0.001595 | 0.001870 |
-| test_to_chars_2.test | RUN | 0.257356 | 1.645823 | 1.107307 | 0.001513 | 0.001808 | 0.001784 |
-| test_to_chars_2_no_simd.test | RUN | 0.241290 | 1.757099 | 0.999214 | 0.001839 | 0.001722 | 0.001993 |
-| test_to_chars_3.test | RUN | 0.186402 | 0.555717 | 0.707462 | 0.001852 | 0.001463 | 0.001435 |
-| test_from_chars.test | RUN | 0.211723 | 0.862377 | 0.753587 | 0.001617 | 0.001831 | 0.001743 |
-| test_from_chars_no_simd.test | RUN | 0.186370 | 0.691853 | 0.666720 | 0.001614 | 0.001722 | 0.001684 |
-| test_from_chars_2.test | RUN | 0.204010 | 0.795519 | 0.772482 | 0.001711 | 0.001708 | 0.001650 |
-| test_from_chars_2_no_simd.test | RUN | 0.178714 | 0.602399 | 0.597937 | 0.001794 | 0.001697 | 0.001749 |
-| test_uuid_from_string.test | RUN | 0.248652 | 0.886390 | 0.916109 | 0.001797 | 0.001682 | 0.001493 |
-| test_uuid_from_string_2.test | RUN | 0.216326 | 0.793150 | 0.756222 | 0.001778 | 0.002276 | 0.002108 |
-| test_uuid_from_string_3.test | RUN | 0.215258 | 0.785492 | 0.817421 | 0.001710 | 0.001520 | 0.001958 |
-| test_uuid_clock.test | RUN | 0.137743 | 0.335782 | 0.494228 | 0.001626 | 0.001896 | 0.001750 |
-| test_nil_generator.test | RUN | 0.157261 | 0.376350 | 0.543143 | 0.001709 | 0.001762 | 0.001974 |
-| test_string_generator.test | RUN | 0.198238 | 0.635171 | 0.784616 | 0.001981 | 0.001942 | 0.001827 |
-| test_string_generator_2.test | RUN | 0.248889 | 0.878125 | 0.861125 | 0.001686 | 0.001842 | 0.001654 |
-| test_random_generator.test | RUN | 0.331341 | 1.737345 | 1.245620 | 0.002571 | 0.002659 | 0.002656 |
-| test_random_generator_2.test | RUN | 0.242769 | 0.667041 | 0.889846 | 0.001678 | 0.001927 | 0.001645 |
-| test_name_generator.test | RUN | 0.208752 | 2.217757 | 0.953589 | 0.001772 | 0.001945 | 0.001718 |
-| test_namespaces.test | RUN | 0.176204 | 0.479769 | 0.629523 | 0.001540 | 0.001864 | 0.001676 |
-| test_name_generator_md5.test | RUN | 0.223055 | 1.051509 | 0.910035 | 0.001576 | 0.001852 | 0.001906 |
-| test_name_generator_sha1.test | RUN | 0.211135 | 3.273372 | 0.896676 | 0.001617 | 0.001991 | 0.001825 |
-| test_time_generator.test | RUN | 0.234017 | 0.661639 | 0.840149 | 0.001499 | 0.001807 | 0.001755 |
-| test_time_generator_v1.test | RUN | 0.261935 | 0.745935 | 0.960162 | 0.002106 | 0.002334 | 0.002542 |
-| test_time_generator_v1_2.test | RUN | 0.250115 | 0.689307 | 0.931379 | 0.002110 | 0.002108 | 0.002305 |
-| test_time_generator_v1_3.test | RUN | 0.274961 | 0.723744 | 1.009128 | 0.004752 | 0.004888 | 0.004798 |
-| test_time_generator_v6.test | RUN | 0.257249 | 0.747572 | 0.978390 | 0.002170 | 0.002433 | 0.002405 |
-| test_time_generator_v6_2.test | RUN | 0.259756 | 0.689448 | 0.941352 | 0.001852 | 0.002142 | 0.002281 |
-| test_time_generator_v6_3.test | RUN | 0.282283 | 0.742905 | 1.007349 | 0.004506 | 0.004452 | 0.004816 |
-| test_time_generator_v7.test | RUN | 0.251709 | 0.725226 | 0.940401 | 0.001712 | 0.002210 | 0.002040 |
-| test_time_generator_v7_2.test | RUN | 0.227452 | 0.655617 | 0.845149 | 0.001808 | 0.001974 | 0.001756 |
-| test_time_generator_v7_3.test | RUN | 0.227416 | 0.856551 | 0.894312 | 0.002360 | 0.002580 | 0.002479 |
-| test_serialization.test | RUN | 0.427525 | 1.261870 | 1.544284 | 0.002000 | 0.001773 | 0.001932 |
-| test_tagging.test | RUN | 0.233017 | 0.798577 | 0.862258 | 0.001636 | 0.001666 | 0.001890 |
-| test_uuid_class.test | RUN | 0.244006 | 0.693402 | 0.966543 | 0.001592 | 0.001630 | 0.001928 |
-| test_uuid_in_map.test | RUN | 0.273461 | 0.818451 | 1.056520 | 0.001806 | 0.001938 | 0.001883 |
-| test_hash.test | RUN | 0.273921 | 0.727533 | 0.909649 | 0.001786 | 0.001879 | 0.001845 |
-| test_hash_value.test | RUN | 0.195089 | 0.478077 | 0.681917 | 0.005035 | 0.004797 | 0.004849 |
-| test_std_unordered.test | RUN | 0.256027 | 0.818399 | 0.920237 | 0.001849 | 0.001948 | 0.001830 |
-| test_boost_unordered.test | RUN | 0.361923 | 1.012619 | 1.250723 | 0.001736 | 0.001842 | 0.001637 |
-| test_detail_md5.test | RUN | 0.170907 | 0.505595 | 0.681941 | 0.001605 | 0.001576 | 0.001929 |
-| test_detail_sha1.test | RUN | 0.154328 | 0.647262 | 0.646106 | 0.009311 | 0.009108 | 0.008301 |
-| test_detail_endian.test | RUN | 0.121646 | 0.375360 | 0.467447 | 0.001647 | 0.001747 | 0.001748 |
-| test_detail_chacha20.test | RUN | 0.137005 | 0.458758 | 0.481489 | 0.001584 | 0.001648 | 0.001947 |
-| random_provider_no_copy_ctor.test | COMPILE_FAIL | 0.128633 | 0.261822 | 0.403109 | — | — | — |
-| random_provider_no_copy_assign.test | COMPILE_FAIL | 0.124885 | 0.262681 | 0.402429 | — | — | — |
-| test_msvc_simd_bug981648.test | RUN | 0.206197 | 0.524385 | 0.710921 | 0.001834 | 0.001778 | 0.002011 |
-| test_bench_random.test | RUN | 0.237759 | 0.679739 | 0.908331 | 0.006006 | 0.005983 | 0.005886 |
-| test_entropy_error.test | RUN | 0.119061 | 0.316415 | 0.410291 | 0.001729 | 0.001904 | 0.001705 |
-| test_detail_random_provider.test | RUN | 0.225767 | 0.528276 | 0.775999 | 0.001649 | 0.001787 | 0.001724 |
-| test_constants.test | RUN | 0.178872 | 0.484066 | 0.613032 | 0.001523 | 0.001844 | 0.001640 |
-| test_uuid_cx.test | COMPILE | 0.100376 | 0.229990 | 0.309033 | — | — | — |
-| test_uuid_cx2.test | RUN | 0.187227 | 0.544452 | 0.674159 | 0.001469 | 0.001664 | 0.001871 |
-| test_uuid_cx3.test | RUN | 0.161544 | 0.432924 | 0.642549 | 0.001601 | 0.001847 | 0.001529 |
-| test_uuid_cx3_no_simd.test | RUN | 0.147755 | 0.410120 | 0.524851 | 0.001582 | 0.001650 | 0.001811 |
-| test_hash_value_cx.test | RUN | 0.159717 | 0.398106 | 0.580130 | 0.001554 | 0.001855 | 0.001464 |
-| test_string_generator_cx.test | RUN | 0.188943 | 0.477734 | 0.623915 | 0.001562 | 0.001760 | 0.001639 |
-| test_string_generator_cx2.test | RUN | 0.221198 | 0.589140 | 0.709934 | 0.001850 | 0.001810 | 0.001769 |
-| test_constants_cx.test | RUN | 0.155716 | 0.338420 | 0.544279 | 0.001807 | 0.001683 | 0.001338 |
-| test_from_chars_cx.test | RUN | 0.193762 | 0.645625 | 0.693949 | 0.001758 | 0.001903 | 0.001592 |
-| test_from_chars_cx2.test | RUN | 0.206824 | 0.794120 | 0.726174 | 0.001788 | 0.001697 | 0.001804 |
-| test_to_chars_cx.test | RUN | 0.201777 | 0.717290 | 0.807539 | 0.001595 | 0.001832 | 0.001271 |
-| test_uuid_from_string_cx.test | RUN | 0.209952 | 0.746289 | 0.698520 | 0.001458 | 0.001414 | 0.001414 |
-| quick.test | RUN | 0.233431 | 0.567561 | 0.773240 | 0.001437 | 0.001336 | 0.001351 |
+| test_include1.test | RUN | 0.312573 | 0.734821 | 0.992781 | 0.000680 | 0.000730 | 0.001795 |
+| test_uuid.test | RUN | 0.203317 | 0.594473 | 0.731101 | 0.001690 | 0.001734 | 0.001677 |
+| test_uuid_no_simd.test | RUN | 0.186798 | 0.600901 | 0.673787 | 0.001723 | 0.001412 | 0.001376 |
+| test_uuid_2.test | RUN | 0.148753 | 0.434769 | 0.459087 | 0.001560 | 0.001681 | 0.001452 |
+| test_uuid_3.test | RUN | 0.121521 | 0.292929 | 0.385064 | 0.001910 | 0.001806 | 0.001255 |
+| test_alignment.test | RUN | 0.115297 | 0.280440 | 0.334917 | 0.001725 | 0.001637 | 0.001663 |
+| test_alignment_2.test | RUN | 0.119563 | 0.290891 | 0.341165 | 0.001636 | 0.001621 | 0.001508 |
+| test_attribute_packed.test | RUN | 0.117459 | 0.274701 | 0.341120 | 0.001433 | 0.001632 | 0.001471 |
+| test_pragma_pack.test | RUN | 0.114170 | 0.259761 | 0.321373 | 0.001642 | 0.001651 | 0.001304 |
+| test_data.test | RUN | 0.137699 | 0.465730 | 0.488595 | 0.001761 | 0.001531 | 0.001681 |
+| test_comparison.test | RUN | 0.191119 | 0.545107 | 0.661388 | 0.001518 | 0.001665 | 0.001520 |
+| test_comparison_no_simd.test | RUN | 0.184243 | 0.614338 | 0.599100 | 0.001711 | 0.001486 | 0.001644 |
+| test_io.test | RUN | 0.231207 | 1.057958 | 1.007659 | 0.001852 | 0.001657 | 0.001776 |
+| test_io_no_simd.test | RUN | 0.229391 | 1.050887 | 0.974361 | 0.001455 | 0.001775 | 0.001726 |
+| test_io_2.test | RUN | 0.194291 | 1.081206 | 0.702019 | 0.001488 | 0.001420 | 0.001755 |
+| test_io_2_no_simd.test | RUN | 0.171096 | 1.026342 | 0.668944 | 0.001733 | 0.001618 | 0.001669 |
+| test_to_chars.test | RUN | 0.175224 | 0.699426 | 0.669394 | 0.001767 | 0.001733 | 0.001662 |
+| test_to_chars_no_simd.test | RUN | 0.162047 | 0.682572 | 0.643931 | 0.001808 | 0.001525 | 0.001752 |
+| test_to_chars_2.test | RUN | 0.211645 | 1.236099 | 0.778619 | 0.001565 | 0.001571 | 0.001388 |
+| test_to_chars_2_no_simd.test | RUN | 0.198238 | 1.300213 | 0.724841 | 0.001530 | 0.001453 | 0.001700 |
+| test_to_chars_3.test | RUN | 0.149806 | 0.448613 | 0.481644 | 0.001742 | 0.001304 | 0.001292 |
+| test_from_chars.test | RUN | 0.171537 | 0.621250 | 0.542555 | 0.001554 | 0.001581 | 0.001575 |
+| test_from_chars_no_simd.test | RUN | 0.146968 | 0.500638 | 0.449648 | 0.001485 | 0.001319 | 0.001355 |
+| test_from_chars_2.test | RUN | 0.167486 | 0.621714 | 0.524149 | 0.001476 | 0.001621 | 0.001593 |
+| test_from_chars_2_no_simd.test | RUN | 0.142434 | 0.485624 | 0.436238 | 0.001698 | 0.001763 | 0.001504 |
+| test_uuid_from_string.test | RUN | 0.195908 | 0.719399 | 0.664347 | 0.001526 | 0.001754 | 0.001758 |
+| test_uuid_from_string_2.test | RUN | 0.169025 | 0.667121 | 0.535376 | 0.001794 | 0.001640 | 0.001777 |
+| test_uuid_from_string_3.test | RUN | 0.174027 | 0.648013 | 0.579203 | 0.001544 | 0.001808 | 0.001825 |
+| test_uuid_clock.test | RUN | 0.105890 | 0.278182 | 0.338024 | 0.001420 | 0.001779 | 0.001573 |
+| test_nil_generator.test | RUN | 0.124456 | 0.316643 | 0.376578 | 0.001746 | 0.001754 | 0.001746 |
+| test_string_generator.test | RUN | 0.159627 | 0.517546 | 0.558589 | 0.001668 | 0.001806 | 0.001848 |
+| test_string_generator_2.test | RUN | 0.197720 | 0.695661 | 0.651538 | 0.001534 | 0.001670 | 0.001685 |
+| test_random_generator.test | RUN | 0.271292 | 1.297823 | 0.910696 | 0.058987 | 0.059421 | 0.059459 |
+| test_random_generator_2.test | RUN | 0.196517 | 0.501698 | 0.616031 | 0.001217 | 0.001666 | 0.001565 |
+| test_name_generator.test | RUN | 0.169537 | 1.617091 | 0.640716 | 0.001499 | 0.001614 | 0.001722 |
+| test_namespaces.test | RUN | 0.143696 | 0.359609 | 0.439512 | 0.001104 | 0.001672 | 0.001467 |
+| test_name_generator_md5.test | RUN | 0.177521 | 0.804149 | 0.648660 | 0.001708 | 0.001634 | 0.001786 |
+| test_name_generator_sha1.test | RUN | 0.171823 | 2.372066 | 0.642214 | 0.001659 | 0.001643 | 0.001548 |
+| test_time_generator.test | RUN | 0.185330 | 0.494860 | 0.595373 | 0.001456 | 0.001711 | 0.001439 |
+| test_time_generator_v1.test | RUN | 0.205895 | 0.555387 | 0.668494 | 0.001934 | 0.002092 | 0.002170 |
+| test_time_generator_v1_2.test | RUN | 0.206181 | 0.519145 | 0.610441 | 0.001857 | 0.001883 | 0.002044 |
+| test_time_generator_v1_3.test | RUN | 0.227245 | 0.548847 | 0.701537 | 0.003291 | 0.003654 | 0.003584 |
+| test_time_generator_v6.test | RUN | 0.211102 | 0.547413 | 0.662966 | 0.001919 | 0.002108 | 0.001902 |
+| test_time_generator_v6_2.test | RUN | 0.205991 | 0.520187 | 0.620726 | 0.001615 | 0.001934 | 0.002016 |
+| test_time_generator_v6_3.test | RUN | 0.228359 | 0.550393 | 0.700272 | 0.003415 | 0.004566 | 0.004762 |
+| test_time_generator_v7.test | RUN | 0.199445 | 0.562624 | 0.626693 | 0.001796 | 0.001975 | 0.001931 |
+| test_time_generator_v7_2.test | RUN | 0.186911 | 0.517409 | 0.584812 | 0.001655 | 0.001812 | 0.001765 |
+| test_time_generator_v7_3.test | RUN | 0.185775 | 0.666749 | 0.611263 | 0.030149 | 0.030494 | 0.030516 |
+| test_serialization.test | RUN | 0.352763 | 0.974857 | 1.121816 | 0.001903 | 0.001730 | 0.001974 |
+| test_tagging.test | RUN | 0.186661 | 0.595052 | 0.599938 | 0.001496 | 0.001560 | 0.001676 |
+| test_uuid_class.test | RUN | 0.196682 | 0.508384 | 0.654112 | 0.001444 | 0.001400 | 0.001626 |
+| test_uuid_in_map.test | RUN | 0.214458 | 0.602200 | 0.704274 | 0.001352 | 0.001664 | 0.001656 |
+| test_hash.test | RUN | 0.210289 | 0.522649 | 0.625018 | 0.001565 | 0.001576 | 0.001658 |
+| test_hash_value.test | RUN | 0.141452 | 0.369644 | 0.463840 | 0.004060 | 0.003821 | 0.004204 |
+| test_std_unordered.test | RUN | 0.187038 | 0.606767 | 0.648265 | 0.001466 | 0.001671 | 0.001829 |
+| test_boost_unordered.test | RUN | 0.265653 | 0.775830 | 0.845653 | 0.001685 | 0.001728 | 0.001728 |
+| test_detail_md5.test | RUN | 0.127164 | 0.375366 | 0.448486 | 0.001527 | 0.001685 | 0.001658 |
+| test_detail_sha1.test | RUN | 0.119115 | 0.476721 | 0.438097 | 0.006905 | 0.006729 | 0.006229 |
+| test_detail_endian.test | RUN | 0.088469 | 0.269208 | 0.320751 | 0.001490 | 0.001665 | 0.001583 |
+| test_detail_chacha20.test | RUN | 0.103473 | 0.338959 | 0.322496 | 0.001690 | 0.001516 | 0.001612 |
+| random_provider_no_copy_ctor.test | COMPILE_FAIL | 0.087127 | 0.190978 | 0.256668 | — | — | — |
+| random_provider_no_copy_assign.test | COMPILE_FAIL | 0.089133 | 0.188389 | 0.245257 | — | — | — |
+| test_msvc_simd_bug981648.test | RUN | 0.151258 | 0.391542 | 0.469504 | 0.001677 | 0.001670 | 0.001646 |
+| test_bench_random.test | RUN | 0.170798 | 0.492807 | 0.619445 | 0.308901 | 0.311962 | 0.311951 |
+| test_entropy_error.test | RUN | 0.086218 | 0.236544 | 0.293662 | 0.001457 | 0.001794 | 0.001385 |
+| test_detail_random_provider.test | RUN | 0.171841 | 0.390569 | 0.540217 | 0.003033 | 0.002941 | 0.001378 |
+| test_constants.test | RUN | 0.129816 | 0.365837 | 0.440033 | 0.001426 | 0.001383 | 0.001475 |
+| test_uuid_cx.test | COMPILE | 0.076700 | 0.135593 | 0.173314 | — | — | — |
+| test_uuid_cx2.test | RUN | 0.132877 | 0.412395 | 0.489262 | 0.001439 | 0.001536 | 0.001443 |
+| test_uuid_cx3.test | RUN | 0.097945 | 0.301085 | 0.437247 | 0.001582 | 0.001528 | 0.001387 |
+| test_uuid_cx3_no_simd.test | RUN | 0.108670 | 0.300596 | 0.392315 | 0.001123 | 0.001394 | 0.001383 |
+| test_hash_value_cx.test | RUN | 0.118799 | 0.299926 | 0.389389 | 0.001614 | 0.001555 | 0.001333 |
+| test_string_generator_cx.test | RUN | 0.131051 | 0.374933 | 0.443129 | 0.001614 | 0.001404 | 0.001634 |
+| test_string_generator_cx2.test | RUN | 0.162323 | 0.458139 | 0.509466 | 0.001137 | 0.001505 | 0.001319 |
+| test_constants_cx.test | RUN | 0.113231 | 0.256845 | 0.358040 | 0.001462 | 0.001294 | 0.001680 |
+| test_from_chars_cx.test | RUN | 0.144527 | 0.492178 | 0.481531 | 0.001709 | 0.001234 | 0.001212 |
+| test_from_chars_cx2.test | RUN | 0.144797 | 0.582384 | 0.526907 | 0.001649 | 0.001319 | 0.001309 |
+| test_to_chars_cx.test | RUN | 0.145877 | 0.547566 | 0.562732 | 0.001532 | 0.001578 | 0.001487 |
+| test_uuid_from_string_cx.test | RUN | 0.154275 | 0.553578 | 0.542426 | 0.001325 | 0.001237 | 0.001096 |
+| quick.test | RUN | 0.145573 | 0.445488 | 0.525504 | 0.001146 | 0.001363 | 0.001254 |
 
 ## Native runtime replay
 
@@ -91,91 +91,91 @@ Child CPU of successful native tests, with process startup included; GDB and exp
 
 | Reference | CPU speedup ↑ | Paired blocks | A/A speedup |
 |---|---:|---|---:|
-| gcc | 1.008× | 1.018×, 0.998× | 1.017× |
-| clang | 0.990× | 0.985×, 0.995× | 0.994× |
+| gcc | 1.000× | 0.995×, 1.005× | 1.003× |
+| clang | 0.997× | 1.005×, 0.989× | 1.000× |
 
-† A/A drift or paired-block spread exceeds 5%; small differences are unresolved. 1375 native tests in the full cohort; 1363 have byte-identical output throughout. [Raw replay evidence in CI artifacts](https://github.com/vishvananda/cppgm-extended/actions/runs/43648658351).
+† A/A drift or paired-block spread exceeds 5%; small differences are unresolved. 1375 native tests in the full cohort; 1363 have byte-identical output throughout. [Raw replay evidence in CI artifacts](https://github.com/vishvananda/cppgm-extended/actions/runs/43658654032).
 
 | Test | Repeats | CPU cppgm | GCC | Clang | Output check |
 |---|---:|---:|---:|---:|---|
-| quick.test | 10 | 0.001139s | 0.001134s | 0.001165s | byte equality observed |
-| test_alignment.test | 10 | 0.001179s | 0.001157s | 0.001167s | byte equality observed |
-| test_alignment_2.test | 10 | 0.001149s | 0.001165s | 0.001161s | byte equality observed |
-| test_attribute_packed.test | 10 | 0.001162s | 0.001113s | 0.001184s | byte equality observed |
-| test_bench_random.test | 4 | 0.005189s | 0.005155s | 0.005132s | native test oracle; output varies |
-| test_boost_unordered.test | 10 | 0.001223s | 0.001244s | 0.001207s | byte equality observed |
-| test_comparison.test | 10 | 0.001196s | 0.001210s | 0.001201s | byte equality observed |
-| test_comparison_no_simd.test | 10 | 0.001205s | 0.001197s | 0.001198s | byte equality observed |
-| test_constants.test | 10 | 0.001195s | 0.001163s | 0.001172s | byte equality observed |
-| test_constants_cx.test | 10 | 0.001159s | 0.001142s | 0.001139s | byte equality observed |
-| test_data.test | 10 | 0.001167s | 0.001165s | 0.001165s | byte equality observed |
-| test_detail_chacha20.test | 10 | 0.001174s | 0.001154s | 0.001152s | byte equality observed |
-| test_detail_endian.test | 10 | 0.001168s | 0.001153s | 0.001165s | byte equality observed |
-| test_detail_md5.test | 10 | 0.001200s | 0.001176s | 0.001160s | byte equality observed |
-| test_detail_random_provider.test | 10 | 0.001165s | 0.001144s | 0.001141s | byte equality observed |
-| test_detail_sha1.test | 3 | 0.008458s | 0.008407s | 0.007755s | byte equality observed |
-| test_entropy_error.test | 10 | 0.001155s | 0.001148s | 0.001160s | byte equality observed |
-| test_from_chars.test | 10 | 0.001149s | 0.001123s | 0.001144s | byte equality observed |
-| test_from_chars_2.test | 10 | 0.001143s | 0.001152s | 0.001155s | byte equality observed |
-| test_from_chars_2_no_simd.test | 10 | 0.001157s | 0.001166s | 0.001157s | byte equality observed |
-| test_from_chars_cx.test | 10 | 0.001154s | 0.001154s | 0.001170s | byte equality observed |
-| test_from_chars_cx2.test | 10 | 0.001159s | 0.001164s | 0.001150s | byte equality observed |
-| test_from_chars_no_simd.test | 10 | 0.001166s | 0.001177s | 0.001168s | byte equality observed |
-| test_hash.test | 10 | 0.001189s | 0.001156s | 0.001146s | byte equality observed |
-| test_hash_value.test | 6 | 0.004197s | 0.004116s | 0.004063s | byte equality observed |
-| test_hash_value_cx.test | 10 | 0.001153s | 0.001141s | 0.001144s | byte equality observed |
-| test_include1.test | 10 | 0.000506s | 0.000507s | 0.001128s | byte equality observed |
-| test_io.test | 10 | 0.001248s | 0.001217s | 0.001220s | byte equality observed |
-| test_io_2.test | 10 | 0.001290s | 0.001297s | 0.001299s | byte equality observed |
-| test_io_2_no_simd.test | 10 | 0.001303s | 0.001334s | 0.001318s | byte equality observed |
-| test_io_no_simd.test | 10 | 0.001241s | 0.001247s | 0.001247s | byte equality observed |
-| test_msvc_simd_bug981648.test | 10 | 0.001164s | 0.001160s | 0.001165s | native test oracle; output varies |
-| test_name_generator.test | 10 | 0.001185s | 0.001190s | 0.001174s | byte equality observed |
-| test_name_generator_md5.test | 10 | 0.001194s | 0.001199s | 0.001193s | byte equality observed |
-| test_name_generator_sha1.test | 10 | 0.001193s | 0.001213s | 0.001208s | byte equality observed |
-| test_namespaces.test | 10 | 0.001183s | 0.001167s | 0.001161s | byte equality observed |
-| test_nil_generator.test | 10 | 0.001154s | 0.001145s | 0.001129s | byte equality observed |
-| test_pragma_pack.test | 10 | 0.001179s | 0.001141s | 0.001186s | byte equality observed |
-| test_random_generator.test | 9 | 0.002008s | 0.002005s | 0.002000s | native test oracle; output varies |
-| test_random_generator_2.test | 10 | 0.001206s | 0.001152s | 0.001168s | byte equality observed |
-| test_serialization.test | 10 | 0.001276s | 0.001294s | 0.001277s | byte equality observed |
-| test_std_unordered.test | 10 | 0.001238s | 0.001208s | 0.001237s | byte equality observed |
-| test_string_generator.test | 10 | 0.001239s | 0.001289s | 0.001265s | byte equality observed |
-| test_string_generator_2.test | 10 | 0.001195s | 0.001187s | 0.001199s | byte equality observed |
-| test_string_generator_cx.test | 10 | 0.001168s | 0.001165s | 0.001159s | byte equality observed |
-| test_string_generator_cx2.test | 10 | 0.001154s | 0.001164s | 0.001127s | byte equality observed |
-| test_tagging.test | 10 | 0.001153s | 0.001187s | 0.001157s | byte equality observed |
-| test_time_generator.test | 10 | 0.001184s | 0.001188s | 0.001178s | byte equality observed |
-| test_time_generator_v1.test | 10 | 0.001605s | 0.001683s | 0.001682s | byte equality observed |
-| test_time_generator_v1_2.test | 10 | 0.001433s | 0.001447s | 0.001473s | byte equality observed |
-| test_time_generator_v1_3.test | 5 | 0.003611s | 0.003492s | 0.003756s | byte equality observed |
-| test_time_generator_v6.test | 5 | 0.001613s | 0.001694s | 0.001720s | byte equality observed |
-| test_time_generator_v6_2.test | 10 | 0.001446s | 0.001454s | 0.001457s | byte equality observed |
-| test_time_generator_v6_3.test | 6 | 0.003660s | 0.003561s | 0.003714s | byte equality observed |
-| test_time_generator_v7.test | 10 | 0.001410s | 0.001451s | 0.001456s | byte equality observed |
-| test_time_generator_v7_2.test | 10 | 0.001236s | 0.001217s | 0.001243s | byte equality observed |
-| test_time_generator_v7_3.test | 10 | 0.001843s | 0.001849s | 0.001844s | byte equality observed |
-| test_to_chars.test | 10 | 0.001242s | 0.001276s | 0.001235s | byte equality observed |
-| test_to_chars_2.test | 10 | 0.001194s | 0.001213s | 0.001183s | byte equality observed |
-| test_to_chars_2_no_simd.test | 10 | 0.001184s | 0.001196s | 0.001188s | byte equality observed |
-| test_to_chars_3.test | 10 | 0.001191s | 0.001177s | 0.001169s | byte equality observed |
-| test_to_chars_cx.test | 10 | 0.001203s | 0.001176s | 0.001164s | byte equality observed |
-| test_to_chars_no_simd.test | 10 | 0.001241s | 0.001242s | 0.001233s | byte equality observed |
-| test_uuid.test | 10 | 0.001148s | 0.001168s | 0.001153s | byte equality observed |
-| test_uuid_2.test | 10 | 0.001163s | 0.001186s | 0.001166s | byte equality observed |
-| test_uuid_3.test | 10 | 0.001166s | 0.001142s | 0.001166s | byte equality observed |
-| test_uuid_class.test | 10 | 0.001166s | 0.001177s | 0.001182s | byte equality observed |
-| test_uuid_clock.test | 10 | 0.001150s | 0.001153s | 0.001149s | byte equality observed |
-| test_uuid_cx2.test | 10 | 0.001185s | 0.001167s | 0.001140s | byte equality observed |
-| test_uuid_cx3.test | 10 | 0.001165s | 0.001137s | 0.001165s | byte equality observed |
-| test_uuid_cx3_no_simd.test | 10 | 0.001163s | 0.001147s | 0.001175s | byte equality observed |
-| test_uuid_from_string.test | 10 | 0.001175s | 0.001150s | 0.001179s | byte equality observed |
-| test_uuid_from_string_2.test | 10 | 0.001449s | 0.001414s | 0.001516s | byte equality observed |
-| test_uuid_from_string_3.test | 10 | 0.001269s | 0.001247s | 0.001240s | byte equality observed |
-| test_uuid_from_string_cx.test | 10 | 0.001189s | 0.001134s | 0.001190s | byte equality observed |
-| test_uuid_in_map.test | 10 | 0.001187s | 0.001160s | 0.001169s | byte equality observed |
-| test_uuid_no_simd.test | 10 | 0.001151s | 0.001162s | 0.001162s | byte equality observed |
+| quick.test | 10 | 0.000909s | 0.000886s | 0.000870s | byte equality observed |
+| test_alignment.test | 10 | 0.000910s | 0.000894s | 0.000916s | byte equality observed |
+| test_alignment_2.test | 10 | 0.000912s | 0.000880s | 0.000898s | byte equality observed |
+| test_attribute_packed.test | 10 | 0.000878s | 0.000850s | 0.000864s | byte equality observed |
+| test_bench_random.test | 1 | 0.323197s | 0.323402s | 0.323223s | native test oracle; output varies |
+| test_boost_unordered.test | 10 | 0.001454s | 0.001442s | 0.001433s | byte equality observed |
+| test_comparison.test | 10 | 0.000883s | 0.000857s | 0.000873s | byte equality observed |
+| test_comparison_no_simd.test | 10 | 0.000869s | 0.000848s | 0.000864s | byte equality observed |
+| test_constants.test | 10 | 0.000873s | 0.000824s | 0.000835s | byte equality observed |
+| test_constants_cx.test | 10 | 0.000840s | 0.000817s | 0.000824s | byte equality observed |
+| test_data.test | 10 | 0.000875s | 0.000841s | 0.000856s | byte equality observed |
+| test_detail_chacha20.test | 10 | 0.000858s | 0.000833s | 0.000872s | byte equality observed |
+| test_detail_endian.test | 10 | 0.000850s | 0.000832s | 0.000857s | byte equality observed |
+| test_detail_md5.test | 10 | 0.000896s | 0.000843s | 0.000869s | byte equality observed |
+| test_detail_random_provider.test | 8 | 0.002479s | 0.002434s | 0.002495s | byte equality observed |
+| test_detail_sha1.test | 4 | 0.005032s | 0.005495s | 0.004141s | byte equality observed |
+| test_entropy_error.test | 10 | 0.000947s | 0.000915s | 0.001004s | byte equality observed |
+| test_from_chars.test | 10 | 0.000859s | 0.000857s | 0.000928s | byte equality observed |
+| test_from_chars_2.test | 10 | 0.000859s | 0.000830s | 0.000906s | byte equality observed |
+| test_from_chars_2_no_simd.test | 10 | 0.000864s | 0.000837s | 0.000893s | byte equality observed |
+| test_from_chars_cx.test | 10 | 0.000868s | 0.000836s | 0.000871s | byte equality observed |
+| test_from_chars_cx2.test | 10 | 0.000859s | 0.000860s | 0.000879s | byte equality observed |
+| test_from_chars_no_simd.test | 10 | 0.000855s | 0.000873s | 0.000878s | byte equality observed |
+| test_hash.test | 10 | 0.001414s | 0.001401s | 0.001414s | byte equality observed |
+| test_hash_value.test | 7 | 0.002819s | 0.002729s | 0.002852s | byte equality observed |
+| test_hash_value_cx.test | 10 | 0.000895s | 0.000873s | 0.000891s | byte equality observed |
+| test_include1.test | 10 | 0.000398s | 0.000399s | 0.000828s | byte equality observed |
+| test_io.test | 10 | 0.000996s | 0.000976s | 0.000929s | byte equality observed |
+| test_io_2.test | 10 | 0.000991s | 0.000970s | 0.000978s | byte equality observed |
+| test_io_2_no_simd.test | 10 | 0.000988s | 0.000990s | 0.000975s | byte equality observed |
+| test_io_no_simd.test | 10 | 0.000950s | 0.000928s | 0.000966s | byte equality observed |
+| test_msvc_simd_bug981648.test | 10 | 0.000888s | 0.000900s | 0.000903s | native test oracle; output varies |
+| test_name_generator.test | 10 | 0.000933s | 0.000924s | 0.000920s | byte equality observed |
+| test_name_generator_md5.test | 10 | 0.000938s | 0.000901s | 0.000934s | byte equality observed |
+| test_name_generator_sha1.test | 10 | 0.000918s | 0.000923s | 0.000924s | byte equality observed |
+| test_namespaces.test | 10 | 0.000934s | 0.000896s | 0.000885s | byte equality observed |
+| test_nil_generator.test | 10 | 0.000907s | 0.000900s | 0.000906s | byte equality observed |
+| test_pragma_pack.test | 10 | 0.000866s | 0.000873s | 0.000884s | byte equality observed |
+| test_random_generator.test | 1 | 0.061536s | 0.061445s | 0.061442s | native test oracle; output varies |
+| test_random_generator_2.test | 10 | 0.000862s | 0.000855s | 0.000852s | byte equality observed |
+| test_serialization.test | 10 | 0.000946s | 0.000956s | 0.000946s | byte equality observed |
+| test_std_unordered.test | 10 | 0.001443s | 0.001448s | 0.001436s | byte equality observed |
+| test_string_generator.test | 10 | 0.000927s | 0.000944s | 0.000901s | byte equality observed |
+| test_string_generator_2.test | 10 | 0.000894s | 0.000895s | 0.000899s | byte equality observed |
+| test_string_generator_cx.test | 10 | 0.000920s | 0.000894s | 0.000885s | byte equality observed |
+| test_string_generator_cx2.test | 10 | 0.000931s | 0.000892s | 0.000881s | byte equality observed |
+| test_tagging.test | 10 | 0.000909s | 0.000892s | 0.000882s | byte equality observed |
+| test_time_generator.test | 10 | 0.000935s | 0.000894s | 0.000926s | byte equality observed |
+| test_time_generator_v1.test | 10 | 0.001191s | 0.001274s | 0.001275s | byte equality observed |
+| test_time_generator_v1_2.test | 10 | 0.001080s | 0.001097s | 0.001115s | byte equality observed |
+| test_time_generator_v1_3.test | 7 | 0.003211s | 0.002968s | 0.003098s | byte equality observed |
+| test_time_generator_v6.test | 10 | 0.001226s | 0.001301s | 0.001296s | byte equality observed |
+| test_time_generator_v6_2.test | 10 | 0.001105s | 0.001124s | 0.001116s | byte equality observed |
+| test_time_generator_v6_3.test | 7 | 0.003219s | 0.003017s | 0.002991s | byte equality observed |
+| test_time_generator_v7.test | 10 | 0.001125s | 0.001117s | 0.001132s | byte equality observed |
+| test_time_generator_v7_2.test | 10 | 0.001275s | 0.001070s | 0.001250s | byte equality observed |
+| test_time_generator_v7_3.test | 1 | 0.031559s | 0.030501s | 0.031667s | byte equality observed |
+| test_to_chars.test | 10 | 0.000925s | 0.000869s | 0.000865s | byte equality observed |
+| test_to_chars_2.test | 10 | 0.000909s | 0.000850s | 0.000875s | byte equality observed |
+| test_to_chars_2_no_simd.test | 10 | 0.000919s | 0.000911s | 0.000905s | byte equality observed |
+| test_to_chars_3.test | 10 | 0.000927s | 0.000902s | 0.000898s | byte equality observed |
+| test_to_chars_cx.test | 10 | 0.000935s | 0.000897s | 0.000884s | byte equality observed |
+| test_to_chars_no_simd.test | 10 | 0.000952s | 0.000935s | 0.000921s | byte equality observed |
+| test_uuid.test | 10 | 0.000903s | 0.000887s | 0.000881s | byte equality observed |
+| test_uuid_2.test | 10 | 0.000913s | 0.000924s | 0.000891s | byte equality observed |
+| test_uuid_3.test | 10 | 0.000898s | 0.000883s | 0.000873s | byte equality observed |
+| test_uuid_class.test | 10 | 0.000911s | 0.000927s | 0.000905s | byte equality observed |
+| test_uuid_clock.test | 10 | 0.000901s | 0.000895s | 0.000894s | byte equality observed |
+| test_uuid_cx2.test | 10 | 0.000906s | 0.000920s | 0.000881s | byte equality observed |
+| test_uuid_cx3.test | 10 | 0.000887s | 0.000900s | 0.000873s | byte equality observed |
+| test_uuid_cx3_no_simd.test | 10 | 0.000892s | 0.000910s | 0.000882s | byte equality observed |
+| test_uuid_from_string.test | 10 | 0.000909s | 0.000916s | 0.000896s | byte equality observed |
+| test_uuid_from_string_2.test | 10 | 0.001041s | 0.001039s | 0.001077s | byte equality observed |
+| test_uuid_from_string_3.test | 10 | 0.000985s | 0.000968s | 0.000967s | byte equality observed |
+| test_uuid_from_string_cx.test | 10 | 0.000924s | 0.000931s | 0.000880s | byte equality observed |
+| test_uuid_in_map.test | 10 | 0.000911s | 0.000925s | 0.000948s | byte equality observed |
+| test_uuid_no_simd.test | 10 | 0.000942s | 0.000915s | 0.000900s | byte equality observed |
 
-[Raw outcomes, commands and timing observations in CI artifacts](https://github.com/vishvananda/cppgm-extended/actions/runs/43648658351).
+[Raw outcomes, commands and timing observations in CI artifacts](https://github.com/vishvananda/cppgm-extended/actions/runs/43658654032).
 
 [Comparison records](../results.json) · [Host and toolchains](../metadata.json)
