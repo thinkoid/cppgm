@@ -368,6 +368,10 @@ void SyntaxRenderer::function_qualifier(const FunctionQualifier& qualifier)
 		text("->");
 		type_id(*qualifier.trailing);
 		break;
+	case FunctionQualifierKind::Requires:
+		text("requires ");
+		expression(*qualifier.noexcept_operand);
+		break;
 	}
 }
 

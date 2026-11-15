@@ -634,6 +634,11 @@ void AstDumper::declarator_suffix(const DeclaratorSuffix& suffix)
 			type_id(*qualifier.trailing);
 			close();
 			break;
+		case FunctionQualifierKind::Requires:
+			open("requires-clause");
+			expression(*qualifier.noexcept_operand);
+			close();
+			break;
 		}
 	}
 }

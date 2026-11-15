@@ -176,7 +176,8 @@ enum class FunctionQualifierKind : uint8_t
 	Noexcept,
 	Throw,
 	Virt,
-	TrailingReturn
+	TrailingReturn,
+	Requires
 };
 
 // One suffix of a function declarator after its parameter clause, in
@@ -192,6 +193,7 @@ struct FunctionQualifier
 	uint32_t location;
 	// Virt: `final` or `override`.
 	const Identifier* virt;
+	// Noexcept: its optional operand; Requires: its constraint-expression.
 	Expr* noexcept_operand;
 	// Throw: the dynamic-exception-specification's type-ids.
 	Slice<TypeId*> throw_types;
@@ -234,6 +236,15 @@ struct DeclaratorSuffix
 	uint8_t array_cv;
 	bool array_static;
 };
+
+inline const Expr* RequiresClause(const DeclaratorSuffix* suffix)
+{
+	if (suffix != nullptr && suffix->kind == DeclaratorSuffixKind::Function)
+		for (const FunctionQualifier& qualifier : suffix->qualifiers)
+			if (qualifier.kind == FunctionQualifierKind::Requires)
+				return qualifier.noexcept_operand;
+	return nullptr;
+}
 
 // A declarator's pack ellipsis, which precedes its name (8p4).
 enum class PackPosition : uint8_t
