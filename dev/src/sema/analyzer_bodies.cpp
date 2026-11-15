@@ -349,7 +349,9 @@ bool Analyzer::deferrable_expression(const syntax::Expr* expr, Scope* scope)
 	if (deferring_reserved_ == 0 || body_ == nullptr || body_->pattern || expr == nullptr)
 	{
 		expression(expr, scope);
-		return true;
+		// An expression that failed softly (a defaulted comparison's
+		// implied body, see analyze_comparison_body) has no facts to use.
+		return !failed();
 	}
 	// One pending from an earlier part of the statement: the statement is
 	// deferred whole (see deferrable_statement); nothing more is typed.
