@@ -169,7 +169,7 @@ Methods: [public programs](benchmarks/public/README.md) ([O0 and per-host result
 ## Caveats
 
 - The [required C++11/14/17 profile](LANGUAGE_PROFILE.md) covers selected features, not full conformance to every edition.
-- C++20 and C have partial support. The profile lists the selected C++20 features; C sources compile in the `c17` and `gnu17` modes.
+- C++20 and C have partial support. The profile lists the selected C++20 features; the optional [PA38](pa38/README.md) compiles C sources in the `c17` and `gnu17` modes.
 - Targets are Linux x86-64, Intel macOS and wasm32 (`wasm32-unknown-unknown` and `wasm32-wasip1`, [PA37](pa37/README.md)).
 - [Integrated assembly](pa29/README.md) is complete for its documented x86-64 profile; it is not a general assembler.
 - No C++ standard library is bundled; use a host-installed library.
