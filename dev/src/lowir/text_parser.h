@@ -158,7 +158,7 @@ private:
 	int64_t parse_small_integer(const char* what);
 	void parse_metadata(MetadataContext context, SymbolMetadata* symbol, BoundaryMetadata* boundary);
 	void parse_metadata_item(
-		MetadataContext context, SymbolMetadata* symbol, BoundaryMetadata* boundary, uint32_t& seen);
+		MetadataContext context, SymbolMetadata* symbol, BoundaryMetadata* boundary, uint64_t& seen);
 	void parse_symbol_value(MetadataKey key, MetadataContext context, SymbolMetadata& symbol);
 	void parse_function_binding(bool imported);
 	void parse_boundary_value(MetadataKey key, BoundaryMetadata& boundary);

@@ -29,6 +29,14 @@ unsigned log2_of(uint64_t value)
 	return log;
 }
 
+// A set of metadata keys is one word: each key has one bit.
+static_assert(kMetadataKeyCount <= 64, "a set of metadata keys has 64 bits");
+
+uint64_t key_bit(MetadataKey key)
+{
+	return static_cast<uint64_t>(1) << static_cast<unsigned>(key);
+}
+
 } // namespace
 
 Parser::Parser(Program& program)
@@ -753,7 +761,7 @@ uint8_t Parser::parse_object_classes(Type type)
 void Parser::parse_metadata(MetadataContext context, SymbolMetadata* symbol, BoundaryMetadata* boundary)
 {
 	// One bracket or several (lowir.md "Functions"); a key appears once.
-	uint32_t seen = 0;
+	uint64_t seen = 0;
 	while (accept(TokenKind::LBracket))
 	{
 		do
@@ -766,7 +774,7 @@ void Parser::parse_metadata(MetadataContext context, SymbolMetadata* symbol, Bou
 }
 
 void Parser::parse_metadata_item(
-	MetadataContext context, SymbolMetadata* symbol, BoundaryMetadata* boundary, uint32_t& seen)
+	MetadataContext context, SymbolMetadata* symbol, BoundaryMetadata* boundary, uint64_t& seen)
 {
 	if (!at(TokenKind::Word))
 		fail("expected metadata key, got '" + spelling(token()) + "'");
@@ -775,7 +783,7 @@ void Parser::parse_metadata_item(
 		fail("unknown symbol metadata: " + spelling(token()));
 	advance();
 	expect(TokenKind::Equals, "=");
-	const uint32_t bit = 1u << static_cast<unsigned>(key);
+	const uint64_t bit = key_bit(key);
 	if ((seen & bit) != 0)
 		fail(std::string("duplicate metadata key: ") + ir_model::spelling(key));
 	seen |= bit;
@@ -994,7 +1002,7 @@ void Parser::parse_parameter(Signature& signature)
 void Parser::parse_parameter_metadata(Parameter& parameter)
 {
 	advance();
-	uint32_t seen = 0;
+	uint64_t seen = 0;
 	do
 	{
 		if (!at(TokenKind::Word))
@@ -1034,7 +1042,7 @@ void Parser::parse_parameter_metadata(Parameter& parameter)
 			if (!at(TokenKind::Word) || !aggregate_shape_from_spelling(token().text, token().length, &parameter.shape))
 				fail("invalid aggregate parameter shape");
 		}
-		const uint32_t bit = 1u << static_cast<unsigned>(index);
+		const uint64_t bit = key_bit(index);
 		if (index == MetadataKey::Classes)
 		{
 			if ((seen & bit) != 0)
