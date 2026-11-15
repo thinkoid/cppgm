@@ -6,10 +6,10 @@ description: >-
 runs:
   using: composite
   steps:
-    # The build reads dev/ and the host compiler. The host configuration header names the host compiler's version,
-    # target and search directories, so its text is part of the key.
-    - name: Identify the host compiler
-      id: host
+    # The build reads dev/ and the host compiler. The key has the tree of dev/ in the checked-out commit, and the
+    # host configuration header, which names the host compiler's version, target and search directories.
+    - name: Identify the compiler sources and the host compiler
+      id: inputs
       shell: bash
       run: |
         set -euo pipefail
@@ -21,7 +21,8 @@ runs:
           cd dev
           CPPGM_BUILD_HOST_CXX="$host" CPPGM_STDLIB_FLAGS="${CPPGM_STDLIB_FLAGS:-}" perl gen_builtin_host_config.pl
         } | sha256sum | cut -c1-24)
-        echo "digest=$digest" >> "$GITHUB_OUTPUT"
+        sources=$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD:dev)
+        echo "key=cppgm-$digest-$sources" >> "$GITHUB_OUTPUT"
     - name: Restore a build of these sources
       id: cache
       uses: actions/cache/restore@v4
@@ -29,7 +30,7 @@ runs:
         path: |
           dev/cppgm
           obj/generated
-        key: cppgm-${{ steps.host.outputs.digest }}-${{ hashFiles('dev/**') }}
+        key: ${{ steps.inputs.outputs.key }}
     - name: Build
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
