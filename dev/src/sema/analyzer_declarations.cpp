@@ -2061,6 +2061,7 @@ Binding* Analyzer::declare_function(const Specifiers& specifiers, const Declarat
 		if (c_source_ && function->type->c_unprototyped() &&
 			(!info.type->c_unprototyped() || (definition && info.type->param_count != 0)))
 		{
+			check_startup_redeclaration(function, info.type, location);
 			function->type = info.type;
 			function->signature = signature;
 		}

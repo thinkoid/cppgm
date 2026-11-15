@@ -2,6 +2,15 @@
 
 namespace sema {
 
+void Analyzer::check_startup_redeclaration(const FunctionEntity* function, const Type* type, uint32_t location)
+{
+	// A C declaration without a prototype can acquire parameters later.
+	// An earlier constructor attribute still requires a void() boundary.
+	if (!graph_.startup_functions.empty() && graph_.startup_index.find(function) != PointerMap::kMissing &&
+		type->canonical->param_count != 0)
+		error(location, "a constructor function cannot acquire parameters in a later declaration");
+}
+
 void Analyzer::startup_attribute(Entity* entity, const syntax::Attribute& attribute)
 {
 	if (entity->kind != EntityKind::Function || entity->owner->kind != ScopeKind::Namespace)
