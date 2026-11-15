@@ -2693,6 +2693,17 @@ uint32_t drop_repeated_compares(Function& f)
 		return a.op == b.op && a.type == b.type && a.ops[0].reg == b.ops[0].reg && a.ops[1].kind == b.ops[1].kind &&
 			a.ops[1].reg == b.ops[1].reg && a.ops[1].imm == b.ops[1].imm;
 	};
+	// Whether `inst` leaves the flags and the registers of `compare` as they
+	// are: a copy, a memory access, a conditional move. (`mov r, 0` may be
+	// encoded as an xor.)
+	auto keeps = [](const Inst& inst, const Inst& compare) {
+		if (inst.op == Op::Nop)
+			return true;
+		const bool quiet = inst.op == Op::Cmov || inst.op == Op::Lea || inst.op == Op::Load || inst.op == Op::Store ||
+			(inst.op == Op::Mov && !(inst.ops[1].is_imm() && inst.ops[1].imm == 0));
+		const Reg w = written_reg(inst);
+		return quiet && w != compare.ops[0].reg && !(compare.ops[1].is_reg() && w == compare.ops[1].reg);
+	};
 	// Per block: the compare its predecessors end with.
 	std::vector<uint32_t> left(blocks, kUnseen);
 	auto edge = [&](uint32_t t, uint32_t compare) {
@@ -2761,23 +2772,23 @@ uint32_t drop_repeated_compares(Function& f)
 				++removed;
 				continue;
 			}
-			// (`mov r, 0` may be encoded as an xor.)
-			const bool quiet = inst.op == Op::Nop || inst.op == Op::Cmov || inst.op == Op::Lea || inst.op == Op::Load ||
-				inst.op == Op::Store || (inst.op == Op::Mov && !(inst.ops[1].is_imm() && inst.ops[1].imm == 0));
-			const Reg w = inst.op == Op::Nop ? kNoReg : written_reg(inst);
-			if (earlier != kUnseen &&
-				(!quiet || w == f.insts[earlier].ops[0].reg ||
-					(f.insts[earlier].ops[1].is_reg() && w == f.insts[earlier].ops[1].reg)))
+			if (earlier != kUnseen && !keeps(inst, f.insts[earlier]))
 				earlier = kUnseen;
 		}
 	}
+	// (The compare may follow instructions that keep the flags: transfers
+	// an edge gave the block, hoist_edge_moves.)
 	for (uint32_t b = 0; b < blocks; ++b)
 	{
 		const Block& block = f.blocks[b];
 		if (block.count == 0 || left[b] >= kMixed)
 			continue;
-		Inst& first = f.insts[block.first];
-		if (compare_of(first) && same(first, f.insts[left[b]]) && static_cast<uint32_t>(left[b]) != block.first)
+		const Inst& entered = f.insts[left[b]];
+		uint32_t at = block.first;
+		while (at + 1 < block.first + block.count && !compare_of(f.insts[at]) && keeps(f.insts[at], entered))
+			++at;
+		Inst& first = f.insts[at];
+		if (compare_of(first) && same(first, entered) && static_cast<uint32_t>(left[b]) != at)
 		{
 			first.op = Op::Nop;
 			first.nops = 0;
