@@ -16,9 +16,10 @@
 // through a new block that sets the frame up (Op::Prologue: the
 // reservation and the saves' pushes) and copies those registers back. The
 // region's returns are frameless (MF_FRAMELESS). The region comes first,
-// then the prologue blocks, then the rest, so the unwind facts read the
-// code before the first prologue as the entry's state
-// (object/host_unwind.cpp). No call runs in the region: nothing unwinds
+// so the unwind facts read the code before the first prologue as the
+// entry's state (object/host_unwind.cpp); a prologue block then lies
+// before its target where it can fall into it, the others between the
+// region and the rest. No call runs in the region: nothing unwinds
 // through it, and landing pads (entered from framed calls only) stay
 // framed. Linear in the function's MIR.
 namespace native {
@@ -591,7 +592,7 @@ bool shrink_wrap(Function& f)
 	// Placed again, then the frameless blocks (what the entry reaches short
 	// of a prologue block) first, then the prologue blocks, then the rest,
 	// each in placed order; the prologue block of the earliest-placed exit
-	// is last and falls into its target and what follows that.
+	// is last of them and falls into its target and what follows that.
 	place_blocks(f);
 	const uint32_t total = static_cast<uint32_t>(f.blocks.size());
 	std::vector<uint8_t> part(total, 2); // 0 frameless, 1 prologue, 2 framed
@@ -647,7 +648,33 @@ bool shrink_wrap(Function& f)
 			if (part[b] == k && !moved[b] && b != hot)
 				order.push_back(b);
 	}
-	reorder_blocks(f, order);
+	// Another prologue block lies before its target and falls into it when
+	// the block there does not branch to that target (it would no longer
+	// fall into it).
+	std::vector<uint32_t> entered(total, lowir::kNoId);
+	for (size_t at = 1; at < order.size(); ++at)
+	{
+		const uint32_t b = order[at];
+		if (part[b] != 1 || b == hot)
+			continue;
+		const uint32_t s = f.insts[f.blocks[b].first + f.blocks[b].count - 1].ops[0].symbol;
+		const size_t place = static_cast<size_t>(std::find(order.begin(), order.end(), s) - order.begin());
+		if (place == order.size() || place < at)
+			continue;
+		successors(f, order[place - 1], next_blocks);
+		if (order[place - 1] == b || std::find(next_blocks.begin(), next_blocks.end(), s) == next_blocks.end())
+			entered[s] = b;
+	}
+	std::vector<uint32_t> final_order;
+	for (uint32_t b : order)
+	{
+		if (part[b] == 1 && b != hot && entered[f.insts[f.blocks[b].first + f.blocks[b].count - 1].ops[0].symbol] == b)
+			continue;
+		if (entered[b] != lowir::kNoId)
+			final_order.push_back(entered[b]);
+		final_order.push_back(b);
+	}
+	reorder_blocks(f, final_order);
 	f.shrink_wrapped = true;
 	return true;
 }

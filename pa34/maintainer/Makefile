@@ -32,6 +32,8 @@ define run_structural_control_bucket
 			$(LOWIROPT_APP) $(LOWIR2NATIVE_APP) $(CPPGM_DRIVER_APP) "$(1)" || status=1; \
 		perl ../scripts/check_lowir_native_tail_jump.pl \
 			$(LOWIR2NATIVE_APP) $(CPPGM_DRIVER_APP) "$(1)" || status=1; \
+		perl ../scripts/check_lowir_native_frame_entries.pl \
+			$(LOWIR2NATIVE_APP) $(CPPGM_DRIVER_APP) "$(1)" || status=1; \
 		perl ../scripts/check_lowir_native_scalar_query.pl \
 			$(LOWIR2NATIVE_APP) $(CPPGM_DRIVER_APP) "$(1)" || status=1; \
 		perl ../scripts/check_lowir_native_loop_alignment.pl \
@@ -90,6 +92,7 @@ CHECK_RUN += \
 	'$(NATIVE_CONTROL_TEST_ROOT)/*::perl ../scripts/check_pa24_native_contracts.pl $(LOWIR2NATIVE_APP) {tests}' \
 	'$(STRUCTURAL_CONTROL_TEST_ROOT)/*host-scalar-tail-query*.t::perl ../scripts/check_lowir_native_scalar_query.pl $(LOWIR2NATIVE_APP) $(CPPGM_DRIVER_APP) {tests}' \
 	'$(STRUCTURAL_CONTROL_TEST_ROOT)/*host-tail-jump-transfer*.t::perl ../scripts/check_lowir_native_tail_jump.pl $(LOWIR2NATIVE_APP) $(CPPGM_DRIVER_APP) {tests}' \
+	'$(STRUCTURAL_CONTROL_TEST_ROOT)/*host-frame-entries*.t::perl ../scripts/check_lowir_native_frame_entries.pl $(LOWIR2NATIVE_APP) $(CPPGM_DRIVER_APP) {tests}' \
 	'$(STRUCTURAL_CONTROL_TEST_ROOT)/*host-loop-alignment*.t::perl ../scripts/check_lowir_native_loop_alignment.pl $(CPPGM_DRIVER_APP) {tests}' \
 	'$(STRUCTURAL_CONTROL_TEST_ROOT)/*host-scan-cycle-line*.t::perl ../scripts/check_lowir_native_loop_alignment.pl $(CPPGM_DRIVER_APP) {tests}' \
 	'$(DRIVER_CENSUS_TEST_ROOT)/*::perl ../scripts/check_cppgm_function_census.pl $(CPPGM_DRIVER_APP) {tests}' \

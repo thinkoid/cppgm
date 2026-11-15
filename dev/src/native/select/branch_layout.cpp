@@ -470,6 +470,11 @@ uint32_t FunctionSelector::layout_branches()
 	const bool object_in_rax = signature_->result.is_object() && entry_layout_.result == ArgClass::Mixed &&
 		entry_layout_.result_parts == 1 && entry_layout_.result_part[0].reg == RAX;
 	const bool bare_returns = f.preserve_mask == 0 && f.stack_size == 0;
+	// (Without a frame pointer, a return that pops at most two saves is
+	// about as short as the jump to another one.)
+	const uint32_t saves_past_one = f.preserve_mask & (f.preserve_mask - 1);
+	const bool short_returns = f.omit_frame_pointer && !f.cold && (f.preserve_mask & kCallerSavedGprs) == 0 &&
+		(saves_past_one & (saves_past_one - 1)) == 0;
 	for (uint32_t b = 0; b < blocks; ++b)
 	{
 		Block& block = f.blocks[b];
@@ -492,7 +497,7 @@ uint32_t FunctionSelector::layout_branches()
 		if (jcc != nullptr && jcc->op == Op::Jcc && jcc->ops[0].kind == OperandKind::Label &&
 			jcc->ops[0].symbol == b + 1 && !jump_only(b + 1))
 			last.ops[0].symbol = t;
-		else if (bare_returns || (f.insts[f.blocks[t].first].flags & MF_FRAMELESS) != 0)
+		else if (bare_returns || short_returns || (f.insts[f.blocks[t].first].flags & MF_FRAMELESS) != 0)
 		{
 			last = f.insts[f.blocks[t].first];
 			coalesce_return(f, block, object_in_rax);

@@ -331,6 +331,7 @@ prune_student_pa34() {
     check_native_carrier_fields \
     check_lowir_native_structural_controls check_lowir_native_parameter_addresses \
     check_lowir_native_tail_jump check_lowir_native_scalar_query \
+    check_lowir_native_frame_entries \
     check_lowir_native_loop_alignment \
     check_lowir_native_survivor_properties; do
     rm -f "$dest/scripts/$script.pl"

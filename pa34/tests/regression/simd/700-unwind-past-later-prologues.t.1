@@ -1,0 +1,92 @@
+// A function that returns early without a frame and enters its frame on
+// three paths, each with a call that can throw past a local object with a
+// destructor. The frame set-up of a path lies next to that path's code,
+// after other code of the function that already has the frame, so the
+// unwinder reads rules that change back to the entry's state and to the
+// frame's again.
+#include <cstdio>
+#include <stdexcept>
+
+struct Guard
+{
+	int* count;
+	~Guard() { ++*count; }
+};
+
+int cleanups;
+int (*volatile through)(int);
+
+int doubled(int x)
+{
+	if (x > 100)
+		throw std::runtime_error("large");
+	return x * 2;
+}
+
+int lowered(int x)
+{
+	if (x < -100)
+		throw x;
+	return x - 1;
+}
+
+int pick(int* p, int mode)
+{
+	if (p == nullptr)
+		return 0;
+	int v = *p;
+	if (v == 0)
+		return 1;
+	if (mode == 1)
+	{
+		Guard g{ &cleanups };
+		through = doubled;
+		return through(v) + 1;
+	}
+	if (mode == 2)
+	{
+		Guard g{ &cleanups };
+		through = lowered;
+		return through(v) + 2;
+	}
+	if (mode == 3)
+	{
+		Guard g{ &cleanups };
+		through = doubled;
+		int a = through(v + 1);
+		through = lowered;
+		return a + through(v);
+	}
+	return v;
+}
+
+int (*volatile picked)(int*, int) = pick;
+
+int main()
+{
+	int values[] = { 0, 7, 500, -500 };
+	long sum = 0;
+	int caught = 0;
+	for (int mode = 0; mode < 4; ++mode)
+	{
+		sum += picked(nullptr, mode);
+		for (int k = 0; k < 4; ++k)
+		{
+			try
+			{
+				sum += picked(&values[k], mode) * (k + 1);
+			}
+			catch (const std::runtime_error&)
+			{
+				caught += 1;
+			}
+			catch (int thrown)
+			{
+				caught += 100;
+				sum += thrown;
+			}
+		}
+	}
+	std::printf("%ld %d %d\n", sum, caught, cleanups);
+	return 0;
+}

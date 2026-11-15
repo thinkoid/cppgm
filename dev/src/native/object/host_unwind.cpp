@@ -209,11 +209,10 @@ uint32_t encode_cie(const CieDescription& description, std::vector<uint8_t>& out
 void encode_frameless_instructions(const UnwindFacts& facts, bool lsda, std::vector<uint8_t>& out)
 {
 	Cursor cursor = { out, 0 };
-	uint32_t below = 8;
 	// Each prologue: the saves' pushes, then the reservation. A
 	// shrink-wrapped function's code before its first has the entry's
-	// rules; a later one starts from them again (the one before it ended
-	// with the body's).
+	// rules; a later one starts from them again (the code before it ended
+	// with the body's). Returns the bytes below the return address.
 	std::vector<UnwindFacts::Prologue> prologues = facts.prologues;
 	if (prologues.empty())
 	{
@@ -222,22 +221,21 @@ void encode_frameless_instructions(const UnwindFacts& facts, bool lsda, std::vec
 			only.save_end[k] = facts.saves[k].end;
 		prologues.push_back(only);
 	}
-	for (size_t p = 0; p < prologues.size(); ++p)
-	{
-		if (p != 0)
+	auto prologue = [&](const UnwindFacts::Prologue& at, bool later) {
+		if (later)
 		{
-			cursor.advance(prologues[p].start);
+			cursor.advance(at.start);
 			out.push_back(DW_CFA_def_cfa_offset);
 			put_uleb(out, 8);
 			for (const UnwindFacts::Save& save : facts.saves)
 				out.push_back(static_cast<uint8_t>(DW_CFA_restore | kDwarfRegs[save.reg]));
 		}
-		below = 8;
+		uint32_t below = 8;
 		// [virtual rbp + offset] is CFA - 16 + offset.
 		for (size_t k = 0; k < facts.saves.size() && k < 13; ++k)
 		{
 			const UnwindFacts::Save& save = facts.saves[k];
-			cursor.advance(prologues[p].save_end[k]);
+			cursor.advance(at.save_end[k]);
 			below += 8;
 			out.push_back(DW_CFA_def_cfa_offset);
 			put_uleb(out, below);
@@ -247,12 +245,15 @@ void encode_frameless_instructions(const UnwindFacts& facts, bool lsda, std::vec
 		below += facts.reserve;
 		if (facts.reserve != 0)
 		{
-			cursor.advance(prologues[p].reserve_end);
+			cursor.advance(at.reserve_end);
 			out.push_back(DW_CFA_def_cfa_offset);
 			put_uleb(out, below);
 		}
-	}
-	const uint32_t body = below;
+		return below;
+	};
+	const uint32_t body = prologue(prologues[0], false);
+	// The later prologues lie among the body's code, in address order.
+	size_t next_prologue = 1;
 	// The body's rules hold up to each epilogue (the previous one's code
 	// ends with its restore): they are remembered where the cursor is.
 	auto epilogue = [&](const uint32_t* pop_end, uint32_t released_end, uint32_t ret_end, bool more) {
@@ -283,10 +284,10 @@ void encode_frameless_instructions(const UnwindFacts& facts, bool lsda, std::vec
 			out.push_back(DW_CFA_restore_state);
 		}
 	};
-	// The body's argument areas and, where a landing pad catches a call,
-	// its argument bytes (DW_CFA_GNU_args_size, as with a frame pointer:
-	// the pad runs with the area released), in address order with the
-	// epilogues; none lies inside an epilogue's code.
+	// The body's argument areas, the later prologues and, where a landing
+	// pad catches a call, its argument bytes (DW_CFA_GNU_args_size, as with
+	// a frame pointer: the pad runs with the area released), in address
+	// order with the epilogues; none lies inside an epilogue's code.
 	size_t next_adjust = 0;
 	size_t next_call = 0;
 	uint32_t args = 0;
@@ -303,9 +304,12 @@ void encode_frameless_instructions(const UnwindFacts& facts, bool lsda, std::vec
 			}
 			const uint32_t adjust = next_adjust < facts.adjusts.size() ? facts.adjusts[next_adjust].end : 0xffffffffu;
 			const uint32_t call = next_call < facts.calls.size() ? facts.calls[next_call].begin : 0xffffffffu;
-			if (adjust >= before && call >= before)
+			const uint32_t entered = next_prologue < prologues.size() ? prologues[next_prologue].start : 0xffffffffu;
+			if (adjust >= before && call >= before && entered >= before)
 				return;
-			if (adjust <= call)
+			if (entered <= adjust && entered <= call)
+				prologue(prologues[next_prologue++], true);
+			else if (adjust <= call)
 			{
 				cursor.advance(adjust);
 				out.push_back(DW_CFA_def_cfa_offset);
