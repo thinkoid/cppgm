@@ -65,14 +65,18 @@ jobs:
                   apt-get install -y --no-install-recommends bzip2 gdb ;;
                 wasm)
                   apt-get install -y --no-install-recommends curl xz-utils perl util-linux ;;
+                wasm-selfbuild)
+                  apt-get install -y --no-install-recommends curl xz-utils perl nodejs npm ;;
                 index-cpp|simdjson|internal) ;;
                 *) exit 2 ;;
               esac
               git config --global --add safe.directory /work/source
               git config --global --add safe.directory /work/tools
               make -C dev cppgm -j16
+              jobs=16
+              if [ "$SUITE" = wasm-selfbuild ]; then jobs=2; fi
               python3 -u ../tools/scripts/intel_library_benchmarks.py run \
-                --suite "$SUITE" --source /work/source --jobs 16
+                --suite "$SUITE" --source /work/source --jobs "$jobs"
             '
       - name: Report
         if: always()
@@ -80,6 +84,7 @@ jobs:
           SUITE: ${{ inputs.suite }}
         run: |
           report="source/obj/$SUITE/details.md"
+          if [ "$SUITE" = wasm-selfbuild ]; then report="source/obj/$SUITE/summary.md"; fi
           if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; fi
       - name: Collect results and diagnostics
         if: always()

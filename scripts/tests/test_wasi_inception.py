@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import subprocess
 import sys
 from types import SimpleNamespace
 import unittest
@@ -23,6 +24,47 @@ frozen = module('wasi_inception')
 
 
 class WasiInception(unittest.TestCase):
+    def test_freeze_uses_selected_checkout_for_sources_lists_and_revision(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, sdk, shim = root / 'source', root / 'sdk', root / 'shim'
+            files = {
+                'source/dev/frontend_source_sets.mk': 'FRONTEND_OBJ_BASENAMES_cppgm = selected\n',
+                'source/dev/src/selected.cpp': 'selected source',
+                'source/dev/cppgm.cpp': 'selected entry point',
+                'source/LICENSE': 'license', 'source/NOTICE': 'notice',
+                'source/scripts/experimental/wasi_host.h': 'selected host',
+                'source/scripts/experimental/wasi_stack.S': 'selected stack',
+                'source/obj/generated/cppgm_builtin_host_config.h': 'kStandardIncludePaths[] = {nullptr};',
+                'source/.gitignore': 'obj/\n', 'compiler': 'binary',
+                'shim/dist/index.js': 'shim',
+                'shim/package.json': '{"name":"@bjorn3/browser_wasi_shim","version":"0.4.2"}',
+                'sdk/VERSION': 'pinned SDK',
+                'sdk/lib/clang/23/lib/wasm32-unknown-wasip1/libclang_rt.builtins.a': 'archive',
+            }
+            for name in ('crt1-command.o', 'libc.a', 'libc-printscan-long-double.a',
+                         'eh/libc++.a', 'eh/libc++abi.a', 'eh/libunwind.a'):
+                files['sdk/share/wasi-sysroot/lib/wasm32-wasip1/' + name] = 'archive'
+            for name, contents in files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(contents)
+            subprocess.run(['git', 'init', '-q', str(source)], check=True)
+            subprocess.run(['git', '-C', str(source), 'add', '.'], check=True)
+            subprocess.run(['git', '-C', str(source), '-c', 'user.name=Test', '-c', 'user.email=test@example.org',
+                            'commit', '-qm', 'selected sources'], check=True)
+            expected = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
+            package = root / 'package'
+            frozen.prepare(SimpleNamespace(directory=package, repo_root=source, sdk=sdk,
+                compiler=root / 'compiler', shim=shim, x86_headers=False, optimization=3))
+            manifest = json.loads((package / 'manifest.json').read_text())
+            self.assertEqual(manifest['revision'], expected)
+            self.assertFalse(manifest['dirty'])
+            self.assertEqual(manifest['x86_sources'][:-1], ['dev/src/selected.cpp', 'dev/cppgm.cpp'])
+            self.assertEqual((package / 'inputs/dev/src/selected.cpp').read_text(), 'selected source')
+            self.assertEqual((package / 'inputs/wasi_host.h').read_text(), 'selected host')
+            frozen.verify(package, manifest)
+
     def test_lane_requires_all_fixed_points_and_x86_levels(self):
         args = lane.arguments([])
         phases = lane.plan(args, Path('/new-package'))

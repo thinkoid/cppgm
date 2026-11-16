@@ -71,13 +71,13 @@ def floating_cases():
     return "\n".join(lines) + "\n"
 
 
-def source_sets(tools):
+def source_sets(tools, repo_root=REPO):
     """Use the compiler's owning source lists, including each tool's entry point."""
     makefile = "include dev/frontend_source_sets.mk\nlist:\n"
     for name in tools:
         makefile += "\t@printf '%s\\n' '" + name + "' $(FRONTEND_OBJ_BASENAMES_" + name + ") END\n"
     lines = subprocess.check_output(["make", "-s", "-f", "-", "list"],
-                                    input=makefile.encode(), cwd=REPO).decode().splitlines()
+                                    input=makefile.encode(), cwd=repo_root).decode().splitlines()
     result = {}
     while lines:
         name = lines.pop(0)
@@ -90,17 +90,18 @@ def source_sets(tools):
 def prepare(args):
     package = args.directory.resolve()
     package.mkdir()  # Never replace an existing experiment or its observations.
+    repo_root = getattr(args, 'repo_root', REPO).resolve(strict=True)
     inputs = package / "inputs"
     inputs.mkdir()
-    copy_tree(REPO / "dev/src", inputs / "dev/src")
+    copy_tree(repo_root / "dev/src", inputs / "dev/src")
     tools = getattr(args, "reference_tools", ["cppgm"])
     for name in tools:
-        shutil.copyfile(REPO / ("dev/" + name + ".cpp"), inputs / ("dev/" + name + ".cpp"))
+        shutil.copyfile(repo_root / ("dev/" + name + ".cpp"), inputs / ("dev/" + name + ".cpp"))
     for name in ['LICENSE', 'NOTICE']:
-        shutil.copyfile(REPO / name, inputs / name)
-    shutil.copyfile(HERE / "wasi_host.h", inputs / "wasi_host.h")
-    shutil.copyfile(HERE / "wasi_stack.S", inputs / "wasi_stack.S")
-    tool_sources = source_sets(tools)
+        shutil.copyfile(repo_root / name, inputs / name)
+    shutil.copyfile(repo_root / "scripts/experimental/wasi_host.h", inputs / "wasi_host.h")
+    shutil.copyfile(repo_root / "scripts/experimental/wasi_stack.S", inputs / "wasi_stack.S")
+    tool_sources = source_sets(tools, repo_root)
     x86_sources = list(tool_sources["cppgm"])
     # These are supplied WASI command-host sources, shared by every exported
     # tool. Native builds keep their owning frontend source sets unchanged.
@@ -109,7 +110,7 @@ def prepare(args):
             sources.insert(-1, "dev/src/support/wasi_heap.cpp")
         sources.insert(-1, "wasi_stack.S")
     sources = tool_sources["cppgm"]
-    config = (REPO / "obj/generated/cppgm_builtin_host_config.h").read_text()
+    config = (repo_root / "obj/generated/cppgm_builtin_host_config.h").read_text()
     paths = re.search(r"kStandardIncludePaths\[\] = \{(.*?)\};", config, re.S)
     if paths is None:
         raise RuntimeError("generated host configuration has no include path table")
@@ -184,9 +185,9 @@ def prepare(args):
                                for p in sorted((package / "shim").rglob("*")) if p.is_file()},
                 "runner_files": {name: digest((package / name).read_bytes()) for name in runners},
                 "sdk_version": (args.sdk / "VERSION").read_text(),
-                "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO).decode().strip(),
+                "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_root).decode().strip(),
                 "tool_sources": tool_sources,
-                "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=REPO)),
+                "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=repo_root)),
                 "source_sha256": digest(json.dumps([(f['path'], f['sha256']) for f in files
                                                      if f['path'].startswith('dev/')]).encode())}
     save(package / "manifest.json", manifest)
@@ -344,6 +345,7 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     pack = commands.add_parser("prepare")
     pack.add_argument("--directory", required=True, type=Path)
+    pack.add_argument("--repo-root", type=Path, default=REPO)
     pack.add_argument("--sdk", required=True, type=Path)
     pack.add_argument("--compiler", type=Path, default=REPO / "dev/cppgm")
     pack.add_argument("--shim", required=True, type=Path)

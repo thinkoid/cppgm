@@ -26,6 +26,7 @@ SUITES = {
     'boost': 'boost.yml',
     'internal': 'internal-cpp.yml',
     'wasm': 'wasm.yml',
+    'wasm-selfbuild': 'wasm.yml',
 }
 
 
@@ -51,6 +52,8 @@ def dispatch_command(args, revision, label):
                '-f', f'runner_label={label}']
     if args.course_quality and args.suite == 'public':
         command += ['-f', 'course_quality=true']
+    if args.suite == 'wasm-selfbuild':
+        command += ['-f', 'intel_suite=wasm-selfbuild']
     return command
 
 
@@ -87,7 +90,7 @@ def main():
     parser.add_argument('--listen', action='store_true', help='accept one manually queued job instead of dispatching')
     parser.add_argument('--course-quality', action='store_true', help='also measure the optional course exercises')
     parser.add_argument('--suite', choices=['all', *SUITES], default='all',
-                        help='run all seven suites sequentially (default), or just one')
+                        help='run all suites sequentially (default), or just one')
     parser.add_argument('--plan', action='store_true', help='show the pinned campaign without registering runners or starting jobs')
     args = parser.parse_args()
     revision = github(f'repos/{args.repo}/commits/{args.revision}')['sha']

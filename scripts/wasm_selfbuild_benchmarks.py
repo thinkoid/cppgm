@@ -138,6 +138,7 @@ def run(args):
     args.output = args.output.resolve()
     args.tools = args.tools.resolve()
     args.compiler = args.compiler.resolve()
+    args.repo_root = args.repo_root.resolve(strict=True)
     if hasattr(os, 'sched_getaffinity'):
         cpus = sorted(os.sched_getaffinity(0))[:args.jobs]
         os.sched_setaffinity(0, cpus)
@@ -145,7 +146,8 @@ def run(args):
         cpus = []
     package = args.output / 'package'
     inception.prepare(argparse.Namespace(directory=package, sdk=args.tools / 'wasi-sdk',
-                      compiler=args.compiler, shim=args.shim.resolve(), x86_headers=False, optimization=3))
+                      compiler=args.compiler, shim=args.shim.resolve(), x86_headers=False, optimization=3,
+                      repo_root=args.repo_root))
     manifest = json.loads((package / 'manifest.json').read_text())
     inception.verify(package, manifest)
     campaign = Campaign(args, package, manifest)
@@ -180,7 +182,8 @@ def run(args):
                        'link_seconds', 'link_cpu_seconds']}
     inception.verify(package, manifest)
     metadata = dict(revision=manifest['revision'],
-                    dirty=bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT)),
+                    dirty=manifest['dirty'] or bool(subprocess.check_output(
+                        ['git', 'status', '--porcelain'], cwd=args.repo_root)),
                     sources=len(manifest['sources']), cpu=public_benchmarks.cpu_model(), affinity=cpus,
                     jobs=args.jobs, manifest_sha256=digest(package / 'manifest.json'),
                     candidate_sha256=digest(candidate), reference_sha256=digest(reference),
@@ -212,6 +215,7 @@ def run(args):
 def arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--repo-root', type=Path, default=ROOT, help='compiler source checkout to freeze')
     parser.add_argument('--tools', type=Path, default=ROOT / 'obj/wasm-tools')
     parser.add_argument('--compiler', type=Path, default=ROOT / 'dev/cppgm')
     parser.add_argument('--shim', type=Path, default=ROOT / 'scripts/experimental/node_modules/@bjorn3/browser_wasi_shim')

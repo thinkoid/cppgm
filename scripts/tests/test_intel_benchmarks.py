@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -68,8 +69,37 @@ class IntelBenchmarkTests(unittest.TestCase):
                 self.assertEqual(command[command.index('--repo-root') + 1], str(source))
                 self.assertEqual(command[command.index('--compiler') + 1], str(source / 'dev/cppgm'))
                 self.assertEqual(command[command.index('--output') + 1], str(source / 'obj' / suite))
-                self.assertEqual('--jobs' in command, suite in ('godot', 'boost', 'internal'))
+                self.assertEqual('--jobs' in command, suite in ('godot', 'boost', 'internal', 'wasm-selfbuild'))
                 self.assertEqual(Path(command[1]).name, library.SCRIPTS[suite])
+
+    def test_wasi_selfbuild_dispatch_selects_only_its_suite(self):
+        args = SimpleNamespace(suite='wasm-selfbuild', repo='owner/repo', ref='tooling', course_quality=False)
+        command = launcher.dispatch_command(args, 'a' * 40, 'unique')
+        self.assertEqual(command[3], 'wasm.yml')
+        self.assertIn('intel_suite=wasm-selfbuild', command)
+        self.assertIn('revision=' + 'a' * 40, command)
+        self.assertIn('runner_label=unique', command)
+        args.suite = 'wasm'
+        self.assertNotIn('intel_suite=wasm-selfbuild', launcher.dispatch_command(args, 'a' * 40, 'unique'))
+
+    def test_wasi_selfbuild_installs_pinned_tools_and_routes_publication(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary)
+            args = SimpleNamespace(suite='wasm-selfbuild', source=source, jobs=2)
+            with patch.object(library.subprocess, 'run') as run:
+                library.run(args)
+            calls = [call.args[0] for call in run.call_args_list]
+            self.assertEqual(len(calls), 3)
+            self.assertEqual(calls[0][-2:], ['--prefix', str(source / 'obj/wasm-tools')])
+            self.assertEqual(calls[1][:3], ['npm', 'ci', '--ignore-scripts'])
+            self.assertEqual(calls[2], library.run_command('wasm-selfbuild', source, 2))
+            with patch.object(sys, 'argv', ['adapter', 'publish', '--suite', 'wasm-selfbuild',
+                    '--artifact', 'artifact', '--target', 'badges', '--revision', 'a' * 40,
+                    '--run-url', 'https://example.org/run']), patch.object(library.subprocess, 'run') as run:
+                library.main()
+            command = run.call_args.args[0]
+            self.assertEqual(command[2:4], ['publish-selfbuild', 'artifact'])
+            self.assertEqual(command[-2:], ['--platform', 'intel'])
 
     def test_source_metadata_reads_the_selected_clean_checkout(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -97,10 +127,12 @@ class IntelBenchmarkTests(unittest.TestCase):
             root = Path(temporary)
             source, target = root / 'run', root / 'artifact'
             keep = ['results.json', 'compile.stdout', 'compile.stderr', 'counter-probe',
+                    'package/manifest.json', 'package/manifest.sha256', 'package/inputs/AB-0-0/a.log',
                     'raw/requests.stdin',
                     'runtime/observations.jsonl', 'runtime/000/stdout', 'runtime/000/stderr',
                     'cppgm/libs-json-test/invocations.jsonl', 'cppgm/libs-json-test/b2.log']
             discard = ['compiler', 'output.o', 'source/input.json', 'source/tests/result.stdout',
+                       'package/inputs/dev/header.hpp', 'package/inputs/sysroot/large.json',
                        'cppgm/build/large.json', 'binary']
             for name in keep + discard:
                 path = source / name

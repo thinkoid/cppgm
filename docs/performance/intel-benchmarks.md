@@ -12,10 +12,20 @@ python3 scripts/run_intel_benchmarks_once.py --plan \
 
 Remove `--plan` to start. The suites run sequentially: public programs,
 self-build/inception timing, index-cpp, simdjson scalar and SSE, Godot, Boost O3,
-the internal C++ source subset, and Wasm O0/O3 kernels. Each suite gets a fresh temporary runner and Ubuntu 26.04 container. The
+the internal C++ source subset, Wasm O0/O3 kernels, and the complete WASI compiler
+self-build. Each suite gets a fresh temporary runner and Ubuntu 26.04 container. The
 launcher waits for the suite and publication to pass before starting the next;
 runner logs and measurements remain in the printed directory. Use `--suite NAME`
 to refresh just one suite.
+
+The WASI self-build is a separate suite (`--suite wasm-selfbuild`); kernel
+measurements do not include it. It uses the same two workers, frozen inputs,
+byte checks and paired timing blocks as the hosted comparison. Its results
+populate the dedicated Intel row under `wasm-selfbuild`. To run it before merging
+workflow changes, use `--ref BRANCH --revision COMPILER_COMMIT`; the WASI package,
+source lists and recorded revision all come from that compiler checkout.
+The launcher also supports older GitHub CLI versions that omit the dispatch URL,
+identifying the completed job by its unique runner label and name.
 
 The internal suite pins both archive checksums from before and after the
 `cppgm-extended` to `cppgm` rename: only the archive's directory prefix changed.
