@@ -7,6 +7,11 @@
 #   make check TEST=tests/regression/x.t
 REGRESSION_TEST_ROOT ?= tests/regression
 
+# Each fixture's object also compiles from its optimized LowIR
+# (-S -emit-lowir, then -c -fno-lowir-passes) byte for byte
+# (scripts/check_wasm.pl).
+export CPPGM_WASM_OPTIMIZED_TEXT := 1
+
 test: test-regression
 
 test-regression: $(TEST_DEPS)

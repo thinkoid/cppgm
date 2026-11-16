@@ -19,6 +19,7 @@
 #include "lex/post_tokenizer.h"
 #include "lower/program_lowering.h"
 #include "lowir/text_reader.h"
+#include "lowir/text_writer.h"
 #include "native/backend_error.h"
 #include "native/link/linker.h"
 #include "native/object/elf_object.h"
@@ -115,6 +116,14 @@ struct Invocation
 	std::string standard;
 	native::Target target = native::host_target();
 	bool compile_only = false;
+	// -S -emit-lowir: each input's program as -c compiles it, after the
+	// LowIR optimizer, written as LowIR text instead of an object (clang's
+	// -S -emit-llvm).
+	bool emit_lowir = false;
+	// -fno-lowir-passes: the program goes to the back end (or to the text)
+	// without the LowIR optimizer; the back end still runs at the -O level.
+	// A program -S -emit-lowir wrote compiles so to the object -c gives.
+	bool lowir_passes = true;
 	bool position_independent = false;
 	bool red_zone = true;
 	// -ffunction-sections: each function in a section of its own.
@@ -339,6 +348,15 @@ uint32_t parse_wasm_stack_size(const std::string& size)
 	return static_cast<uint32_t>(bytes);
 }
 
+// -S -emit-lowir compiles as -c does: LowIR is the only assembly form this
+// driver writes.
+void lowir_output(Invocation& invocation, bool assembly_output)
+{
+	if (assembly_output != invocation.emit_lowir)
+		throw InvocationError(assembly_output ? "-S requires -emit-lowir" : "-emit-lowir requires -S");
+	invocation.compile_only = invocation.compile_only || invocation.emit_lowir;
+}
+
 Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions& base)
 {
 	Invocation invocation;
@@ -350,12 +368,19 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 	bool pthread = false;
 	bool optimize_size = false, popcnt_explicit = false;
 	unsigned pic_level = 0, pie_level = 0;
+	bool assembly_output = false;
 	const size_t base_defines = invocation.preprocessor.command_line.size();
 	for (size_t i = 0; i < args.size(); ++i)
 	{
 		const std::string& arg = args[i];
 		if (arg == "-c")
 			invocation.compile_only = true;
+		else if (arg == "-S")
+			assembly_output = true;
+		else if (arg == "-emit-lowir")
+			invocation.emit_lowir = true;
+		else if (arg == "-flowir-passes" || arg == "-fno-lowir-passes")
+			invocation.lowir_passes = arg == "-flowir-passes";
 		else if (arg == "-fPIC" || arg == "-fpic" || arg == "-fPIE" || arg == "-fpie")
 		{
 			invocation.position_independent = true;
@@ -538,6 +563,7 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 	input_language(invocation);
 	if (invocation.inputs.empty())
 		throw InvocationError("no input files");
+	lowir_output(invocation, assembly_output);
 	// GCC's -pthread defines _REENTRANT ahead of every -D and -U wherever
 	// it is written (the host link adds the thread library; link mode's
 	// runtime needs nothing).
@@ -643,7 +669,7 @@ void report_census(const native::ObjectStats& stats)
 // the optimized text (lowiropt and --emit-lowir keep thunks as lowered).
 void optimize_unit(lowir::Program& program, const Invocation& invocation, native::EhModel eh_model)
 {
-	if (invocation.optimizer.level == 0)
+	if (invocation.optimizer.level == 0 || !invocation.lowir_passes)
 		return;
 	opt::OptimizerOptions options = invocation.optimizer;
 	options.inline_thunk_targets = eh_model == native::EhModel::Course;
@@ -707,8 +733,22 @@ bool lower_source(const std::string& path, const Invocation& invocation, lower::
 	return true;
 }
 
-bool compile_unit(
-	const std::string& path, const Invocation& invocation, native::EhModel eh_model, native::object::ObjectFile& object)
+// -S -emit-lowir: a unit's program as the back end would take it, written
+// to `output` (at -O0 each definition as the lowering completes it, as -c
+// encodes it).
+bool write_unit_lowir(const lowir::Program& program, lowir::DefinitionStream* definitions, const std::string& output)
+{
+	if (definitions != nullptr ? lowir::write_program_file(program, *definitions, output)
+							   : lowir::write_program_file(program, output))
+		return true;
+	std::cerr << "ERROR: cannot write " << output << std::endl;
+	return false;
+}
+
+// With `lowir_output`, -S -emit-lowir: the program is written there as text
+// instead of compiled.
+bool compile_unit(const std::string& path, const Invocation& invocation, native::EhModel eh_model,
+	native::object::ObjectFile& object, const std::string* lowir_output = nullptr)
 {
 	const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
 	lowir::Program program;
@@ -718,10 +758,14 @@ bool compile_unit(
 	stats.census = invocation.function_census;
 	native::ObjectBuilder builder(program, stats, eh_model, invocation.optimizer.level, invocation.position_independent,
 		invocation.target, invocation.red_zone, invocation.function_sections);
-	// At -O0 each definition is encoded as the lowering completes it; an
-	// optimizing level keeps the program until the optimizer has run.
-	if (invocation.optimizer.level == 0)
-		lowering.set_definition_stream(&builder);
+	// At -O0 each definition is encoded (or written) as the lowering
+	// completes it; an optimizing level keeps the program until the
+	// optimizer has run.
+	lowir::DefinitionStream definitions;
+	const bool streaming = invocation.optimizer.level == 0;
+	if (streaming)
+		lowering.set_definition_stream(
+			lowir_output != nullptr ? static_cast<lowir::DefinitionSink*>(&definitions) : &builder);
 	lowering.set_object_mode(true);
 	lowering.set_debug_locations(invocation.debug_info);
 	lowering.set_debug_types(invocation.debug_types);
@@ -741,6 +785,8 @@ bool compile_unit(
 			return true;
 		lowering.finish();
 		optimize_unit(program, invocation, eh_model);
+		if (lowir_output != nullptr)
+			return write_unit_lowir(program, streaming ? &definitions : nullptr, *lowir_output);
 		object.path = path;
 		builder.finish(object);
 	}
@@ -781,8 +827,8 @@ bool compile_unit(
 // One serialized LowIR unit (PA33's LowIR object input): read and
 // validated, optimized at the invocation's level, then compiled by the same
 // object back end as a source's program.
-bool compile_lowir_unit(
-	const std::string& path, const Invocation& invocation, native::EhModel eh_model, native::object::ObjectFile& object)
+bool compile_lowir_unit(const std::string& path, const Invocation& invocation, native::EhModel eh_model,
+	native::object::ObjectFile& object, const std::string* lowir_output)
 {
 	lowir::Program program;
 	std::string error;
@@ -793,6 +839,8 @@ bool compile_lowir_unit(
 	}
 	native::recover_jump_thunks(program, eh_model);
 	optimize_unit(program, invocation, eh_model);
+	if (lowir_output != nullptr)
+		return write_unit_lowir(program, nullptr, *lowir_output);
 	native::ObjectStats stats;
 	stats.clocks = invocation.stats;
 	stats.census = invocation.function_census;
@@ -807,11 +855,11 @@ bool compile_lowir_unit(
 	return true;
 }
 
-bool compile_input(
-	const Input& input, const Invocation& invocation, native::EhModel eh_model, native::object::ObjectFile& object)
+bool compile_input(const Input& input, const Invocation& invocation, native::EhModel eh_model,
+	native::object::ObjectFile& object, const std::string* lowir_output = nullptr)
 {
-	return input.kind == Input::Kind::LowIR ? compile_lowir_unit(input.name, invocation, eh_model, object)
-											: compile_unit(input.name, invocation, eh_model, object);
+	return input.kind == Input::Kind::LowIR ? compile_lowir_unit(input.name, invocation, eh_model, object, lowir_output)
+											: compile_unit(input.name, invocation, eh_model, object, lowir_output);
 }
 
 bool regular_file(const std::string& path)
@@ -836,13 +884,21 @@ void check_output(const Invocation& invocation, const std::string& output)
 	}
 }
 
-std::string default_object_name(const std::string& source)
+std::string output_name(const std::string& source, const char* suffix)
 {
 	std::string name = source.substr(source.rfind('/') == std::string::npos ? 0 : source.rfind('/') + 1);
 	const size_t dot = name.rfind('.');
 	if (dot != std::string::npos && dot != 0)
 		name.erase(dot);
-	return name + ".o";
+	return name + suffix;
+}
+
+// -c's output for an input, or -S -emit-lowir's (<input>.lowir).
+std::string default_output_name(const Invocation& invocation, const Input& input)
+{
+	if (!invocation.output.empty())
+		return invocation.output;
+	return output_name(input.name, invocation.emit_lowir ? ".lowir" : ".o");
 }
 
 // The exception model of a -c object: a course object (`.obj`, PA25's
@@ -868,7 +924,15 @@ int compile_mode(const Invocation& invocation)
 		if (input.kind != Input::Kind::Source && input.kind != Input::Kind::LowIR)
 			throw InvocationError("-c needs C++ source or LowIR inputs: " + input.name);
 		native::object::ObjectFile object;
-		const std::string output = invocation.output.empty() ? default_object_name(input.name) : invocation.output;
+		const std::string output = default_output_name(invocation, input);
+		if (invocation.emit_lowir)
+		{
+			check_output(invocation, output);
+			// (Lowered as a host object is, whatever the output's name.)
+			if (!compile_input(input, invocation, native::EhModel::Host, object, &output))
+				return EXIT_FAILURE;
+			continue;
+		}
 		if (!compile_input(input, invocation, object_eh_model(output), object))
 			return EXIT_FAILURE;
 		std::string error;
@@ -990,8 +1054,10 @@ bool wasm_assembly(const Input& input, const Invocation& invocation, wasm::LinkI
 
 // One translation unit's posttoken records (`sof`, the PA2 tokens, `eof`);
 // false after an error.
+// With `lowir_output`, -S -emit-lowir: the program is written there as text
+// instead of compiled.
 bool wasm_input(const Input& input, const Invocation& invocation, const backend::Options& options,
-	wasm::LinkInputs& inputs, std::string& error)
+	wasm::LinkInputs& inputs, std::string& error, const std::string* lowir_output)
 {
 	if (input.kind == Input::Kind::Assembly)
 		return wasm_assembly(input, invocation, inputs, error);
@@ -1042,6 +1108,14 @@ bool wasm_input(const Input& input, const Invocation& invocation, const backend:
 					  << " resolutions=" << work.resolutions << " candidates=" << work.candidates << std::endl;
 #endif
 	}
+	if (lowir_output != nullptr)
+	{
+		wasm::optimize_object_program(program, options, nullptr);
+		if (lowir::write_program_file(program, *lowir_output))
+			return true;
+		error = "cannot write " + *lowir_output;
+		return false;
+	}
 	std::string dump = "machine_ir wasm32 1\n";
 	wasm::Object object;
 	if (!wasm::compile_object(program, options, object, dump, error))
@@ -1071,18 +1145,22 @@ int wasm_mode(const Invocation& invocation)
 	if (invocation.wasm_stack_size != 0)
 		options.wasm_stack_size = invocation.wasm_stack_size;
 	options.optimizer = &invocation.optimizer;
+	options.lowir_passes = invocation.lowir_passes;
 	std::string error;
 	wasm::LinkInputs objects;
 	for (const Input& input : invocation.inputs)
 	{
-		if (!wasm_input(input, invocation, options, objects, error))
+		const std::string lowir_output = invocation.emit_lowir ? default_output_name(invocation, input) : "";
+		if (invocation.emit_lowir)
+			check_output(invocation, lowir_output);
+		if (!wasm_input(input, invocation, options, objects, error, invocation.emit_lowir ? &lowir_output : nullptr))
 		{
 			std::cerr << "ERROR: " << error << std::endl;
 			return EXIT_FAILURE;
 		}
-		if (invocation.compile_only)
+		if (invocation.compile_only && !invocation.emit_lowir)
 		{
-			options.output = invocation.output.empty() ? default_object_name(input.name) : invocation.output;
+			options.output = default_output_name(invocation, input);
 			check_output(invocation, options.output);
 			if (!wasm::output_objects(objects, options, true, error))
 			{

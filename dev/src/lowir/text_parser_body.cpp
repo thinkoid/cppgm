@@ -195,6 +195,7 @@ void Parser::finish_body(FunctionBuilder& builder, SymbolId function)
 			fail_at(Position{ source_, temp_uses_[temp] },
 				std::string("undefined temporary: ") + program_.spelling(body.temps[temp].name));
 	}
+	number_temps_as_defined(builder.body());
 }
 
 // ---------------------------------------------------------------------------

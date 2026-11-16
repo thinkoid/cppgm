@@ -59,6 +59,22 @@ bool write_file(const std::string& path, const void* data, size_t size, std::str
 
 } // namespace
 
+void optimize_object_program(lowir::Program& program, const backend::Options& options, opt::OptimizerStats* stats)
+{
+	// The object follows the program's order: the one its LowIR text has,
+	// also for the symbols the optimizer adds (such as a switch's table).
+	lowir::order_as_written(program);
+	if (!options.lowir_passes)
+		return;
+	opt::OptimizerOptions optimization;
+	if (options.optimizer != nullptr)
+		optimization = *options.optimizer;
+	optimization.level = options.optimization_level;
+	optimization.has_gnu_sincos = target_model::has_gnu_sincos(program.target);
+	opt::optimize_program(program, optimization, stats);
+	lowir::order_as_written(program);
+}
+
 bool compile_object(
 	lowir::Program& program, const backend::Options& options, Object& object, std::string& dump, std::string& error)
 {
@@ -74,15 +90,8 @@ bool compile_object(
 	}
 	try
 	{
-		// The object follows the program's order: the one its LowIR text has.
-		lowir::order_as_written(program);
-		opt::OptimizerOptions optimization;
-		if (options.optimizer != nullptr)
-			optimization = *options.optimizer;
-		optimization.level = options.optimization_level;
-		optimization.has_gnu_sincos = target_model::has_gnu_sincos(program.target);
 		opt::OptimizerStats stats;
-		opt::optimize_program(program, optimization, &stats);
+		optimize_object_program(program, options, &stats);
 #if CPPGM_TELEMETRY_ENABLED
 		const auto object_start = std::chrono::steady_clock::now();
 #endif

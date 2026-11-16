@@ -41,6 +41,8 @@ struct Options
 	bool wasm_atomics = true;
 	WasmLinkOptions wasm_link;
 	const opt::OptimizerOptions* optimizer = nullptr;
+	// -fno-lowir-passes: the back end takes the program as it is.
+	bool lowir_passes = true;
 };
 
 } // namespace backend

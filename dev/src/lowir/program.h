@@ -429,6 +429,13 @@ struct Program
 // order gives the same output from the text as from the program.
 void order_as_written(Program& program);
 
+// Numbers a body's temporaries as its definitions come: the parameters,
+// then the results in layout order (as the optimizer leaves a body,
+// opt::compact_body). A reader numbers a temporary where the text first
+// names it, which is before its definition for a phi's operand along a
+// back edge; numbered so, a program read from its text has the ids it had.
+void number_temps_as_defined(FunctionBody& body);
+
 // A consumer of function definitions as a producer completes them (in
 // order); the producer releases each body after the append. A consumer
 // that selects code (`needs_boundaries`) is given every direct callee's

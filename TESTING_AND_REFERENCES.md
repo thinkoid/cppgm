@@ -223,6 +223,12 @@ not grow. The source-only `pa34/maintainer/Makefile` retains census and Cachegri
 targets, which are not student requirements; the course lane
 `make -C pa34 test-kernels` (PA36's kernels under Cachegrind, at PA34's
 limit) is one, so `make test-report` needs valgrind.
+The PA33 and PA37 `maintainer/Makefile`s also turn on a check of this
+solution's `cppgm -S -emit-lowir` (the LowIR that `-c` compiles, after the
+LowIR optimizer). PA33's object round trip and PA37's Wasm checker compile
+each object again from that text with `-c -fno-lowir-passes`, after
+`lowiropt -O0` has read and written it, and compare it with the direct
+object byte for byte.
 Keep solution-specific expectations out of graded course fixtures.
 
 ## Reference policy

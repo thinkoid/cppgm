@@ -61,6 +61,48 @@ void order_as_written(Program& program)
 	program.order.swap(written);
 }
 
+void number_temps_as_defined(FunctionBody& body)
+{
+	std::vector<TempId> map(body.temps.size(), kNoId);
+	TempId next = body.parameter_count;
+	bool moved = false;
+	for (TempId t = 0; t < body.parameter_count; ++t)
+		map[t] = t;
+	for (BlockId b : body.layout)
+		for (InstId i = body.blocks[b].first; i != kNoId; i = body.instructions[i].next)
+		{
+			const TempId result = body.instructions[i].result;
+			if (result == kNoId)
+				continue;
+			moved = moved || result != next;
+			map[result] = next++;
+		}
+	if (!moved)
+		return;
+	// (A temporary no placed instruction defines keeps its order, after
+	// the others.)
+	for (TempId& t : map)
+		if (t == kNoId)
+			t = next++;
+	std::vector<Temp> temps(body.temps.size());
+	for (TempId t = 0; t < body.temps.size(); ++t)
+		temps[map[t]] = body.temps[t];
+	body.temps.swap(temps);
+	auto remap = [&](Value& v) {
+		if (v.kind == ValueKind::Temp)
+			v.index = map[v.index];
+	};
+	for (Instruction& inst : body.instructions)
+	{
+		if (inst.result != kNoId)
+			inst.result = map[inst.result];
+		for (Value& v : inst.ops)
+			remap(v);
+	}
+	for (Value& v : body.operands)
+		remap(v);
+}
+
 void Program::declare_global(SymbolId id, SymbolKind kind, const Global& global)
 {
 	Symbol& symbol = symbols[id];

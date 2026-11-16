@@ -4,6 +4,11 @@
 # this solution's pass-specific choices, outside the course contract. One
 # fixture's reference is regenerated with the course root pointed at its lane:
 #   make ref-test TEST=tests/regression/o3/x.t O3_TEST_ROOT=tests/regression/o3
+#
+# The object round trip also compiles each object from its optimized LowIR
+# (-S -emit-lowir, then -c -fno-lowir-passes) byte for byte
+# (scripts/run_object_lowir_roundtrip_tests.pl).
+export CPPGM_OBJECT_ROUNDTRIP_OPTIMIZED_TEXT := 1
 REGRESSION_O0_TEST_ROOT ?= tests/regression/o0
 REGRESSION_O1_TEST_ROOT ?= tests/regression/o1
 REGRESSION_O2_TEST_ROOT ?= tests/regression/o2

@@ -267,6 +267,29 @@ sub check_text_object {
         if read_file($object) ne read_file($direct);
 }
 
+# CPPGM_WASM_OPTIMIZED_TEXT (this solution's lane, outside the course
+# contract): the program -c compiles after the LowIR optimizer
+# (-S -emit-lowir), read and written by lowiropt -O0, compiles without the
+# optimizer (-fno-lowir-passes) to the direct object as well.
+my $optimized_text = $ENV{CPPGM_WASM_OPTIMIZED_TEXT};
+sub check_optimized_text_object {
+    my ($index, $level, $input, $direct) = @_;
+    my @compile = ($source_compiler, '--target', $expect->{target} // 'wasm32-unknown-unknown',
+        @target_flags, @{$expect->{flags} // []}, "-O$level");
+    my $name = "optimized-$index-$level";
+    my ($status, $stdout, $stderr) = command("$name-lowir", @compile, '-S', '-emit-lowir', $input,
+        '-o', "$directory/$name.lowir");
+    die "$test: -S -emit-lowir failed: $stdout$stderr\n" if $status;
+    ($status, $stdout, $stderr) = command("$name-rewrite", $lowiropt, '-O0', '-o',
+        "$directory/$name.rewritten.lowir", "$directory/$name.lowir");
+    die "$test: lowiropt -O0 rejected the optimized LowIR: $stdout$stderr\n" if $status;
+    ($status, $stdout, $stderr) = command("$name-object", @compile, '-c', '-fno-lowir-passes',
+        "$directory/$name.rewritten.lowir", '-o', "$directory/$name.o");
+    die "$test: object compile from the optimized LowIR failed: $stdout$stderr\n" if $status;
+    die "$test: the object compiled from its optimized LowIR differs from the direct one at O$level\n"
+        if read_file("$directory/$name.o") ne read_file($direct);
+}
+
 for my $level (@{$expect->{levels} // [0, 1, 2, 3]}) {
     my ($status, $stdout, $stderr);
     my @provided_objects = @assembly_objects;
@@ -351,6 +374,8 @@ for my $level (@{$expect->{levels} // [0, 1, 2, 3]}) {
         ($status, $stdout, $stderr) = command("object-validate-$index-$level", $validator, 'validate', $object);
         die "$test: invalid relocatable object: $stdout$stderr\n" if $status;
         check_text_object($index, $level, $inputs[$index], $object) if !$expect->{assembly};
+        check_optimized_text_object($index, $level, $inputs[$index], $object)
+            if $optimized_text && !$expect->{assembly};
         push @objects, $object;
         if ($expect->{source} && !$expect->{assembly} && @units) {
             my $lowir = $lowered_source{$inputs[$index]} // "$directory/unit-$index.lowir";

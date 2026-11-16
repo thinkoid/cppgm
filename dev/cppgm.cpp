@@ -675,9 +675,15 @@ DriverInvocation parse_driver_invocation(const vector<string>& args)
 		{
 			throw InvocationError("query flag must be used as a direct invocation");
 		}
-		if (args[i] == "-c")
+		// -S (only with -emit-lowir, which the toolchain checks) compiles
+		// as -c does and writes the program as LowIR text.
+		if (args[i] == "-c" || args[i] == "-S")
 		{
 			compile_only = true;
+			continue;
+		}
+		if (args[i] == "-emit-lowir" || args[i] == "-fno-lowir-passes" || args[i] == "-flowir-passes")
+		{
 			continue;
 		}
 		if (args[i] == "--stats" || args[i] == "--stats-functions" || args[i].compare(0, 15, "--verify-passes") == 0)
@@ -1100,6 +1106,7 @@ void report_lowir_stats(const lower::LoweringCounters& counters, const lowir::Pr
 // constructed program first (audit builds).
 int run_emit_lowir_mode(vector<string> args)
 {
+	const vector<string> given = args;
 	const bool stats = consume_stats_flag(args);
 	const bool validate = consume_flag(args, "--validate");
 	SourceOutputInvocation invocation = parse_source_output_invocation(args, true);
@@ -1107,9 +1114,19 @@ int run_emit_lowir_mode(vector<string> args)
 	// The LowIR half of an object compile: a `.lowir` output (the
 	// toolchain's LowIR object input, `-c x.lowir`) with the object
 	// compile's debug-information level stated (-g0, -gline-tables-only)
-	// is the program `-c -o x.o` compiles, lowered as -c lowers it (in
-	// host-object mode for a native target), so the object it gives is the
-	// direct compile's (PA33 object roundtrip).
+	// is the program `-c -o x.o` compiles: the driver's -S -emit-lowir
+	// writes it, so the object it gives is the direct compile's (PA33
+	// object roundtrip).
+	if (invocation.debug_level && ends_with(invocation.outfile, ".lowir"))
+	{
+		if (validate)
+			throw InvocationError("--validate checks the LowIR view, not an object compile's LowIR");
+		vector<string> compile = { "-S", "-emit-lowir" };
+		for (const string& arg : given)
+			if (arg != "--hosted")
+				compile.push_back(arg);
+		return driver::run_toolchain(compile, source_preprocessor_options());
+	}
 	// Otherwise the output is the course's LowIR view, --hosted or not
 	// (the help text: --hosted
 	// selects the host environment, which this view preprocesses in
@@ -1119,9 +1136,6 @@ int run_emit_lowir_mode(vector<string> args)
 	// Both are LowIR that lowir and lowiropt read, and state the
 	// instruction facts the lowering proved (lowir.md "Instruction Facts"),
 	// which the object compile reads.
-	const bool object_half = invocation.debug_level && ends_with(invocation.outfile, ".lowir");
-	if (object_half)
-		invocation.hosted = true;
 	PreprocessorOptions options = source_preprocessor_options(invocation);
 	// The LowIR view preprocesses in the host environment -c uses (PA33: a
 	// source the driver lanes compile includes host headers).
@@ -1135,18 +1149,13 @@ int run_emit_lowir_mode(vector<string> args)
 	const bool optimizing = invocation.optimizer.level > 0;
 	if (!validate && !optimizing)
 		lowering.set_definition_stream(&definitions);
-	// A Wasm object's half is lowered as its -c lowers it, by Wasm's
-	// conventions rather than the host object's.
-	const bool host_half = object_half && !target_model::is_wasm(invocation.target);
-	lowering.set_object_mode(host_half);
-	lowering.set_host_objects(host_half);
 	lowering.set_macho_objects(invocation.target == native::Target::MacOS);
-	lowering.set_optimizing(object_half || invocation.optimizer.level >= 2);
+	lowering.set_optimizing(invocation.optimizer.level >= 2);
 	lowering.set_strict_aliasing(invocation.strict_aliasing);
 	lowering.set_popcnt(options.popcnt);
 	lowering.set_exceptions(options.modes.exceptions);
 	// The LowIR view carries the source's debug locations when debug
-	// information is asked for, including the object roundtrip's view.
+	// information is asked for.
 	lowering.set_debug_locations(invocation.debug_info);
 	lowering.set_debug_types(invocation.debug_types);
 	double front_ms = 0, lower_ms = 0;
@@ -1289,7 +1298,13 @@ int run_cppgm(const vector<string>& raw_args)
 
 	if (has_help_arg(raw_args))
 	{
-		cout << cppgm_help_text();
+		// The course's flags, then this compiler's (the header: a tool may
+		// list more).
+		cout << cppgm_help_text() << "\n"
+			 << "this compiler's flags:\n"
+				"  -S -emit-lowir      write the LowIR that -c compiles, after the LowIR optimizer\n"
+				"                      (default output: <input>.lowir)\n"
+				"  -fno-lowir-passes   compile without the LowIR optimizer; the back end runs at the -O level\n";
 		return EXIT_SUCCESS;
 	}
 

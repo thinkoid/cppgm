@@ -21,10 +21,11 @@ std::vector<uint8_t> type_key(const Signature& signature)
 }
 
 // The type of each signature, numbered in the order the program first refers
-// to it: its functions' in program order, then its calls' in block order,
-// then any other's. A program read from LowIR text makes its signatures in
-// the text's order, so the numbering is the same from the text as from the
-// program that wrote it.
+// to it: its functions' in program order, then its calls' in block order. A
+// program read from LowIR text makes its signatures in the text's order, so
+// the numbering is the same from the text as from the program that wrote it.
+// A signature nothing refers to (one whose calls the optimizer removed,
+// which the text does not write) has no type.
 void function_types(const lowir::Program& program, Module& module)
 {
 	std::vector<Signature> types(program.signatures.size());
@@ -85,8 +86,6 @@ void function_types(const lowir::Program& program, Module& module)
 				if ((body.instructions[inst].flags & lowir::IF_SIGNATURE) != 0)
 					number(static_cast<lowir::SignatureId>(body.instructions[inst].immediate));
 	}
-	for (lowir::SignatureId id = 0; id < types.size(); ++id)
-		number(id);
 }
 
 } // namespace

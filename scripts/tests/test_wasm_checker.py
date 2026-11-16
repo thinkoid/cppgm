@@ -37,12 +37,16 @@ with open(os.environ['CHECKER_COMMANDS'], 'a') as log:
     log.write(json.dumps([kind, args]) + '\n')
 if kind == 'compiler':
     output = Path(args[args.index('-o') + 1])
-    if '--emit-lowir' in args:
+    if '--emit-lowir' in args or '-emit-lowir' in args:
         output.write_text('target wasm32 1\nfunction @observe() -> i32 {\n block ^entry:\n return i32 17\n}\n')
     else:
         # A valid core module exporting observe() -> i32, returning 17
-        # (19 from rewritten text in the differing mode).
-        result = '13' if os.environ.get('TEXT_MODE') == 'differ' and any('rewritten' in x for x in args) else '11'
+        # (19 from rewritten text, or from the optimized text, in the
+        # differing modes).
+        mode = os.environ.get('TEXT_MODE')
+        differs = (mode == 'differ' and any('rewritten' in x for x in args)) or \
+            (mode == 'differ-optimized' and '-fno-lowir-passes' in args)
+        result = '13' if differs else '11'
         output.write_bytes(bytes.fromhex('0061736d010000000105016000017f03020100070b01076f62736572766500000a06010400' + result + '0b'))
 elif kind == 'lowiropt':
     Path(args[args.index('-o') + 1]).write_text(Path(args[-1]).read_text())
@@ -58,7 +62,7 @@ elif kind == 'runtime':
 
 
 class WasmChecker(unittest.TestCase):
-    def check(self, expect, mode='ok', text_mode='same'):
+    def check(self, expect, mode='ok', text_mode='same', optimized_text=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for name, body in [('supervisor', SUPERVISOR), ('compiler', TOOL), ('lowiropt', TOOL),
@@ -75,6 +79,9 @@ class WasmChecker(unittest.TestCase):
                        CPPGM_WASM_TOOLS=str(root / 'validator'), CPPGM_WASMTIME=str(root / 'runtime'),
                        CPPGM_TEST_SUPERVISOR=str(root / 'supervisor'),
                        CHECKER_COMMANDS=str(root / 'commands.jsonl'), TRAP_MODE=mode, TEXT_MODE=text_mode)
+            env.pop('CPPGM_WASM_OPTIMIZED_TEXT', None)
+            if optimized_text:
+                env['CPPGM_WASM_OPTIMIZED_TEXT'] = '1'
             result = subprocess.run(['perl', str(ROOT / 'scripts/check_wasm.pl'),
                                      str(root / 'compiler'), str(fixture)], env=env, cwd=root,
                                     capture_output=True, text=True, timeout=30)
@@ -109,6 +116,22 @@ class WasmChecker(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertTrue(any('rewritten' in x for tool, args in commands if tool == 'compiler'
                                     for x in args))
+
+    def test_the_solution_lane_compiles_each_object_from_its_optimized_lowir(self):
+        for expect in ({'source': True, 'levels': [2], 'calls': [{'export': 'observe', 'result': '17'}]},
+                       {'levels': [0], 'calls': [{'export': 'observe', 'result': '17'}]}):
+            with self.subTest(source=expect.get('source', False)):
+                result, commands = self.check(expect, text_mode='differ-optimized')
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertFalse(any('-emit-lowir' in args for tool, args in commands if tool == 'compiler'))
+                result, commands = self.check(expect, text_mode='differ-optimized', optimized_text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('optimized LowIR differs from the direct one', result.stderr)
+                result, commands = self.check(expect, optimized_text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                compiler = [args for tool, args in commands if tool == 'compiler']
+                self.assertTrue(any('-S' in args and '-emit-lowir' in args for args in compiler))
+                self.assertTrue(any('-fno-lowir-passes' in args for args in compiler))
 
     def test_assembly_uses_direct_source_and_object_paths_without_lowir(self):
         result, commands = self.check({'source': True, 'assembly': True,
