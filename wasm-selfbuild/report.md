@@ -6,3 +6,4 @@ Each host retains its last measurement. Compare the CPU model and measured commi
 |---|---|---|---|
 | EPYC (CI) | AMD EPYC 9V45 96-Core Processor | `0785eb821` | [Results](epyc/report.md) |
 | Intel (CI) | Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz | `33a92f123` | [Results](github-intel/report.md) |
+| Intel (dedicated) | INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz | `50b6ccfce` | [Results](intel/report.md) |
