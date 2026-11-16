@@ -84,14 +84,16 @@ void Selector::plan_nonlocal_jumps()
 	if (!any)
 		return;
 	nonlocal_sites_.assign(body_.instructions.size(), kNoId);
-	uint32_t next = static_cast<uint32_t>(body_.blocks.size());
+	number_pc_cases();
+	// (The code after a setjmp call continues as a case past the blocks'.)
+	uint32_t next = static_cast<uint32_t>(body_.layout.size());
 	for (BlockId block : body_.layout)
 	{
 		if (exceptions_ != nullptr && exceptions_->active &&
 			exceptions_->analysis.eh_live_[exceptions_->layout_of[block]] == 0)
 			continue;
 		InstId first = body_.blocks[block].first, previous = kNoId;
-		uint32_t id = block;
+		uint32_t id = pc_cases_[block];
 		for (InstId i = first; i != kNoId; i = body_.instructions[i].next)
 		{
 			const auto& inst = body_.instructions[i];
@@ -142,7 +144,7 @@ bool Selector::nonlocal_call(const lowir::Instruction& inst)
 void Selector::nonlocal_dispatch()
 {
 	pc_ = add_local(ValueType::I32);
-	out_.emit(Op::I32Const, { body_.layout[0] });
+	out_.emit(Op::I32Const, { 0 }); // the entry's case
 	out_.emit(Op::LocalSet, { pc_ });
 	out_.emit(Op::Loop, { block_type(ValueType::Void) });
 	out_.emit(Op::Block, { module_.nonlocal_pair_type });
@@ -151,7 +153,7 @@ void Selector::nonlocal_dispatch()
 		{ block_type(ValueType::Void), 1, static_cast<uint64_t>(CatchKind::TagRef), module_.nonlocal_tag_index, 0 });
 	out_.relocate(RelocationKind::TagIndex, module_.nonlocal_tag_symbol, 3);
 	const uint32_t count = static_cast<uint32_t>(nonlocal_fragments_.size());
-	std::vector<uint32_t> depths(body_.blocks.size() + count + 1, count);
+	std::vector<uint32_t> depths(body_.layout.size() + count + 1, count);
 	for (uint32_t i = 0; i < count; ++i)
 		depths[nonlocal_fragments_[i].id] = i;
 	for (uint32_t i = 0; i <= count; ++i)

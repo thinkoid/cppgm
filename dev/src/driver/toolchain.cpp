@@ -1022,7 +1022,9 @@ bool wasm_input(const Input& input, const Invocation& invocation, const backend:
 		program.target = invocation.target;
 		program.explicit_target = true;
 		lower::ProgramLowering lowering(program);
-		lowering.set_optimizing(invocation.optimizer.level >= 2);
+		// An object's LowIR is the same at every level, so the LowIR that
+		// --emit-lowir writes for it compiles to this object at any level.
+		lowering.set_optimizing(true);
 		lowering.set_exceptions(invocation.preprocessor.modes.exceptions);
 		lowering.set_strict_aliasing(invocation.strict_aliasing);
 		UnitWork work;

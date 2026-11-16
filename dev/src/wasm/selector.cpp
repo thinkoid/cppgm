@@ -275,10 +275,18 @@ void Selector::simple()
 	block(body_.layout[0]);
 }
 
+void Selector::number_pc_cases()
+{
+	pc_cases_.assign(body_.blocks.size(), kNoId);
+	for (uint32_t k = 0; k < body_.layout.size(); ++k)
+		pc_cases_[body_.layout[k]] = k;
+}
+
 void Selector::dispatch()
 {
+	number_pc_cases();
 	pc_ = add_local(ValueType::I32);
-	out_.emit(Op::I32Const, { body_.layout[0] });
+	out_.emit(Op::I32Const, { 0 }); // the entry's case
 	out_.emit(Op::LocalSet, { pc_ });
 	out_.emit(Op::Loop, { block_type(ValueType::Void) });
 	// A dense table keeps each fallback edge constant-time even after
@@ -292,9 +300,9 @@ void Selector::dispatch()
 		blocks.push_back(id);
 	}
 	const uint32_t count = static_cast<uint32_t>(blocks.size());
-	std::vector<uint32_t> depths(body_.blocks.size() + 1, count);
+	std::vector<uint32_t> depths(body_.layout.size() + 1, count);
 	for (uint32_t i = 0; i < count; ++i)
-		depths[blocks[i]] = i;
+		depths[pc_cases_[blocks[i]]] = i;
 	for (uint32_t i = 0; i <= count; ++i)
 		out_.emit(Op::Block, { block_type(ValueType::Void) });
 	nesting_ = count + 2;
@@ -390,7 +398,7 @@ void Selector::edge(BlockId from, BlockId to)
 		}
 		throw WasmError("Wasm structured branch has no active destination");
 	}
-	out_.emit(Op::I32Const, { to });
+	out_.emit(Op::I32Const, { pc_cases_[to] });
 	out_.emit(Op::LocalSet, { pc_ });
 	out_.emit(Op::Br, { nesting_ - 1 });
 }

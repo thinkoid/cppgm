@@ -50,6 +50,17 @@ SymbolId Program::symbol_for(NameId name)
 	return entry;
 }
 
+void order_as_written(Program& program)
+{
+	std::vector<SymbolId> written;
+	written.reserve(program.order.size());
+	for (SymbolKind kind : kWrittenSymbolKinds)
+		for (SymbolId id : program.order)
+			if (program.symbols[id].kind == kind)
+				written.push_back(id);
+	program.order.swap(written);
+}
+
 void Program::declare_global(SymbolId id, SymbolKind kind, const Global& global)
 {
 	Symbol& symbol = symbols[id];

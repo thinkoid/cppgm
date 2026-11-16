@@ -196,6 +196,11 @@ inline bool is_global_kind(SymbolKind kind)
 	return kind == SymbolKind::GlobalDeclaration || kind == SymbolKind::GlobalDefinition;
 }
 
+// The LowIR text lists symbols one kind at a time in this order, each kind
+// in program order.
+const SymbolKind kWrittenSymbolKinds[] = { SymbolKind::GlobalDeclaration, SymbolKind::FunctionDeclaration,
+	SymbolKind::GlobalDefinition, SymbolKind::FunctionDefinition };
+
 struct Symbol
 {
 	NameId name;
@@ -418,6 +423,11 @@ struct Program
 	// other reader of the program.
 	std::vector<JumpThunk> jump_thunks;
 };
+
+// Puts the program's order in the written one (kWrittenSymbolKinds), which
+// a program read from its LowIR text has, so a consumer that follows the
+// order gives the same output from the text as from the program.
+void order_as_written(Program& program);
 
 // A consumer of function definitions as a producer completes them (in
 // order); the producer releases each body after the append. A consumer

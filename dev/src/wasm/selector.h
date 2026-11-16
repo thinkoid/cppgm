@@ -169,6 +169,11 @@ private:
 	std::vector<uint32_t> locals_;
 	std::vector<uint32_t> wide_locals_;
 	std::vector<uint32_t> objects_;
+	// The temporaries that locals and frame objects are given out for, in
+	// order: the parameters, then as the layout defines them (as the body
+	// read from its LowIR text numbers them). A temporary no placed
+	// instruction defines has no reader and no local.
+	std::vector<lowir::TempId> temp_order_;
 	std::vector<uint32_t> incoming_;
 	std::vector<uint32_t> call_areas_;
 	std::vector<uint32_t> variadic_areas_;
@@ -196,6 +201,10 @@ private:
 	uint32_t jump_environment_ = lowir::kNoId;
 	uint32_t jump_reference_ = lowir::kNoId;
 	uint32_t pc_ = lowir::kNoId;
+	// A block's value of pc_: its layout position, which the body read
+	// from its LowIR text also gives it (its id can differ).
+	std::vector<uint32_t> pc_cases_;
+	void number_pc_cases();
 	uint32_t nesting_ = 0;
 	uint32_t dispatch_depth_ = 0;
 	uint32_t current_block_ = 0;

@@ -21,11 +21,13 @@ sub detect_jobs {
 }
 
 sub usage {
-  die "usage: run_object_lowir_roundtrip_tests.pl [--debuginfo] --app APP [--lowiropt APP] (--test-root DIR | --test FILE)...\n";
+  die "usage: run_object_lowir_roundtrip_tests.pl [--debuginfo] [--target TARGET] --app APP [--lowiropt APP] (--test-root DIR | --test FILE)...\n";
 }
 
 my $app = "../dev/cppgm";
 my $lowiropt;
+# The target both compiles name (`--target`), or the driver default.
+my @target_flags;
 my $debuginfo = 0;
 my @roots;
 my @tests;
@@ -37,6 +39,9 @@ while(@ARGV) {
   if($arg eq "--app") {
     usage() unless @ARGV;
     $app = shift @ARGV;
+  } elsif($arg eq "--target") {
+    usage() unless @ARGV;
+    @target_flags = ("--target", shift @ARGV);
   } elsif($arg eq "--lowiropt") {
     usage() unless @ARGV;
     $lowiropt = shift @ARGV;
@@ -217,7 +222,7 @@ sub check_mode {
 
   my @debug_flags = defined($debug_flag) ? ($debug_flag) : ("-g0");
   my @optimization_flags = defined($opt) ? ($opt) : ();
-  my @direct_cmd = ($app, "-c", @debug_flags, @optimization_flags);
+  my @direct_cmd = ($app, @target_flags, "-c", @debug_flags, @optimization_flags);
   my $direct_error = run_command(@direct_cmd, "-o", $direct, $source);
   return $direct_error if defined $direct_error;
   # The O0 emission must preprocess exactly like the direct compile. An
@@ -225,6 +230,7 @@ sub check_mode {
   my @preprocess_flags =
     (defined($opt) && $opt ne "-O0") ? ("-D__OPTIMIZE__=1") : ();
   my $emit_error = run_command($app,
+                               @target_flags,
                                "--emit-lowir",
                                @debug_flags,
                                "-O0",
@@ -248,6 +254,7 @@ sub check_mode {
   my $rewrite_error = run_command($lowiropt, "-O0", "-o", $rewritten, $lowir);
   return $rewrite_error if defined $rewrite_error;
   my $from_lowir_error = run_command($app,
+                                     @target_flags,
                                      "-c",
                                      @debug_flags,
                                      @optimization_flags,

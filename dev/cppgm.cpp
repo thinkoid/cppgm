@@ -1107,8 +1107,9 @@ int run_emit_lowir_mode(vector<string> args)
 	// The LowIR half of an object compile: a `.lowir` output (the
 	// toolchain's LowIR object input, `-c x.lowir`) with the object
 	// compile's debug-information level stated (-g0, -gline-tables-only)
-	// is the program `-c -o x.o` compiles, lowered in host-object mode, so
-	// the object it gives is the direct compile's (PA33 object roundtrip).
+	// is the program `-c -o x.o` compiles, lowered as -c lowers it (in
+	// host-object mode for a native target), so the object it gives is the
+	// direct compile's (PA33 object roundtrip).
 	// Otherwise the output is the course's LowIR view, --hosted or not
 	// (the help text: --hosted
 	// selects the host environment, which this view preprocesses in
@@ -1134,8 +1135,11 @@ int run_emit_lowir_mode(vector<string> args)
 	const bool optimizing = invocation.optimizer.level > 0;
 	if (!validate && !optimizing)
 		lowering.set_definition_stream(&definitions);
-	lowering.set_object_mode(object_half);
-	lowering.set_host_objects(object_half);
+	// A Wasm object's half is lowered as its -c lowers it, by Wasm's
+	// conventions rather than the host object's.
+	const bool host_half = object_half && !target_model::is_wasm(invocation.target);
+	lowering.set_object_mode(host_half);
+	lowering.set_host_objects(host_half);
 	lowering.set_macho_objects(invocation.target == native::Target::MacOS);
 	lowering.set_optimizing(object_half || invocation.optimizer.level >= 2);
 	lowering.set_strict_aliasing(invocation.strict_aliasing);

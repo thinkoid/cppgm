@@ -8,14 +8,31 @@ namespace wasm {
 
 namespace {
 
+// The type of a signature as the key that identifies it.
+std::vector<uint8_t> type_key(const Signature& signature)
+{
+	std::vector<uint8_t> key;
+	for (ValueType parameter : signature.parameters)
+		key.push_back(static_cast<uint8_t>(parameter));
+	key.push_back(0);
+	for (ValueType returned : signature.results)
+		key.push_back(static_cast<uint8_t>(returned));
+	return key;
+}
+
+// The type of each signature, numbered in the order the program first refers
+// to it: its functions' in program order, then its calls' in block order,
+// then any other's. A program read from LowIR text makes its signatures in
+// the text's order, so the numbering is the same from the text as from the
+// program that wrote it.
 void function_types(const lowir::Program& program, Module& module)
 {
-	std::map<std::vector<uint8_t>, uint32_t> known;
-	for (const lowir::Signature& source : program.signatures)
+	std::vector<Signature> types(program.signatures.size());
+	for (size_t s = 0; s < program.signatures.size(); ++s)
 	{
-		Signature signature;
+		const lowir::Signature& source = program.signatures[s];
+		Signature& signature = types[s];
 		Boundary boundary;
-		std::vector<uint8_t> key;
 		boundary.result = classify_value(source.result, source.boundary.result_shape, program.pointer_type());
 		if (boundary.result.passing == Passing::Expand)
 			boundary.result.passing = Passing::Indirect;
@@ -41,17 +58,35 @@ void function_types(const lowir::Program& program, Module& module)
 			signature.results.push_back(ValueType::I32);
 		else if (result != ValueType::Void)
 			signature.results.push_back(result);
-		for (ValueType parameter : signature.parameters)
-			key.push_back(static_cast<uint8_t>(parameter));
-		key.push_back(0);
-		for (ValueType returned : signature.results)
-			key.push_back(static_cast<uint8_t>(returned));
-		auto inserted = known.emplace(key, static_cast<uint32_t>(module.signatures.size()));
-		if (inserted.second)
-			module.signatures.push_back(std::move(signature));
-		module.signature_types.push_back(inserted.first->second);
 		module.boundaries.push_back(std::move(boundary));
 	}
+	std::map<std::vector<uint8_t>, uint32_t> known;
+	module.signature_types.assign(types.size(), lowir::kNoId);
+	const auto number = [&](lowir::SignatureId id) {
+		if (id == lowir::kNoId || module.signature_types[id] != lowir::kNoId)
+			return;
+		const auto inserted = known.emplace(type_key(types[id]), static_cast<uint32_t>(module.signatures.size()));
+		if (inserted.second)
+			module.signatures.push_back(types[id]);
+		module.signature_types[id] = inserted.first->second;
+	};
+	for (lowir::SymbolId id : program.order)
+		if (lowir::is_function_kind(program.symbols[id].kind))
+			number(program.functions[program.symbols[id].detail].signature);
+	for (lowir::SymbolId id : program.order)
+	{
+		const lowir::Symbol& symbol = program.symbols[id];
+		if (symbol.kind != lowir::SymbolKind::FunctionDefinition)
+			continue;
+		const lowir::FunctionBody& body = *program.functions[symbol.detail].body;
+		for (lowir::BlockId block : body.layout)
+			for (lowir::InstId inst = body.blocks[block].first; inst != lowir::kNoId;
+				inst = body.instructions[inst].next)
+				if ((body.instructions[inst].flags & lowir::IF_SIGNATURE) != 0)
+					number(static_cast<lowir::SignatureId>(body.instructions[inst].immediate));
+	}
+	for (lowir::SignatureId id = 0; id < types.size(); ++id)
+		number(id);
 }
 
 } // namespace

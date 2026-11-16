@@ -1,4 +1,6 @@
-"""The real checker must retain failure checks and lower each source only once."""
+"""The real checker must retain failure checks, lower each source only once for
+its LowIR view and twice for its object text (O0, O1+), and compare the
+object compiled from that text with the direct one."""
 from pathlib import Path
 import json
 import os
@@ -38,8 +40,12 @@ if kind == 'compiler':
     if '--emit-lowir' in args:
         output.write_text('target wasm32 1\nfunction @observe() -> i32 {\n block ^entry:\n return i32 17\n}\n')
     else:
-        # A valid core module exporting observe() -> i32, returning 17.
-        output.write_bytes(bytes.fromhex('0061736d010000000105016000017f03020100070b01076f62736572766500000a0601040041110b'))
+        # A valid core module exporting observe() -> i32, returning 17
+        # (19 from rewritten text in the differing mode).
+        result = '13' if os.environ.get('TEXT_MODE') == 'differ' and any('rewritten' in x for x in args) else '11'
+        output.write_bytes(bytes.fromhex('0061736d010000000105016000017f03020100070b01076f62736572766500000a06010400' + result + '0b'))
+elif kind == 'lowiropt':
+    Path(args[args.index('-o') + 1]).write_text(Path(args[-1]).read_text())
 elif kind == 'runtime':
     mode = os.environ.get('TRAP_MODE', 'ok')
     if mode == 'ok':
@@ -52,10 +58,10 @@ elif kind == 'runtime':
 
 
 class WasmChecker(unittest.TestCase):
-    def check(self, expect, mode='ok'):
+    def check(self, expect, mode='ok', text_mode='same'):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for name, body in [('supervisor', SUPERVISOR), ('compiler', TOOL),
+            for name, body in [('supervisor', SUPERVISOR), ('compiler', TOOL), ('lowiropt', TOOL),
                                ('validator', TOOL), ('runtime', TOOL)]:
                 path = root / name
                 path.write_text('#!' + sys.executable + '\n' + body)
@@ -65,9 +71,10 @@ class WasmChecker(unittest.TestCase):
             fixture.with_suffix('.wasm-expect').write_text(json.dumps(expect))
             (root / 'extra.cpp').write_text('// supplied source unit\n')
             env = dict(os.environ, CPPGM_WASM_CPPGM=str(root / 'compiler'),
+                       CPPGM_WASM_LOWIROPT=str(root / 'lowiropt'),
                        CPPGM_WASM_TOOLS=str(root / 'validator'), CPPGM_WASMTIME=str(root / 'runtime'),
                        CPPGM_TEST_SUPERVISOR=str(root / 'supervisor'),
-                       CHECKER_COMMANDS=str(root / 'commands.jsonl'), TRAP_MODE=mode)
+                       CHECKER_COMMANDS=str(root / 'commands.jsonl'), TRAP_MODE=mode, TEXT_MODE=text_mode)
             result = subprocess.run(['perl', str(ROOT / 'scripts/check_wasm.pl'),
                                      str(root / 'compiler'), str(fixture)], env=env, cwd=root,
                                     capture_output=True, text=True, timeout=30)
@@ -81,10 +88,27 @@ class WasmChecker(unittest.TestCase):
                                                'calls': [{'export': 'observe', 'result': '17'}]})
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 compiler = [args for tool, args in commands if tool == 'compiler']
-                lowered = [args for args in compiler if '--emit-lowir' in args]
+                lowered = [args for args in compiler if '--emit-lowir' in args and '-g0' not in args]
                 self.assertEqual(len(lowered), 1 + bool(units))
+                texts = [args for args in compiler if '--emit-lowir' in args and '-g0' in args]
+                self.assertEqual(len(texts), 2 * (1 + bool(units)))
+                self.assertEqual(sum('-D__OPTIMIZE__=1' in args for args in texts), 1 + bool(units))
+                rewrites = [args for tool, args in commands if tool == 'lowiropt']
+                self.assertEqual(len(rewrites), len(texts))
                 for level in range(4):
                     self.assertTrue(any('-O' + str(level) in args for args in compiler))
+
+    def test_an_object_compiled_from_its_lowir_text_must_be_the_direct_one(self):
+        for expect in ({'source': True, 'levels': [2], 'calls': [{'export': 'observe', 'result': '17'}]},
+                       {'levels': [0], 'calls': [{'export': 'observe', 'result': '17'}]}):
+            with self.subTest(source=expect.get('source', False)):
+                result, commands = self.check(expect, text_mode='differ')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('differs from the direct one', result.stderr)
+                result, commands = self.check(expect)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertTrue(any('rewritten' in x for tool, args in commands if tool == 'compiler'
+                                    for x in args))
 
     def test_assembly_uses_direct_source_and_object_paths_without_lowir(self):
         result, commands = self.check({'source': True, 'assembly': True,

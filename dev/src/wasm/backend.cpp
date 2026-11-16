@@ -74,6 +74,8 @@ bool compile_object(
 	}
 	try
 	{
+		// The object follows the program's order: the one its LowIR text has.
+		lowir::order_as_written(program);
 		opt::OptimizerOptions optimization;
 		if (options.optimizer != nullptr)
 			optimization = *options.optimizer;

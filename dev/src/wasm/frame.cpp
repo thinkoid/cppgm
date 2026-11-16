@@ -28,8 +28,23 @@ void Selector::prepare_locals()
 	out_.parameter_count = static_cast<uint32_t>(out_.locals.size());
 	locals_.resize(body_.temps.size(), kNoId);
 	incoming_.resize(body_.parameter_count, kNoId);
+	temp_order_.clear();
+	std::vector<uint8_t> listed(body_.temps.size(), 0);
+	auto list = [&](TempId t) {
+		if (listed[t] == 0)
+		{
+			listed[t] = 1;
+			temp_order_.push_back(t);
+		}
+	};
+	for (TempId t = 0; t < body_.parameter_count; ++t)
+		list(t);
+	for (BlockId block : body_.layout)
+		for (InstId i = body_.blocks[block].first; i != kNoId; i = body_.instructions[i].next)
+			if (body_.instructions[i].result != kNoId)
+				list(body_.instructions[i].result);
 	uint32_t next = hidden_result_ == kNoId ? 0 : 1;
-	for (uint32_t i = 0; i < body_.temps.size(); ++i)
+	for (const TempId i : temp_order_)
 	{
 		if (i < body_.parameter_count)
 		{
@@ -117,7 +132,7 @@ void Selector::prepare_frame()
 		slots_[i] = follows ? slots_[owners[i]] : reserve(body_.slots[i].type);
 	}
 	objects_.resize(body_.temps.size(), kNoId);
-	for (uint32_t i = 0; i < body_.temps.size(); ++i)
+	for (const TempId i : temp_order_)
 		if (memory_value(body_.temps[i].type) && wide_locals_[i] == kNoId && places_.slot_of[i] == kNoId &&
 			!(i < body_.parameter_count && boundary_.parameters[i].passing == Passing::Indirect))
 			objects_[i] = reserve(body_.temps[i].type);

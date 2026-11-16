@@ -435,10 +435,8 @@ void Writer::write()
 		text("\n\n");
 	}
 	append_assembly_definitions(out_, program_);
-	const SymbolKind phases[] = { SymbolKind::GlobalDeclaration, SymbolKind::FunctionDeclaration,
-		SymbolKind::GlobalDefinition, SymbolKind::FunctionDefinition };
 	bool written = false;
-	for (SymbolKind phase : phases)
+	for (SymbolKind phase : kWrittenSymbolKinds)
 	{
 		bool phase_written = false;
 		if (phase == SymbolKind::FunctionDefinition && definitions_ != nullptr)

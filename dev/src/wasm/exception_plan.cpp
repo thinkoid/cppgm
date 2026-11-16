@@ -167,7 +167,11 @@ void prepare_exception_plan(const Program& program, SymbolId symbol, Object& obj
 		return;
 	ObjectData data;
 	data.alignment = 2;
-	data.name = ".gcc_except_table." + std::to_string(symbol);
+	// Named by the function's object name, which a program read from its
+	// LowIR text also has (not by its symbol id).
+	const Symbol& function = program.symbols[symbol];
+	data.name = std::string(".gcc_except_table.") +
+		program.spelling(function.metadata.object != 0 ? function.metadata.object : function.name);
 	lsda(plan.tables, data);
 	ObjectSymbol table;
 	table.kind = 1;
