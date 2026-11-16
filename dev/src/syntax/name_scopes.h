@@ -88,6 +88,9 @@ struct Scope
 	uint32_t id;
 	// A second visit is needed when a lookup first missed without dependent bases.
 	uint32_t specialization_visit;
+	// One bit per name hash of the names declared here (see
+	// NameScopes::declare): a clear bit answers a search without the table.
+	uint64_t name_bits;
 	Scope* parent;
 	const Identifier* name;
 	// Namespace: nominated namespaces (using-directives, inline and unnamed

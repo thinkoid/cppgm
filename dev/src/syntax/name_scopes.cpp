@@ -10,6 +10,12 @@ namespace {
 
 const uint64_t kEmptyKey = ~0ull;
 
+// The bit of Scope::name_bits a name sets: six bits of its spelling's hash.
+uint64_t NameBit(const Identifier* name)
+{
+	return uint64_t(1) << (name->hash >> 26);
+}
+
 // Orders NameScopes::pending_ as a max-heap by the depth of `at`.
 bool Shallower(const ScopeEdge* a, const ScopeEdge* b)
 {
@@ -134,6 +140,7 @@ Scope* NameScopes::push(ScopeKind kind, const Identifier* name)
 	scope->fixed_bases = 0;
 	scope->id = next_scope_id_++;
 	scope->specialization_visit = 0;
+	scope->name_bits = 0;
 	scope->parent = current_;
 	scope->depth = current_ != nullptr ? current_->depth + 1 : 0;
 	scope->name = name;
@@ -185,6 +192,7 @@ void NameScopes::declare(Scope* scope, const Identifier* name, NameBinding bindi
 		marks_[name->id] |= kNamespaceTemplateValue;
 	if (member)
 		touch_name(name->id);
+	scope->name_bits |= NameBit(name);
 	const uint64_t key = key_of(scope, name);
 	uint32_t index = find_slot(key);
 	if (slots_[index].key == kEmptyKey)
@@ -553,6 +561,8 @@ void NameScopes::reattach(const std::vector<Change>& changes, size_t begin, size
 
 NameBinding NameScopes::own(Scope* scope, const Identifier* name) const
 {
+	if ((scope->name_bits & NameBit(name)) == 0)
+		return NameBinding{ NameCategory::None, false, nullptr };
 	const Slot& slot = slots_[find_slot(key_of(scope, name))];
 	if (slot.key == kEmptyKey)
 		return NameBinding{ NameCategory::None, false, nullptr };

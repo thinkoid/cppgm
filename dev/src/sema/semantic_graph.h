@@ -157,10 +157,6 @@ struct Scope
 	// its concrete class, including bases dependent in the original
 	// template (an explicit member specialization, 14.7.3p16).
 	bool concrete_members : 1;
-	// Monotonic membership hint for the name index. Setting it through a
-	// const scope records an index entry, independently of name visibility
-	// and the printed bindings list (which can omit indexed declarations).
-	mutable bool indexed_names : 1;
 	// A frozen prefix of a default argument's function parameter clause.
 	// Lookup sees these bindings; declarations (including closures) belong
 	// to the surrounding declaration scope.
@@ -173,6 +169,12 @@ struct Scope
 	// scopes already count).
 	uint8_t lists;
 	uint32_t id;
+	// Monotonic membership hint for the name index: one bit per name hash
+	// (see NameLookup::entry) of the names indexed here, so a clear bit
+	// answers a search without probing the index. Setting it through a
+	// const scope records an index entry, independently of name visibility
+	// and the printed bindings list (which can omit indexed declarations).
+	mutable uint64_t name_bits;
 	// Where unqualified lookup continues: the lexical parent, or for an
 	// out-of-class definition the scope of its class or namespace.
 	Scope* parent;

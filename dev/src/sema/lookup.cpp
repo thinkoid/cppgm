@@ -9,6 +9,12 @@ namespace sema {
 
 namespace {
 
+// The bit of Scope::name_bits a name sets: six bits of its spelling's hash.
+uint64_t NameBit(const Identifier* name)
+{
+	return uint64_t(1) << (name->hash >> 26);
+}
+
 // A 64-bit mixer (a multiplicative hash, its high half folded down): every
 // key bit reaches the low bits the tables index by, so names declared in
 // many scopes spread out.
@@ -194,7 +200,9 @@ void NameLookup::reserve(uint32_t names)
 
 NameEntry* NameLookup::entry(const Scope* scope, const Identifier* name)
 {
-	scope->indexed_names = true;
+	const uint64_t bit = NameBit(name);
+	if ((scope->name_bits & bit) == 0)
+		scope->name_bits |= bit;
 	if ((count_ + 1) * 2 > slots_.size())
 		grow();
 	const uint64_t key = key_of(scope, name);
@@ -215,7 +223,7 @@ NameEntry* NameLookup::entry(const Scope* scope, const Identifier* name)
 
 const NameEntry* NameLookup::find(const Scope* scope, const Identifier* name) const
 {
-	if (!scope->indexed_names)
+	if ((scope->name_bits & NameBit(name)) == 0)
 		return nullptr;
 	const uint64_t key = key_of(scope, name);
 	const uint64_t mask = slot_mask_;
