@@ -1578,6 +1578,40 @@ bool AggregateSlots::scalarize_partial_copies()
 	return changed;
 }
 
+// A whole-object load of a slot right before the return of its value: the
+// return reads the slot, as an object return of storage does, so the value
+// is not copied to a home of its own first.
+bool return_object_storage(FunctionBody& body)
+{
+	bool changed = false;
+	for (BlockId b : body.layout)
+	{
+		const InstId last = body.blocks[b].last;
+		if (last == kNoId)
+			continue;
+		Instruction& ret = body.instructions[last];
+		if (ret.op != Opcode::Return || !ret.type.is_object() || !ret.ops[0].is(ValueKind::Temp))
+			continue;
+		const InstId prev = previous_in_block(body, b, last);
+		if (prev == kNoId || body.instructions[prev].result != ret.ops[0].index)
+			continue;
+		const Instruction& load = body.instructions[prev];
+		if (load.op != Opcode::Load || load.type != ret.type || (load.flags & IF_VOLATILE) != 0)
+			continue;
+		Value storage = load.ops[0];
+		if (storage.is(ValueKind::Temp) && storage.index >= body.parameter_count &&
+			body.temps[storage.index].def != kNoId &&
+			body.instructions[body.temps[storage.index].def].op == Opcode::Addr)
+			storage = body.instructions[body.temps[storage.index].def].ops[0];
+		if (!storage.is(ValueKind::Slot) || body.slots[storage.index].type != ret.type)
+			continue;
+		ret.ops[0] = storage;
+		unlink_after(body, b, previous_in_block(body, b, prev), prev);
+		changed = true;
+	}
+	return changed;
+}
+
 bool AggregateSlots::run()
 {
 	const bool object_values = std::any_of(
@@ -1590,6 +1624,7 @@ bool AggregateSlots::run()
 	if (object_values)
 	{
 		rewritten = canonicalize_object_values(body_);
+		rewritten = return_object_storage(body_) || rewritten;
 		rewritten = objects_through_slots() || rewritten;
 	}
 	analyze();

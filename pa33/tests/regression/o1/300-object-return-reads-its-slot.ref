@@ -1,0 +1,33 @@
+function @point(%values : ptr) -> obj<16x8> [result_classes=sse_sse, no_inline=yes] {
+  slot $result : obj<16x8>
+
+  block ^entry:
+    %first = load f64 %values
+    %second_source = index f64 %values, 1
+    %second = load f64 %second_source
+    %t4 = addr $result
+    store f64 %first, %t4
+    %t5 = index i8 [projection=field] %t4, 8
+    store f64 %second, %t5
+    return obj<16x8> $result
+}
+function @main() -> i32 [role=entry] {
+  slot $values : obj<16x8>
+  slot $made : obj<16x8>
+
+  block ^entry:
+    %values_base = addr $values
+    store f64 2.5, %values_base
+    %values_second = index inbounds i8 %values_base, 8
+    store f64 4, %values_second
+    %made_value = call obj<16x8> @point(%values_base)
+    copyobj 16x8 %made_value, $made
+    %made_base = addr $made
+    %first = load f64 %made_base
+    %made_second = index inbounds i8 %made_base, 8
+    %second = load f64 %made_second
+    %sum = binary add f64 %first, %second
+    %scaled = binary add f64 %sum, %sum
+    %result = convert fptosi i32 f64 %scaled
+    return i32 %result
+}

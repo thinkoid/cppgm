@@ -36,8 +36,7 @@ function @make(%kind : i32) -> obj<16x8> [result_classes=sse_sse] {
     store i32 %t9, %t13
     %t14 = index i8 [projection=field] %t12, 8
     store i64 %t11, %t14
-    %returned = load obj<16x8> $result
-    return obj<16x8> %returned
+    return obj<16x8> $result
 }
 function @main() -> i32 [role=entry] {
   block ^entry:
