@@ -82,6 +82,8 @@ FRONTEND_OBJ_BASENAMES_lowir2native += lowir/text_writer lowir/assembly_writer l
 # Object names use the shared UTF-8 decoder without the source lexer.
 FRONTEND_OBJ_BASENAMES_lowir2native += support/unicode/utf8
 FRONTEND_OBJ_BASENAMES_cppgm += $(FRONTEND_PHASE_BASENAMES_wasm)
+# Single-threaded WASI host heap; an empty translation unit on native hosts.
+FRONTEND_OBJ_BASENAMES_cppgm += support/wasi_heap
 
 # Optional foreign producer library: typed LowIR -> optimizer -> native object.
 # No source frontend, text reader, command-line driver, or test batch runner.
