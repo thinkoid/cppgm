@@ -168,9 +168,9 @@ def prepare(args):
         shutil.copyfile(HERE / name, package / name)
     manifest = {"schema": 1, "sources": sources, "flags": flags,
                 "link_flags": ["-Wl,-z,stack-size=8388608", "-lc-printscan-long-double",
-                               "--export=__cppgm_wasi_stack_pointer",
-                               "--export=__cppgm_wasi_restore_stack_pointer",
-                               "--export=__cppgm_wasi_heap_break"], "files": files,
+                               "-Wl,--export=__cppgm_wasi_stack_pointer",
+                               "-Wl,--export=__cppgm_wasi_restore_stack_pointer",
+                               "-Wl,--export=__cppgm_wasi_heap_break"], "files": files,
                 "process_reset": {"stack_pointer": "__cppgm_wasi_stack_pointer",
                                   "restore_stack_pointer": "__cppgm_wasi_restore_stack_pointer",
                                   "heap_break": "__cppgm_wasi_heap_break"},
