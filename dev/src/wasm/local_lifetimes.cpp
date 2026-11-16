@@ -30,6 +30,31 @@ struct Graph
 	std::vector<uint32_t> block, first, predecessor_first, predecessors;
 };
 
+struct Handlers
+{
+	std::vector<uint32_t> first, targets;
+
+	void enter(const Function& function, const Instruction& inst, const std::vector<uint32_t>& labels)
+	{
+		first.push_back(static_cast<uint32_t>(targets.size()));
+		uint32_t at = inst.operands.first + 2;
+		for (uint64_t i = 0; i < function.operands[inst.operands.first + 1]; ++i)
+		{
+			const CatchKind kind = static_cast<CatchKind>(function.operands[at++]);
+			if (kind == CatchKind::Tag || kind == CatchKind::TagRef)
+				++at;
+			const uint64_t depth = function.operands[at++];
+			targets.push_back(labels[labels.size() - 1 - depth]);
+		}
+	}
+
+	void leave()
+	{
+		targets.resize(first.back());
+		first.pop_back();
+	}
+};
+
 // Branch operands name enclosing labels, including the function's label.
 // Resolve those typed labels before partitioning the selected instruction stream.
 bool control_edges(const Function& function, std::vector<Edge>& edges)
@@ -37,16 +62,19 @@ bool control_edges(const Function& function, std::vector<Edge>& edges)
 	const uint32_t size = static_cast<uint32_t>(function.instructions.size());
 	std::vector<uint32_t> open(1, size), end(size + 1, size), other(size, none);
 	std::vector<Edge> branches;
+	Handlers handlers;
 	for (uint32_t i = 0; i < size; ++i)
 	{
 		const Instruction& inst = function.instructions[i];
 		if (inst.op == Op::TryTable)
-			return false; // Landing edges need exceptional liveness too.
-		if (inst.op == Op::Block || inst.op == Op::Loop || inst.op == Op::If)
+			handlers.enter(function, inst, open); // Catch depths exclude the new try label.
+		if (inst.op == Op::Block || inst.op == Op::Loop || inst.op == Op::If || inst.op == Op::TryTable)
 			open.push_back(i);
 		else if (inst.op == Op::End && open.size() > 1)
 		{
 			end[open.back()] = i + 1;
+			if (function.instructions[open.back()].op == Op::TryTable)
+				handlers.leave();
 			open.pop_back();
 		}
 		else if (inst.op == Op::Else)
@@ -57,6 +85,12 @@ bool control_edges(const Function& function, std::vector<Edge>& edges)
 		else if (inst.op == Op::Br || inst.op == Op::BrIf || inst.op == Op::BrTable)
 			for (uint32_t k = 0; k < inst.operands.count; ++k)
 				branches.push_back(Edge{ i, open[open.size() - 1 - function.operands[inst.operands.first + k]] });
+		// Split at throwing instructions: a result store after a call must not
+		// kill a value that its landing path still needs. Keeping outer handlers
+		// too is conservative when an inner catch handles the same exception.
+		if (!handlers.targets.empty() && (effects(inst.op) & machine_model::MayThrow))
+			for (uint32_t target : handlers.targets)
+				branches.push_back(Edge{ i, target });
 	}
 	for (const Edge& edge : branches)
 		edges.push_back(Edge{
