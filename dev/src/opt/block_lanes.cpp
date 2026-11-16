@@ -62,6 +62,7 @@ private:
 	};
 
 	bool block(BlockId b);
+	void find_runs(const std::vector<Stored>& stores, std::vector<Stored>& lanes, std::vector<size_t>& runs) const;
 	bool reduction(BlockId b);
 	bool reload(BlockId b, const std::vector<Stored>& stores, const std::vector<size_t>& runs);
 	bool quiet(const Instruction& inst) const;
@@ -853,6 +854,49 @@ bool BlockLanes::reduction(BlockId b)
 	return false;
 }
 
+// The runs of adjacent stores of one type that may form a group, from the
+// stores sorted by address: each run's stores are laid out in `lanes` from
+// its index in `runs`. Any store to a run's first address may begin it and
+// any store to its last address end it (each tried in block order), so no
+// choice depends on how stores to one address sort; the addresses between
+// have one store each.
+void BlockLanes::find_runs(
+	const std::vector<Stored>& stores, std::vector<Stored>& lanes, std::vector<size_t>& runs) const
+{
+	// Where each address's stores begin, then the end.
+	std::vector<size_t> address;
+	for (size_t i = 0; i < stores.size(); ++i)
+		if (i == 0 || !(stores[i].at.root == stores[i - 1].at.root) || stores[i].at.offset != stores[i - 1].at.offset)
+			address.push_back(i);
+	address.push_back(stores.size());
+	for (size_t a = 0; a + 1 < address.size(); ++a)
+		for (size_t first = address[a]; first < address[a + 1]; ++first)
+		{
+			const Type type = body_.instructions[stores[first].id].type;
+			const unsigned count = type.kind() == TypeKind::F64 ? 2 : 4;
+			const int64_t step = type.kind() == TypeKind::F64 ? 8 : 4;
+			bool run = a + count < address.size();
+			for (unsigned lane = 1; lane < count && run; ++lane)
+			{
+				const Stored& there = stores[address[a + lane]];
+				run = there.at.root == stores[first].at.root &&
+					there.at.offset == stores[first].at.offset + lane * step &&
+					(lane + 1 == count ||
+						(address[a + lane + 1] - address[a + lane] == 1 && body_.instructions[there.id].type == type));
+			}
+			for (size_t last = run ? address[a + count - 1] : 0; run && last < address[a + count]; ++last)
+			{
+				if (body_.instructions[stores[last].id].type != type || runs.size() >= kBlockStores)
+					continue;
+				runs.push_back(lanes.size());
+				lanes.push_back(stores[first]);
+				for (unsigned lane = 1; lane + 1 < count; ++lane)
+					lanes.push_back(stores[address[a + lane]]);
+				lanes.push_back(stores[last]);
+			}
+		}
+}
+
 bool BlockLanes::block(BlockId b)
 {
 	std::vector<Stored> stores;
@@ -875,37 +919,28 @@ bool BlockLanes::block(BlockId b)
 		return true;
 	if (stores.size() < 2)
 		return false;
-	std::sort(stores.begin(), stores.end(), [](const Stored& a, const Stored& b) {
+	// Stores to one address stay in block order.
+	std::sort(stores.begin(), stores.end(), [this](const Stored& a, const Stored& b) {
 		if (a.at.root.kind != b.at.root.kind)
 			return a.at.root.kind < b.at.root.kind;
 		if (a.at.root.index != b.at.root.index)
 			return a.at.root.index < b.at.root.index;
-		return a.at.offset < b.at.offset;
+		if (a.at.offset != b.at.offset)
+			return a.at.offset < b.at.offset;
+		return position_[a.id] < position_[b.id];
 	});
-	// The runs of adjacent stores of one type that may form a group.
+	std::vector<Stored> lanes;
 	std::vector<size_t> runs;
-	for (size_t i = 0; i + 1 < stores.size(); ++i)
-	{
-		const Type type = body_.instructions[stores[i].id].type;
-		const unsigned lanes = type.kind() == TypeKind::F64 ? 2 : 4;
-		const int64_t step = type.kind() == TypeKind::F64 ? 8 : 4;
-		bool run = i + lanes <= stores.size();
-		for (unsigned lane = 1; lane < lanes && run; ++lane)
-			run = stores[i + lane].at.root == stores[i].at.root &&
-				stores[i + lane].at.offset == stores[i].at.offset + lane * step &&
-				body_.instructions[stores[i + lane].id].type == type;
-		if (run)
-			runs.push_back(i);
-	}
-	if (!runs.empty() && reload(b, stores, runs))
+	find_runs(stores, lanes, runs);
+	if (!runs.empty() && reload(b, lanes, runs))
 		return true;
 	for (size_t r = 0; r < runs.size(); ++r)
 	{
-		const Type type = body_.instructions[stores[runs[r]].id].type;
+		const Type type = body_.instructions[lanes[runs[r]].id].type;
 		lanes_ = type.kind() == TypeKind::F64 ? 2 : 4;
 		lane_type_ = type;
 		// (A group changes the block's order: it is read again.)
-		if (group(b, stores, runs, r))
+		if (group(b, lanes, runs, r))
 			return true;
 	}
 	return false;

@@ -1,0 +1,129 @@
+global @source : obj<64x4> = {
+  f32 1f
+  f32 2f
+  f32 3f
+  f32 4f
+  f32 5f
+  f32 6f
+  f32 7f
+  f32 8f
+  f32 9f
+  f32 10f
+  f32 11f
+  f32 12f
+  f32 13f
+  f32 14f
+  f32 15f
+  f32 16f
+}
+global @copy : obj<64x4> = {
+  zero 64
+}
+
+function @copy_then_set(%p : ptr) -> void [no_inline=yes] {
+  block ^entry:
+    %src = addr @source
+    %dst = addr @copy
+    %l0 = load typed f32 %src
+    store typed f32 %l0, %dst
+    %s1 = index i8 %src, 4
+    %l1 = load typed f32 %s1
+    %d1 = index i8 %dst, 4
+    store typed f32 %l1, %d1
+    %s2 = index i8 %src, 8
+    %l2 = load typed f32 %s2
+    %d2 = index i8 %dst, 8
+    store typed f32 %l2, %d2
+    %s3 = index i8 %src, 12
+    %d3 = index i8 %dst, 12
+    %t12 = load v128 %s3
+    store v128 %t12, %d3
+    %s7 = index i8 %src, 28
+    %d7 = index i8 %dst, 28
+    %t15 = load v128 %s7
+    store v128 %t15, %d7
+    %s11 = index i8 %src, 44
+    %d11 = index i8 %dst, 44
+    %t18 = load v128 %s11
+    store v128 %t18, %d11
+    %s15 = index i8 %src, 60
+    %l15 = load typed f32 %s15
+    %d15 = index i8 %dst, 60
+    store typed f32 %l15, %d15
+    %a0 = load typed f32 %p
+    store typed f32 %a0, %d1
+    %a1 = load typed f32 %p
+    store typed f32 %a1, %d3
+    return void
+}
+function @main() -> i32 [role=entry] {
+  slot $v : obj<4x4>
+
+  block ^entry:
+    %p = addr $v
+    store typed f32 100f, %p
+    call void @copy_then_set(%p)
+    %d = addr @copy
+    %sum0 = load typed f32 %d
+    %q1 = index i8 %d, 4
+    %r1 = load typed f32 %q1
+    %m1 = binary add f32 %r1, %r1
+    %sum1 = binary add f32 %sum0, %m1
+    %q2 = index i8 %d, 8
+    %r2 = load typed f32 %q2
+    %m2 = binary mul f32 %r2, 3f
+    %sum2 = binary add f32 %sum1, %m2
+    %q3 = index i8 %d, 12
+    %r3 = load typed f32 %q3
+    %m3 = binary mul f32 %r3, 4f
+    %sum3 = binary add f32 %sum2, %m3
+    %q4 = index i8 %d, 16
+    %r4 = load typed f32 %q4
+    %m4 = binary mul f32 %r4, 5f
+    %sum4 = binary add f32 %sum3, %m4
+    %q5 = index i8 %d, 20
+    %r5 = load typed f32 %q5
+    %m5 = binary mul f32 %r5, 6f
+    %sum5 = binary add f32 %sum4, %m5
+    %q6 = index i8 %d, 24
+    %r6 = load typed f32 %q6
+    %m6 = binary mul f32 %r6, 7f
+    %sum6 = binary add f32 %sum5, %m6
+    %q7 = index i8 %d, 28
+    %r7 = load typed f32 %q7
+    %sum7 = binary add f32 %sum6, %r7
+    %q8 = index i8 %d, 32
+    %r8 = load typed f32 %q8
+    %m8 = binary add f32 %r8, %r8
+    %sum8 = binary add f32 %sum7, %m8
+    %q9 = index i8 %d, 36
+    %r9 = load typed f32 %q9
+    %m9 = binary mul f32 %r9, 3f
+    %sum9 = binary add f32 %sum8, %m9
+    %q10 = index i8 %d, 40
+    %r10 = load typed f32 %q10
+    %m10 = binary mul f32 %r10, 4f
+    %sum10 = binary add f32 %sum9, %m10
+    %q11 = index i8 %d, 44
+    %r11 = load typed f32 %q11
+    %m11 = binary mul f32 %r11, 5f
+    %sum11 = binary add f32 %sum10, %m11
+    %q12 = index i8 %d, 48
+    %r12 = load typed f32 %q12
+    %m12 = binary mul f32 %r12, 6f
+    %sum12 = binary add f32 %sum11, %m12
+    %q13 = index i8 %d, 52
+    %r13 = load typed f32 %q13
+    %m13 = binary mul f32 %r13, 7f
+    %sum13 = binary add f32 %sum12, %m13
+    %q14 = index i8 %d, 56
+    %r14 = load typed f32 %q14
+    %sum14 = binary add f32 %sum13, %r14
+    %q15 = index i8 %d, 60
+    %r15 = load typed f32 %q15
+    %m15 = binary add f32 %r15, %r15
+    %sum15 = binary add f32 %sum14, %m15
+    %e = cmp eq f32 %sum15, 1103f
+    %r = select i32 %e, 0, 1
+    return i32 %r
+}
