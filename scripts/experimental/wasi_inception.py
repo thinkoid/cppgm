@@ -99,7 +99,15 @@ def prepare(args):
     for name in ['LICENSE', 'NOTICE']:
         shutil.copyfile(REPO / name, inputs / name)
     shutil.copyfile(HERE / "wasi_host.h", inputs / "wasi_host.h")
+    shutil.copyfile(HERE / "wasi_stack.S", inputs / "wasi_stack.S")
     tool_sources = source_sets(tools)
+    x86_sources = list(tool_sources["cppgm"])
+    # These are supplied WASI command-host sources, shared by every exported
+    # tool. Native builds keep their owning frontend source sets unchanged.
+    for sources in tool_sources.values():
+        if "dev/src/support/wasi_heap.cpp" not in sources:
+            sources.insert(-1, "dev/src/support/wasi_heap.cpp")
+        sources.insert(-1, "wasi_stack.S")
     sources = tool_sources["cppgm"]
     config = (REPO / "obj/generated/cppgm_builtin_host_config.h").read_text()
     paths = re.search(r"kStandardIncludePaths\[\] = \{(.*?)\};", config, re.S)
@@ -159,11 +167,17 @@ def prepare(args):
     for name in runners:
         shutil.copyfile(HERE / name, package / name)
     manifest = {"schema": 1, "sources": sources, "flags": flags,
-                "link_flags": ["-Wl,-z,stack-size=8388608", "-lc-printscan-long-double"], "files": files,
+                "link_flags": ["-Wl,-z,stack-size=8388608", "-lc-printscan-long-double",
+                               "--export=__cppgm_wasi_stack_pointer",
+                               "--export=__cppgm_wasi_restore_stack_pointer",
+                               "--export=__cppgm_wasi_heap_break"], "files": files,
+                "process_reset": {"stack_pointer": "__cppgm_wasi_stack_pointer",
+                                  "restore_stack_pointer": "__cppgm_wasi_restore_stack_pointer",
+                                  "heap_break": "__cppgm_wasi_heap_break"},
                 "x86_flags": ["--target=x86_64-linux-gnu", "-std=c++11", "-D_GNU_SOURCE",
                               "-DCPPGM_TELEMETRY_ENABLED=0", "-nostdinc", "-Idev/src", "-Igenerated"]
                              + [flag for name in x86_paths for flag in ["-isystem", name]],
-                "x86_headers": args.x86_headers, "x86_sources": sources + ["checks/floating.cpp"],
+                "x86_headers": args.x86_headers, "x86_sources": x86_sources + ["checks/floating.cpp"],
                 "native_sha256": digest((package / "native-compiler").read_bytes()),
                 "bundle_sha256": digest((package / "bundle.bin").read_bytes()),
                 "shim_files": {p.relative_to(package).as_posix(): digest(p.read_bytes())
