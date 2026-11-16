@@ -638,7 +638,8 @@ SoftFloat SoftFloatOfValue(lowir::Type type)
 
 uint8_t ProgramLowering::soft_float_classes(SoftFloat kind) const
 {
-	if (!object_mode_ || kind == SoftFloat::None)
+	// Wasm passes them by its own convention (the shape), as object_classes.
+	if (!object_mode_ || kind == SoftFloat::None || target_model::is_wasm(program_.target))
 		return 0;
 	return static_cast<uint8_t>(
 		lowir::OC_STATED | lowir::EB_SSE | (kind == SoftFloat::Quad ? lowir::EB_SSEUP << 2 : lowir::EB_NONE));
