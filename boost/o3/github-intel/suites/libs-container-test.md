@@ -4,95 +4,95 @@ All original oracles passed for all three compilers. Seconds are child CPU, one 
 
 | Test | Kind | Compile cppgm | GCC | Clang | Test cppgm | GCC | Clang |
 |---|---|---:|---:|---:|---:|---:|---:|
-| vector_test.test | RUN | 5.978546 | 29.814975 | 23.782137 | 0.004664 | 0.004625 | 0.005967 |
-| vector_options_test.test | RUN | 0.269813 | 1.299583 | 0.969858 | 0.001256 | 0.001577 | 0.001443 |
-| uses_allocator_test.test | RUN | 0.044152 | 0.098894 | 0.122161 | 0.000490 | 0.000526 | 0.001149 |
-| uses_allocator_construction_test.test | RUN | 0.137934 | 0.378839 | 0.446288 | 0.001333 | 0.001362 | 0.001127 |
-| unsynchronized_pool_resource_test.test | RUN | 0.185088 | 1.215923 | 0.575454 | 0.001329 | 0.001480 | 0.001197 |
-| tree_test.test | RUN | 0.846808 | 4.329366 | 3.398460 | 0.000875 | 0.001397 | 0.001237 |
-| throw_exception_test.test | RUN | 0.099485 | 0.246248 | 0.285333 | 0.001272 | 0.001329 | 0.001084 |
-| synchronized_pool_resource_test.test | RUN | 0.159914 | 1.205499 | 0.567616 | 0.001131 | 0.001459 | 0.001193 |
-| string_view_compat_test.test | RUN | 0.311925 | 2.455591 | 1.122285 | 0.001139 | 0.001439 | 0.001144 |
-| string_test.test | RUN | 1.478637 | 9.426272 | 6.129217 | 0.014086 | 0.012745 | 0.013167 |
-| string_options_test.test | RUN | 0.248976 | 1.956767 | 0.989849 | 0.001380 | 0.001456 | 0.001365 |
-| static_vector_test.test | RUN | 1.462729 | 7.610567 | 6.336054 | 0.001775 | 0.001714 | 0.001655 |
-| static_vector_options_test.test | RUN | 0.171123 | 0.497112 | 0.540521 | 0.001243 | 0.001245 | 0.001361 |
-| stable_vector_test.test | RUN | 3.454212 | 16.397708 | 12.175327 | 0.031672 | 0.031541 | 0.032831 |
-| small_vector_test.test | RUN | 2.228563 | 11.283626 | 8.997032 | 0.002860 | 0.002492 | 0.004374 |
-| small_vector_options_test.test | RUN | 0.311415 | 1.333435 | 1.148610 | 0.001411 | 0.001466 | 0.001284 |
-| slist_test.test | RUN | 2.076884 | 10.331066 | 7.841191 | 0.023410 | 0.023285 | 0.022647 |
-| set_test.test | RUN | 3.174182 | 18.983737 | 14.381400 | 0.014505 | 0.012984 | 0.013351 |
-| segtor_test.test | RUN | 4.081184 | 20.715513 | 16.068117 | 0.722687 | 0.730635 | 0.716141 |
-| segtor_options_test.test | RUN | 0.204234 | 0.586800 | 0.673486 | 0.001493 | 0.001432 | 0.001232 |
-| scoped_allocator_usage_test.test | RUN | 0.729041 | 3.077871 | 2.568075 | 0.001193 | 0.001449 | 0.001225 |
-| scoped_allocator_adaptor_test.test | RUN | 0.300468 | 0.819957 | 1.124490 | 0.001374 | 0.001264 | 0.001026 |
-| resource_adaptor_test.test | RUN | 0.158751 | 0.482120 | 0.492737 | 0.001454 | 0.001195 | 0.001248 |
-| polymorphic_allocator_test.test | RUN | 0.134611 | 0.397687 | 0.413169 | 0.001098 | 0.001288 | 0.001099 |
-| pmr_vector_test.test | RUN | 0.074227 | 0.145848 | 0.206423 | 0.000524 | 0.000521 | 0.001158 |
-| pmr_string_test.test | RUN | 0.145015 | 0.308629 | 0.391248 | 0.000496 | 0.000560 | 0.001316 |
-| pmr_stable_vector_test.test | RUN | 0.177731 | 0.516351 | 0.590257 | 0.001385 | 0.001217 | 0.001118 |
-| pmr_small_vector_test.test | RUN | 0.088686 | 0.201136 | 0.278667 | 0.001136 | 0.001336 | 0.001322 |
-| pmr_slist_test.test | RUN | 0.134152 | 0.706168 | 0.590347 | 0.000897 | 0.001298 | 0.001125 |
-| pmr_set_test.test | RUN | 0.141965 | 0.345361 | 0.432616 | 0.001239 | 0.001263 | 0.001096 |
-| pmr_nest_test.test | RUN | 0.108601 | 0.237510 | 0.291541 | 0.001535 | 0.001450 | 0.001133 |
-| pmr_map_test.test | RUN | 0.151827 | 0.350779 | 0.433724 | 0.001234 | 0.001198 | 0.001207 |
-| pmr_list_test.test | RUN | 0.096669 | 0.217538 | 0.281769 | 0.001098 | 0.001291 | 0.001157 |
-| pmr_hub_test.test | RUN | 0.135632 | 0.298528 | 0.353326 | 0.001489 | 0.001331 | 0.001191 |
-| pmr_flat_set_test.test | RUN | 0.104203 | 0.236991 | 0.309369 | 0.000908 | 0.001074 | 0.001172 |
-| pmr_flat_map_test.test | RUN | 0.126826 | 0.273107 | 0.363510 | 0.001089 | 0.001138 | 0.001366 |
-| pmr_devector_test.test | RUN | 0.084224 | 0.240209 | 0.273233 | 0.001206 | 0.001491 | 0.001168 |
-| pmr_deque_test.test | RUN | 0.082223 | 0.197786 | 0.276652 | 0.001160 | 0.001387 | 0.001154 |
-| pair_test.test | RUN | 0.212397 | 0.473495 | 0.600160 | 0.001323 | 0.001338 | 0.001236 |
-| null_iterators_test.test | RUN | 0.333104 | 0.932549 | 1.020420 | 0.001284 | 0.001536 | 0.001210 |
-| node_handle_test.test | RUN | 0.145685 | 1.226392 | 0.421036 | 0.001284 | 0.001488 | 0.001142 |
-| node_allocator_test.test | RUN | 2.469177 | 12.857571 | 9.799762 | 0.009816 | 0.009363 | 0.009331 |
-| new_delete_resource_test.test | RUN | 0.176261 | 0.720387 | 0.579134 | 0.001644 | 0.001933 | 0.001834 |
-| nest_test.test | RUN | 0.498865 | 3.402431 | 2.056892 | 0.001315 | 0.001424 | 0.001269 |
-| nest_api_test.test | RUN | 0.732621 | 6.623733 | 3.949614 | 0.002266 | 0.002432 | 0.002382 |
-| monotonic_buffer_resource_test.test | RUN | 0.180696 | 1.317722 | 0.588533 | 0.001259 | 0.001386 | 0.001272 |
-| memory_resource_test.test | RUN | 0.105486 | 0.348110 | 0.340846 | 0.001287 | 0.001100 | 0.001194 |
-| map_test.test | RUN | 4.360019 | 21.595882 | 20.396784 | 0.010521 | 0.010340 | 0.008773 |
-| list_test.test | RUN | 2.241825 | 10.957742 | 8.445549 | 0.021958 | 0.022791 | 0.022122 |
-| is_constructible_test.test | RUN | 0.064559 | 0.126293 | 0.193980 | 0.000527 | 0.000607 | 0.001163 |
-| insert_vs_emplace_test.test | RUN | 0.212499 | 0.856349 | 1.107632 | 0.001323 | 0.001538 | 0.001205 |
-| hub_uses_allocator_test.test | RUN | 0.238095 | 0.735315 | 0.776366 | 0.001159 | 0.001308 | 0.001357 |
-| hub_stability_test.test | RUN | 0.533612 | 3.493123 | 2.879387 | 0.001411 | 0.001698 | 0.001476 |
-| hub_sort_test.test | RUN | 0.343180 | 1.557124 | 1.359668 | 0.520982 | 0.545725 | 0.501852 |
-| hub_pocxx_test.test | RUN | 0.292242 | 1.880800 | 0.985641 | 0.001307 | 0.001306 | 0.001117 |
-| hub_new_extended_alignment_test.test | RUN | 0.164023 | 0.557170 | 0.512727 | 0.001316 | 0.001543 | 0.001302 |
-| hub_exception_safety_test.test | RUN | 0.640469 | 4.442933 | 2.765484 | 0.065008 | 0.067906 | 0.064769 |
-| hub_empty_sort_test.test | RUN | 0.186083 | 0.497663 | 0.615730 | 0.001143 | 0.001176 | 0.001291 |
-| hub_api_test.test | RUN | 2.190201 | 17.541997 | 9.111964 | 0.003462 | 0.003247 | 0.003156 |
-| global_resource_test.test | RUN | 0.099072 | 0.336629 | 0.314321 | 0.001261 | 0.001422 | 0.001319 |
-| flat_tree_test.test | RUN | 4.071111 | 27.558629 | 17.585717 | 0.001204 | 0.001353 | 0.001192 |
-| flat_set_test.test | RUN | 5.071582 | 35.097126 | 22.745840 | 0.007518 | 0.007005 | 0.006815 |
-| flat_set_adaptor_test.test | RUN | 3.775413 | 30.640633 | 17.878585 | 0.007494 | 0.006743 | 0.006431 |
-| flat_map_test.test | RUN | 8.188919 | 51.623604 | 37.533024 | 0.008686 | 0.008110 | 0.007606 |
-| flat_map_adaptor_test.test | RUN | 5.151878 | 37.230359 | 25.993273 | 0.008013 | 0.007505 | 0.007328 |
-| explicit_inst_vector_test.test | RUN | 0.787028 | 5.076510 | 3.938457 | 0.001167 | 0.001384 | 0.001132 |
-| explicit_inst_string_test.test | RUN | 1.067091 | 9.024238 | 5.592692 | 0.001207 | 0.001346 | 0.001310 |
-| explicit_inst_static_vector_test.test | RUN | 0.092578 | 0.330529 | 0.375791 | 0.001133 | 0.001247 | 0.001172 |
-| explicit_inst_stable_vector_test.test | RUN | 0.638185 | 3.204114 | 2.560508 | 0.001193 | 0.001329 | 0.001254 |
-| explicit_inst_small_vector_test.test | RUN | 0.513149 | 2.918583 | 2.285085 | 0.001065 | 0.001294 | 0.001130 |
-| explicit_inst_slist_test.test | RUN | 0.398853 | 2.634558 | 1.815642 | 0.001202 | 0.001421 | 0.001186 |
-| explicit_inst_set_test.test | RUN | 0.547477 | 3.036402 | 2.041448 | 0.001161 | 0.001325 | 0.001092 |
-| explicit_inst_map_test.test | RUN | 0.602831 | 3.166698 | 2.273277 | 0.001162 | 0.001311 | 0.001130 |
-| explicit_inst_list_test.test | RUN | 0.136598 | 0.723463 | 0.570583 | 0.001184 | 0.001423 | 0.001094 |
-| explicit_inst_flat_set_test.test | RUN | 3.371785 | 23.051817 | 13.385003 | 0.001185 | 0.001281 | 0.001192 |
-| explicit_inst_flat_map_test.test | RUN | 3.594037 | 23.930147 | 14.932823 | 0.001296 | 0.001306 | 0.001123 |
-| explicit_inst_devector_test.test | RUN | 0.437212 | 2.856900 | 1.878087 | 0.001168 | 0.001404 | 0.001232 |
-| explicit_inst_deque_test.test | RUN | 0.443619 | 3.049475 | 2.030987 | 0.001128 | 0.001188 | 0.001161 |
-| devector_test.test | RUN | 6.393025 | 34.826392 | 27.581356 | 0.003180 | 0.003105 | 0.003743 |
-| devector_options_test.test | RUN | 0.274556 | 1.663908 | 1.091114 | 0.001503 | 0.001504 | 0.001416 |
-| deque_test.test | RUN | 4.090920 | 23.801748 | 14.838920 | 0.364954 | 0.359355 | 0.437085 |
-| deque_options_test.test | RUN | 0.205029 | 0.612405 | 0.718320 | 0.001273 | 0.001418 | 0.001172 |
-| copy_move_algo_test.test | RUN | 0.191399 | 0.729319 | 0.652989 | 0.001522 | 0.001368 | 0.001253 |
-| common_iterator_test.test | RUN | 0.013126 | 0.035823 | 0.036801 | 0.000474 | 0.000479 | 0.001128 |
-| boost_iterator_comp_test.test | RUN | 0.277745 | 0.855001 | 0.991840 | 0.001201 | 0.001265 | 0.001191 |
-| allocator_traits_test.test | RUN | 0.157962 | 0.372414 | 0.464389 | 0.001239 | 0.001191 | 0.001228 |
-| alloc_full_test.test | RUN | 0.185522 | 0.809722 | 0.693954 | 0.003866 | 0.003991 | 0.003966 |
-| alloc_basic_test.test | RUN | 0.153473 | 0.556089 | 0.505724 | 0.001273 | 0.001346 | 0.001251 |
-| adaptive_pool_test.test | RUN | 2.490276 | 13.702427 | 9.280430 | 0.008682 | 0.011452 | 0.012192 |
+| vector_test.test | RUN | 5.940418 | 29.477908 | 24.550247 | 0.004398 | 0.004332 | 0.005872 |
+| vector_options_test.test | RUN | 0.252387 | 1.283809 | 0.979190 | 0.001340 | 0.001423 | 0.001435 |
+| uses_allocator_test.test | RUN | 0.040979 | 0.096794 | 0.125453 | 0.000474 | 0.000472 | 0.001232 |
+| uses_allocator_construction_test.test | RUN | 0.133356 | 0.371436 | 0.447443 | 0.001094 | 0.001221 | 0.001294 |
+| unsynchronized_pool_resource_test.test | RUN | 0.175169 | 1.189380 | 0.588810 | 0.001110 | 0.001436 | 0.001452 |
+| tree_test.test | RUN | 0.809362 | 4.407775 | 3.433577 | 0.001035 | 0.001190 | 0.001330 |
+| throw_exception_test.test | RUN | 0.097644 | 0.238219 | 0.300576 | 0.001152 | 0.001240 | 0.001304 |
+| synchronized_pool_resource_test.test | RUN | 0.172509 | 1.175229 | 0.580330 | 0.001095 | 0.001419 | 0.001488 |
+| string_view_compat_test.test | RUN | 0.294677 | 2.379347 | 1.118405 | 0.001083 | 0.001369 | 0.001457 |
+| string_test.test | RUN | 1.438438 | 9.195129 | 6.255477 | 0.013603 | 0.012822 | 0.013544 |
+| string_options_test.test | RUN | 0.245513 | 1.915818 | 1.000650 | 0.001112 | 0.001473 | 0.001422 |
+| static_vector_test.test | RUN | 1.438965 | 7.678700 | 6.494171 | 0.001657 | 0.001713 | 0.001871 |
+| static_vector_options_test.test | RUN | 0.168312 | 0.462691 | 0.545221 | 0.001293 | 0.001254 | 0.001474 |
+| stable_vector_test.test | RUN | 3.387521 | 16.200916 | 12.854033 | 0.031050 | 0.032263 | 0.033268 |
+| small_vector_test.test | RUN | 2.209707 | 11.222050 | 9.072212 | 0.002707 | 0.002489 | 0.004435 |
+| small_vector_options_test.test | RUN | 0.302102 | 1.291250 | 1.156665 | 0.001333 | 0.001476 | 0.001627 |
+| slist_test.test | RUN | 2.052700 | 10.138379 | 8.106130 | 0.023356 | 0.022588 | 0.022615 |
+| set_test.test | RUN | 3.102196 | 19.102552 | 14.624135 | 0.014530 | 0.012806 | 0.013565 |
+| segtor_test.test | RUN | 3.982379 | 20.789117 | 16.480940 | 0.696821 | 0.740059 | 0.722002 |
+| segtor_options_test.test | RUN | 0.197010 | 0.556937 | 0.706270 | 0.001298 | 0.001561 | 0.001568 |
+| scoped_allocator_usage_test.test | RUN | 0.706192 | 2.985309 | 2.693153 | 0.001089 | 0.001306 | 0.001404 |
+| scoped_allocator_adaptor_test.test | RUN | 0.305569 | 0.822964 | 1.162039 | 0.001217 | 0.001210 | 0.001076 |
+| resource_adaptor_test.test | RUN | 0.148881 | 0.486334 | 0.498370 | 0.001112 | 0.001316 | 0.001388 |
+| polymorphic_allocator_test.test | RUN | 0.125225 | 0.390705 | 0.408521 | 0.001141 | 0.001229 | 0.001369 |
+| pmr_vector_test.test | RUN | 0.068356 | 0.145010 | 0.214142 | 0.000481 | 0.000504 | 0.001146 |
+| pmr_string_test.test | RUN | 0.144270 | 0.306311 | 0.391463 | 0.000440 | 0.000526 | 0.001165 |
+| pmr_stable_vector_test.test | RUN | 0.169713 | 0.518761 | 0.606636 | 0.001168 | 0.001262 | 0.001174 |
+| pmr_small_vector_test.test | RUN | 0.085822 | 0.201302 | 0.251713 | 0.001116 | 0.001330 | 0.001262 |
+| pmr_slist_test.test | RUN | 0.128440 | 0.696346 | 0.593343 | 0.001187 | 0.001321 | 0.001240 |
+| pmr_set_test.test | RUN | 0.139950 | 0.340222 | 0.437604 | 0.001108 | 0.001280 | 0.001079 |
+| pmr_nest_test.test | RUN | 0.104996 | 0.222584 | 0.301107 | 0.001162 | 0.001190 | 0.001154 |
+| pmr_map_test.test | RUN | 0.146030 | 0.353020 | 0.426386 | 0.001347 | 0.001256 | 0.001366 |
+| pmr_list_test.test | RUN | 0.093660 | 0.215899 | 0.299235 | 0.001198 | 0.001228 | 0.001116 |
+| pmr_hub_test.test | RUN | 0.132644 | 0.298742 | 0.379105 | 0.001085 | 0.001052 | 0.001340 |
+| pmr_flat_set_test.test | RUN | 0.099120 | 0.236088 | 0.308989 | 0.001091 | 0.001222 | 0.001306 |
+| pmr_flat_map_test.test | RUN | 0.120718 | 0.273869 | 0.382148 | 0.001355 | 0.001197 | 0.001217 |
+| pmr_devector_test.test | RUN | 0.079149 | 0.239051 | 0.265630 | 0.001028 | 0.001249 | 0.001188 |
+| pmr_deque_test.test | RUN | 0.077884 | 0.200517 | 0.289510 | 0.001080 | 0.001425 | 0.001151 |
+| pair_test.test | RUN | 0.202494 | 0.481048 | 0.567581 | 0.001167 | 0.001413 | 0.001264 |
+| null_iterators_test.test | RUN | 0.317781 | 0.932525 | 1.018256 | 0.001047 | 0.001252 | 0.001138 |
+| node_handle_test.test | RUN | 0.140534 | 1.206724 | 0.399288 | 0.001111 | 0.001486 | 0.001209 |
+| node_allocator_test.test | RUN | 2.444931 | 12.605643 | 9.885148 | 0.009110 | 0.009132 | 0.009356 |
+| new_delete_resource_test.test | RUN | 0.173170 | 0.717536 | 0.569518 | 0.001466 | 0.001957 | 0.001846 |
+| nest_test.test | RUN | 0.487524 | 3.429928 | 2.056010 | 0.001161 | 0.001493 | 0.001298 |
+| nest_api_test.test | RUN | 0.832661 | 6.568939 | 4.064248 | 0.002185 | 0.002580 | 0.002470 |
+| monotonic_buffer_resource_test.test | RUN | 0.152031 | 1.316236 | 0.577549 | 0.001089 | 0.001308 | 0.001247 |
+| memory_resource_test.test | RUN | 0.087394 | 0.359994 | 0.262942 | 0.001068 | 0.001380 | 0.001091 |
+| map_test.test | RUN | 4.227842 | 21.756189 | 20.397882 | 0.010734 | 0.010363 | 0.009823 |
+| list_test.test | RUN | 2.196804 | 11.139091 | 8.455596 | 0.021493 | 0.022840 | 0.022476 |
+| is_constructible_test.test | RUN | 0.060881 | 0.129075 | 0.192582 | 0.000469 | 0.000564 | 0.001318 |
+| insert_vs_emplace_test.test | RUN | 0.210270 | 0.847797 | 1.130126 | 0.001210 | 0.001448 | 0.001534 |
+| hub_uses_allocator_test.test | RUN | 0.231238 | 0.722483 | 0.780997 | 0.001299 | 0.001220 | 0.001349 |
+| hub_stability_test.test | RUN | 0.527867 | 3.448229 | 2.872863 | 0.001488 | 0.001566 | 0.001702 |
+| hub_sort_test.test | RUN | 0.339358 | 1.544910 | 1.385228 | 0.526254 | 0.538014 | 0.504318 |
+| hub_pocxx_test.test | RUN | 0.298296 | 1.838212 | 0.977701 | 0.001354 | 0.001270 | 0.001214 |
+| hub_new_extended_alignment_test.test | RUN | 0.157109 | 0.537283 | 0.544199 | 0.001170 | 0.001366 | 0.001149 |
+| hub_exception_safety_test.test | RUN | 0.635407 | 4.393510 | 2.890899 | 0.065295 | 0.071984 | 0.069319 |
+| hub_empty_sort_test.test | RUN | 0.183504 | 0.499647 | 0.626483 | 0.001120 | 0.001469 | 0.001273 |
+| hub_api_test.test | RUN | 2.128337 | 17.647849 | 9.091586 | 0.003408 | 0.003386 | 0.003095 |
+| global_resource_test.test | RUN | 0.097090 | 0.339229 | 0.324217 | 0.001387 | 0.001473 | 0.001316 |
+| flat_tree_test.test | RUN | 4.008943 | 27.610122 | 17.772158 | 0.001169 | 0.001215 | 0.001295 |
+| flat_set_test.test | RUN | 4.987891 | 34.656069 | 22.929214 | 0.007062 | 0.006554 | 0.006823 |
+| flat_set_adaptor_test.test | RUN | 3.738950 | 30.520156 | 17.655237 | 0.007465 | 0.007096 | 0.007102 |
+| flat_map_test.test | RUN | 8.083187 | 51.291183 | 37.445248 | 0.008339 | 0.008130 | 0.007634 |
+| flat_map_adaptor_test.test | RUN | 5.137357 | 37.234080 | 26.308846 | 0.007795 | 0.007503 | 0.007473 |
+| explicit_inst_vector_test.test | RUN | 0.793992 | 5.015083 | 3.857874 | 0.001133 | 0.001292 | 0.001183 |
+| explicit_inst_string_test.test | RUN | 1.064577 | 8.944700 | 5.342073 | 0.001254 | 0.001189 | 0.001176 |
+| explicit_inst_static_vector_test.test | RUN | 0.095384 | 0.316202 | 0.357759 | 0.001181 | 0.001221 | 0.001167 |
+| explicit_inst_stable_vector_test.test | RUN | 0.632193 | 3.208762 | 2.462337 | 0.001168 | 0.001251 | 0.001342 |
+| explicit_inst_small_vector_test.test | RUN | 0.524263 | 2.868335 | 2.306704 | 0.001211 | 0.001302 | 0.001106 |
+| explicit_inst_slist_test.test | RUN | 0.387991 | 2.600553 | 1.772001 | 0.001383 | 0.001210 | 0.001273 |
+| explicit_inst_set_test.test | RUN | 0.547503 | 2.977991 | 2.062555 | 0.001217 | 0.001341 | 0.001109 |
+| explicit_inst_map_test.test | RUN | 0.587250 | 3.127642 | 2.237918 | 0.001157 | 0.001300 | 0.001104 |
+| explicit_inst_list_test.test | RUN | 0.137076 | 0.716532 | 0.564605 | 0.001104 | 0.001240 | 0.001182 |
+| explicit_inst_flat_set_test.test | RUN | 3.325082 | 22.970637 | 13.459513 | 0.001323 | 0.001320 | 0.001182 |
+| explicit_inst_flat_map_test.test | RUN | 3.570442 | 23.929452 | 15.204152 | 0.001119 | 0.001336 | 0.001188 |
+| explicit_inst_devector_test.test | RUN | 0.425988 | 2.818999 | 1.901244 | 0.001178 | 0.001295 | 0.001103 |
+| explicit_inst_deque_test.test | RUN | 0.435939 | 3.019419 | 2.056317 | 0.001265 | 0.001262 | 0.001244 |
+| devector_test.test | RUN | 5.883723 | 37.912735 | 24.973793 | 0.003021 | 0.003084 | 0.003846 |
+| devector_options_test.test | RUN | 0.275984 | 1.661397 | 1.035256 | 0.001459 | 0.001430 | 0.001360 |
+| deque_test.test | RUN | 4.423440 | 19.727738 | 17.647547 | 0.388995 | 0.364090 | 0.438054 |
+| deque_options_test.test | RUN | 0.190341 | 0.606178 | 0.751522 | 0.001202 | 0.001351 | 0.001282 |
+| copy_move_algo_test.test | RUN | 0.179297 | 0.735106 | 0.701062 | 0.001402 | 0.001468 | 0.001406 |
+| common_iterator_test.test | RUN | 0.012572 | 0.035832 | 0.037239 | 0.000458 | 0.000519 | 0.001180 |
+| boost_iterator_comp_test.test | RUN | 0.265600 | 0.868447 | 0.889054 | 0.001139 | 0.001133 | 0.001236 |
+| allocator_traits_test.test | RUN | 0.148237 | 0.375146 | 0.464721 | 0.001147 | 0.001465 | 0.001345 |
+| alloc_full_test.test | RUN | 0.181032 | 0.800488 | 0.663276 | 0.003806 | 0.003983 | 0.003930 |
+| alloc_basic_test.test | RUN | 0.147702 | 0.564310 | 0.499540 | 0.001150 | 0.001366 | 0.001373 |
+| adaptive_pool_test.test | RUN | 2.429898 | 12.459070 | 10.012330 | 0.011988 | 0.008030 | 0.012393 |
 
 ## Native runtime replay
 
@@ -100,103 +100,103 @@ Child CPU of successful native tests, with process startup included; GDB and exp
 
 | Reference | CPU speedup ↑ | Paired blocks | A/A speedup |
 |---|---:|---|---:|
-| gcc | 1.012× | 1.007×, 1.017× | 1.004× |
-| clang | 1.073× | 1.074×, 1.072× | 1.008× |
+| gcc | 1.011× | 1.002×, 1.020× | 1.009× |
+| clang | 1.067× | 1.070×, 1.063× | 1.002× |
 
-† A/A drift or paired-block spread exceeds 5%; small differences are unresolved. 1375 native tests in the full cohort; 1364 have byte-identical output throughout. [Raw replay evidence in CI artifacts](https://github.com/vishvananda/cppgm/actions/runs/43778388618).
+† A/A drift or paired-block spread exceeds 5%; small differences are unresolved. 1375 native tests in the full cohort; 1363 have byte-identical output throughout. [Raw replay evidence in CI artifacts](https://github.com/vishvananda/cppgm/actions/runs/43801643681).
 
 | Test | Repeats | CPU cppgm | GCC | Clang | Output check |
 |---|---:|---:|---:|---:|---|
-| adaptive_pool_test.test | 3 | 0.009105s | 0.008196s | 0.009136s | byte equality observed |
-| alloc_basic_test.test | 10 | 0.000811s | 0.000820s | 0.000806s | byte equality observed |
-| alloc_full_test.test | 7 | 0.002693s | 0.002709s | 0.002849s | byte equality observed |
-| allocator_traits_test.test | 10 | 0.000767s | 0.000768s | 0.000772s | byte equality observed |
-| boost_iterator_comp_test.test | 10 | 0.000789s | 0.000782s | 0.000792s | byte equality observed |
-| common_iterator_test.test | 10 | 0.000366s | 0.000365s | 0.000800s | byte equality observed |
-| copy_move_algo_test.test | 10 | 0.001172s | 0.000920s | 0.000993s | byte equality observed |
-| deque_options_test.test | 10 | 0.000840s | 0.000851s | 0.000827s | byte equality observed |
-| deque_test.test | 1 | 0.375018s | 0.372148s | 0.447384s | byte equality observed |
-| devector_options_test.test | 10 | 0.000884s | 0.000840s | 0.000842s | byte equality observed |
-| devector_test.test | 5 | 0.002900s | 0.002805s | 0.003623s | byte equality observed |
-| explicit_inst_deque_test.test | 10 | 0.000717s | 0.000722s | 0.000721s | byte equality observed |
-| explicit_inst_devector_test.test | 10 | 0.000705s | 0.000719s | 0.000721s | byte equality observed |
-| explicit_inst_flat_map_test.test | 10 | 0.000714s | 0.000720s | 0.000721s | byte equality observed |
-| explicit_inst_flat_set_test.test | 10 | 0.000709s | 0.000731s | 0.000724s | byte equality observed |
-| explicit_inst_list_test.test | 10 | 0.000706s | 0.000721s | 0.000717s | byte equality observed |
-| explicit_inst_map_test.test | 10 | 0.000722s | 0.000726s | 0.000716s | byte equality observed |
-| explicit_inst_set_test.test | 10 | 0.000718s | 0.000731s | 0.000711s | byte equality observed |
-| explicit_inst_slist_test.test | 10 | 0.000711s | 0.000729s | 0.000728s | byte equality observed |
-| explicit_inst_small_vector_test.test | 10 | 0.000719s | 0.000717s | 0.000716s | byte equality observed |
-| explicit_inst_stable_vector_test.test | 10 | 0.000720s | 0.000711s | 0.000710s | byte equality observed |
-| explicit_inst_static_vector_test.test | 10 | 0.000706s | 0.000696s | 0.000706s | byte equality observed |
-| explicit_inst_string_test.test | 10 | 0.000708s | 0.000706s | 0.000731s | byte equality observed |
-| explicit_inst_vector_test.test | 10 | 0.000718s | 0.000703s | 0.000719s | byte equality observed |
-| flat_map_adaptor_test.test | 4 | 0.005674s | 0.005367s | 0.005430s | byte equality observed |
-| flat_map_test.test | 4 | 0.006184s | 0.005726s | 0.005500s | byte equality observed |
-| flat_set_adaptor_test.test | 4 | 0.005519s | 0.005017s | 0.005348s | byte equality observed |
-| flat_set_test.test | 4 | 0.005453s | 0.004812s | 0.005236s | byte equality observed |
-| flat_tree_test.test | 10 | 0.000722s | 0.000718s | 0.000735s | byte equality observed |
-| global_resource_test.test | 10 | 0.000749s | 0.000747s | 0.000769s | byte equality observed |
-| hub_api_test.test | 8 | 0.002549s | 0.002224s | 0.002186s | byte equality observed |
-| hub_empty_sort_test.test | 10 | 0.000743s | 0.000720s | 0.000749s | byte equality observed |
-| hub_exception_safety_test.test | 1 | 0.049660s | 0.054595s | 0.049960s | byte equality observed |
-| hub_new_extended_alignment_test.test | 10 | 0.000756s | 0.000767s | 0.000751s | byte equality observed |
-| hub_pocxx_test.test | 10 | 0.000756s | 0.000747s | 0.000753s | byte equality observed |
-| hub_sort_test.test | 1 | 0.425555s | 0.439666s | 0.413349s | byte equality observed |
-| hub_stability_test.test | 10 | 0.000972s | 0.000974s | 0.000966s | byte equality observed |
-| hub_uses_allocator_test.test | 10 | 0.000749s | 0.000752s | 0.000727s | byte equality observed |
-| insert_vs_emplace_test.test | 10 | 0.000765s | 0.000766s | 0.000752s | byte equality observed |
-| is_constructible_test.test | 10 | 0.000341s | 0.000324s | 0.000702s | byte equality observed |
-| list_test.test | 2 | 0.015503s | 0.015637s | 0.016061s | byte equality observed |
-| map_test.test | 3 | 0.007560s | 0.007351s | 0.007238s | byte equality observed |
-| memory_resource_test.test | 10 | 0.000755s | 0.000754s | 0.000735s | byte equality observed |
-| monotonic_buffer_resource_test.test | 10 | 0.000761s | 0.000746s | 0.000732s | byte equality observed |
-| nest_api_test.test | 10 | 0.001627s | 0.001635s | 0.001648s | byte equality observed |
-| nest_test.test | 10 | 0.000785s | 0.000766s | 0.000778s | byte equality observed |
-| new_delete_resource_test.test | 10 | 0.001118s | 0.001131s | 0.001125s | byte equality observed |
-| node_allocator_test.test | 3 | 0.006642s | 0.006605s | 0.006700s | byte equality observed |
-| node_handle_test.test | 10 | 0.000775s | 0.000761s | 0.000760s | byte equality observed |
-| null_iterators_test.test | 10 | 0.000747s | 0.000745s | 0.000742s | byte equality observed |
-| pair_test.test | 10 | 0.000757s | 0.000753s | 0.000737s | byte equality observed |
-| pmr_deque_test.test | 10 | 0.000734s | 0.000719s | 0.000721s | byte equality observed |
-| pmr_devector_test.test | 10 | 0.000750s | 0.000734s | 0.000732s | byte equality observed |
-| pmr_flat_map_test.test | 10 | 0.000739s | 0.000745s | 0.000731s | byte equality observed |
-| pmr_flat_set_test.test | 10 | 0.000743s | 0.000737s | 0.000727s | byte equality observed |
-| pmr_hub_test.test | 10 | 0.000746s | 0.000734s | 0.000731s | byte equality observed |
-| pmr_list_test.test | 10 | 0.000740s | 0.000740s | 0.000731s | byte equality observed |
-| pmr_map_test.test | 10 | 0.000744s | 0.000744s | 0.000728s | byte equality observed |
-| pmr_nest_test.test | 10 | 0.000733s | 0.000743s | 0.000745s | byte equality observed |
-| pmr_set_test.test | 10 | 0.000734s | 0.000744s | 0.000758s | byte equality observed |
-| pmr_slist_test.test | 10 | 0.000736s | 0.000741s | 0.000737s | byte equality observed |
-| pmr_small_vector_test.test | 10 | 0.000733s | 0.000744s | 0.000731s | byte equality observed |
-| pmr_stable_vector_test.test | 10 | 0.000743s | 0.000748s | 0.000742s | byte equality observed |
-| pmr_string_test.test | 10 | 0.000355s | 0.000345s | 0.000790s | byte equality observed |
-| pmr_vector_test.test | 10 | 0.000345s | 0.000348s | 0.000774s | byte equality observed |
-| polymorphic_allocator_test.test | 10 | 0.000765s | 0.000774s | 0.000808s | byte equality observed |
-| resource_adaptor_test.test | 10 | 0.000776s | 0.000765s | 0.000826s | byte equality observed |
-| scoped_allocator_adaptor_test.test | 10 | 0.000765s | 0.000762s | 0.000829s | byte equality observed |
-| scoped_allocator_usage_test.test | 10 | 0.000766s | 0.000768s | 0.000808s | byte equality observed |
-| segtor_options_test.test | 10 | 0.000806s | 0.000804s | 0.000799s | byte equality observed |
-| segtor_test.test | 1 | 0.461641s | 0.467807s | 0.506485s | byte equality observed |
-| set_test.test | 2 | 0.010684s | 0.009508s | 0.010330s | byte equality observed |
-| slist_test.test | 2 | 0.016348s | 0.016071s | 0.016182s | byte equality observed |
-| small_vector_options_test.test | 10 | 0.000836s | 0.000816s | 0.000808s | byte equality observed |
-| small_vector_test.test | 7 | 0.001695s | 0.001576s | 0.002735s | byte equality observed |
-| stable_vector_test.test | 1 | 0.027651s | 0.028114s | 0.028538s | byte equality observed |
-| static_vector_options_test.test | 10 | 0.000789s | 0.000762s | 0.000777s | byte equality observed |
-| static_vector_test.test | 10 | 0.001064s | 0.000970s | 0.001013s | byte equality observed |
-| string_options_test.test | 10 | 0.000773s | 0.000786s | 0.000779s | byte equality observed |
-| string_test.test | 3 | 0.009209s | 0.009011s | 0.009267s | byte equality observed |
-| string_view_compat_test.test | 10 | 0.000748s | 0.000757s | 0.000734s | byte equality observed |
-| synchronized_pool_resource_test.test | 10 | 0.000785s | 0.000769s | 0.000768s | byte equality observed |
-| throw_exception_test.test | 10 | 0.000722s | 0.000722s | 0.000726s | byte equality observed |
-| tree_test.test | 10 | 0.000722s | 0.000740s | 0.000701s | byte equality observed |
-| unsynchronized_pool_resource_test.test | 10 | 0.000777s | 0.000777s | 0.000755s | byte equality observed |
-| uses_allocator_construction_test.test | 10 | 0.000723s | 0.000716s | 0.000716s | byte equality observed |
-| uses_allocator_test.test | 10 | 0.000316s | 0.000341s | 0.000697s | byte equality observed |
-| vector_options_test.test | 10 | 0.000845s | 0.000841s | 0.000832s | byte equality observed |
-| vector_test.test | 5 | 0.002974s | 0.002954s | 0.003932s | byte equality observed |
+| adaptive_pool_test.test | 3 | 0.008896s | 0.008290s | 0.008981s | byte equality observed |
+| alloc_basic_test.test | 10 | 0.000812s | 0.000796s | 0.000796s | byte equality observed |
+| alloc_full_test.test | 7 | 0.002696s | 0.002767s | 0.002796s | byte equality observed |
+| allocator_traits_test.test | 10 | 0.000773s | 0.000759s | 0.000761s | byte equality observed |
+| boost_iterator_comp_test.test | 10 | 0.000776s | 0.000783s | 0.000765s | byte equality observed |
+| common_iterator_test.test | 10 | 0.000357s | 0.000360s | 0.000789s | byte equality observed |
+| copy_move_algo_test.test | 10 | 0.001154s | 0.000899s | 0.000986s | byte equality observed |
+| deque_options_test.test | 10 | 0.000828s | 0.000851s | 0.000842s | byte equality observed |
+| deque_test.test | 1 | 0.372279s | 0.372468s | 0.444212s | byte equality observed |
+| devector_options_test.test | 10 | 0.000884s | 0.000844s | 0.000835s | byte equality observed |
+| devector_test.test | 5 | 0.002868s | 0.002810s | 0.003599s | byte equality observed |
+| explicit_inst_deque_test.test | 10 | 0.000712s | 0.000712s | 0.000711s | byte equality observed |
+| explicit_inst_devector_test.test | 10 | 0.000697s | 0.000696s | 0.000712s | byte equality observed |
+| explicit_inst_flat_map_test.test | 10 | 0.000710s | 0.000711s | 0.000718s | byte equality observed |
+| explicit_inst_flat_set_test.test | 10 | 0.000710s | 0.000714s | 0.000719s | byte equality observed |
+| explicit_inst_list_test.test | 10 | 0.000698s | 0.000693s | 0.000707s | byte equality observed |
+| explicit_inst_map_test.test | 10 | 0.000719s | 0.000724s | 0.000716s | byte equality observed |
+| explicit_inst_set_test.test | 10 | 0.000719s | 0.000719s | 0.000713s | byte equality observed |
+| explicit_inst_slist_test.test | 10 | 0.000718s | 0.000726s | 0.000712s | byte equality observed |
+| explicit_inst_small_vector_test.test | 10 | 0.000711s | 0.000723s | 0.000716s | byte equality observed |
+| explicit_inst_stable_vector_test.test | 10 | 0.000709s | 0.000722s | 0.000716s | byte equality observed |
+| explicit_inst_static_vector_test.test | 10 | 0.000706s | 0.000703s | 0.000709s | byte equality observed |
+| explicit_inst_string_test.test | 10 | 0.000717s | 0.000731s | 0.000723s | byte equality observed |
+| explicit_inst_vector_test.test | 10 | 0.000709s | 0.000719s | 0.000719s | byte equality observed |
+| flat_map_adaptor_test.test | 4 | 0.005671s | 0.005350s | 0.005379s | byte equality observed |
+| flat_map_test.test | 4 | 0.006143s | 0.005743s | 0.005500s | byte equality observed |
+| flat_set_adaptor_test.test | 4 | 0.005508s | 0.005009s | 0.005359s | byte equality observed |
+| flat_set_test.test | 4 | 0.005451s | 0.005007s | 0.005266s | byte equality observed |
+| flat_tree_test.test | 10 | 0.000728s | 0.000713s | 0.000727s | byte equality observed |
+| global_resource_test.test | 10 | 0.000755s | 0.000758s | 0.000756s | byte equality observed |
+| hub_api_test.test | 8 | 0.002548s | 0.002237s | 0.002151s | byte equality observed |
+| hub_empty_sort_test.test | 10 | 0.000728s | 0.000731s | 0.000724s | byte equality observed |
+| hub_exception_safety_test.test | 1 | 0.051044s | 0.056392s | 0.050248s | byte equality observed |
+| hub_new_extended_alignment_test.test | 10 | 0.000794s | 0.000799s | 0.000736s | byte equality observed |
+| hub_pocxx_test.test | 10 | 0.000778s | 0.000776s | 0.000751s | byte equality observed |
+| hub_sort_test.test | 1 | 0.424304s | 0.443068s | 0.407166s | byte equality observed |
+| hub_stability_test.test | 10 | 0.000975s | 0.000968s | 0.000977s | byte equality observed |
+| hub_uses_allocator_test.test | 10 | 0.000743s | 0.000748s | 0.000757s | byte equality observed |
+| insert_vs_emplace_test.test | 10 | 0.000769s | 0.000763s | 0.000757s | byte equality observed |
+| is_constructible_test.test | 10 | 0.000346s | 0.000321s | 0.000723s | byte equality observed |
+| list_test.test | 2 | 0.015458s | 0.015525s | 0.015879s | byte equality observed |
+| map_test.test | 3 | 0.007579s | 0.007285s | 0.007198s | byte equality observed |
+| memory_resource_test.test | 10 | 0.000757s | 0.000727s | 0.000758s | byte equality observed |
+| monotonic_buffer_resource_test.test | 10 | 0.000761s | 0.000735s | 0.000760s | byte equality observed |
+| nest_api_test.test | 10 | 0.001629s | 0.001607s | 0.001644s | byte equality observed |
+| nest_test.test | 10 | 0.000768s | 0.000746s | 0.000787s | byte equality observed |
+| new_delete_resource_test.test | 10 | 0.001126s | 0.001102s | 0.001116s | byte equality observed |
+| node_allocator_test.test | 3 | 0.006622s | 0.006548s | 0.006628s | byte equality observed |
+| node_handle_test.test | 10 | 0.000757s | 0.000732s | 0.000766s | byte equality observed |
+| null_iterators_test.test | 10 | 0.000753s | 0.000703s | 0.000751s | byte equality observed |
+| pair_test.test | 10 | 0.000753s | 0.000707s | 0.000756s | byte equality observed |
+| pmr_deque_test.test | 10 | 0.000735s | 0.000697s | 0.000729s | byte equality observed |
+| pmr_devector_test.test | 10 | 0.000741s | 0.000707s | 0.000743s | byte equality observed |
+| pmr_flat_map_test.test | 10 | 0.000743s | 0.000714s | 0.000733s | byte equality observed |
+| pmr_flat_set_test.test | 10 | 0.000741s | 0.000701s | 0.000735s | byte equality observed |
+| pmr_hub_test.test | 10 | 0.000737s | 0.000719s | 0.000737s | byte equality observed |
+| pmr_list_test.test | 10 | 0.000739s | 0.000716s | 0.000731s | byte equality observed |
+| pmr_map_test.test | 10 | 0.000735s | 0.000700s | 0.000738s | byte equality observed |
+| pmr_nest_test.test | 10 | 0.000741s | 0.000718s | 0.000733s | byte equality observed |
+| pmr_set_test.test | 10 | 0.000736s | 0.000729s | 0.000743s | byte equality observed |
+| pmr_slist_test.test | 10 | 0.000730s | 0.000740s | 0.000731s | byte equality observed |
+| pmr_small_vector_test.test | 10 | 0.000732s | 0.000731s | 0.000735s | byte equality observed |
+| pmr_stable_vector_test.test | 10 | 0.000740s | 0.000735s | 0.000779s | byte equality observed |
+| pmr_string_test.test | 10 | 0.000348s | 0.000340s | 0.000787s | byte equality observed |
+| pmr_vector_test.test | 10 | 0.000346s | 0.000342s | 0.000772s | byte equality observed |
+| polymorphic_allocator_test.test | 10 | 0.000754s | 0.000766s | 0.000793s | byte equality observed |
+| resource_adaptor_test.test | 10 | 0.000766s | 0.000743s | 0.000807s | byte equality observed |
+| scoped_allocator_adaptor_test.test | 10 | 0.000756s | 0.000722s | 0.000804s | byte equality observed |
+| scoped_allocator_usage_test.test | 10 | 0.000763s | 0.000726s | 0.000804s | byte equality observed |
+| segtor_options_test.test | 10 | 0.000803s | 0.000775s | 0.000812s | byte equality observed |
+| segtor_test.test | 1 | 0.455696s | 0.461920s | 0.501066s | byte equality observed |
+| set_test.test | 2 | 0.010677s | 0.009534s | 0.010274s | byte equality observed |
+| slist_test.test | 2 | 0.016219s | 0.015970s | 0.015937s | byte equality observed |
+| small_vector_options_test.test | 10 | 0.000857s | 0.000817s | 0.000804s | byte equality observed |
+| small_vector_test.test | 7 | 0.001678s | 0.001578s | 0.002721s | byte equality observed |
+| stable_vector_test.test | 1 | 0.027649s | 0.027957s | 0.028451s | byte equality observed |
+| static_vector_options_test.test | 10 | 0.000800s | 0.000775s | 0.000783s | byte equality observed |
+| static_vector_test.test | 10 | 0.001055s | 0.000979s | 0.001009s | byte equality observed |
+| string_options_test.test | 10 | 0.000773s | 0.000784s | 0.000751s | byte equality observed |
+| string_test.test | 3 | 0.009149s | 0.008970s | 0.009241s | byte equality observed |
+| string_view_compat_test.test | 10 | 0.000748s | 0.000746s | 0.000717s | byte equality observed |
+| synchronized_pool_resource_test.test | 10 | 0.000771s | 0.000773s | 0.000751s | byte equality observed |
+| throw_exception_test.test | 10 | 0.000721s | 0.000723s | 0.000706s | byte equality observed |
+| tree_test.test | 10 | 0.000719s | 0.000715s | 0.000691s | byte equality observed |
+| unsynchronized_pool_resource_test.test | 10 | 0.000768s | 0.000772s | 0.000748s | byte equality observed |
+| uses_allocator_construction_test.test | 10 | 0.000724s | 0.000716s | 0.000706s | byte equality observed |
+| uses_allocator_test.test | 10 | 0.000345s | 0.000315s | 0.000685s | byte equality observed |
+| vector_options_test.test | 10 | 0.000846s | 0.000828s | 0.000821s | byte equality observed |
+| vector_test.test | 5 | 0.002953s | 0.002976s | 0.003900s | byte equality observed |
 
-[Raw outcomes, commands and timing observations in CI artifacts](https://github.com/vishvananda/cppgm/actions/runs/43778388618).
+[Raw outcomes, commands and timing observations in CI artifacts](https://github.com/vishvananda/cppgm/actions/runs/43801643681).
 
 [Comparison records](../results.json) · [Host and toolchains](../metadata.json)

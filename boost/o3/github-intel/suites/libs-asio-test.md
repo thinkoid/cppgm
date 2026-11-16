@@ -4,301 +4,301 @@ All original oracles passed for all three compilers. Seconds are child CPU, one 
 
 | Test | Kind | Compile cppgm | GCC | Clang | Test cppgm | GCC | Clang |
 |---|---|---:|---:|---:|---:|---:|---:|
-| any_completion_executor.test | RUN | 0.530485 | 3.448850 | 2.966606 | 0.001802 | 0.001815 | 0.001831 |
-| any_completion_executor_select.test | RUN | 0.543453 | 3.498918 | 3.132003 | 0.001967 | 0.001717 | 0.001822 |
-| any_completion_handler.test | RUN | 0.602216 | 3.172207 | 2.723617 | 0.001394 | 0.001557 | 0.001544 |
-| any_completion_handler_select.test | RUN | 0.624667 | 3.216945 | 2.915414 | 0.001352 | 0.001528 | 0.001544 |
-| any_io_executor.test | RUN | 0.561785 | 3.786525 | 3.308632 | 0.001492 | 0.002125 | 0.002031 |
-| any_io_executor_select.test | RUN | 0.579226 | 3.729840 | 3.419879 | 0.001449 | 0.001536 | 0.002012 |
-| append.test | RUN | 0.527590 | 2.958318 | 2.444805 | 0.001228 | 0.001571 | 0.001494 |
-| append_select.test | RUN | 0.525210 | 2.994277 | 2.433738 | 0.001272 | 0.001646 | 0.001528 |
-| as_tuple.test | RUN | 0.676790 | 3.637625 | 3.476617 | 0.001556 | 0.001485 | 0.001600 |
-| as_tuple_select.test | RUN | 0.683927 | 3.585090 | 3.379269 | 0.001483 | 0.001550 | 0.001402 |
-| associated_allocator.test | LINK | 0.130634 | 0.290763 | 0.365482 | — | — | — |
-| associated_allocator_select.test | LINK | 0.128526 | 0.288776 | 0.355734 | — | — | — |
-| associated_cancellation_slot.test | LINK | 0.146177 | 0.309730 | 0.399369 | — | — | — |
-| associated_cancellation_slot_select.test | LINK | 0.144118 | 0.310654 | 0.389175 | — | — | — |
-| associated_executor.test | LINK | 0.207934 | 0.544525 | 0.691003 | — | — | — |
-| associated_executor_select.test | LINK | 0.206797 | 0.547171 | 0.668068 | — | — | — |
-| associated_immediate_executor.test | LINK | 0.195279 | 0.508148 | 0.596224 | — | — | — |
-| associated_immediate_executor_select.test | LINK | 0.192645 | 0.505131 | 0.584506 | — | — | — |
-| associator.test | LINK | 0.103978 | 0.241373 | 0.295950 | — | — | — |
-| associator_select.test | LINK | 0.104897 | 0.242051 | 0.296839 | — | — | — |
-| awaitable.test | LINK | 0.108733 | 0.241714 | 0.287041 | — | — | — |
-| awaitable_select.test | LINK | 0.110277 | 0.241024 | 0.294191 | — | — | — |
-| basic_datagram_socket.test | LINK | 0.333440 | 0.774123 | 1.106680 | — | — | — |
-| basic_datagram_socket_select.test | LINK | 0.336843 | 0.792728 | 1.144264 | — | — | — |
-| basic_deadline_timer.test | LINK | 0.409555 | 0.913871 | 1.272316 | — | — | — |
-| basic_deadline_timer_select.test | LINK | 0.405777 | 0.937208 | 1.318555 | — | — | — |
-| basic_file.test | LINK | 0.108212 | 0.240976 | 0.293982 | — | — | — |
-| basic_file_select.test | LINK | 0.110805 | 0.243879 | 0.299994 | — | — | — |
-| basic_random_access_file.test | LINK | 0.108160 | 0.244036 | 0.301476 | — | — | — |
-| basic_random_access_file_select.test | LINK | 0.107417 | 0.245519 | 0.297711 | — | — | — |
-| basic_raw_socket.test | LINK | 0.338930 | 0.780919 | 1.134828 | — | — | — |
-| basic_raw_socket_select.test | LINK | 0.342583 | 0.799337 | 1.145196 | — | — | — |
-| basic_readable_pipe.test | LINK | 0.325048 | 0.736437 | 0.978335 | — | — | — |
-| basic_readable_pipe_select.test | LINK | 0.336403 | 0.788508 | 1.178569 | — | — | — |
-| basic_seq_packet_socket.test | LINK | 0.331294 | 0.775678 | 1.118274 | — | — | — |
-| basic_seq_packet_socket_select.test | LINK | 0.340336 | 0.807002 | 1.159973 | — | — | — |
-| basic_signal_set.test | LINK | 0.313253 | 0.712695 | 0.885990 | — | — | — |
-| basic_signal_set_select.test | LINK | 0.324632 | 0.766423 | 1.089844 | — | — | — |
-| basic_socket_acceptor.test | LINK | 0.331878 | 0.775706 | 1.135219 | — | — | — |
-| basic_socket_acceptor_select.test | LINK | 0.340153 | 0.796104 | 1.143747 | — | — | — |
-| basic_stream_file.test | LINK | 0.103250 | 0.250328 | 0.303618 | — | — | — |
-| basic_stream_file_select.test | LINK | 0.107630 | 0.246321 | 0.292757 | — | — | — |
-| basic_stream_socket.test | LINK | 0.332412 | 0.782284 | 1.135464 | — | — | — |
-| basic_stream_socket_select.test | LINK | 0.343870 | 0.795243 | 1.153410 | — | — | — |
-| basic_streambuf.test | LINK | 0.163163 | 0.352785 | 0.434428 | — | — | — |
-| basic_streambuf_select.test | LINK | 0.164080 | 0.349994 | 0.429594 | — | — | — |
-| basic_waitable_timer.test | LINK | 0.316479 | 0.729357 | 1.061240 | — | — | — |
-| basic_waitable_timer_select.test | LINK | 0.319828 | 0.757731 | 1.077747 | — | — | — |
-| basic_writable_pipe.test | LINK | 0.317611 | 0.736701 | 0.967663 | — | — | — |
-| basic_writable_pipe_select.test | LINK | 0.330609 | 0.780052 | 1.175671 | — | — | — |
-| bind_allocator.test | RUN | 0.560393 | 3.014002 | 2.691277 | 0.001838 | 0.001856 | 0.001572 |
-| bind_allocator_select.test | RUN | 0.573580 | 3.079251 | 2.635524 | 0.001277 | 0.001689 | 0.001852 |
-| bind_cancellation_slot.test | RUN | 0.577218 | 3.054691 | 2.721207 | 0.001015 | 0.001075 | 0.001058 |
-| bind_cancellation_slot_select.test | RUN | 0.597037 | 3.031487 | 2.566839 | 0.000991 | 0.000997 | 0.000986 |
-| bind_executor.test | RUN | 0.393501 | 2.094015 | 1.689849 | 0.001762 | 0.001674 | 0.001779 |
-| bind_executor_select.test | RUN | 0.399324 | 2.111598 | 1.644430 | 0.001504 | 0.001561 | 0.001522 |
-| bind_immediate_executor.test | RUN | 0.293472 | 1.714366 | 1.051559 | 0.000982 | 0.001025 | 0.000949 |
-| bind_immediate_executor_select.test | RUN | 0.299722 | 1.683815 | 1.166548 | 0.000925 | 0.001040 | 0.000989 |
-| buffer.test | RUN | 0.174405 | 0.711443 | 0.619035 | 0.000930 | 0.000989 | 0.000931 |
-| buffer_select.test | RUN | 0.171699 | 0.714921 | 0.628081 | 0.000945 | 0.000975 | 0.000885 |
-| buffer_registration.test | LINK | 0.133618 | 0.353694 | 0.363946 | — | — | — |
-| buffer_registration_select.test | LINK | 0.134104 | 0.352512 | 0.369490 | — | — | — |
-| buffered_read_stream.test | RUN | 0.664024 | 4.578078 | 3.769419 | 0.001225 | 0.001839 | 0.001685 |
-| buffered_read_stream_select.test | RUN | 0.678800 | 4.727423 | 3.781643 | 0.001214 | 0.001623 | 0.001648 |
-| buffered_stream.test | RUN | 0.930489 | 7.355519 | 6.576033 | 0.001778 | 0.001836 | 0.001544 |
-| buffered_stream_select.test | RUN | 0.950009 | 7.499903 | 6.447763 | 0.001546 | 0.001776 | 0.001736 |
-| buffered_write_stream.test | RUN | 1.112872 | 6.355219 | 5.734748 | 0.001784 | 0.001927 | 0.001806 |
-| buffered_write_stream_select.test | RUN | 1.125865 | 6.493288 | 5.480303 | 0.001526 | 0.001882 | 0.001690 |
-| buffers_iterator.test | RUN | 0.331433 | 0.559802 | 0.889770 | 0.001231 | 0.001384 | 0.001356 |
-| buffers_iterator_select.test | RUN | 0.322177 | 0.559117 | 0.895235 | 0.001192 | 0.001367 | 0.001384 |
-| cancel_after.test | RUN | 0.913745 | 4.956766 | 4.138324 | 0.003609 | 0.004156 | 0.003385 |
-| cancel_after_select.test | RUN | 0.936609 | 4.908633 | 4.132943 | 0.003282 | 0.003302 | 0.003212 |
-| cancel_at.test | RUN | 0.816051 | 4.506152 | 4.082492 | 0.003037 | 0.003165 | 0.003181 |
-| cancel_at_select.test | RUN | 0.782334 | 4.393907 | 4.033176 | 0.002653 | 0.003241 | 0.003237 |
-| cancellation_signal.test | LINK | 0.094627 | 0.202192 | 0.233469 | — | — | — |
-| cancellation_signal_select.test | LINK | 0.096388 | 0.202899 | 0.253714 | — | — | — |
-| cancellation_state.test | LINK | 0.089139 | 0.202734 | 0.347181 | — | — | — |
-| cancellation_state_select.test | LINK | 0.121396 | 0.204882 | 0.360248 | — | — | — |
-| cancellation_type.test | LINK | 0.100890 | 0.161592 | 0.296090 | — | — | — |
-| cancellation_type_select.test | LINK | 0.108265 | 0.163106 | 0.287684 | — | — | — |
-| co_composed.test | RUN | 0.101050 | 0.163410 | 0.288122 | 0.001110 | 0.000995 | 0.001151 |
-| co_composed_select.test | RUN | 0.103603 | 0.227458 | 0.293770 | 0.001206 | 0.001344 | 0.001161 |
-| co_spawn.test | LINK | 0.103061 | 0.229671 | 0.294093 | — | — | — |
-| co_spawn_select.test | LINK | 0.102824 | 0.164937 | 0.286797 | — | — | — |
-| completion_condition.test | LINK | 0.133440 | 0.367538 | 0.402739 | — | — | — |
-| completion_condition_select.test | LINK | 0.132822 | 0.362495 | 0.389085 | — | — | — |
-| compose.test | RUN | 0.681355 | 3.787825 | 3.318317 | 0.001691 | 0.002141 | 0.001858 |
-| compose_select.test | RUN | 0.690914 | 3.774841 | 3.335863 | 0.001343 | 0.001567 | 0.001658 |
-| composed.test | RUN | 0.683668 | 3.667469 | 3.184501 | 0.001340 | 0.001392 | 0.001482 |
-| composed_select.test | RUN | 0.653332 | 3.652747 | 3.217584 | 0.001316 | 0.001575 | 0.001396 |
-| config.test | RUN | 0.343181 | 2.378403 | 1.389596 | 0.001421 | 0.001496 | 0.001320 |
-| config_select.test | RUN | 0.369783 | 2.497379 | 1.561357 | 0.001289 | 0.001446 | 0.001357 |
-| connect.test | LINK | 1.105403 | 8.029645 | 6.821928 | — | — | — |
-| connect_select.test | LINK | 1.128633 | 8.107830 | 6.853331 | — | — | — |
-| connect_pipe.test | RUN | 0.591844 | 3.036376 | 2.614166 | 0.001322 | 0.001596 | 0.001350 |
-| connect_pipe_select.test | RUN | 0.604670 | 3.137346 | 2.791754 | 0.001278 | 0.001612 | 0.001351 |
-| consign.test | RUN | 0.508233 | 2.996463 | 2.417704 | 0.001265 | 0.001206 | 0.001278 |
-| consign_select.test | RUN | 0.524133 | 3.008798 | 2.422746 | 0.001356 | 0.001400 | 0.001417 |
-| coroutine.test | LINK | 0.109959 | 0.282024 | 0.333728 | — | — | — |
-| coroutine_select.test | LINK | 0.112372 | 0.278131 | 0.335604 | — | — | — |
-| deadline_timer.test | RUN | 0.765041 | 3.863808 | 3.393041 | 0.002656 | 0.003066 | 0.002175 |
-| deadline_timer_select.test | RUN | 0.759726 | 3.842020 | 3.350154 | 0.002279 | 0.002391 | 0.003115 |
-| deferred.test | RUN | 0.118269 | 0.259223 | 0.321898 | 0.001202 | 0.001571 | 0.001237 |
-| deferred_select.test | RUN | 0.115989 | 0.260682 | 0.317304 | 0.001191 | 0.001469 | 0.001204 |
-| detached.test | LINK | 0.129933 | 0.289562 | 0.353099 | — | — | — |
-| detached_select.test | LINK | 0.133282 | 0.282111 | 0.359502 | — | — | — |
-| disposition.test | RUN | 0.141515 | 0.704130 | 0.662792 | 0.000951 | 0.001612 | 0.001395 |
-| disposition_select.test | RUN | 0.128077 | 0.704360 | 0.675923 | 0.000976 | 0.001565 | 0.001406 |
-| error.test | RUN | 0.116652 | 0.679465 | 0.592276 | 0.000945 | 0.001510 | 0.001260 |
-| error_select.test | RUN | 0.116137 | 0.681771 | 0.585853 | 0.000938 | 0.001610 | 0.001197 |
-| file_base.test | LINK | 0.149512 | 0.560567 | 0.647956 | — | — | — |
-| file_base_select.test | LINK | 0.145341 | 0.554988 | 0.532838 | — | — | — |
-| fwd_first.test | LINK | 0.341245 | 0.968845 | 1.166017 | — | — | — |
-| fwd_last.test | LINK | 0.337025 | 0.873348 | 1.144048 | — | — | — |
-| generic_basic_endpoint.test | LINK | 0.125305 | 0.323497 | 0.414771 | — | — | — |
-| generic_basic_endpoint_select.test | LINK | 0.123691 | 0.320042 | 0.408705 | — | — | — |
-| generic_datagram_protocol.test | LINK | 0.561480 | 3.055177 | 2.453447 | — | — | — |
-| generic_datagram_protocol_select.test | LINK | 0.565668 | 3.111190 | 2.377044 | — | — | — |
-| generic_raw_protocol.test | LINK | 0.561001 | 3.044601 | 2.450189 | — | — | — |
-| generic_raw_protocol_select.test | LINK | 0.561486 | 3.110607 | 2.381863 | — | — | — |
-| generic_seq_packet_protocol.test | LINK | 0.485144 | 2.585203 | 2.050381 | — | — | — |
-| generic_seq_packet_protocol_select.test | LINK | 0.487918 | 2.590117 | 2.018122 | — | — | — |
-| generic_stream_protocol.test | LINK | 0.517793 | 2.789193 | 2.256969 | — | — | — |
-| generic_stream_protocol_select.test | LINK | 0.521953 | 2.819191 | 2.253531 | — | — | — |
-| high_resolution_timer.test | LINK | 0.214992 | 0.485242 | 0.636885 | — | — | — |
-| high_resolution_timer_select.test | LINK | 0.222060 | 0.497236 | 0.645515 | — | — | — |
-| immediate.test | LINK | 0.147922 | 0.372822 | 0.389940 | — | — | — |
-| immediate_select.test | LINK | 0.147450 | 0.374793 | 0.391372 | — | — | — |
-| inline_executor.test | RUN | 0.181092 | 0.584010 | 0.591238 | 0.000940 | 0.001040 | 0.000892 |
-| inline_executor_select.test | RUN | 0.182917 | 0.583498 | 0.594979 | 0.000950 | 0.001035 | 0.000880 |
-| inline_or_executor.test | RUN | 0.303233 | 1.793458 | 1.190899 | 0.000950 | 0.001034 | 0.000909 |
-| inline_or_executor_select.test | RUN | 0.313357 | 1.821100 | 1.301168 | 0.000956 | 0.001017 | 0.000945 |
-| io_context.test | RUN | 0.449220 | 2.753578 | 2.078426 | 0.001983 | 0.002167 | 0.001997 |
-| io_context_select.test | RUN | 0.450814 | 2.675579 | 2.093971 | 0.001670 | 0.001906 | 0.001836 |
-| io_context_strand.test | RUN | 0.426633 | 2.292724 | 1.809774 | 0.001846 | 0.001867 | 0.001791 |
-| io_context_strand_select.test | RUN | 0.432713 | 2.296149 | 1.832782 | 0.001581 | 0.001766 | 0.001553 |
-| ip_address.test | LINK | 0.150987 | 0.522936 | 0.519213 | — | — | — |
-| ip_address_select.test | LINK | 0.149281 | 0.512828 | 0.508894 | — | — | — |
-| ip_address_v4.test | LINK | 0.154375 | 0.549543 | 0.886682 | — | — | — |
-| ip_address_v4_select.test | LINK | 0.152593 | 0.540367 | 0.890879 | — | — | — |
-| ip_address_v6.test | LINK | 0.175228 | 0.724430 | 1.090265 | — | — | — |
-| ip_address_v6_select.test | LINK | 0.175683 | 0.720181 | 1.091594 | — | — | — |
-| ip_basic_endpoint.test | LINK | 0.131208 | 0.340327 | 0.697521 | — | — | — |
-| ip_basic_endpoint_select.test | LINK | 0.133992 | 0.340433 | 0.692100 | — | — | — |
-| ip_basic_resolver.test | LINK | 0.217991 | 0.489142 | 1.036205 | — | — | — |
-| ip_basic_resolver_select.test | LINK | 0.221098 | 0.510333 | 1.061580 | — | — | — |
-| ip_basic_resolver_entry.test | LINK | 0.071131 | 0.193728 | 0.293643 | — | — | — |
-| ip_basic_resolver_entry_select.test | LINK | 0.071237 | 0.163610 | 0.290796 | — | — | — |
-| ip_basic_resolver_iterator.test | LINK | 0.129968 | 0.453801 | 0.684977 | — | — | — |
-| ip_basic_resolver_iterator_select.test | LINK | 0.129759 | 0.487484 | 0.674044 | — | — | — |
-| ip_basic_resolver_query.test | LINK | 0.122791 | 0.475113 | 0.650657 | — | — | — |
-| ip_basic_resolver_query_select.test | LINK | 0.124813 | 0.481270 | 0.654816 | — | — | — |
-| ip_host_name.test | RUN | 0.134110 | 0.665552 | 0.747329 | 0.000904 | 0.001528 | 0.001234 |
-| ip_host_name_select.test | RUN | 0.134371 | 0.660672 | 0.749925 | 0.000901 | 0.001448 | 0.001116 |
-| ip_icmp.test | RUN | 0.710408 | 6.497273 | 4.890802 | 0.000905 | 0.001420 | 0.001061 |
-| ip_icmp_select.test | RUN | 0.700018 | 6.540771 | 4.778418 | 0.000988 | 0.001470 | 0.001208 |
-| ip_multicast.test | RUN | 0.389652 | 3.179719 | 2.783241 | 0.001034 | 0.001547 | 0.001236 |
-| ip_multicast_select.test | RUN | 0.403176 | 3.145657 | 2.746258 | 0.001043 | 0.001673 | 0.001187 |
-| ip_resolver_query_base.test | LINK | 0.081720 | 0.267114 | 0.308090 | — | — | — |
-| ip_resolver_query_base_select.test | LINK | 0.082974 | 0.266279 | 0.307067 | — | — | — |
-| ip_tcp.test | RUN | 1.051312 | 9.531011 | 7.603006 | 0.001300 | 0.001894 | 0.001538 |
-| ip_tcp_select.test | RUN | 1.052400 | 9.906274 | 7.426385 | 0.001187 | 0.001836 | 0.001866 |
-| ip_udp.test | RUN | 0.753106 | 6.696774 | 5.132784 | 0.001103 | 0.001637 | 0.001322 |
-| ip_udp_select.test | RUN | 0.750263 | 6.989106 | 5.003731 | 0.001018 | 0.001572 | 0.001382 |
-| ip_unicast.test | RUN | 0.363916 | 2.893811 | 2.411090 | 0.000940 | 0.001598 | 0.001232 |
-| ip_unicast_select.test | RUN | 0.362122 | 2.931089 | 2.379484 | 0.001000 | 0.001571 | 0.001188 |
-| ip_v6_only.test | RUN | 0.373784 | 2.992192 | 2.504270 | 0.001011 | 0.001624 | 0.001296 |
-| ip_v6_only_select.test | RUN | 0.383038 | 3.049090 | 2.472033 | 0.000986 | 0.001611 | 0.001195 |
-| is_read_buffered.test | RUN | 0.253651 | 0.886000 | 1.263939 | 0.000899 | 0.001361 | 0.001133 |
-| is_read_buffered_select.test | RUN | 0.259098 | 0.903759 | 1.289171 | 0.000895 | 0.001394 | 0.001104 |
-| is_write_buffered.test | RUN | 0.249843 | 0.886723 | 1.243814 | 0.000913 | 0.001364 | 0.001237 |
-| is_write_buffered_select.test | RUN | 0.257443 | 0.898510 | 1.294296 | 0.000930 | 0.001245 | 0.001157 |
-| local_basic_endpoint.test | LINK | 0.123583 | 0.486396 | 0.656188 | — | — | — |
-| local_basic_endpoint_select.test | LINK | 0.124630 | 0.486741 | 0.650585 | — | — | — |
-| local_connect_pair.test | LINK | 0.343626 | 2.905491 | 2.295933 | — | — | — |
-| local_connect_pair_select.test | LINK | 0.351102 | 2.935356 | 2.315993 | — | — | — |
-| local_datagram_protocol.test | LINK | 0.477525 | 3.868937 | 3.234411 | — | — | — |
-| local_datagram_protocol_select.test | LINK | 0.485050 | 3.889814 | 3.251859 | — | — | — |
-| local_seq_packet_protocol.test | LINK | 0.486680 | 3.752459 | 3.302498 | — | — | — |
-| local_seq_packet_protocol_select.test | LINK | 0.486901 | 3.859675 | 3.196273 | — | — | — |
-| local_stream_protocol.test | LINK | 0.451861 | 3.604318 | 3.125403 | — | — | — |
-| local_stream_protocol_select.test | LINK | 0.459763 | 3.639555 | 3.025130 | — | — | — |
-| placeholders.test | LINK | 0.078840 | 0.262567 | 0.327548 | — | — | — |
-| placeholders_select.test | LINK | 0.078463 | 0.263405 | 0.324112 | — | — | — |
-| posix_basic_descriptor.test | LINK | 0.217410 | 0.740226 | 0.978547 | — | — | — |
-| posix_basic_descriptor_select.test | LINK | 0.228076 | 0.793956 | 1.171096 | — | — | — |
-| posix_basic_stream_descriptor.test | LINK | 0.218333 | 0.737538 | 0.970123 | — | — | — |
-| posix_basic_stream_descriptor_select.test | LINK | 0.228255 | 0.780822 | 1.148760 | — | — | — |
-| posix_descriptor_base.test | LINK | 0.086699 | 0.268418 | 0.320254 | — | — | — |
-| posix_descriptor_base_select.test | LINK | 0.085236 | 0.268756 | 0.311557 | — | — | — |
-| posix_stream_descriptor.test | LINK | 0.464923 | 3.699595 | 3.066500 | — | — | — |
-| posix_stream_descriptor_select.test | LINK | 0.481905 | 3.737669 | 3.149889 | — | — | — |
-| prepend.test | RUN | 0.491145 | 2.932304 | 2.376526 | 0.001211 | 0.001313 | 0.001313 |
-| prepend_select.test | RUN | 0.504278 | 2.958413 | 2.358161 | 0.001222 | 0.001314 | 0.001249 |
-| random_access_file.test | LINK | 0.294624 | 0.668047 | 0.774313 | — | — | — |
-| random_access_file_select.test | LINK | 0.306391 | 0.698168 | 0.982002 | — | — | — |
-| read.test | RUN | 1.677581 | 18.897943 | 14.056084 | 0.001684 | 0.002178 | 0.001866 |
-| read_select.test | RUN | 1.707882 | 18.507016 | 14.251683 | 0.001746 | 0.002128 | 0.001768 |
-| read_at.test | RUN | 1.684965 | 24.363253 | 18.390058 | 0.002034 | 0.002311 | 0.001967 |
-| read_at_select.test | RUN | 1.700849 | 24.888795 | 18.461302 | 0.002034 | 0.002614 | 0.002059 |
-| read_until.test | RUN | 0.878799 | 7.303243 | 5.325292 | 0.001449 | 0.001714 | 0.001351 |
-| read_until_select.test | RUN | 0.889977 | 7.230536 | 5.502236 | 0.001551 | 0.001554 | 0.001404 |
-| readable_pipe.test | LINK | 0.542237 | 3.023845 | 2.427973 | — | — | — |
-| readable_pipe_select.test | LINK | 0.562927 | 3.156976 | 2.529853 | — | — | — |
-| recycling_allocator.test | RUN | 0.158573 | 0.424711 | 0.472184 | 0.001276 | 0.001371 | 0.001126 |
-| recycling_allocator_select.test | RUN | 0.158220 | 0.413253 | 0.493796 | 0.001174 | 0.001418 | 0.001317 |
-| redirect_disposition.test | LINK | 0.715058 | 4.239441 | 3.642959 | — | — | — |
-| redirect_disposition_select.test | LINK | 0.717641 | 4.156127 | 3.616436 | — | — | — |
-| redirect_error.test | LINK | 0.638995 | 3.489660 | 3.166810 | — | — | — |
-| redirect_error_select.test | LINK | 0.640459 | 3.497332 | 3.168091 | — | — | — |
-| registered_buffer.test | LINK | 0.154460 | 0.343369 | 0.447745 | — | — | — |
-| registered_buffer_select.test | LINK | 0.152393 | 0.335924 | 0.410556 | — | — | — |
-| signal_set.test | RUN | 0.524433 | 2.919070 | 2.232347 | 0.001276 | 0.001458 | 0.001147 |
-| signal_set_select.test | RUN | 0.549853 | 3.017957 | 2.477366 | 0.001284 | 0.001448 | 0.001282 |
-| signal_set_base.test | LINK | 0.122363 | 0.254606 | 0.311441 | — | — | — |
-| signal_set_base_select.test | LINK | 0.121806 | 0.258284 | 0.306046 | — | — | — |
-| socket_base.test | RUN | 0.642376 | 4.254692 | 3.420661 | 0.001647 | 0.001440 | 0.001371 |
-| socket_base_select.test | RUN | 0.649442 | 4.135000 | 3.339991 | 0.001324 | 0.001634 | 0.001236 |
-| spawn.test | RUN | 1.130327 | 7.105005 | 5.843877 | 0.001494 | 0.001948 | 0.001482 |
-| spawn_select.test | RUN | 1.136353 | 7.043605 | 5.960464 | 0.001569 | 0.001639 | 0.001592 |
-| static_thread_pool.test | RUN | 0.279805 | 0.647327 | 0.777455 | 0.001293 | 0.001479 | 0.001284 |
-| static_thread_pool_select.test | RUN | 0.290011 | 0.683566 | 0.987820 | 0.001102 | 0.001503 | 0.001240 |
-| steady_timer.test | LINK | 0.319405 | 0.725012 | 1.095999 | — | — | — |
-| steady_timer_select.test | LINK | 0.324697 | 0.742884 | 1.079796 | — | — | — |
-| strand.test | RUN | 0.694446 | 3.968750 | 3.557096 | 0.001840 | 0.002231 | 0.002116 |
-| strand_select.test | RUN | 0.703268 | 3.899300 | 3.497182 | 0.001904 | 0.002272 | 0.002046 |
-| stream_file.test | LINK | 0.289703 | 0.673184 | 0.788031 | — | — | — |
-| stream_file_select.test | LINK | 0.305289 | 0.683170 | 1.016318 | — | — | — |
-| streambuf.test | RUN | 0.185217 | 0.385155 | 0.566531 | 0.000918 | 0.001030 | 0.001143 |
-| streambuf_select.test | RUN | 0.168064 | 0.372446 | 0.478978 | 0.000886 | 0.000951 | 0.001172 |
-| system_timer.test | LINK | 0.456507 | 2.555599 | 2.235752 | — | — | — |
-| system_timer_select.test | LINK | 0.459031 | 2.527172 | 2.050517 | — | — | — |
-| system_context.test | LINK | 0.196385 | 0.428120 | 0.473885 | — | — | — |
-| system_context_select.test | LINK | 0.202983 | 0.462228 | 0.598039 | — | — | — |
-| system_executor.test | LINK | 0.262135 | 1.440394 | 0.948680 | — | — | — |
-| system_executor_select.test | LINK | 0.270913 | 1.412602 | 1.074495 | — | — | — |
-| this_coro.test | LINK | 0.073045 | 0.160975 | 0.183084 | — | — | — |
-| this_coro_select.test | LINK | 0.073702 | 0.161727 | 0.183144 | — | — | — |
-| thread_pool.test | RUN | 0.315556 | 1.848190 | 1.246856 | 0.001621 | 0.001713 | 0.001630 |
-| thread_pool_select.test | RUN | 0.327480 | 1.891293 | 1.369201 | 0.001642 | 0.001644 | 0.001712 |
-| time_traits.test | LINK | 0.164458 | 0.338132 | 0.377104 | — | — | — |
-| time_traits_select.test | LINK | 0.165509 | 0.432757 | 0.379254 | — | — | — |
-| ts_buffer.test | LINK | 0.157389 | 0.562310 | 0.398811 | — | — | — |
-| ts_buffer_select.test | LINK | 0.157303 | 0.558850 | 0.402636 | — | — | — |
-| ts_executor.test | LINK | 0.226845 | 0.802887 | 0.635042 | — | — | — |
-| ts_executor_select.test | LINK | 0.237100 | 0.825899 | 0.771567 | — | — | — |
-| ts_internet.test | LINK | 0.246929 | 0.863595 | 0.966737 | — | — | — |
-| ts_internet_select.test | LINK | 0.253797 | 0.889782 | 1.067214 | — | — | — |
-| ts_io_context.test | LINK | 0.198443 | 0.660577 | 0.765571 | — | — | — |
-| ts_io_context_select.test | LINK | 0.210401 | 0.688917 | 0.989816 | — | — | — |
-| ts_net.test | LINK | 0.293884 | 1.025305 | 1.535089 | — | — | — |
-| ts_net_select.test | LINK | 0.303526 | 1.055342 | 1.593422 | — | — | — |
-| ts_netfwd.test | LINK | 0.294082 | 1.028033 | 1.563611 | — | — | — |
-| ts_netfwd_select.test | LINK | 0.304227 | 1.050044 | 1.597007 | — | — | — |
-| ts_socket.test | LINK | 0.243687 | 0.803621 | 1.206879 | — | — | — |
-| ts_socket_select.test | LINK | 0.249997 | 0.821844 | 1.217887 | — | — | — |
-| ts_timer.test | LINK | 0.214028 | 0.719153 | 1.050249 | — | — | — |
-| ts_timer_select.test | LINK | 0.219370 | 0.737968 | 1.054018 | — | — | — |
-| use_awaitable.test | LINK | 0.071326 | 0.242590 | 0.294573 | — | — | — |
-| use_awaitable_select.test | LINK | 0.071685 | 0.242735 | 0.287050 | — | — | — |
-| wait_traits.test | LINK | 0.071103 | 0.242329 | 0.289074 | — | — | — |
-| wait_traits_select.test | LINK | 0.071276 | 0.241656 | 0.280555 | — | — | — |
-| windows_basic_object_handle.test | LINK | 0.071764 | 0.238929 | 0.294393 | — | — | — |
-| windows_basic_object_handle_select.test | LINK | 0.071650 | 0.242047 | 0.293597 | — | — | — |
-| windows_basic_overlapped_handle.test | LINK | 0.070183 | 0.245017 | 0.292778 | — | — | — |
-| windows_basic_overlapped_handle_select.test | LINK | 0.070997 | 0.240164 | 0.295289 | — | — | — |
-| windows_basic_random_access_handle.test | LINK | 0.070149 | 0.240397 | 0.296580 | — | — | — |
-| windows_basic_random_access_handle_select.test | LINK | 0.071185 | 0.240912 | 0.294684 | — | — | — |
-| windows_basic_stream_handle.test | LINK | 0.070628 | 0.241801 | 0.288034 | — | — | — |
-| windows_basic_stream_handle_select.test | LINK | 0.071723 | 0.237338 | 0.288952 | — | — | — |
-| windows_object_handle.test | LINK | 0.200428 | 0.655185 | 0.764653 | — | — | — |
-| windows_object_handle_select.test | LINK | 0.212433 | 0.700742 | 0.992797 | — | — | — |
-| windows_overlapped_ptr.test | LINK | 0.211751 | 0.695437 | 0.860580 | — | — | — |
-| windows_overlapped_ptr_select.test | LINK | 0.221892 | 0.738502 | 1.049612 | — | — | — |
-| windows_random_access_handle.test | LINK | 0.200348 | 0.653265 | 0.771669 | — | — | — |
-| windows_random_access_handle_select.test | LINK | 0.211964 | 0.700849 | 0.978586 | — | — | — |
-| windows_stream_handle.test | LINK | 0.202170 | 0.657843 | 0.787848 | — | — | — |
-| windows_stream_handle_select.test | LINK | 0.214547 | 0.700953 | 0.977989 | — | — | — |
-| writable_pipe.test | LINK | 0.380962 | 2.936081 | 2.457282 | — | — | — |
-| writable_pipe_select.test | LINK | 0.445148 | 3.097657 | 2.622323 | — | — | — |
-| write.test | RUN | 1.673076 | 15.361686 | 13.738845 | 0.002046 | 0.001835 | 0.001743 |
-| write_select.test | RUN | 1.688989 | 15.285473 | 13.551584 | 0.001754 | 0.001798 | 0.001752 |
-| write_at.test | RUN | 1.749722 | 20.599008 | 17.353973 | 0.001958 | 0.002150 | 0.001904 |
-| write_at_select.test | RUN | 1.766088 | 20.797778 | 17.357360 | 0.002076 | 0.001970 | 0.002024 |
-| any_executor.test | RUN | 0.683034 | 6.696712 | 5.705946 | 0.001797 | 0.002091 | 0.001657 |
-| blocking.test | RUN | 1.505524 | 9.021457 | 11.216769 | 0.003307 | 0.003345 | 0.003271 |
-| blocking_adaptation.test | RUN | 0.751788 | 3.734755 | 5.082103 | 0.002200 | 0.002074 | 0.002016 |
-| context_as.test | RUN | 0.437382 | 2.607205 | 1.751706 | 0.001576 | 0.001617 | 0.001382 |
-| executor.test | RUN | 0.111007 | 0.245729 | 0.306567 | 0.001103 | 0.001333 | 0.001237 |
-| inline_exception_handling.test | RUN | 1.382533 | 7.844496 | 11.191814 | 0.002396 | 0.002258 | 0.002404 |
-| invocable_archetype.test | RUN | 0.107852 | 0.246878 | 0.292283 | 0.001247 | 0.001371 | 0.001211 |
-| mapping.test | RUN | 1.515161 | 8.446021 | 11.365453 | 0.002412 | 0.002360 | 0.002422 |
-| outstanding_work.test | RUN | 0.684139 | 3.579355 | 4.897239 | 0.002074 | 0.002248 | 0.002131 |
-| prefer_only.test | RUN | 0.220439 | 1.420873 | 1.090706 | 0.001230 | 0.001298 | 0.001215 |
-| relationship.test | RUN | 0.583084 | 3.462479 | 4.352137 | 0.001523 | 0.002074 | 0.001494 |
+| any_completion_executor.test | RUN | 0.518366 | 3.429965 | 2.963233 | 0.001718 | 0.001668 | 0.001954 |
+| any_completion_executor_select.test | RUN | 0.532043 | 3.459738 | 3.132324 | 0.001802 | 0.002076 | 0.001544 |
+| any_completion_handler.test | RUN | 0.597243 | 3.115577 | 2.725027 | 0.001378 | 0.001628 | 0.001584 |
+| any_completion_handler_select.test | RUN | 0.592712 | 3.180817 | 2.898080 | 0.001324 | 0.001519 | 0.001609 |
+| any_io_executor.test | RUN | 0.547650 | 3.724302 | 3.221507 | 0.001194 | 0.001877 | 0.002117 |
+| any_io_executor_select.test | RUN | 0.566010 | 3.720302 | 3.349844 | 0.001453 | 0.001856 | 0.002229 |
+| append.test | RUN | 0.499088 | 2.951904 | 2.430511 | 0.001182 | 0.001510 | 0.001365 |
+| append_select.test | RUN | 0.518525 | 3.032150 | 2.439903 | 0.001312 | 0.001490 | 0.001562 |
+| as_tuple.test | RUN | 0.662442 | 3.559151 | 3.429711 | 0.001514 | 0.001443 | 0.001385 |
+| as_tuple_select.test | RUN | 0.672416 | 3.504543 | 3.401898 | 0.001301 | 0.001451 | 0.001350 |
+| associated_allocator.test | LINK | 0.129029 | 0.289504 | 0.355274 | — | — | — |
+| associated_allocator_select.test | LINK | 0.125298 | 0.288623 | 0.356242 | — | — | — |
+| associated_cancellation_slot.test | LINK | 0.134760 | 0.310311 | 0.394132 | — | — | — |
+| associated_cancellation_slot_select.test | LINK | 0.138382 | 0.307533 | 0.389767 | — | — | — |
+| associated_executor.test | LINK | 0.205485 | 0.540936 | 0.674494 | — | — | — |
+| associated_executor_select.test | LINK | 0.204254 | 0.541755 | 0.663556 | — | — | — |
+| associated_immediate_executor.test | LINK | 0.185205 | 0.496820 | 0.586653 | — | — | — |
+| associated_immediate_executor_select.test | LINK | 0.186284 | 0.499893 | 0.587976 | — | — | — |
+| associator.test | LINK | 0.105032 | 0.240307 | 0.294175 | — | — | — |
+| associator_select.test | LINK | 0.101447 | 0.232593 | 0.294864 | — | — | — |
+| awaitable.test | LINK | 0.099454 | 0.230509 | 0.295959 | — | — | — |
+| awaitable_select.test | LINK | 0.101314 | 0.241873 | 0.294870 | — | — | — |
+| basic_datagram_socket.test | LINK | 0.321127 | 0.757004 | 1.113849 | — | — | — |
+| basic_datagram_socket_select.test | LINK | 0.323907 | 0.783211 | 1.140123 | — | — | — |
+| basic_deadline_timer.test | LINK | 0.390726 | 0.890070 | 1.272060 | — | — | — |
+| basic_deadline_timer_select.test | LINK | 0.390312 | 0.914855 | 1.293563 | — | — | — |
+| basic_file.test | LINK | 0.107749 | 0.238781 | 0.287462 | — | — | — |
+| basic_file_select.test | LINK | 0.102094 | 0.233882 | 0.286328 | — | — | — |
+| basic_random_access_file.test | LINK | 0.104336 | 0.237037 | 0.300206 | — | — | — |
+| basic_random_access_file_select.test | LINK | 0.104823 | 0.238843 | 0.292770 | — | — | — |
+| basic_raw_socket.test | LINK | 0.331157 | 0.764110 | 1.115302 | — | — | — |
+| basic_raw_socket_select.test | LINK | 0.332035 | 0.785772 | 1.146141 | — | — | — |
+| basic_readable_pipe.test | LINK | 0.313929 | 0.730580 | 0.968421 | — | — | — |
+| basic_readable_pipe_select.test | LINK | 0.324774 | 0.778326 | 1.169164 | — | — | — |
+| basic_seq_packet_socket.test | LINK | 0.329913 | 0.761796 | 1.112125 | — | — | — |
+| basic_seq_packet_socket_select.test | LINK | 0.336819 | 0.781694 | 1.144977 | — | — | — |
+| basic_signal_set.test | LINK | 0.303283 | 0.708902 | 0.872403 | — | — | — |
+| basic_signal_set_select.test | LINK | 0.312864 | 0.748052 | 1.086596 | — | — | — |
+| basic_socket_acceptor.test | LINK | 0.331783 | 0.764487 | 1.119363 | — | — | — |
+| basic_socket_acceptor_select.test | LINK | 0.337767 | 0.787467 | 1.149396 | — | — | — |
+| basic_stream_file.test | LINK | 0.098642 | 0.236952 | 0.299440 | — | — | — |
+| basic_stream_file_select.test | LINK | 0.100234 | 0.234711 | 0.299659 | — | — | — |
+| basic_stream_socket.test | LINK | 0.326581 | 0.768842 | 1.118063 | — | — | — |
+| basic_stream_socket_select.test | LINK | 0.330649 | 0.779196 | 1.134937 | — | — | — |
+| basic_streambuf.test | LINK | 0.151815 | 0.343886 | 0.432977 | — | — | — |
+| basic_streambuf_select.test | LINK | 0.152674 | 0.350429 | 0.430785 | — | — | — |
+| basic_waitable_timer.test | LINK | 0.308313 | 0.718591 | 1.030943 | — | — | — |
+| basic_waitable_timer_select.test | LINK | 0.313387 | 0.729518 | 1.060613 | — | — | — |
+| basic_writable_pipe.test | LINK | 0.312392 | 0.724761 | 0.976083 | — | — | — |
+| basic_writable_pipe_select.test | LINK | 0.326556 | 0.769828 | 1.171306 | — | — | — |
+| bind_allocator.test | RUN | 0.547490 | 2.979872 | 2.627535 | 0.001771 | 0.001957 | 0.001706 |
+| bind_allocator_select.test | RUN | 0.559776 | 3.018473 | 2.632385 | 0.001642 | 0.001858 | 0.001198 |
+| bind_cancellation_slot.test | RUN | 0.563334 | 3.024735 | 2.662747 | 0.000944 | 0.000986 | 0.001016 |
+| bind_cancellation_slot_select.test | RUN | 0.576472 | 2.995427 | 2.595394 | 0.000923 | 0.001049 | 0.000984 |
+| bind_executor.test | RUN | 0.379480 | 2.066837 | 1.689812 | 0.001551 | 0.001714 | 0.001805 |
+| bind_executor_select.test | RUN | 0.391600 | 2.100447 | 1.680887 | 0.001386 | 0.001525 | 0.001439 |
+| bind_immediate_executor.test | RUN | 0.285191 | 1.703121 | 1.067561 | 0.000929 | 0.000981 | 0.000920 |
+| bind_immediate_executor_select.test | RUN | 0.295303 | 1.668482 | 1.158683 | 0.000896 | 0.000946 | 0.000936 |
+| buffer.test | RUN | 0.167079 | 0.694660 | 0.626156 | 0.000883 | 0.000951 | 0.000881 |
+| buffer_select.test | RUN | 0.168137 | 0.696361 | 0.619643 | 0.000887 | 0.000926 | 0.000912 |
+| buffer_registration.test | LINK | 0.129034 | 0.344387 | 0.366413 | — | — | — |
+| buffer_registration_select.test | LINK | 0.127423 | 0.343544 | 0.365379 | — | — | — |
+| buffered_read_stream.test | RUN | 0.652997 | 4.496412 | 3.817793 | 0.001169 | 0.001744 | 0.001689 |
+| buffered_read_stream_select.test | RUN | 0.662708 | 4.678788 | 3.822879 | 0.001078 | 0.001554 | 0.001569 |
+| buffered_stream.test | RUN | 0.893518 | 7.347112 | 6.880880 | 0.001674 | 0.001638 | 0.001778 |
+| buffered_stream_select.test | RUN | 0.939888 | 7.339028 | 6.608467 | 0.001583 | 0.001819 | 0.001539 |
+| buffered_write_stream.test | RUN | 1.091614 | 6.272250 | 5.828836 | 0.001812 | 0.001759 | 0.001680 |
+| buffered_write_stream_select.test | RUN | 1.114085 | 6.347296 | 5.622732 | 0.001517 | 0.001706 | 0.001726 |
+| buffers_iterator.test | RUN | 0.323689 | 0.555671 | 0.885895 | 0.001345 | 0.001250 | 0.001238 |
+| buffers_iterator_select.test | RUN | 0.323156 | 0.540239 | 0.887216 | 0.001255 | 0.001251 | 0.001228 |
+| cancel_after.test | RUN | 0.904060 | 4.936262 | 4.163134 | 0.003028 | 0.003780 | 0.003252 |
+| cancel_after_select.test | RUN | 0.921094 | 4.882203 | 4.123200 | 0.002596 | 0.003331 | 0.004071 |
+| cancel_at.test | RUN | 0.818628 | 4.495293 | 4.110982 | 0.002665 | 0.003036 | 0.003542 |
+| cancel_at_select.test | RUN | 0.800396 | 4.332708 | 4.065200 | 0.002330 | 0.002901 | 0.003541 |
+| cancellation_signal.test | LINK | 0.095125 | 0.199643 | 0.250784 | — | — | — |
+| cancellation_signal_select.test | LINK | 0.095616 | 0.197652 | 0.268950 | — | — | — |
+| cancellation_state.test | LINK | 0.088052 | 0.197745 | 0.343305 | — | — | — |
+| cancellation_state_select.test | LINK | 0.091940 | 0.198095 | 0.376363 | — | — | — |
+| cancellation_type.test | LINK | 0.104241 | 0.157146 | 0.292218 | — | — | — |
+| cancellation_type_select.test | LINK | 0.100935 | 0.157743 | 0.298130 | — | — | — |
+| co_composed.test | RUN | 0.104560 | 0.157357 | 0.295086 | 0.001220 | 0.000931 | 0.001274 |
+| co_composed_select.test | RUN | 0.103733 | 0.229975 | 0.296548 | 0.001067 | 0.001332 | 0.001556 |
+| co_spawn.test | LINK | 0.096086 | 0.235662 | 0.298918 | — | — | — |
+| co_spawn_select.test | LINK | 0.101967 | 0.237082 | 0.297395 | — | — | — |
+| completion_condition.test | LINK | 0.140629 | 0.368380 | 0.405207 | — | — | — |
+| completion_condition_select.test | LINK | 0.131065 | 0.371634 | 0.404589 | — | — | — |
+| compose.test | RUN | 0.680661 | 3.759355 | 3.411937 | 0.001960 | 0.001785 | 0.001980 |
+| compose_select.test | RUN | 0.686948 | 3.697402 | 3.416152 | 0.001570 | 0.001925 | 0.001589 |
+| composed.test | RUN | 0.677743 | 3.713234 | 3.307839 | 0.001328 | 0.001509 | 0.001566 |
+| composed_select.test | RUN | 0.674043 | 3.608762 | 3.280774 | 0.001229 | 0.001454 | 0.001541 |
+| config.test | RUN | 0.352520 | 2.403459 | 1.420096 | 0.001413 | 0.001251 | 0.001417 |
+| config_select.test | RUN | 0.377196 | 2.388139 | 1.590216 | 0.001374 | 0.001384 | 0.001424 |
+| connect.test | LINK | 1.083594 | 7.939060 | 7.136816 | — | — | — |
+| connect_select.test | LINK | 1.100972 | 7.933796 | 7.114050 | — | — | — |
+| connect_pipe.test | RUN | 0.572132 | 2.989656 | 2.602288 | 0.001452 | 0.001527 | 0.001556 |
+| connect_pipe_select.test | RUN | 0.593113 | 3.135120 | 2.772317 | 0.001257 | 0.001509 | 0.001594 |
+| consign.test | RUN | 0.501281 | 2.932762 | 2.399590 | 0.001437 | 0.001316 | 0.001605 |
+| consign_select.test | RUN | 0.514675 | 2.985459 | 2.382379 | 0.001250 | 0.001362 | 0.001393 |
+| coroutine.test | LINK | 0.106010 | 0.283822 | 0.339970 | — | — | — |
+| coroutine_select.test | LINK | 0.107579 | 0.279217 | 0.322138 | — | — | — |
+| deadline_timer.test | RUN | 0.737229 | 3.838082 | 3.416583 | 0.002474 | 0.003023 | 0.003071 |
+| deadline_timer_select.test | RUN | 0.750273 | 3.799057 | 3.409421 | 0.002321 | 0.003072 | 0.002539 |
+| deferred.test | RUN | 0.113868 | 0.257796 | 0.315719 | 0.001129 | 0.001361 | 0.001394 |
+| deferred_select.test | RUN | 0.113588 | 0.261395 | 0.317010 | 0.001076 | 0.001203 | 0.001516 |
+| detached.test | LINK | 0.124229 | 0.288745 | 0.357579 | — | — | — |
+| detached_select.test | LINK | 0.129303 | 0.286874 | 0.350156 | — | — | — |
+| disposition.test | RUN | 0.123543 | 0.692503 | 0.659316 | 0.000939 | 0.001299 | 0.001617 |
+| disposition_select.test | RUN | 0.121418 | 0.693827 | 0.660116 | 0.000933 | 0.001276 | 0.001590 |
+| error.test | RUN | 0.113693 | 0.665793 | 0.583447 | 0.000893 | 0.001383 | 0.001458 |
+| error_select.test | RUN | 0.113607 | 0.665170 | 0.587011 | 0.000873 | 0.001308 | 0.001360 |
+| file_base.test | LINK | 0.139756 | 0.543367 | 0.651110 | — | — | — |
+| file_base_select.test | LINK | 0.140582 | 0.550054 | 0.615253 | — | — | — |
+| fwd_first.test | LINK | 0.331852 | 0.924535 | 1.169398 | — | — | — |
+| fwd_last.test | LINK | 0.331711 | 0.889027 | 1.170271 | — | — | — |
+| generic_basic_endpoint.test | LINK | 0.120506 | 0.316750 | 0.420938 | — | — | — |
+| generic_basic_endpoint_select.test | LINK | 0.123313 | 0.312924 | 0.418357 | — | — | — |
+| generic_datagram_protocol.test | LINK | 0.554584 | 2.972230 | 2.479027 | — | — | — |
+| generic_datagram_protocol_select.test | LINK | 0.551804 | 3.067425 | 2.430185 | — | — | — |
+| generic_raw_protocol.test | LINK | 0.552495 | 2.975001 | 2.451448 | — | — | — |
+| generic_raw_protocol_select.test | LINK | 0.544841 | 3.047127 | 2.436526 | — | — | — |
+| generic_seq_packet_protocol.test | LINK | 0.475640 | 2.499570 | 2.077202 | — | — | — |
+| generic_seq_packet_protocol_select.test | LINK | 0.474243 | 2.527831 | 2.085459 | — | — | — |
+| generic_stream_protocol.test | LINK | 0.510786 | 2.706959 | 2.236905 | — | — | — |
+| generic_stream_protocol_select.test | LINK | 0.507838 | 2.769818 | 2.236376 | — | — | — |
+| high_resolution_timer.test | LINK | 0.204812 | 0.468522 | 0.647402 | — | — | — |
+| high_resolution_timer_select.test | LINK | 0.208777 | 0.484645 | 0.663039 | — | — | — |
+| immediate.test | LINK | 0.140292 | 0.361461 | 0.404558 | — | — | — |
+| immediate_select.test | LINK | 0.141662 | 0.361019 | 0.404139 | — | — | — |
+| inline_executor.test | RUN | 0.175296 | 0.568925 | 0.615677 | 0.000865 | 0.000963 | 0.000918 |
+| inline_executor_select.test | RUN | 0.173633 | 0.572838 | 0.611701 | 0.000906 | 0.000950 | 0.000911 |
+| inline_or_executor.test | RUN | 0.297478 | 1.746544 | 1.227299 | 0.000965 | 0.000995 | 0.000947 |
+| inline_or_executor_select.test | RUN | 0.301698 | 1.771118 | 1.327219 | 0.000938 | 0.000906 | 0.001059 |
+| io_context.test | RUN | 0.443135 | 2.671343 | 2.147784 | 0.001810 | 0.001893 | 0.002108 |
+| io_context_select.test | RUN | 0.445755 | 2.630729 | 2.129804 | 0.001490 | 0.001734 | 0.001931 |
+| io_context_strand.test | RUN | 0.411965 | 2.255046 | 1.850407 | 0.001638 | 0.001658 | 0.001754 |
+| io_context_strand_select.test | RUN | 0.417413 | 2.222360 | 1.843481 | 0.001508 | 0.001658 | 0.001906 |
+| ip_address.test | LINK | 0.145356 | 0.509907 | 0.514740 | — | — | — |
+| ip_address_select.test | LINK | 0.144586 | 0.509528 | 0.512180 | — | — | — |
+| ip_address_v4.test | LINK | 0.146022 | 0.541756 | 0.882946 | — | — | — |
+| ip_address_v4_select.test | LINK | 0.143301 | 0.537029 | 0.854206 | — | — | — |
+| ip_address_v6.test | LINK | 0.169882 | 0.709085 | 1.111817 | — | — | — |
+| ip_address_v6_select.test | LINK | 0.169743 | 0.702367 | 1.118427 | — | — | — |
+| ip_basic_endpoint.test | LINK | 0.120725 | 0.336456 | 0.713628 | — | — | — |
+| ip_basic_endpoint_select.test | LINK | 0.125007 | 0.336190 | 0.706320 | — | — | — |
+| ip_basic_resolver.test | LINK | 0.209428 | 0.549792 | 1.062351 | — | — | — |
+| ip_basic_resolver_select.test | LINK | 0.209122 | 0.585464 | 1.098910 | — | — | — |
+| ip_basic_resolver_entry.test | LINK | 0.069111 | 0.236546 | 0.296378 | — | — | — |
+| ip_basic_resolver_entry_select.test | LINK | 0.065730 | 0.233632 | 0.296414 | — | — | — |
+| ip_basic_resolver_iterator.test | LINK | 0.121047 | 0.493002 | 0.689420 | — | — | — |
+| ip_basic_resolver_iterator_select.test | LINK | 0.120666 | 0.487077 | 0.689025 | — | — | — |
+| ip_basic_resolver_query.test | LINK | 0.113525 | 0.469661 | 0.660871 | — | — | — |
+| ip_basic_resolver_query_select.test | LINK | 0.116221 | 0.462339 | 0.673431 | — | — | — |
+| ip_host_name.test | RUN | 0.125027 | 0.643858 | 0.746097 | 0.000886 | 0.001299 | 0.001394 |
+| ip_host_name_select.test | RUN | 0.127827 | 0.633771 | 0.750849 | 0.000870 | 0.001200 | 0.001145 |
+| ip_icmp.test | RUN | 0.687093 | 6.225758 | 5.057084 | 0.000891 | 0.001303 | 0.001154 |
+| ip_icmp_select.test | RUN | 0.680171 | 6.358191 | 4.932596 | 0.000937 | 0.001236 | 0.001348 |
+| ip_multicast.test | RUN | 0.380313 | 3.105680 | 2.811287 | 0.000978 | 0.001281 | 0.001291 |
+| ip_multicast_select.test | RUN | 0.389186 | 3.059767 | 2.793030 | 0.000935 | 0.001332 | 0.001359 |
+| ip_resolver_query_base.test | LINK | 0.079475 | 0.257638 | 0.308745 | — | — | — |
+| ip_resolver_query_base_select.test | LINK | 0.076090 | 0.257723 | 0.309184 | — | — | — |
+| ip_tcp.test | RUN | 1.018343 | 9.179845 | 7.798481 | 0.001208 | 0.001560 | 0.002006 |
+| ip_tcp_select.test | RUN | 1.014492 | 9.641731 | 7.583598 | 0.001275 | 0.001802 | 0.001879 |
+| ip_udp.test | RUN | 0.728893 | 6.562035 | 5.317223 | 0.000948 | 0.001391 | 0.001450 |
+| ip_udp_select.test | RUN | 0.725191 | 6.718975 | 5.206746 | 0.001022 | 0.001381 | 0.001428 |
+| ip_unicast.test | RUN | 0.355003 | 2.817936 | 2.445600 | 0.000950 | 0.001280 | 0.001291 |
+| ip_unicast_select.test | RUN | 0.354141 | 2.797248 | 2.418218 | 0.000977 | 0.001050 | 0.001146 |
+| ip_v6_only.test | RUN | 0.365204 | 2.884138 | 2.531516 | 0.000986 | 0.001252 | 0.001388 |
+| ip_v6_only_select.test | RUN | 0.371463 | 3.001201 | 2.513485 | 0.000926 | 0.001303 | 0.001331 |
+| is_read_buffered.test | RUN | 0.247917 | 0.857551 | 1.283931 | 0.000880 | 0.001330 | 0.001306 |
+| is_read_buffered_select.test | RUN | 0.251110 | 0.872974 | 1.309582 | 0.000884 | 0.001199 | 0.001191 |
+| is_write_buffered.test | RUN | 0.242838 | 0.847611 | 1.296612 | 0.000871 | 0.001098 | 0.001394 |
+| is_write_buffered_select.test | RUN | 0.250490 | 0.867508 | 1.331994 | 0.000856 | 0.001200 | 0.001436 |
+| local_basic_endpoint.test | LINK | 0.115751 | 0.485396 | 0.676327 | — | — | — |
+| local_basic_endpoint_select.test | LINK | 0.119229 | 0.463978 | 0.680263 | — | — | — |
+| local_connect_pair.test | LINK | 0.329481 | 2.886548 | 2.363460 | — | — | — |
+| local_connect_pair_select.test | LINK | 0.338003 | 2.847565 | 2.328330 | — | — | — |
+| local_datagram_protocol.test | LINK | 0.463333 | 3.785930 | 3.365107 | — | — | — |
+| local_datagram_protocol_select.test | LINK | 0.473827 | 3.813333 | 3.283522 | — | — | — |
+| local_seq_packet_protocol.test | LINK | 0.475145 | 3.715513 | 3.336029 | — | — | — |
+| local_seq_packet_protocol_select.test | LINK | 0.475350 | 3.761851 | 3.327904 | — | — | — |
+| local_stream_protocol.test | LINK | 0.439052 | 3.513842 | 3.163659 | — | — | — |
+| local_stream_protocol_select.test | LINK | 0.446973 | 3.534389 | 3.127421 | — | — | — |
+| placeholders.test | LINK | 0.078618 | 0.260923 | 0.338572 | — | — | — |
+| placeholders_select.test | LINK | 0.073004 | 0.257729 | 0.327755 | — | — | — |
+| posix_basic_descriptor.test | LINK | 0.214376 | 0.723396 | 0.981971 | — | — | — |
+| posix_basic_descriptor_select.test | LINK | 0.224675 | 0.761464 | 1.188815 | — | — | — |
+| posix_basic_stream_descriptor.test | LINK | 0.210341 | 0.723969 | 0.973642 | — | — | — |
+| posix_basic_stream_descriptor_select.test | LINK | 0.217639 | 0.759846 | 1.177569 | — | — | — |
+| posix_descriptor_base.test | LINK | 0.081883 | 0.268233 | 0.325654 | — | — | — |
+| posix_descriptor_base_select.test | LINK | 0.083175 | 0.271013 | 0.318322 | — | — | — |
+| posix_stream_descriptor.test | LINK | 0.459746 | 3.587445 | 3.097774 | — | — | — |
+| posix_stream_descriptor_select.test | LINK | 0.468809 | 3.594471 | 3.140056 | — | — | — |
+| prepend.test | RUN | 0.342734 | 2.865661 | 2.436485 | 0.000975 | 0.001437 | 0.001479 |
+| prepend_select.test | RUN | 0.345837 | 2.947184 | 2.402881 | 0.000906 | 0.001371 | 0.001379 |
+| random_access_file.test | LINK | 0.204656 | 0.636665 | 0.792206 | — | — | — |
+| random_access_file_select.test | LINK | 0.254858 | 0.700963 | 0.995198 | — | — | — |
+| read.test | RUN | 1.661085 | 18.167337 | 14.239577 | 0.001697 | 0.001792 | 0.001927 |
+| read_select.test | RUN | 1.679311 | 18.173929 | 14.402892 | 0.001708 | 0.001821 | 0.001992 |
+| read_at.test | RUN | 1.666517 | 23.522928 | 18.969473 | 0.001962 | 0.002424 | 0.002173 |
+| read_at_select.test | RUN | 1.682582 | 23.316747 | 19.084496 | 0.001919 | 0.002229 | 0.002478 |
+| read_until.test | RUN | 0.860896 | 7.071506 | 5.369565 | 0.001477 | 0.001557 | 0.001634 |
+| read_until_select.test | RUN | 0.870619 | 7.118311 | 5.538055 | 0.001432 | 0.001509 | 0.001396 |
+| readable_pipe.test | LINK | 0.542255 | 2.929588 | 2.416186 | — | — | — |
+| readable_pipe_select.test | LINK | 0.556564 | 3.076675 | 2.554030 | — | — | — |
+| recycling_allocator.test | RUN | 0.154547 | 0.410270 | 0.470382 | 0.001104 | 0.001195 | 0.001260 |
+| recycling_allocator_select.test | RUN | 0.161668 | 0.411217 | 0.479500 | 0.001220 | 0.001300 | 0.001367 |
+| redirect_disposition.test | LINK | 0.708648 | 4.089674 | 3.731149 | — | — | — |
+| redirect_disposition_select.test | LINK | 0.710220 | 4.074048 | 3.694049 | — | — | — |
+| redirect_error.test | LINK | 0.624469 | 3.397441 | 3.249858 | — | — | — |
+| redirect_error_select.test | LINK | 0.620446 | 3.368032 | 3.224981 | — | — | — |
+| registered_buffer.test | LINK | 0.150694 | 0.340350 | 0.429992 | — | — | — |
+| registered_buffer_select.test | LINK | 0.148089 | 0.330429 | 0.430156 | — | — | — |
+| signal_set.test | RUN | 0.513715 | 2.872698 | 2.289712 | 0.001191 | 0.001459 | 0.001468 |
+| signal_set_select.test | RUN | 0.532686 | 2.983658 | 2.486022 | 0.001241 | 0.001354 | 0.001447 |
+| signal_set_base.test | LINK | 0.118781 | 0.263807 | 0.316648 | — | — | — |
+| signal_set_base_select.test | LINK | 0.117480 | 0.266442 | 0.311844 | — | — | — |
+| socket_base.test | RUN | 0.629885 | 4.172997 | 3.484119 | 0.001437 | 0.001532 | 0.001608 |
+| socket_base_select.test | RUN | 0.642469 | 4.086904 | 3.461243 | 0.001372 | 0.001398 | 0.001245 |
+| spawn.test | RUN | 1.095970 | 6.988197 | 6.028251 | 0.001403 | 0.001601 | 0.001655 |
+| spawn_select.test | RUN | 1.109415 | 6.950468 | 5.977677 | 0.001385 | 0.001485 | 0.001797 |
+| static_thread_pool.test | RUN | 0.274011 | 0.642785 | 0.771757 | 0.001170 | 0.001271 | 0.001321 |
+| static_thread_pool_select.test | RUN | 0.287870 | 0.693617 | 0.987815 | 0.001243 | 0.001175 | 0.001452 |
+| steady_timer.test | LINK | 0.309702 | 0.701569 | 1.073674 | — | — | — |
+| steady_timer_select.test | LINK | 0.311264 | 0.728168 | 1.111236 | — | — | — |
+| strand.test | RUN | 0.679054 | 3.932995 | 3.588387 | 0.001884 | 0.002024 | 0.002067 |
+| strand_select.test | RUN | 0.679951 | 3.871677 | 3.539817 | 0.002056 | 0.001572 | 0.002026 |
+| stream_file.test | LINK | 0.289987 | 0.633175 | 0.833521 | — | — | — |
+| stream_file_select.test | LINK | 0.300741 | 0.612998 | 1.003784 | — | — | — |
+| streambuf.test | RUN | 0.175711 | 0.365463 | 0.557684 | 0.000919 | 0.000941 | 0.001497 |
+| streambuf_select.test | RUN | 0.162948 | 0.364585 | 0.445255 | 0.000906 | 0.000933 | 0.000925 |
+| system_timer.test | LINK | 0.450561 | 2.499525 | 2.136104 | — | — | — |
+| system_timer_select.test | LINK | 0.449550 | 2.454634 | 2.057405 | — | — | — |
+| system_context.test | LINK | 0.190886 | 0.422879 | 0.474730 | — | — | — |
+| system_context_select.test | LINK | 0.201528 | 0.444537 | 0.603711 | — | — | — |
+| system_executor.test | LINK | 0.256869 | 1.426065 | 0.978781 | — | — | — |
+| system_executor_select.test | LINK | 0.265777 | 1.384918 | 1.072812 | — | — | — |
+| this_coro.test | LINK | 0.069631 | 0.161137 | 0.185040 | — | — | — |
+| this_coro_select.test | LINK | 0.068075 | 0.155491 | 0.186151 | — | — | — |
+| thread_pool.test | RUN | 0.308894 | 1.829904 | 1.264754 | 0.001635 | 0.001585 | 0.001710 |
+| thread_pool_select.test | RUN | 0.318899 | 1.849809 | 1.373075 | 0.001580 | 0.001572 | 0.001648 |
+| time_traits.test | LINK | 0.161570 | 0.332114 | 0.381500 | — | — | — |
+| time_traits_select.test | LINK | 0.163461 | 0.343569 | 0.379211 | — | — | — |
+| ts_buffer.test | LINK | 0.157335 | 0.559907 | 0.405744 | — | — | — |
+| ts_buffer_select.test | LINK | 0.153407 | 0.550205 | 0.407422 | — | — | — |
+| ts_executor.test | LINK | 0.220081 | 0.782632 | 0.639151 | — | — | — |
+| ts_executor_select.test | LINK | 0.228655 | 0.829873 | 0.887501 | — | — | — |
+| ts_internet.test | LINK | 0.243568 | 0.837741 | 0.949283 | — | — | — |
+| ts_internet_select.test | LINK | 0.249319 | 0.861429 | 1.252596 | — | — | — |
+| ts_io_context.test | LINK | 0.202460 | 0.651778 | 0.773587 | — | — | — |
+| ts_io_context_select.test | LINK | 0.205946 | 0.691946 | 0.964907 | — | — | — |
+| ts_net.test | LINK | 0.288393 | 1.019043 | 1.550111 | — | — | — |
+| ts_net_select.test | LINK | 0.294788 | 1.030476 | 1.606398 | — | — | — |
+| ts_netfwd.test | LINK | 0.291850 | 1.003624 | 1.546929 | — | — | — |
+| ts_netfwd_select.test | LINK | 0.299915 | 1.056559 | 1.587221 | — | — | — |
+| ts_socket.test | LINK | 0.240869 | 0.793483 | 1.201729 | — | — | — |
+| ts_socket_select.test | LINK | 0.246509 | 0.816796 | 1.230591 | — | — | — |
+| ts_timer.test | LINK | 0.211019 | 0.704473 | 1.053639 | — | — | — |
+| ts_timer_select.test | LINK | 0.223208 | 0.742291 | 1.089121 | — | — | — |
+| use_awaitable.test | LINK | 0.070249 | 0.241631 | 0.296272 | — | — | — |
+| use_awaitable_select.test | LINK | 0.070264 | 0.236245 | 0.305583 | — | — | — |
+| wait_traits.test | LINK | 0.066889 | 0.238474 | 0.299768 | — | — | — |
+| wait_traits_select.test | LINK | 0.069659 | 0.238606 | 0.295059 | — | — | — |
+| windows_basic_object_handle.test | LINK | 0.067437 | 0.238767 | 0.296927 | — | — | — |
+| windows_basic_object_handle_select.test | LINK | 0.067783 | 0.238390 | 0.308317 | — | — | — |
+| windows_basic_overlapped_handle.test | LINK | 0.068661 | 0.237714 | 0.303036 | — | — | — |
+| windows_basic_overlapped_handle_select.test | LINK | 0.068810 | 0.237878 | 0.300107 | — | — | — |
+| windows_basic_random_access_handle.test | LINK | 0.066503 | 0.239828 | 0.301390 | — | — | — |
+| windows_basic_random_access_handle_select.test | LINK | 0.070877 | 0.240804 | 0.303264 | — | — | — |
+| windows_basic_stream_handle.test | LINK | 0.069737 | 0.236144 | 0.299151 | — | — | — |
+| windows_basic_stream_handle_select.test | LINK | 0.070491 | 0.236481 | 0.296394 | — | — | — |
+| windows_object_handle.test | LINK | 0.200227 | 0.662263 | 0.796471 | — | — | — |
+| windows_object_handle_select.test | LINK | 0.211181 | 0.695292 | 0.997899 | — | — | — |
+| windows_overlapped_ptr.test | LINK | 0.205403 | 0.690263 | 0.870901 | — | — | — |
+| windows_overlapped_ptr_select.test | LINK | 0.210585 | 0.742545 | 1.075699 | — | — | — |
+| windows_random_access_handle.test | LINK | 0.194399 | 0.659009 | 0.781309 | — | — | — |
+| windows_random_access_handle_select.test | LINK | 0.206103 | 0.687415 | 0.989814 | — | — | — |
+| windows_stream_handle.test | LINK | 0.200504 | 0.658190 | 0.793061 | — | — | — |
+| windows_stream_handle_select.test | LINK | 0.209808 | 0.701214 | 0.985919 | — | — | — |
+| writable_pipe.test | LINK | 0.375661 | 2.953946 | 2.521189 | — | — | — |
+| writable_pipe_select.test | LINK | 0.385744 | 3.039238 | 2.667763 | — | — | — |
+| write.test | RUN | 1.590216 | 15.152015 | 14.058231 | 0.001818 | 0.001717 | 0.001818 |
+| write_select.test | RUN | 1.677226 | 15.238237 | 14.141976 | 0.001891 | 0.001806 | 0.002012 |
+| write_at.test | RUN | 1.718616 | 20.384913 | 18.008659 | 0.001966 | 0.001913 | 0.002192 |
+| write_at_select.test | RUN | 1.732328 | 20.438741 | 18.040542 | 0.002051 | 0.001802 | 0.002036 |
+| any_executor.test | RUN | 0.679990 | 6.672059 | 5.761605 | 0.001723 | 0.001589 | 0.002043 |
+| blocking.test | RUN | 1.495485 | 8.845034 | 11.476558 | 0.003325 | 0.003148 | 0.003514 |
+| blocking_adaptation.test | RUN | 0.733445 | 3.829118 | 5.175388 | 0.001980 | 0.002242 | 0.002357 |
+| context_as.test | RUN | 0.425815 | 2.634318 | 1.816934 | 0.001502 | 0.001464 | 0.001610 |
+| executor.test | RUN | 0.110179 | 0.249920 | 0.311900 | 0.001295 | 0.001268 | 0.001404 |
+| inline_exception_handling.test | RUN | 1.401282 | 8.393010 | 11.456383 | 0.002304 | 0.002260 | 0.002406 |
+| invocable_archetype.test | RUN | 0.105028 | 0.238500 | 0.303073 | 0.001190 | 0.001341 | 0.001394 |
+| mapping.test | RUN | 1.467434 | 8.047059 | 11.494213 | 0.002346 | 0.002317 | 0.002521 |
+| outstanding_work.test | RUN | 0.673049 | 3.528869 | 4.968148 | 0.002108 | 0.002104 | 0.002424 |
+| prefer_only.test | RUN | 0.217287 | 1.390064 | 1.115649 | 0.001197 | 0.001372 | 0.001436 |
+| relationship.test | RUN | 0.508595 | 3.432797 | 4.596835 | 0.001451 | 0.002054 | 0.001563 |
 
 ## Native runtime replay
 
@@ -306,120 +306,120 @@ Child CPU of successful native tests, with process startup included; GDB and exp
 
 | Reference | CPU speedup ↑ | Paired blocks | A/A speedup |
 |---|---:|---|---:|
-| gcc | 1.010× | 0.999×, 1.021× | 1.002× |
-| clang | 0.991× | 0.990×, 0.991× | 1.016× |
+| gcc | 1.003× | 1.004×, 1.003× | 1.009× |
+| clang | 0.993× | 0.998×, 0.989× | 0.991× |
 
-† A/A drift or paired-block spread exceeds 5%; small differences are unresolved. 1375 native tests in the full cohort; 1364 have byte-identical output throughout. [Raw replay evidence in CI artifacts](https://github.com/vishvananda/cppgm/actions/runs/43778388618).
+† A/A drift or paired-block spread exceeds 5%; small differences are unresolved. 1375 native tests in the full cohort; 1363 have byte-identical output throughout. [Raw replay evidence in CI artifacts](https://github.com/vishvananda/cppgm/actions/runs/43801643681).
 
 | Test | Repeats | CPU cppgm | GCC | Clang | Output check |
 |---|---:|---:|---:|---:|---|
-| any_completion_executor.test | 3 | 0.001260s | 0.001266s | 0.001259s | byte equality observed |
-| any_completion_executor_select.test | 3 | 0.001220s | 0.001229s | 0.001215s | byte equality observed |
-| any_completion_handler.test | 10 | 0.001043s | 0.001027s | 0.001011s | byte equality observed |
-| any_completion_handler_select.test | 10 | 0.001034s | 0.001032s | 0.001002s | byte equality observed |
-| any_io_executor.test | 6 | 0.001240s | 0.001229s | 0.001202s | byte equality observed |
-| any_io_executor_select.test | 6 | 0.001214s | 0.001222s | 0.001209s | byte equality observed |
-| append.test | 10 | 0.000982s | 0.000985s | 0.000967s | byte equality observed |
-| append_select.test | 10 | 0.000966s | 0.000964s | 0.000955s | byte equality observed |
-| as_tuple.test | 5 | 0.001043s | 0.001046s | 0.001027s | byte equality observed |
-| as_tuple_select.test | 10 | 0.000966s | 0.000967s | 0.000961s | byte equality observed |
-| bind_allocator.test | 1 | 0.001444s | 0.001451s | 0.001414s | byte equality observed |
-| bind_allocator_select.test | 1 | 0.001183s | 0.001218s | 0.001159s | byte equality observed |
-| bind_cancellation_slot.test | 10 | 0.000873s | 0.000899s | 0.000848s | byte equality observed |
-| bind_cancellation_slot_select.test | 10 | 0.000808s | 0.000820s | 0.000803s | byte equality observed |
-| bind_executor.test | 1 | 0.001401s | 0.001483s | 0.001442s | byte equality observed |
-| bind_executor_select.test | 1 | 0.001677s | 0.001613s | 0.001675s | byte equality observed |
-| bind_immediate_executor.test | 10 | 0.000893s | 0.000884s | 0.000894s | byte equality observed |
-| bind_immediate_executor_select.test | 10 | 0.000867s | 0.000894s | 0.000874s | byte equality observed |
-| buffer.test | 10 | 0.000832s | 0.000833s | 0.000833s | byte equality observed |
-| buffer_select.test | 10 | 0.000843s | 0.000824s | 0.000824s | byte equality observed |
-| buffered_read_stream.test | 10 | 0.001041s | 0.001033s | 0.001004s | byte equality observed |
-| buffered_read_stream_select.test | 10 | 0.001013s | 0.000994s | 0.000975s | byte equality observed |
-| buffered_stream.test | 10 | 0.001013s | 0.000999s | 0.000990s | byte equality observed |
-| buffered_stream_select.test | 10 | 0.000993s | 0.000985s | 0.000975s | byte equality observed |
-| buffered_write_stream.test | 10 | 0.000995s | 0.000967s | 0.000987s | byte equality observed |
-| buffered_write_stream_select.test | 6 | 0.000998s | 0.000973s | 0.000979s | byte equality observed |
-| buffers_iterator.test | 10 | 0.000819s | 0.000828s | 0.000805s | byte equality observed |
-| buffers_iterator_select.test | 10 | 0.000788s | 0.000790s | 0.000794s | byte equality observed |
-| cancel_after.test | 1 | 0.002878s | 0.003001s | 0.002935s | byte equality observed |
-| cancel_after_select.test | 1 | 0.002394s | 0.002411s | 0.002464s | byte equality observed |
-| cancel_at.test | 1 | 0.003043s | 0.003080s | 0.003051s | byte equality observed |
-| cancel_at_select.test | 1 | 0.002872s | 0.002979s | 0.002804s | byte equality observed |
-| co_composed.test | 10 | 0.000878s | 0.000860s | 0.000871s | byte equality observed |
-| co_composed_select.test | 10 | 0.000792s | 0.000821s | 0.000808s | byte equality observed |
-| compose.test | 1 | 0.001398s | 0.001430s | 0.001420s | byte equality observed |
-| compose_select.test | 1 | 0.001129s | 0.001141s | 0.001211s | byte equality observed |
-| composed.test | 1 | 0.001703s | 0.001667s | 0.001661s | byte equality observed |
-| composed_select.test | 1 | 0.001268s | 0.001279s | 0.001437s | byte equality observed |
-| config.test | 10 | 0.000918s | 0.000932s | 0.000917s | byte equality observed |
-| config_select.test | 10 | 0.000898s | 0.000858s | 0.000868s | byte equality observed |
-| connect_pipe.test | 10 | 0.000890s | 0.000864s | 0.000889s | byte equality observed |
-| connect_pipe_select.test | 10 | 0.000908s | 0.000878s | 0.000864s | byte equality observed |
-| consign.test | 10 | 0.000862s | 0.000870s | 0.000858s | byte equality observed |
-| consign_select.test | 10 | 0.000839s | 0.000864s | 0.000822s | byte equality observed |
-| deadline_timer.test | 1 | 0.002187s | 0.002209s | 0.002200s | byte equality observed |
-| deadline_timer_select.test | 1 | 0.001881s | 0.001800s | 0.001908s | byte equality observed |
-| deferred.test | 10 | 0.000815s | 0.000851s | 0.000823s | byte equality observed |
-| deferred_select.test | 10 | 0.000734s | 0.000764s | 0.000745s | byte equality observed |
-| disposition.test | 10 | 0.000786s | 0.000800s | 0.000788s | byte equality observed |
-| disposition_select.test | 10 | 0.000792s | 0.000788s | 0.000800s | byte equality observed |
-| error.test | 10 | 0.000770s | 0.000773s | 0.000764s | byte equality observed |
-| error_select.test | 10 | 0.000776s | 0.000782s | 0.000761s | byte equality observed |
-| inline_executor.test | 10 | 0.000775s | 0.000772s | 0.000766s | byte equality observed |
-| inline_executor_select.test | 10 | 0.000774s | 0.000775s | 0.000762s | byte equality observed |
-| inline_or_executor.test | 10 | 0.000784s | 0.000788s | 0.000767s | byte equality observed |
-| inline_or_executor_select.test | 10 | 0.000778s | 0.000790s | 0.000769s | byte equality observed |
-| io_context.test | 1 | 0.001727s | 0.001748s | 0.001801s | byte equality observed |
-| io_context_select.test | 1 | 0.001979s | 0.002037s | 0.002037s | byte equality observed |
-| io_context_strand.test | 1 | 0.002053s | 0.001979s | 0.002084s | byte equality observed |
-| io_context_strand_select.test | 1 | 0.001770s | 0.001749s | 0.001801s | byte equality observed |
-| ip_host_name.test | 10 | 0.000845s | 0.000848s | 0.000824s | byte equality observed |
-| ip_host_name_select.test | 10 | 0.000766s | 0.000767s | 0.000773s | byte equality observed |
-| ip_icmp.test | 10 | 0.000791s | 0.000792s | 0.000761s | byte equality observed |
-| ip_icmp_select.test | 10 | 0.000783s | 0.000803s | 0.000759s | byte equality observed |
-| ip_multicast.test | 10 | 0.000848s | 0.000855s | 0.000832s | byte equality observed |
-| ip_multicast_select.test | 10 | 0.000834s | 0.000836s | 0.000814s | byte equality observed |
-| ip_tcp.test | 10 | 0.001046s | 0.001032s | 0.001032s | byte equality observed |
-| ip_tcp_select.test | 10 | 0.001003s | 0.001019s | 0.001001s | byte equality observed |
-| ip_udp.test | 10 | 0.000864s | 0.000867s | 0.000843s | byte equality observed |
-| ip_udp_select.test | 10 | 0.000844s | 0.000861s | 0.000828s | byte equality observed |
-| ip_unicast.test | 10 | 0.000812s | 0.000825s | 0.000798s | byte equality observed |
-| ip_unicast_select.test | 10 | 0.000806s | 0.000822s | 0.000794s | byte equality observed |
-| ip_v6_only.test | 10 | 0.000814s | 0.000825s | 0.000797s | byte equality observed |
-| ip_v6_only_select.test | 10 | 0.000798s | 0.000816s | 0.000796s | byte equality observed |
-| is_read_buffered.test | 10 | 0.000753s | 0.000758s | 0.000738s | byte equality observed |
-| is_read_buffered_select.test | 10 | 0.000749s | 0.000758s | 0.000747s | byte equality observed |
-| is_write_buffered.test | 10 | 0.000754s | 0.000751s | 0.000743s | byte equality observed |
-| is_write_buffered_select.test | 10 | 0.000760s | 0.000755s | 0.000743s | byte equality observed |
-| prepend.test | 10 | 0.000808s | 0.000817s | 0.000798s | byte equality observed |
-| prepend_select.test | 10 | 0.000786s | 0.000828s | 0.000779s | byte equality observed |
-| read.test | 10 | 0.001106s | 0.001140s | 0.001062s | byte equality observed |
-| read_at.test | 10 | 0.001314s | 0.001446s | 0.001302s | byte equality observed |
-| read_at_select.test | 10 | 0.001311s | 0.001451s | 0.001302s | byte equality observed |
-| read_select.test | 10 | 0.001102s | 0.001158s | 0.001068s | byte equality observed |
-| read_until.test | 10 | 0.000916s | 0.000952s | 0.000889s | byte equality observed |
-| read_until_select.test | 10 | 0.000931s | 0.000979s | 0.000883s | byte equality observed |
-| recycling_allocator.test | 10 | 0.000800s | 0.000818s | 0.000744s | byte equality observed |
-| recycling_allocator_select.test | 10 | 0.000811s | 0.000822s | 0.000771s | byte equality observed |
-| signal_set.test | 10 | 0.000836s | 0.000835s | 0.000824s | byte equality observed |
-| signal_set_select.test | 10 | 0.000837s | 0.000811s | 0.000814s | byte equality observed |
-| socket_base.test | 10 | 0.000913s | 0.000879s | 0.000905s | byte equality observed |
-| socket_base_select.test | 10 | 0.000889s | 0.000888s | 0.000896s | byte equality observed |
-| spawn.test | 10 | 0.000981s | 0.000962s | 0.000972s | byte equality observed |
-| spawn_select.test | 10 | 0.000985s | 0.000965s | 0.000976s | byte equality observed |
-| static_thread_pool.test | 10 | 0.000824s | 0.000823s | 0.000840s | byte equality observed |
-| static_thread_pool_select.test | 10 | 0.000783s | 0.000751s | 0.000783s | byte equality observed |
-| strand.test | 1 | 0.001687s | 0.001633s | 0.001665s | byte equality observed |
-| strand_select.test | 1 | 0.001464s | 0.001420s | 0.001463s | byte equality observed |
-| streambuf.test | 10 | 0.000872s | 0.000904s | 0.000874s | byte equality observed |
-| streambuf_select.test | 10 | 0.000866s | 0.000872s | 0.000853s | byte equality observed |
-| thread_pool.test | 10 | 0.001544s | 0.001563s | 0.001504s | byte equality observed |
-| thread_pool_select.test | 10 | 0.001526s | 0.001506s | 0.001538s | byte equality observed |
-| write.test | 10 | 0.001198s | 0.001181s | 0.001134s | byte equality observed |
-| write_at.test | 10 | 0.001313s | 0.001294s | 0.001296s | byte equality observed |
-| write_at_select.test | 10 | 0.001310s | 0.001313s | 0.001284s | byte equality observed |
-| write_select.test | 10 | 0.001175s | 0.001148s | 0.001145s | byte equality observed |
+| any_completion_executor.test | 10 | 0.001208s | 0.001183s | 0.001239s | byte equality observed |
+| any_completion_executor_select.test | 10 | 0.001185s | 0.001192s | 0.001184s | byte equality observed |
+| any_completion_handler.test | 10 | 0.001027s | 0.001012s | 0.001001s | byte equality observed |
+| any_completion_handler_select.test | 10 | 0.001029s | 0.001016s | 0.001005s | byte equality observed |
+| any_io_executor.test | 10 | 0.001191s | 0.001247s | 0.001181s | byte equality observed |
+| any_io_executor_select.test | 5 | 0.001201s | 0.001214s | 0.001198s | byte equality observed |
+| append.test | 10 | 0.000973s | 0.000984s | 0.000972s | byte equality observed |
+| append_select.test | 10 | 0.000959s | 0.000970s | 0.000937s | byte equality observed |
+| as_tuple.test | 10 | 0.001020s | 0.001023s | 0.001011s | byte equality observed |
+| as_tuple_select.test | 10 | 0.000971s | 0.000976s | 0.000964s | byte equality observed |
+| bind_allocator.test | 1 | 0.001491s | 0.001478s | 0.001441s | byte equality observed |
+| bind_allocator_select.test | 1 | 0.001177s | 0.001181s | 0.001200s | byte equality observed |
+| bind_cancellation_slot.test | 10 | 0.000900s | 0.000901s | 0.000884s | byte equality observed |
+| bind_cancellation_slot_select.test | 10 | 0.000802s | 0.000803s | 0.000788s | byte equality observed |
+| bind_executor.test | 1 | 0.001489s | 0.001493s | 0.001401s | byte equality observed |
+| bind_executor_select.test | 1 | 0.001688s | 0.001790s | 0.001700s | byte equality observed |
+| bind_immediate_executor.test | 10 | 0.000899s | 0.000899s | 0.000880s | byte equality observed |
+| bind_immediate_executor_select.test | 10 | 0.000876s | 0.000861s | 0.000852s | byte equality observed |
+| buffer.test | 10 | 0.000839s | 0.000824s | 0.000793s | byte equality observed |
+| buffer_select.test | 10 | 0.000823s | 0.000811s | 0.000796s | byte equality observed |
+| buffered_read_stream.test | 10 | 0.001025s | 0.001065s | 0.001011s | byte equality observed |
+| buffered_read_stream_select.test | 10 | 0.001002s | 0.001026s | 0.000989s | byte equality observed |
+| buffered_stream.test | 10 | 0.001008s | 0.000995s | 0.000983s | byte equality observed |
+| buffered_stream_select.test | 10 | 0.000993s | 0.000979s | 0.000973s | byte equality observed |
+| buffered_write_stream.test | 10 | 0.001021s | 0.000999s | 0.000978s | byte equality observed |
+| buffered_write_stream_select.test | 10 | 0.000991s | 0.000974s | 0.000962s | byte equality observed |
+| buffers_iterator.test | 10 | 0.000816s | 0.000809s | 0.000797s | byte equality observed |
+| buffers_iterator_select.test | 10 | 0.000777s | 0.000750s | 0.000782s | byte equality observed |
+| cancel_after.test | 1 | 0.003267s | 0.003335s | 0.003230s | byte equality observed |
+| cancel_after_select.test | 1 | 0.002746s | 0.002719s | 0.002636s | byte equality observed |
+| cancel_at.test | 1 | 0.003378s | 0.003426s | 0.003359s | byte equality observed |
+| cancel_at_select.test | 1 | 0.003323s | 0.003585s | 0.003207s | byte equality observed |
+| co_composed.test | 10 | 0.000844s | 0.000856s | 0.000859s | byte equality observed |
+| co_composed_select.test | 10 | 0.000782s | 0.000796s | 0.000801s | byte equality observed |
+| compose.test | 1 | 0.001589s | 0.001534s | 0.001487s | byte equality observed |
+| compose_select.test | 1 | 0.001240s | 0.001242s | 0.001215s | byte equality observed |
+| composed.test | 1 | 0.001867s | 0.001877s | 0.001743s | byte equality observed |
+| composed_select.test | 1 | 0.001420s | 0.001403s | 0.001351s | byte equality observed |
+| config.test | 9 | 0.000919s | 0.000916s | 0.000917s | byte equality observed |
+| config_select.test | 10 | 0.000879s | 0.000867s | 0.000855s | byte equality observed |
+| connect_pipe.test | 10 | 0.000899s | 0.000900s | 0.000858s | byte equality observed |
+| connect_pipe_select.test | 10 | 0.000870s | 0.000914s | 0.000864s | byte equality observed |
+| consign.test | 10 | 0.000865s | 0.000901s | 0.000891s | byte equality observed |
+| consign_select.test | 10 | 0.000840s | 0.000834s | 0.000816s | byte equality observed |
+| deadline_timer.test | 1 | 0.002283s | 0.002278s | 0.002282s | byte equality observed |
+| deadline_timer_select.test | 1 | 0.001932s | 0.001945s | 0.001958s | byte equality observed |
+| deferred.test | 10 | 0.000814s | 0.000829s | 0.000823s | byte equality observed |
+| deferred_select.test | 10 | 0.000731s | 0.000739s | 0.000752s | byte equality observed |
+| disposition.test | 10 | 0.000793s | 0.000786s | 0.000786s | byte equality observed |
+| disposition_select.test | 10 | 0.000796s | 0.000782s | 0.000764s | byte equality observed |
+| error.test | 10 | 0.000772s | 0.000754s | 0.000744s | byte equality observed |
+| error_select.test | 10 | 0.000767s | 0.000757s | 0.000735s | byte equality observed |
+| inline_executor.test | 10 | 0.000768s | 0.000758s | 0.000767s | byte equality observed |
+| inline_executor_select.test | 10 | 0.000768s | 0.000774s | 0.000770s | byte equality observed |
+| inline_or_executor.test | 10 | 0.000774s | 0.000785s | 0.000765s | byte equality observed |
+| inline_or_executor_select.test | 10 | 0.000775s | 0.000779s | 0.000764s | byte equality observed |
+| io_context.test | 1 | 0.001809s | 0.001809s | 0.001754s | byte equality observed |
+| io_context_select.test | 1 | 0.002158s | 0.002066s | 0.002101s | byte equality observed |
+| io_context_strand.test | 1 | 0.002086s | 0.002115s | 0.002039s | byte equality observed |
+| io_context_strand_select.test | 1 | 0.001779s | 0.001716s | 0.001717s | byte equality observed |
+| ip_host_name.test | 10 | 0.000840s | 0.000840s | 0.000838s | byte equality observed |
+| ip_host_name_select.test | 10 | 0.000773s | 0.000775s | 0.000743s | byte equality observed |
+| ip_icmp.test | 10 | 0.000784s | 0.000796s | 0.000759s | byte equality observed |
+| ip_icmp_select.test | 10 | 0.000779s | 0.000786s | 0.000762s | byte equality observed |
+| ip_multicast.test | 10 | 0.000848s | 0.000843s | 0.000830s | byte equality observed |
+| ip_multicast_select.test | 10 | 0.000831s | 0.000822s | 0.000813s | byte equality observed |
+| ip_tcp.test | 10 | 0.001043s | 0.001041s | 0.001029s | byte equality observed |
+| ip_tcp_select.test | 10 | 0.001005s | 0.001001s | 0.000998s | byte equality observed |
+| ip_udp.test | 10 | 0.000857s | 0.000866s | 0.000833s | byte equality observed |
+| ip_udp_select.test | 10 | 0.000848s | 0.000853s | 0.000830s | byte equality observed |
+| ip_unicast.test | 10 | 0.000807s | 0.000818s | 0.000799s | byte equality observed |
+| ip_unicast_select.test | 10 | 0.000804s | 0.000807s | 0.000793s | byte equality observed |
+| ip_v6_only.test | 10 | 0.000816s | 0.000815s | 0.000798s | byte equality observed |
+| ip_v6_only_select.test | 10 | 0.000799s | 0.000801s | 0.000794s | byte equality observed |
+| is_read_buffered.test | 10 | 0.000750s | 0.000742s | 0.000727s | byte equality observed |
+| is_read_buffered_select.test | 10 | 0.000749s | 0.000740s | 0.000729s | byte equality observed |
+| is_write_buffered.test | 10 | 0.000746s | 0.000745s | 0.000724s | byte equality observed |
+| is_write_buffered_select.test | 10 | 0.000749s | 0.000748s | 0.000730s | byte equality observed |
+| prepend.test | 10 | 0.000803s | 0.000832s | 0.000783s | byte equality observed |
+| prepend_select.test | 10 | 0.000782s | 0.000826s | 0.000778s | byte equality observed |
+| read.test | 10 | 0.001097s | 0.001163s | 0.001056s | byte equality observed |
+| read_at.test | 10 | 0.001312s | 0.001443s | 0.001295s | byte equality observed |
+| read_at_select.test | 10 | 0.001312s | 0.001466s | 0.001293s | byte equality observed |
+| read_select.test | 10 | 0.001093s | 0.001149s | 0.001051s | byte equality observed |
+| read_until.test | 10 | 0.000913s | 0.000965s | 0.000861s | byte equality observed |
+| read_until_select.test | 10 | 0.000945s | 0.000941s | 0.000872s | byte equality observed |
+| recycling_allocator.test | 10 | 0.000812s | 0.000827s | 0.000736s | byte equality observed |
+| recycling_allocator_select.test | 10 | 0.000818s | 0.000826s | 0.000738s | byte equality observed |
+| signal_set.test | 10 | 0.000833s | 0.000855s | 0.000757s | byte equality observed |
+| signal_set_select.test | 10 | 0.000822s | 0.000855s | 0.000804s | byte equality observed |
+| socket_base.test | 10 | 0.000908s | 0.000905s | 0.000897s | byte equality observed |
+| socket_base_select.test | 10 | 0.000897s | 0.000879s | 0.000914s | byte equality observed |
+| spawn.test | 10 | 0.000985s | 0.000977s | 0.000978s | byte equality observed |
+| spawn_select.test | 10 | 0.000991s | 0.000985s | 0.000961s | byte equality observed |
+| static_thread_pool.test | 10 | 0.000822s | 0.000818s | 0.000805s | byte equality observed |
+| static_thread_pool_select.test | 10 | 0.000775s | 0.000802s | 0.000798s | byte equality observed |
+| strand.test | 1 | 0.001707s | 0.001692s | 0.001687s | byte equality observed |
+| strand_select.test | 1 | 0.001451s | 0.001467s | 0.001477s | byte equality observed |
+| streambuf.test | 10 | 0.000889s | 0.000884s | 0.000883s | byte equality observed |
+| streambuf_select.test | 10 | 0.000838s | 0.000873s | 0.000853s | byte equality observed |
+| thread_pool.test | 8 | 0.001545s | 0.001541s | 0.001545s | byte equality observed |
+| thread_pool_select.test | 10 | 0.001491s | 0.001585s | 0.001522s | byte equality observed |
+| write.test | 10 | 0.001194s | 0.001191s | 0.001175s | byte equality observed |
+| write_at.test | 10 | 0.001304s | 0.001319s | 0.001263s | byte equality observed |
+| write_at_select.test | 10 | 0.001298s | 0.001281s | 0.001291s | byte equality observed |
+| write_select.test | 10 | 0.001169s | 0.001176s | 0.001163s | byte equality observed |
 
-[Raw outcomes, commands and timing observations in CI artifacts](https://github.com/vishvananda/cppgm/actions/runs/43778388618).
+[Raw outcomes, commands and timing observations in CI artifacts](https://github.com/vishvananda/cppgm/actions/runs/43801643681).
 
 [Comparison records](../results.json) · [Host and toolchains](../metadata.json)
