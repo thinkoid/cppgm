@@ -17,6 +17,12 @@ launcher waits for the suite and publication to pass before starting the next;
 runner logs and measurements remain in the printed directory. Use `--suite NAME`
 to refresh just one suite.
 
+The internal suite pins both archive checksums from before and after the
+`cppgm-extended` to `cppgm` rename: only the archive's directory prefix changed.
+It records the hash actually used, verifies every cohort source unit, and
+accepts historical results with the former hash. Test fresh downloads as well
+as warm caches when changing archive URLs or pins.
+
 `--ref` selects the workflow branch; `--revision` selects the compiler. The
 compiler revision is resolved once for the whole campaign. Workflow tooling and
 compiler sources use separate checkouts, so the infrastructure branch can measure

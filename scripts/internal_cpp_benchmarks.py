@@ -23,7 +23,10 @@ from upstream_dg_proxy import execute
 ROOT = Path(__file__).resolve().parents[1]
 COHORT = ROOT / 'benchmarks/internal/cohort.json'
 SOURCE = '783dbfcf01360d923ff590d2048a0c1764761cc3'
-ARCHIVE_SHA256 = '900f16f0327ba50948f7ed06f752d42531f85e7bb46cc288247ea1d9da4c852f'
+ARCHIVE_SHA256 = '3c1331d3290dfb4331cd5590c5c30426419a50809e263f22bfc7785a6b927d01'
+# The repository rename changed the archive prefix, not the pinned test tree.
+# Keep the former transport hash for verified warm caches and published history.
+LEGACY_ARCHIVE_SHA256 = '900f16f0327ba50948f7ed06f752d42531f85e7bb46cc288247ea1d9da4c852f'
 ROLES = ('cppgm', 'gcc', 'clang')
 
 
@@ -43,10 +46,11 @@ def fetch_inputs(cache, destination):
         url = 'https://codeload.github.com/vishvananda/cppgm/tar.gz/' + SOURCE
         with urllib.request.urlopen(url, timeout=120) as source, temporary.open('wb') as out:
             shutil.copyfileobj(source, out)
-        if digest(temporary) != ARCHIVE_SHA256:
+        if digest(temporary) not in (ARCHIVE_SHA256, LEGACY_ARCHIVE_SHA256):
             raise ValueError('internal input archive checksum mismatch')
         temporary.replace(archive)
-    if digest(archive) != ARCHIVE_SHA256:
+    checksum = digest(archive)
+    if checksum not in (ARCHIVE_SHA256, LEGACY_ARCHIVE_SHA256):
         raise ValueError('internal input archive checksum mismatch')
     # Extract fresh from the verified archive, including companion headers.
     # Never trust a mutable cache tree or extract archive paths verbatim.
@@ -63,6 +67,7 @@ def fetch_inputs(cache, destination):
             target.parent.mkdir(parents=True, exist_ok=True)
             with bundle.extractfile(member) as source, target.open('wb') as out:
                 shutil.copyfileobj(source, out)
+    return checksum
 
 
 def compile_case(arguments):
@@ -175,7 +180,8 @@ def run(args):
     limits = dict(cohort['resources'], timeout_seconds=60, compiler_error_scan=True)
     gcc_install = str(Path(subprocess.check_output([compilers['gcc'], '-print-libgcc-file-name'], text=True).strip()).parent)
     try:
-        fetch_inputs(args.cache, directory / 'source')
+        metadata['archive_sha256'] = fetch_inputs(args.cache, directory / 'source')
+        save(directory / 'metadata.json', metadata)
         for role, compiler in compilers.items():
             start = time.monotonic()
             output = directory / role
@@ -233,7 +239,8 @@ def publish(args):
         raise ValueError('internal artifact does not match the measured revision')
     if json.loads((args.artifact / 'metadata.json').read_text()) != metadata:
         raise ValueError('internal artifact metadata differs')
-    if metadata['cohort_sha256'] != digest(COHORT) or metadata['archive_sha256'] != ARCHIVE_SHA256:
+    if (metadata['cohort_sha256'] != digest(COHORT)
+            or metadata['archive_sha256'] not in (ARCHIVE_SHA256, LEGACY_ARCHIVE_SHA256)):
         raise ValueError('internal artifact input identity differs')
     verify_observations(args.artifact, document)
     host = benchmark_hosts.publication_platform(metadata['cpu'], args.platform)

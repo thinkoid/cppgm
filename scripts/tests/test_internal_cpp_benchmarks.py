@@ -109,6 +109,58 @@ class InternalBenchmarkTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'archive checksum'):
                 bench.fetch_inputs(cache, root / 'other')
 
+    def test_fresh_download_is_verified_and_records_its_actual_transport_hash(self):
+        for prefix, constant in [('cppgm', 'ARCHIVE_SHA256'), ('cppgm-extended', 'LEGACY_ARCHIVE_SHA256')]:
+            with self.subTest(prefix=prefix), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                payload = root / 'download.tar.gz'
+                with tarfile.open(payload, 'w:gz') as bundle:
+                    member = tarfile.TarInfo(prefix + '/pa10/tests/case.t')
+                    member.size = 6
+                    bundle.addfile(member, io.BytesIO(b'input\n'))
+                checksum = bench.digest(payload)
+                with patch.object(bench, constant, checksum), \
+                     patch.object(bench.urllib.request, 'urlopen', side_effect=lambda *a, **k: payload.open('rb')) as download:
+                    actual = bench.fetch_inputs(root / 'cache', root / 'source')
+                    self.assertEqual(actual, checksum)
+                    self.assertIn('/vishvananda/cppgm/tar.gz/' + bench.SOURCE, download.call_args.args[0])
+                    self.assertEqual((root / 'source/pa10/tests/case.t').read_bytes(), b'input\n')
+                    # Warm-cache reuse has the same provenance and does not download again.
+                    self.assertEqual(bench.fetch_inputs(root / 'cache', root / 'again'), checksum)
+                    self.assertEqual(download.call_count, 1)
+
+    def test_unrecognized_download_is_never_cached_or_extracted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with patch.object(bench.urllib.request, 'urlopen', return_value=io.BytesIO(b'untrusted')):
+                with self.assertRaisesRegex(ValueError, 'archive checksum'):
+                    bench.fetch_inputs(root / 'cache', root / 'source')
+            self.assertFalse((root / 'cache' / (bench.SOURCE + '.tar.gz')).exists())
+            self.assertFalse((root / 'source').exists())
+
+    def test_publication_accepts_both_verified_archive_identities_but_rejects_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            data = self.baseline()
+            data.pop('historical')
+            data['metadata']['cohort_sha256'] = bench.digest(bench.COHORT)
+            args = SimpleNamespace(artifact=root, revision=data['metadata']['revision'])
+            for checksum in (bench.ARCHIVE_SHA256, bench.LEGACY_ARCHIVE_SHA256, '0' * 64):
+                with self.subTest(checksum=checksum):
+                    data['metadata']['archive_sha256'] = checksum
+                    (root / 'results.json').write_text(json.dumps(data))
+                    (root / 'metadata.json').write_text(json.dumps(data['metadata']))
+                    # Accepted provenance must reach the existing strict per-unit checks.
+                    with patch.object(bench, 'verify_observations', side_effect=RuntimeError('unit validation')) as verify:
+                        if checksum == '0' * 64:
+                            with self.assertRaisesRegex(ValueError, 'input identity'):
+                                bench.publish(args)
+                            verify.assert_not_called()
+                        else:
+                            with self.assertRaisesRegex(RuntimeError, 'unit validation'):
+                                bench.publish(args)
+                            verify.assert_called_once()
+
     def test_published_totals_must_match_every_unit_observation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
