@@ -80,6 +80,8 @@ bool remove_dead_code(FunctionContext& context)
 	}
 	if (unknown == 0)
 		return false;
+	const bool mapped = context.block_of_version == context.version &&
+		context.block_of_size == body.instructions.size();
 	bool changed = false;
 	for (BlockId b : body.layout)
 	{
@@ -90,6 +92,8 @@ bool remove_dead_code(FunctionContext& context)
 			if (live[i] != 1)
 			{
 				unlink_after(body, b, prev, i);
+				if (mapped)
+					context.block_of[i] = kNoId;
 				++context.stats.dead;
 				changed = true;
 			}

@@ -734,6 +734,15 @@ void JumpThreading::find_use_dominators()
 			use_dom_[v.index] = b;
 			return;
 		}
+		// Most additional uses are below the common dominator already
+		// found. The intervals answer that without climbing the tree again.
+		if (a == b || cfg_.dominates(a, b))
+			return;
+		if (cfg_.dominates(b, a))
+		{
+			use_dom_[v.index] = b;
+			return;
+		}
 		while (a != b)
 		{
 			while (cfg_.rpo_index[a] > cfg_.rpo_index[b])
@@ -783,6 +792,8 @@ void JumpThreading::find_use_dominators()
 BlockId JumpThreading::successor_holding(BlockId m, TempId t) const
 {
 	BlockId x = t < use_dom_.size() ? use_dom_[t] : kNoId;
+	if (x == kNoId || x == m || !cfg_.dominates(m, x))
+		return kNoId;
 	while (x != kNoId && x != m && cfg_.idom[x] != m)
 		x = cfg_.idom[x];
 	return x == kNoId || x == m || cfg_.pred_count(x) != 1 ? kNoId : x;
@@ -1305,7 +1316,11 @@ bool JumpThreading::known_compares()
 			// comes between the phis and it is copied for a threaded
 			// predecessor (at most kThreadCopy plain instructions).
 			bool def_here = false;
-			for (InstId i = first; i != kNoId && i != last && !def_here; i = body_.instructions[i].next)
+			uint32_t examined = 0;
+			// Beyond the copy budget this block cannot be threaded, whether
+			// its compare is here or in another block.
+			for (InstId i = first; i != kNoId && i != last && !def_here && examined++ <= kThreadCopy;
+				i = body_.instructions[i].next)
 				def_here = i == def;
 			if (def_here)
 			{

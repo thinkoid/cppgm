@@ -212,11 +212,17 @@ bool run_pass(FunctionContext& context, bool (*pass)(FunctionContext&), const ch
 	verify(context, name);
 	if (changed && context.kept_body != pass)
 	{
+		// Constant propagation only replaces operands; dead-code removal
+		// clears the entries it unlinks. Both leave this block map current.
+		if ((pass == propagate_constants || pass == remove_dead_code) && context.block_of_version == context.version)
+			++context.block_of_version;
 		++context.version;
 		// Known in order: the pass ended with restore_definition_order, or
 		// only removed instructions or replaced operands with literals.
 		if (context.left_ordered || (was_ordered && (pass == remove_dead_code || pass == propagate_constants)))
 			context.ordered_version = context.version;
+		if (context.verify)
+			verify_kept_analyses(context, name);
 		return true;
 	}
 	if (context.verify)

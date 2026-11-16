@@ -325,6 +325,20 @@ void input_language(Invocation& invocation)
 																			: Input::Kind::Source;
 }
 
+uint32_t parse_wasm_stack_size(const std::string& size)
+{
+	uint64_t bytes = 0;
+	for (char digit : size)
+	{
+		if (digit < '0' || digit > '9' || bytes > 0x7fffffffu / 10)
+			throw InvocationError("invalid Wasm stack size");
+		bytes = bytes * 10 + static_cast<unsigned>(digit - '0');
+	}
+	if (bytes == 0 || bytes > 0x7fffffffu || bytes % 16 != 0)
+		throw InvocationError("Wasm stack size must be a positive multiple of 16 below 2 GiB");
+	return static_cast<uint32_t>(bytes);
+}
+
 Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions& base)
 {
 	Invocation invocation;
@@ -373,19 +387,7 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 		else if (starts_with(arg, "--gcc-install-dir="))
 			gcc_install_dir = arg.substr(arg.find('=') + 1);
 		else if (starts_with(arg, "-Wl,-z,stack-size="))
-		{
-			const std::string size = arg.substr(18);
-			uint64_t bytes = 0;
-			for (char digit : size)
-			{
-				if (digit < '0' || digit > '9' || bytes > 0x7fffffffu / 10)
-					throw InvocationError("invalid Wasm stack size");
-				bytes = bytes * 10 + static_cast<unsigned>(digit - '0');
-			}
-			if (bytes == 0 || bytes > 0x7fffffffu || bytes % 16 != 0)
-				throw InvocationError("Wasm stack size must be a positive multiple of 16 below 2 GiB");
-			invocation.wasm_stack_size = static_cast<uint32_t>(bytes);
-		}
+			invocation.wasm_stack_size = parse_wasm_stack_size(arg.substr(18));
 		else if (arg == "--sysroot" || starts_with(arg, "--sysroot=") || arg == "-resource-dir" ||
 			starts_with(arg, "-resource-dir="))
 		{
