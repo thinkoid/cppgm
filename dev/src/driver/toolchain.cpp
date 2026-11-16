@@ -486,11 +486,14 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 				throw InvocationError("missing output file after -o");
 			invocation.output = args[++i];
 		}
-		else if (arg == "--export" || starts_with(arg, "--export="))
+		else if (arg == "--export" || starts_with(arg, "--export=") || starts_with(arg, "-Wl,--export="))
 		{
 			if (arg == "--export" && i + 1 >= args.size())
 				throw InvocationError("missing export name");
-			invocation.exports.push_back(arg == "--export" ? args[++i] : arg.substr(9));
+			const std::string name = arg == "--export" ? args[++i] : arg.substr(starts_with(arg, "-Wl,") ? 13 : 9);
+			if (name.empty())
+				throw InvocationError("missing export name");
+			invocation.exports.push_back(name);
 		}
 		else if (arg == "--target" || starts_with(arg, "--target="))
 		{

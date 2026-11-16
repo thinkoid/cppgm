@@ -150,7 +150,8 @@ LowIR2NativeInvocation parse_lowir2native_invocation(const vector<string>& args)
 			invocation.no_startfiles = args[i] != "-nodefaultlibs" || invocation.no_startfiles;
 			continue;
 		}
-		if (args[i] == "--export" || args[i].compare(0, 9, "--export=") == 0)
+		if (args[i] == "--export" || args[i].compare(0, 9, "--export=") == 0 ||
+			args[i].compare(0, 13, "-Wl,--export=") == 0)
 		{
 			if (args[i] == "--export")
 			{
@@ -159,7 +160,7 @@ LowIR2NativeInvocation parse_lowir2native_invocation(const vector<string>& args)
 				invocation.exports.push_back(args[++i]);
 			}
 			else
-				invocation.exports.push_back(args[i].substr(9));
+				invocation.exports.push_back(args[i].substr(args[i].compare(0, 4, "-Wl,") == 0 ? 13 : 9));
 			if (invocation.exports.back().empty())
 				throw InvocationError("empty export name");
 			continue;
