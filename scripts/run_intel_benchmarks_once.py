@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run trusted Intel benchmarks sequentially, with one temporary runner per job."""
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -12,6 +13,8 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
+from urllib.parse import urlencode
 import urllib.request
 
 SUITES = {
@@ -49,6 +52,30 @@ def dispatch_command(args, revision, label):
     if args.course_quality and args.suite == 'public':
         command += ['-f', 'course_quality=true']
     return command
+
+
+def dispatched_run(repo, workflow, label, since, attempts=12):
+    """Find this runner's job when older gh versions dispatch without a URL."""
+    query = urlencode(dict(event='workflow_dispatch', created='>=' + since, per_page=100))
+    for attempt in range(attempts):
+        matches = set()
+        page = 1
+        while True:
+            runs = github(f'repos/{repo}/actions/workflows/{workflow}/runs?{query}&page={page}')['workflow_runs']
+            for run in runs:
+                jobs = github(f'repos/{repo}/actions/runs/{run["id"]}/jobs?per_page=100')['jobs']
+                if any(label in job.get('labels', []) and job.get('runner_name') == label for job in jobs):
+                    matches.add(str(run['id']))
+            if len(runs) < 100:
+                break
+            page += 1
+        if len(matches) > 1:
+            raise RuntimeError('multiple workflow runs used this supposedly unique runner')
+        if matches:
+            return matches.pop()
+        if attempt + 1 < attempts:
+            time.sleep(5)
+    raise RuntimeError('could not identify the dispatched run by its unique runner; check Actions')
 
 
 def main():
@@ -97,6 +124,7 @@ def main():
     print(f'Runner files and logs: {directory}', flush=True)
     registered = False
     run_id = None
+    queued_at = None
     try:
         token = github('--method', 'POST', f'repos/{args.repo}/actions/runners/registration-token')['token']
         with (directory / 'configure.log').open('wb') as log:
@@ -109,6 +137,7 @@ def main():
         registered = True
         if not args.listen:
             # Queue the job for this runner's unique label, not any other runner.
+            queued_at = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
             output = subprocess.check_output(dispatch_command(args, revision, label), text=True)
             print(output, end='', flush=True)
             match = re.search(r'/actions/runs/(\d+)', output)
@@ -134,7 +163,10 @@ def main():
             raise RuntimeError(f'runner exited {status}; see {directory / "runner.log"}')
         if not args.listen:
             if run_id is None:
-                raise RuntimeError('gh did not return the run URL; check Actions before starting another suite')
+                run_id = dispatched_run(args.repo, SUITES[args.suite], label, queued_at)
+            print(f'CI run: https://github.com/{args.repo}/actions/runs/{run_id}', flush=True)
+            (directory / 'run.json').write_text(json.dumps(dict(run_id=run_id, revision=revision,
+                workflow_ref=args.ref, runner_label=label), indent=2) + '\n')
             # A healthy runner process does not imply a successful benchmark.
             # Wait for validation and badge publication before the next suite.
             subprocess.run(['gh', 'run', 'watch', run_id, '--repo', args.repo, '--exit-status'], check=True)

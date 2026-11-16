@@ -17,6 +17,37 @@ import run_intel_benchmarks_once as launcher
 
 
 class IntelBenchmarkTests(unittest.TestCase):
+    def test_missing_dispatch_url_uses_exact_job_labels_and_runner_identity(self):
+        label='cppgm-intel-unique'
+        def api(endpoint):
+            if '/workflows/' in endpoint:
+                return {'workflow_runs': [{'id': 11}, {'id': 12}, {'id': 13}]}
+            if '/11/' in endpoint:
+                return {'jobs': [{'labels': ['self-hosted', label], 'runner_name': 'someone-else'}]}
+            if '/12/' in endpoint:
+                return {'jobs': [{'labels': ['self-hosted', label], 'runner_name': label}]}
+            return {'jobs': [{'labels': ['self-hosted', 'different'], 'runner_name': label}]}
+        with patch.object(launcher, 'github', side_effect=api):
+            self.assertEqual(launcher.dispatched_run('owner/repo','suite.yml',label,'2026-11-16T00:00:00Z'), '12')
+
+    def test_discovery_waits_for_job_visibility_and_rejects_ambiguous_matches(self):
+        response=[{'workflow_runs': []}, {'workflow_runs': [{'id': 12}]},
+                  {'jobs': [{'labels': ['unique'], 'runner_name': 'unique'}]}]
+        with patch.object(launcher, 'github', side_effect=response), patch.object(launcher.time,'sleep') as sleep:
+            self.assertEqual(launcher.dispatched_run('owner/repo','suite.yml','unique','since',attempts=2),'12')
+            sleep.assert_called_once_with(5)
+        response=[{'workflow_runs':[{'id':11},{'id':12}]},
+                  {'jobs':[{'labels':['unique'],'runner_name':'unique'}]},
+                  {'jobs':[{'labels':['unique'],'runner_name':'unique'}]}]
+        with patch.object(launcher,'github',side_effect=response):
+            with self.assertRaisesRegex(RuntimeError,'multiple workflow runs'):
+                launcher.dispatched_run('owner/repo','suite.yml','unique','since')
+
+    def test_discovery_never_guesses_the_latest_unrelated_run(self):
+        with patch.object(launcher,'github',return_value={'workflow_runs':[]}), patch.object(launcher.time,'sleep'):
+            with self.assertRaisesRegex(RuntimeError,'could not identify'):
+                launcher.dispatched_run('owner/repo','suite.yml','unique','since',attempts=1)
+
     def test_plan_pins_all_suites_without_registering_or_dispatching(self):
         with patch.object(sys, 'argv', ['runner', '--plan', '--ref', 'feature', '--revision', 'main']), \
                 patch.object(launcher, 'github', return_value={'sha': 'a' * 40}) as api, \
