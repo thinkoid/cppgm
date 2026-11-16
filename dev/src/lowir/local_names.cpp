@@ -50,7 +50,7 @@ const char* const kBlockStems[] = { "",
 	"vector_unordered", "vector_compress", "vector_compress_lane", "vector_compress_end",
 	// The optimizer's.
 	"inline_entry", "inline_cont", "inline_copy", "split", "thread", "loop_preheader", "loop_copy", "loop_exit",
-	"fill_fast", "fill_sized", "fill_same", "wide_loop", "wide_tail", "unrolled", "dead" };
+	"fill_fast", "fill_sized", "fill_same", "wide_loop", "wide_tail", "unrolled", "dead", "unrolled" };
 
 static_assert(
 	sizeof kBlockStems / sizeof kBlockStems[0] == static_cast<size_t>(BlockKind::Count), "one stem per block kind");

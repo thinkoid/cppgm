@@ -117,8 +117,10 @@ bool ShortLoopUnrolling::chain(uint32_t loop, Shape& s) const
 		return false;
 	s.header = l.header;
 	s.latch = l.latches[0];
-	// (Not a loop this pass or the fill widening made, nor what one left.)
-	if (body_.blocks[s.header].kind == BlockKind::Unrolled || body_.blocks[s.pre].kind == BlockKind::WideTail)
+	// (Not a loop this pass or the fill widening made, nor what one left.
+	// A copy keeps the group header's kind; a block's other kinds can be
+	// the lowering's, which LowIR text does not carry.)
+	if (body_.blocks[s.header].kind == BlockKind::UnrolledGroup || body_.blocks[s.pre].kind == BlockKind::WideTail)
 		return false;
 	// (Nor the passes a lane loop left, fewer than its lanes: entered from
 	// the lane loop, or from its exit block.)
@@ -444,7 +446,7 @@ void ShortLoopUnrolling::rewrite(const Shape& s)
 	const bool guarded = ordered && !zero;
 	const BlockId sized = guarded ? append_block(body_, BlockKind::LoopPreheader) : s.pre;
 	const BlockId enter = append_block(body_, BlockKind::LoopPreheader),
-				  group = append_block(body_, BlockKind::Unrolled);
+				  group = append_block(body_, BlockKind::UnrolledGroup);
 	const BlockId left = s.bottom ? append_block(body_, BlockKind::LoopExit) : kNoId;
 	const BlockId tail = append_block(body_, BlockKind::WideTail);
 	const BlockId out = s.bottom ? left : group; // where the group loop leaves from
