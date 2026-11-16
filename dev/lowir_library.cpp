@@ -54,7 +54,6 @@ CppgmLowir* cppgm_lowir_create(uint32_t version, uint32_t target)
 		module->program.target = target == CPPGM_TARGET_LINUX ? target_model::Target::Linux
 															  : target_model::Target::MacOS;
 		module->program.explicit_target = true;
-		module->program.object_facts = true;
 		return module.release();
 	}
 	catch (const InternalError&)

@@ -4,14 +4,27 @@
 
 namespace lowir {
 
-bool text_holds_object_classes(Type type, uint8_t classes)
+bool valid_object_classes(Type type, uint8_t classes)
 {
-	// A value that is not eightbyte classes is written as a word of its own
-	// or as its number.
-	if ((classes & ir_model::OC_STATED) == 0 || (classes & ~(ir_model::OC_STATED | 15)) != 0)
+	using namespace ir_model;
+	if (classes == 0)
 		return true;
-	const uint64_t bytes = object_classes_bytes(type);
-	return bytes == 0 || bytes > 8 || ir_model::eightbyte_class(classes, 1) == ir_model::EB_NONE;
+	if (type.kind() == TypeKind::I128)
+		return classes == (OC_STATED | EB_INTEGER | (EB_INTEGER << 2));
+	if (type.kind() == TypeKind::V128)
+		return classes == (OC_STATED | EB_SSE | (EB_SSEUP << 2));
+	if (!type.is_object() || (classes & OC_STATED) == 0)
+		return false;
+	if (classes == (OC_STATED | OC_MEMORY))
+		return true;
+	if (classes == (OC_STATED | OC_X87))
+		return type.bytes == 16;
+	if (classes == (OC_STATED | OC_COMPLEX_X87))
+		return type.bytes == 32;
+	const EightbyteClass first = eightbyte_class(classes, 0);
+	const EightbyteClass second = eightbyte_class(classes, 1);
+	return (classes & ~(OC_STATED | 15)) == 0 && type.bytes <= 16 && first != EB_SSEUP &&
+		(second != EB_SSEUP || first == EB_SSE) && (type.bytes == 0 || type.bytes > 8 || second == EB_NONE);
 }
 
 bool valid_aggregate_shape(Type type, ir_model::AggregateShape shape)
@@ -46,8 +59,6 @@ const char* validate_argument_facts(const Program& program, const FunctionBody& 
 		if ((call.op != Opcode::Call && call.op != Opcode::VaArg) ||
 			(call.op == Opcode::Call ? fact.argument >= call.extra_count : fact.argument != 0))
 			return "argument fact does not name a call argument or va_arg result";
-		if (fact.classes != 0 && !program.object_facts)
-			return "argument classes require object facts";
 		if (fact.type() != TypeKind::Void)
 		{
 			if (static_cast<unsigned>(fact.type()) >= static_cast<unsigned>(TypeKind::Obj))
@@ -69,6 +80,22 @@ const char* validate_argument_facts(const Program& program, const FunctionBody& 
 				(value.is(ValueKind::Symbol) && !passed.is_pointer()) ||
 				(value.is(ValueKind::Integer) && !(passed.is_integer() || passed.is_pointer())))
 				return "argument_type does not match its literal representation";
+		}
+		if (fact.classes != 0)
+		{
+			Type type = call.type;
+			if (call.op == Opcode::Call)
+			{
+				const Signature* signature = program.call_boundary(call);
+				const Value value = body.operands[call.extra_first + fact.argument];
+				if (signature == nullptr || signature->boundary.arity != ir_model::CAM_VARIADIC ||
+					fact.argument < signature->parameter_count ||
+					(!value.is(ValueKind::Temp) && !value.is(ValueKind::Slot)))
+					return "argument classes require an unnamed variadic argument's value";
+				type = value.is(ValueKind::Temp) ? body.temps[value.index].type : body.slots[value.index].type;
+			}
+			if (!valid_object_classes(type, fact.classes))
+				return "invalid argument or va_arg classes";
 		}
 		const auto shape = fact.shape();
 		if (shape.element != ir_model::AggregateElement::None)

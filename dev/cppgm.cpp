@@ -203,7 +203,7 @@ struct SourceOutputInvocation
 	// `--hosted`: the host environment -c uses (include paths, predefined
 	// macros, builtin declarations, hosted analysis), so a hosted source's
 	// views are those of the program -c compiles (--emit-lowir's LowIR view
-	// always preprocesses so; its object dialect is the object half's, see
+	// always preprocesses so; the object half's program is -c's, see
 	// run_emit_lowir_mode). `-I`, `-D` and `-U` as the driver takes them.
 	bool hosted = false;
 	bool nostdinc = false;
@@ -1107,16 +1107,17 @@ int run_emit_lowir_mode(vector<string> args)
 	// The LowIR half of an object compile: a `.lowir` output (the
 	// toolchain's LowIR object input, `-c x.lowir`) with the object
 	// compile's debug-information level stated (-g0, -gline-tables-only)
-	// is the program `-c -o x.o` compiles, lowered in host-object mode, in
-	// the object dialect, so the object it gives is the direct compile's
-	// (PA33 object roundtrip). Otherwise the output is the course's LowIR
-	// view in the course dialect, --hosted or not (the help text: --hosted
+	// is the program `-c -o x.o` compiles, lowered in host-object mode, so
+	// the object it gives is the direct compile's (PA33 object roundtrip).
+	// Otherwise the output is the course's LowIR view, --hosted or not
+	// (the help text: --hosted
 	// selects the host environment, which this view preprocesses in
 	// anyway), which the LowIR lanes compare, the course's lowir and
 	// lowiropt read and the supplied course back end runs (PA12 controls:
 	// `--emit-lowir -O0 -o x.lowir`), as `.obj` names the course's object.
-	// Both state the instruction facts the lowering proved (lowir.md
-	// "Instruction Facts"), which the object compile reads.
+	// Both are LowIR that lowir and lowiropt read, and state the
+	// instruction facts the lowering proved (lowir.md "Instruction Facts"),
+	// which the object compile reads.
 	const bool object_half = invocation.debug_level && ends_with(invocation.outfile, ".lowir");
 	if (object_half)
 		invocation.hosted = true;

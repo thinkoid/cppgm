@@ -161,13 +161,12 @@ struct FunctionBody
 // ---------------------------------------------------------------------------
 // Signatures and symbols
 
-// Object mode (Program::object_facts: `classes=` on a parameter,
-// `result_classes=` on a boundary), as `obj<bytes x align>` carries no
+// `classes=` on a parameter, a variadic argument or a va_arg result and
+// `result_classes=` on a boundary, as `obj<bytes x align>` carries no
 // field types: the x86-64 psABI classification (3.2.3) of a direct object
-// parameter or result (or an i128 one holding a member function pointer's
-// pair), which an object-mode lowering states from the class's layout and
-// a host object's call boundary follows: ObjectClassBits and
-// EightbyteClass of ir_symbol_model.h.
+// (or of an i128 holding a member function pointer's pair, or a v128),
+// which the lowering states from the class's layout and a call boundary
+// follows: ObjectClassBits and EightbyteClass of ir_symbol_model.h.
 
 // The named-value metadata (role, linkage, binding, storage and the
 // SymbolFlag bits) is the scaffold's record; the names are interned.
@@ -411,13 +410,6 @@ struct Program
 	std::vector<EquivalentEntry> equivalent_entries;
 	std::vector<SignatureId> forward_boundaries;
 	std::vector<uint8_t> forward_globals;
-	// A host-object program (the lowering's object mode, or text the
-	// toolchain reads): its text states the facts the object back end reads
-	// beyond the course's LowIR (x87 and SSEUP classes, classes of other
-	// types and of arguments to `...`, repeated data, NaN payloads), so an
-	// object compiled from it is the one compiled from the program; a
-	// reader of course LowIR rejects them.
-	bool object_facts = false;
 	// Object mode, not in the LowIR text: thunks the object back end emits
 	// as `this` adjusted in its register and a jump to the target, so the
 	// arguments past a variadic function's fixed ones stay where the caller

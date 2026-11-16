@@ -38,7 +38,7 @@ enum class SpecialFloat : uint8_t
 
 Literal special_float(TypeKind kind, SpecialFloat which, bool negative);
 
-// Object mode (Program::object_facts): the NaN `which` whose fraction bits
+// The NaN `which` whose fraction bits
 // below the quiet bit are `payload` in place of the default ones (an f80
 // keeps its integer bit), as `nan(<payload>)` and `snan(<payload>)` spell
 // it. False if the payload does not fit below the quiet bit, or leaves a

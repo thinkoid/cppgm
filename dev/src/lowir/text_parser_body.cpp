@@ -482,7 +482,7 @@ bool Parser::parse_value_instruction(FunctionBuilder& builder, Opcode keyword, I
 			do
 			{
 				const bool shape = at_word(ir_model::spelling(MetadataKey::Shape));
-				if (!shape && (!program_.object_facts || !at_word(ir_model::spelling(MetadataKey::Classes))))
+				if (!shape && !at_word(ir_model::spelling(MetadataKey::Classes)))
 					fail("invalid va_arg metadata");
 				advance();
 				expect(TokenKind::Equals, "=");
@@ -495,8 +495,7 @@ bool Parser::parse_value_instruction(FunctionBuilder& builder, Opcode keyword, I
 					builder.body().argument_facts.push_back(ArgumentFacts{ id, 0, 0, value });
 				}
 				else
-					builder.body().argument_facts.push_back(
-						ArgumentFacts{ id, 0, parse_object_classes(Type::object(16, 3)) });
+					builder.body().argument_facts.push_back(ArgumentFacts{ id, 0, parse_object_classes(nullptr) });
 			} while (accept(TokenKind::Comma));
 			expect(TokenKind::RBracket, "]");
 		}
@@ -817,8 +816,7 @@ void Parser::parse_call(FunctionBuilder& builder, Instruction& inst)
 			}
 			const bool argument_type = at_word(ir_model::spelling(MetadataKey::ArgumentType));
 			const bool argument_shape = at_word(ir_model::spelling(MetadataKey::ArgumentShape));
-			if (!argument_type && !argument_shape &&
-				(!program_.object_facts || !at_word(ir_model::spelling(MetadataKey::Classes))))
+			if (!argument_type && !argument_shape && !at_word(ir_model::spelling(MetadataKey::Classes)))
 				fail("invalid call metadata");
 			advance();
 			expect(TokenKind::Equals, "=");
@@ -847,7 +845,7 @@ void Parser::parse_call(FunctionBuilder& builder, Instruction& inst)
 			}
 			else
 			{
-				const uint8_t classes = parse_object_classes(Type::object(16, 3));
+				const uint8_t classes = parse_object_classes(nullptr);
 				builder.body().argument_facts.push_back(ArgumentFacts{ id, static_cast<uint32_t>(argument), classes });
 			}
 		} while (accept(TokenKind::Comma));

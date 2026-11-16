@@ -733,24 +733,19 @@ bool Parser::at_word(const char* spelling) const
 	return at(TokenKind::Word) && token().length == length && std::memcmp(token().text, spelling, length) == 0;
 }
 
-uint8_t Parser::parse_object_classes(Type type)
+uint8_t Parser::parse_object_classes(const Type* type)
 {
-	// lowir.md "Object ABI Conventions": a direct object of at most 16
-	// bytes, or its two-integer scalar carrier with eight-byte stack alignment.
-	const uint64_t bytes = object_classes_bytes(type);
-	const bool wide_carrier = type.kind() == TypeKind::I128;
-	if (!program_.object_facts && ((!type.is_object() && !wide_carrier) || bytes > 16))
+	// lowir.md "Object ABI Conventions": a direct object, the two-integer
+	// scalar carrier of one with eight-byte stack alignment, or a v128. An
+	// argument's or va_arg's classes name two eightbytes, and the validator
+	// checks them against its type.
+	if (type != nullptr && !type->is_object() && type->kind() != TypeKind::I128 && type->kind() != TypeKind::V128)
 		fail("classes metadata requires a direct object of matching size");
 	uint8_t classes = 0;
 	if (at(TokenKind::Word))
-		classes = ir_model::object_classes_from_spelling(token().text, token().length, bytes, program_.object_facts);
-	else if (at(TokenKind::Number) && program_.object_facts)
-	{
-		const uint64_t value = parse_positive(token().text, token().length);
-		classes = value < 256 ? static_cast<uint8_t>(value) : 0;
-	}
-	if (classes == 0 ||
-		(!program_.object_facts && wide_carrier && classes != (OC_STATED | EB_INTEGER | (EB_INTEGER << 2))))
+		classes = ir_model::object_classes_from_spelling(
+			token().text, token().length, type != nullptr ? object_classes_bytes(*type) : 0, true);
+	if (classes == 0 || (type != nullptr && !valid_object_classes(*type, classes)))
 		fail("invalid classes metadata");
 	advance();
 	return classes;
@@ -795,11 +790,9 @@ void Parser::parse_metadata_item(
 			fail("function metadata requires a signature");
 		if (key == MetadataKey::ResultClasses)
 		{
-			if (result_classes_ == nullptr)
+			if (result_classes_ == nullptr || result_type_ == nullptr)
 				fail("result_classes metadata requires a boundary");
-			*result_classes_ = parse_object_classes(*result_type_);
-			if (*result_classes_ == (OC_STATED | OC_MEMORY) && !program_.object_facts)
-				fail("a memory-class result is returned through an indirect_result parameter");
+			*result_classes_ = parse_object_classes(result_type_);
 			return;
 		}
 		if (key == MetadataKey::ResultShape)
@@ -1046,7 +1039,7 @@ void Parser::parse_parameter_metadata(Parameter& parameter)
 			if ((seen & bit) != 0)
 				fail("duplicate metadata key: classes");
 			seen |= bit;
-			parameter.classes = parse_object_classes(parameter.type);
+			parameter.classes = parse_object_classes(&parameter.type);
 			continue;
 		}
 		if ((seen & bit) != 0)

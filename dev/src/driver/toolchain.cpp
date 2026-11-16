@@ -784,11 +784,7 @@ bool compile_unit(
 bool compile_lowir_unit(
 	const std::string& path, const Invocation& invocation, native::EhModel eh_model, native::object::ObjectFile& object)
 {
-	// A host object's LowIR may state what course LowIR cannot (classes of
-	// x87 and SSEUP data, arguments to `...`, NaN payloads; see
-	// lowir::Program::object_facts).
 	lowir::Program program;
-	program.object_facts = true;
 	std::string error;
 	if (!lowir::read_program_files(program, std::vector<std::string>(1, path), error))
 	{

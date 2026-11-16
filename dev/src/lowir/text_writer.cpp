@@ -1071,7 +1071,7 @@ void Writer::argument_facts(const Instruction& inst, bool& open)
 			}
 			append_aggregate_shape(out_, entry.shape());
 		}
-		if (entry.classes != 0 && program_.object_facts)
+		if (entry.classes != 0)
 		{
 			key(open, MetadataKey::Classes);
 			if (inst.op == Opcode::Call)

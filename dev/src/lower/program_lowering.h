@@ -455,11 +455,7 @@ public:
 	// contract's units destroy namespace-scope objects in a `role=fini`
 	// function instead. Thread-local destruction always uses the thread's
 	// exit registration, including serialized LowIR.
-	void set_object_mode(bool on)
-	{
-		object_mode_ = on;
-		program_.object_facts = on;
-	}
+	void set_object_mode(bool on) { object_mode_ = on; }
 	bool object_mode() const { return object_mode_; }
 	// Objects for the host toolchain, rather than the course's `.obj`
 	// runtime: exception-aware list initialization retains the host's

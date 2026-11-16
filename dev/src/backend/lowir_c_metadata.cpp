@@ -40,7 +40,7 @@ const char* parameter_problem(const CppgmParameter& input, uint32_t index, lowir
 		return "object_bytes metadata requires ptr";
 	if (!lowir::valid_aggregate_shape(t, shape(input.shape_element, input.shape_count)))
 		return "invalid aggregate parameter shape";
-	if (!lowir::text_holds_object_classes(t, input.classes))
+	if (!lowir::valid_object_classes(t, input.classes))
 		return "invalid classes metadata";
 	if (input.pass == ir_model::PPM_INDIRECT_RESULT && (index != 0 || !result.is_void()))
 		return "invalid indirect result parameter";
@@ -61,7 +61,7 @@ const char* boundary_problem(CppgmType result, const CppgmBoundary& input)
 		return "invalid boundary metadata";
 	if (!lowir::valid_aggregate_shape(type(result), shape(input.result_shape_element, input.result_shape_count)))
 		return "invalid aggregate result shape";
-	if (!lowir::text_holds_object_classes(type(result), input.result_classes))
+	if (!lowir::valid_object_classes(type(result), input.result_classes))
 		return "invalid result_classes metadata";
 	return nullptr;
 }

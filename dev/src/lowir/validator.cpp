@@ -121,7 +121,8 @@ const char* misplaced_fact(const Instruction& inst)
 	return nullptr;
 }
 
-// The argument kinds va_arg reads from the variadic area.
+// The argument kinds va_arg reads from the variadic area: also an object,
+// a long double and an i128 (psABI 3.5.7).
 bool is_va_arg_type(Type type)
 {
 	switch (type.kind())
@@ -133,8 +134,11 @@ bool is_va_arg_type(Type type)
 	case TypeKind::I32:
 	case TypeKind::U32:
 	case TypeKind::I64:
+	case TypeKind::I128:
 	case TypeKind::F64:
+	case TypeKind::F80:
 	case TypeKind::Ptr:
+	case TypeKind::Obj:
 		return true;
 	default:
 		return false;
@@ -1041,12 +1045,7 @@ bool Validator::check_instruction(InstId id, const Instruction& inst, BlockId bl
 	case Opcode::VaArg:
 		if (!value_type(inst.ops[0], type) || !type.is_pointer())
 			return fail("va_arg requires a pointer value");
-		// A host object's program also reads an object, a long double or an
-		// i128 (psABI 3.5.7; the toolchain's own LowIR, see
-		// Program::object_facts).
-		if (!is_va_arg_type(inst.type) &&
-			!((program_.object_facts || target_model::is_wasm(program_.target)) &&
-				(inst.type.is_object() || inst.type.kind() == TypeKind::F80 || inst.type.kind() == TypeKind::I128)))
+		if (!is_va_arg_type(inst.type))
 			return fail("va_arg scalar type is not supported");
 		return true;
 	case Opcode::ReadMxcsr:

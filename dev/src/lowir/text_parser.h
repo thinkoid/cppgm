@@ -99,10 +99,10 @@ private:
 	void advance() { lexer_->advance(); }
 	bool at(TokenKind kind) const { return token().kind == kind; }
 	bool at_word(const char* spelling) const;
-	// Object mode: an ObjectClassBits word (or number) at the token;
-	// the program then states object facts.
-	// Classes of a value of `type` (lowir.md "Object ABI Conventions").
-	uint8_t parse_object_classes(Type type);
+	// The ObjectClassBits word at the token: classes of a value of `*type`,
+	// or of an argument or va_arg result (null; lowir.md "Object ABI
+	// Conventions").
+	uint8_t parse_object_classes(const Type* type);
 	WordInfo word(const Token& token) const;
 	bool at_keyword(Keyword keyword) const;
 	bool accept(TokenKind kind);
