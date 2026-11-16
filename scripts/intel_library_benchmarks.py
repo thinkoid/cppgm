@@ -15,11 +15,18 @@ SCRIPTS = {
     'boost': 'boost_benchmarks.py',
     'internal': 'internal_cpp_benchmarks.py',
     'wasm': 'wasm_benchmarks.pl',
+    'wasm-selfbuild': 'wasm_selfbuild_benchmarks.py',
 }
 DIRECTORY = Path(__file__).resolve().parent
 
 
 def run_command(suite, source, jobs):
+    if suite == 'wasm-selfbuild':
+        return [sys.executable, str(DIRECTORY / SCRIPTS[suite]),
+                '--compiler', str(source / 'dev/cppgm'), '--repo-root', str(source),
+                '--output', str(source / 'obj' / suite), '--tools', str(source / 'obj/wasm-tools'),
+                '--shim', str(DIRECTORY / 'experimental/node_modules/@bjorn3/browser_wasi_shim'),
+                '--jobs', str(jobs)]
     if suite == 'wasm':
         return ['perl', str(DIRECTORY / SCRIPTS[suite]), '--compiler', str(source / 'dev/cppgm'),
                 '--repo-root', str(source), '--output', str(source / 'obj' / suite)]
@@ -31,6 +38,13 @@ def run_command(suite, source, jobs):
 
 def run(args):
     command = run_command(args.suite, args.source.resolve(strict=True), args.jobs)
+    if args.suite == 'wasm-selfbuild':
+        subprocess.run(['perl', str(DIRECTORY / 'install_wasm_tools.pl'), '--prefix',
+                        str(args.source / 'obj/wasm-tools')], check=True)
+        subprocess.run(['npm', 'ci', '--ignore-scripts', '--prefix',
+                        str(DIRECTORY / 'experimental')], check=True)
+        subprocess.run(command, check=True)
+        return
     if args.suite == 'wasm':
         tools = args.source / 'obj/wasm-tools'
         subprocess.run(['perl', str(DIRECTORY / 'install_wasm_tools.pl'), '--prefix', str(tools),
@@ -61,7 +75,8 @@ def collect(source, target):
     for path in source.rglob('*'):
         relative = path.relative_to(source)
         if ({'build', 'source'}.intersection(relative.parts) or not path.is_file()
-                or not (path.suffix in suffixes or path.suffix == '.stdin' or path.name in ('stdout', 'stderr')
+                or (relative.parts[:2] == ('package', 'inputs') and path.suffix != '.log')
+                or not (path.suffix in suffixes or path.suffix == '.stdin' or path.name in ('stdout', 'stderr', 'manifest.sha256')
                         or path.name.endswith('probe'))):
             continue
         destination = target / relative
@@ -93,6 +108,11 @@ def main():
     elif args.command == 'collect':
         collect(args.source, args.target)
     else:
+        if args.suite == 'wasm-selfbuild':
+            subprocess.run([sys.executable, str(DIRECTORY / 'wasm_benchmark_results.py'), 'publish-selfbuild',
+                            str(args.artifact), '--target', str(args.target), '--revision', args.revision,
+                            '--run-url', args.run_url, '--platform', 'intel'], check=True)
+            return
         if args.suite == 'wasm':
             subprocess.run([sys.executable, str(DIRECTORY / 'wasm_benchmark_results.py'), 'publish',
                             str(args.artifact / 'O0'), str(args.artifact / 'O3'), '--target', str(args.target),

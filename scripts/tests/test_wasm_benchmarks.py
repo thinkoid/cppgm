@@ -151,7 +151,7 @@ class WasmBenchmarkTests(unittest.TestCase):
             (artifact / 'observations.json').write_text(json.dumps([row('cppgm-producer', 10.),
                                                                     row('clang-producer', 75.)]))
             args = argparse.Namespace(artifact=artifact, target=target, revision='a' * 40,
-                                      run_url='https://example.org/run')
+                                      run_url='https://example.org/run', platform='github')
             producer.publish_selfbuild(args)
             directory = target / producer.SELFBUILD
             self.assertIn('7.50', (directory / 'epyc-compile-clang.svg').read_text())
@@ -161,6 +161,21 @@ class WasmBenchmarkTests(unittest.TestCase):
             self.assertNotIn('commands', published['producers']['cppgm-producer'])
             self.assertIn('[Results](epyc/report.md)', (directory / 'report.md').read_text())
             benchmark_publication.prepare(target)
+            args.platform = 'intel'
+            with self.assertRaisesRegex(ValueError, 'Intel hardware'):
+                producer.publish_selfbuild(args)
+            metadata['cpu'] = 'Intel Xeon Platinum 8581C'
+            (artifact / 'results.json').write_text(json.dumps(dict(schema=1, status='complete', metadata=metadata,
+                                                                   phases=phases, warnings=[])))
+            producer.publish_selfbuild(args)
+            self.assertIn('7.50', (directory / 'intel-compile-clang.svg').read_text())
+            self.assertIn('0.90', (directory / 'intel-runtime-clang.svg').read_text())
+            self.assertIn('7.50', (directory / 'epyc-compile-clang.svg').read_text())
+            self.assertIn('n/m', (directory / 'github-intel-runtime-clang.svg').read_text())
+            self.assertTrue((directory / 'history' / ('a' * 40) / 'intel/results.json').exists())
+            args.platform = 'github'
+            producer.publish_selfbuild(args)
+            self.assertIn('0.90', (directory / 'github-intel-runtime-clang.svg').read_text())
             args.revision = 'b' * 40
             with self.assertRaisesRegex(ValueError, 'clean measured'):
                 producer.publish_selfbuild(args)

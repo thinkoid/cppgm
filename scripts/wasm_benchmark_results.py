@@ -242,7 +242,7 @@ def publish_selfbuild(args):
     metadata = document['metadata']
     if metadata['dirty'] or metadata['revision'] != args.revision:
         raise ValueError('publication requires the clean measured compiler revision')
-    platform = benchmark_hosts.publication_platform(metadata['cpu'], 'github')
+    platform = benchmark_hosts.publication_platform(metadata['cpu'], args.platform)
     directory = args.target / SELFBUILD
     for destination in (directory / platform, directory / 'history' / args.revision / platform):
         destination.mkdir(parents=True, exist_ok=True)
@@ -303,6 +303,7 @@ def main():
     selfbuild.add_argument('--target', type=Path, required=True)
     selfbuild.add_argument('--revision', required=True)
     selfbuild.add_argument('--run-url', required=True)
+    selfbuild.add_argument('--platform', choices=['github', 'intel'], default='github')
     for command in ('report', 'publish'):
         sub = commands.add_parser(command)
         sub.add_argument('artifacts', type=Path, nargs='+')

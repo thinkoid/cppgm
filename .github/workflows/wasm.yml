@@ -27,12 +27,17 @@ on:
         description: Intel runner label supplied by the temporary-runner helper
         type: string
         default: cppgm-intel
+      intel_suite:
+        description: Dedicated Intel measurement to run
+        type: choice
+        options: [wasm, wasm-selfbuild]
+        default: wasm
 
 permissions:
   contents: read
 
 concurrency:
-  group: wasm-benchmarks-${{ github.ref }}-${{ inputs.platform || 'github' }}
+  group: wasm-benchmarks-${{ github.ref }}-${{ inputs.platform || 'github' }}-${{ inputs.intel_suite || 'wasm' }}
   cancel-in-progress: true
 
 jobs:
@@ -258,6 +263,6 @@ jobs:
       contents: write
     uses: ./.github/workflows/intel-library-benchmarks.yml
     with:
-      suite: wasm
+      suite: ${{ inputs.intel_suite || 'wasm' }}
       revision: ${{ inputs.revision || github.sha }}
       runner_label: ${{ inputs.runner_label }}
