@@ -1,5 +1,5 @@
-<svg data-original-label="Boost runtime CPU vs clang" data-original-message="1.05×" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="Boost runtime CPU vs clang; Intel(R) Xeon(R) 6975P-C; measured fd8d08c239b003470d0ecd0edf78dc8fe6b5a2ff; 7 commits behind main: 1.05×">
-  <title>Boost runtime CPU vs clang; Intel(R) Xeon(R) 6975P-C; measured fd8d08c239b003470d0ecd0edf78dc8fe6b5a2ff; 7 commits behind main: 1.05×</title>
+<svg data-original-label="Boost runtime CPU vs clang" data-original-message="1.05×" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="Boost runtime CPU vs clang; Intel(R) Xeon(R) 6975P-C; measured 2a915cfbfed25b5f95be7b7e5c345dfe87f11666; 3 commits behind main: 1.05×">
+  <title>Boost runtime CPU vs clang; Intel(R) Xeon(R) 6975P-C; measured 2a915cfbfed25b5f95be7b7e5c345dfe87f11666; 3 commits behind main: 1.05×</title>
   <defs><clipPath id="badge"><rect width="120" height="24" rx="4"/></clipPath></defs>
   <g clip-path="url(#badge)">
     <rect width="64" height="24" fill="#555"/>
