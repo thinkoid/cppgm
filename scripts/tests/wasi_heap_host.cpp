@@ -7,6 +7,7 @@
 #include <vector>
 
 extern "C" void* cppgm_test_sbrk(intptr_t);
+extern "C" uintptr_t __cppgm_wasi_heap_break();
 namespace {
 const uintptr_t page = 65536;
 size_t capacity = 128, maximum = 65535;
@@ -48,12 +49,14 @@ int main(int argc, char** argv)
 		cppgm_test_sbrk(1);
 	assert(!strcmp(argv[1], "growth"));
 	uintptr_t next = capacity * page;
+	assert(__cppgm_wasi_heap_break() == next && requests.empty());
 	assert(reinterpret_cast<uintptr_t>(cppgm_test_sbrk(0)) == next && requests.empty());
 	for (unsigned i = 0; i < 2048; ++i)
 	{
 		assert(reinterpret_cast<uintptr_t>(cppgm_test_sbrk(page)) == next);
 		next += page;
 		assert(reinterpret_cast<uintptr_t>(cppgm_test_sbrk(0)) == next);
+		assert(__cppgm_wasi_heap_break() == next);
 		assert(capacity * page >= next && capacity * page - next < 16 * 1024 * 1024);
 	}
 	assert(requests.size() < 32); // Each request must not copy the preceding heap.

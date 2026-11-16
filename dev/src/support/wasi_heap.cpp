@@ -47,4 +47,11 @@ extern "C" void* sbrk(intptr_t increment)
 	position = needed;
 	return reinterpret_cast<void*>(before);
 }
+
+// Initialize the logical break before a host saves its pre-start memory image.
+// Restoring that image then reuses reserved pages instead of leaking capacity.
+extern "C" uintptr_t __cppgm_wasi_heap_break()
+{
+	return reinterpret_cast<uintptr_t>(sbrk(0));
+}
 #endif
