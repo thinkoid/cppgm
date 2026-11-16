@@ -304,6 +304,9 @@ void build_edges(const Program& program, const FunctionBody& body, Cfg& cfg, boo
 void build_order(const FunctionBody& body, Cfg& cfg)
 {
 	const uint32_t n = cfg.block_count;
+	cfg.dfs_index.assign(n, kNoId);
+	cfg.dfs_vertex.clear();
+	cfg.dfs_parent.clear();
 	if (body.layout.empty())
 		return;
 	// Iterative DFS: ordinary successors, then handler targets (the
@@ -314,6 +317,9 @@ void build_order(const FunctionBody& body, Cfg& cfg)
 	post.clear();
 	const BlockId entry = body.layout[0];
 	cfg.flags[entry] |= BF_REACHABLE;
+	cfg.dfs_index[entry] = 0;
+	cfg.dfs_vertex.push_back(entry);
+	cfg.dfs_parent.push_back(kNoId);
 	stack.push_back(std::make_pair(entry, 0u));
 	while (!stack.empty())
 	{
@@ -331,6 +337,9 @@ void build_order(const FunctionBody& body, Cfg& cfg)
 			if ((cfg.flags[s] & BF_PLACED) != 0 && (cfg.flags[s] & BF_REACHABLE) == 0)
 			{
 				cfg.flags[s] |= BF_REACHABLE;
+				cfg.dfs_index[s] = static_cast<uint32_t>(cfg.dfs_vertex.size());
+				cfg.dfs_vertex.push_back(s);
+				cfg.dfs_parent.push_back(cfg.dfs_index[b]);
 				next = s;
 			}
 		}
@@ -426,36 +435,9 @@ void build_dominators(Cfg& cfg)
 	// iterative intersection walk is quadratic on a long chain feeding one
 	// merge): a depth-first preorder over both edge kinds, semidominators
 	// by EVAL over the linked forest, then immediate dominators.
-	static std::vector<uint32_t> number;
-	static std::vector<BlockId> vertex, parent;
-	static std::vector<std::pair<BlockId, uint32_t>> stack;
-	number.assign(n, kNoId);
-	vertex.clear();
-	parent.clear();
-	stack.clear();
-	number[entry] = 0;
-	vertex.push_back(entry);
-	parent.push_back(kNoId);
-	stack.push_back(std::make_pair(entry, 0u));
-	while (!stack.empty())
-	{
-		const BlockId b = stack.back().first;
-		const uint32_t k = stack.back().second++;
-		const uint32_t succs = cfg.succ_first[b + 1] - cfg.succ_first[b];
-		const uint32_t total = succs + cfg.handler_first[b + 1] - cfg.handler_first[b];
-		if (k >= total)
-		{
-			stack.pop_back();
-			continue;
-		}
-		const BlockId s = k < succs ? cfg.succs[cfg.succ_first[b] + k] : cfg.handlers[cfg.handler_first[b] + k - succs];
-		if (!cfg.reachable(s) || number[s] != kNoId)
-			continue;
-		number[s] = static_cast<uint32_t>(vertex.size());
-		vertex.push_back(s);
-		parent.push_back(number[b]);
-		stack.push_back(std::make_pair(s, 0u));
-	}
+	const std::vector<uint32_t>& number = cfg.dfs_index;
+	const std::vector<BlockId>& vertex = cfg.dfs_vertex;
+	const std::vector<uint32_t>& parent = cfg.dfs_parent;
 	const uint32_t count = static_cast<uint32_t>(vertex.size());
 	static std::vector<uint32_t> semi, label, ancestor, idom, bucket, next, chain;
 	semi.assign(count, 0);

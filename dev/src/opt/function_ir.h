@@ -301,6 +301,9 @@ struct Cfg
 	std::vector<uint32_t> handler_first, handlers;
 	std::vector<uint8_t> flags;
 	std::vector<lowir::BlockId> rpo;
+	// The same DFS supplies RPO and Lengauer-Tarjan preorder/parents.
+	std::vector<uint32_t> dfs_index, dfs_parent;
+	std::vector<lowir::BlockId> dfs_vertex;
 	std::vector<uint32_t> rpo_index;  // kNoId when unreachable
 	std::vector<lowir::BlockId> idom; // kNoId for the entry and unreachable blocks
 	std::vector<uint32_t> dom_in, dom_out;

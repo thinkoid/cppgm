@@ -1531,11 +1531,10 @@ bool JumpThreading::known_compares()
 		for (const std::pair<BlockId, BlockId>& r : redirects)
 			if (bypass(r.first, s, r.second, cresult))
 				changed = true;
-		if (!redirects.empty() && changed)
-		{
+		if (changed)
 			c_.invalidate_cfg();
-			c_.ensure_cfg();
-		}
+		// Demotion may split an edge even if every bypass is rejected.
+		c_.ensure_cfg();
 	}
 	counted_ = false;
 	return changed;
@@ -2356,12 +2355,10 @@ bool JumpThreading::demote_phis(BlockId s, std::vector<std::pair<BlockId, BlockI
 		}
 		unlink_after(body_, s, kNoId, i);
 	}
-	// The stores and loads leave the graph as it was; new edge blocks do not.
+	// The caller redirects these edges next without reading CFG facts.
+	// Invalidate for new edge blocks, then rebuild after the redirects.
 	if (split)
-	{
 		c_.invalidate_cfg();
-		c_.ensure_cfg();
-	}
 	return true;
 }
 

@@ -93,7 +93,7 @@ change, so measurements compare immutable v0.9.4 baseline/candidate images.
   This reduces `parse` from 243 to 231 code lines, preserving diagnostics and
   the 240-line audit limit.
 
-The retained micro-optimizations reduce instructions by 0.125% for scalar,
+The initial micro-optimizations reduce instructions by 0.125% for scalar,
 0.113% for SSE and 0.104% for the frozen O3 compiler workload. Frozen O0 is
 unchanged to within 0.006%. These are small reductions in compiler work; local
 wall/CPU timing variation does not establish a material elapsed-time gain.
@@ -105,6 +105,54 @@ showed no useful instruction reduction. Neither is in the retained patch.
 Larger gains require reducing repeated whole-function optimizer analysis
 without losing useful transformations or changing their decisions.
 
+## CFG and dominator follow-up
+
+The next investigation uses the initial patch (`989675743`) as its baseline.
+Call-chain instrumentation attributes 79.3% / 77.8% of dominator-building time
+to jump threading, scalar / SSE. In particular, phi demotion splits edges and
+rebuilds the graph, then its caller redirects those edges and rebuilds again.
+No CFG facts are read between those two builds. This accounts for 525 / 417
+full rebuilds and 527,640 / 418,662 reachable-block dominator visits.
+
+Two further changes preserve the same transformation sequence:
+
+- Phi demotion invalidates after splitting edges; its caller rebuilds after
+  redirecting them. The caller still rebuilds when edges were split but all
+  attempted bypasses are rejected. The other caller immediately returns to
+  cleanup, which also rebuilds before reading graph facts.
+- CFG ordering records DFS preorder and parent links in the graph itself.
+  Lengauer-Tarjan reuses that traversal instead of repeating it. Ordinary
+  successors and handler edges retain their order; unreachable-block removal
+  preserves the reachable DFS tree.
+
+Compared with the initial patch, the combined change gives:
+
+| Backend | Instructions | Cycles | Paired wall estimate |
+|---|---:|---:|---:|
+| Scalar O3 | -5.19% | -4.26% | -4.03% |
+| SSE O3 | -3.79% | -3.41% | -3.92% |
+
+Counters use three repeats; wall times use six alternating ABBA/BAAB blocks,
+twelve observations per compiler, with A/A checks before and after. No samples
+were discarded. A/A changes reach about 4% for scalar and 21% for SSE, including
+a four-second scheduling outlier. The wall estimates are consistent with less
+compiler work, but their exact size is not established on this active host.
+The frozen O3 workload improves only 0.38% in instructions: it exercises the
+redundant jump-threading rebuild much less heavily.
+
+An alternative bounded iterative dominator solver before the existing
+Lengauer-Tarjan fallback was rejected. It added work on simdjson, reducing
+the deferral-only savings from 4.17% / 2.95% to 1.00% / 0.43%. The existing
+large-graph algorithm remains.
+
+Further gains would require selective updates after real edge changes, or
+less full-function processing around those transformations. This needs care:
+redirects can change reachability, loop entry and downstream dominance, and
+optimizer decisions also depend on traversal order. Simply batching candidates
+against stale graph facts or choosing another valid RPO can change output.
+The earlier 18–21% profile category includes block maps and use counting; it
+is not all removable CFG work.
+
 ## Validation and evidence
 
 Scalar, SSE and the frozen workload match the baseline object bytes at O0,
@@ -113,13 +161,12 @@ stdout and stderr. The final rebuilt candidate's SHA256 matches the immutable
 image used in the retained measurements.
 
 All 467 compiler objects match byte for byte in PA36's full source identity
-check. The strict course report passes all 11,314 tests (the Wasm lane was
-rerun with the pinned tools on PATH after initial missing-tool setup errors).
+check. The strict course report passes all 11,314 tests with the pinned Wasm tools
+on PATH.
 Debug-info tests, PA36 correctness smoke, self-host through PA5 and inception
 all pass. Architecture audits, the file audit and formatting with CI's pinned
 Clang-format 21.1.8 pass; the file audit retains seven pre-existing header-body
-warnings. Clang-format 22 initially reported a difference in an untouched
-file, so the final audit uses the same formatter version as CI.
+warnings. The final audit uses the same formatter version as CI.
 
 Raw commands, compiler images, profiles, pass counts, byte comparisons and
 counter observations are retained locally under
@@ -127,3 +174,10 @@ counter observations are retained locally under
 are in `prototype-dominance/`; `rejected-eh-cache/` contains the rejected
 experiment. `validation-progress.log` records the broader checks. No raw build
 artifacts or benchmark input changes are committed with the implementation.
+
+The CFG follow-up's raw profiles, immutable compiler images, rejected prototype,
+object comparisons and paired wall measurements are under
+`/mnt/vizier/cppgm-cfg-analysis-20261116/`. Its graph check compares dominance
+against independent vertex-removal reachability on 1,000 random graphs,
+including handler edges and unreachable blocks, while reusing graph storage.
+A 20,000-block chain checks the deep iterative traversal. All pass.
