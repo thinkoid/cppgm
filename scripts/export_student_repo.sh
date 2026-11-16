@@ -483,6 +483,7 @@ dev_support_files=(
   dev/src/support/not_implemented.h
   dev/src/support/testing/test_runner.cpp
   dev/src/support/tool_help_text.h
+  dev/src/support/wasi_heap.cpp
 )
 
 copy_tracked_paths \
