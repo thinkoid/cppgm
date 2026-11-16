@@ -11,11 +11,14 @@ host=${1:?usage: build_release_tools.sh <host compiler> [make argument ...]}
 shift
 root=$(cd "$(dirname "$0")/.." && pwd)
 stage=obj/release
+library_flags='-pthread -fPIC -fvisibility=hidden -fvisibility-inlines-hidden'
 
 make -C "$root/dev" all CXX="$host" CPPGM_HOST_CXX="$host" "$@"
 make -C "$root/pa35" compare-inception CXX=../dev/cppgm CPPGM_HOST_CXX="$host" \
-  INCEPTION_OBJ_ROOT_BASE="../$stage" "$@"
-# A library object does not name its compiler as a prerequisite: compile each one again.
+  INCEPTION_OBJ_ROOT_BASE="../$stage/pic" INCEPTION_BIN_ROOT_BASE="../$stage/bin" \
+  INCEPTION_EXTRA_CC_FLAGS="$library_flags ${INCEPTION_EXTRA_CC_FLAGS:-}" "$@"
+# Third-stage shared objects were compiled by cppgm-self with library flags.
+# Only the library-specific objects need rebuilding when that compiler changes.
 make -C "$root/dev" clean-lowir-library OBJ="../$stage/library"
 make -C "$root/dev" lowir-library CXX="$root/$stage/bin/selfhost/cppgm-self" CPPGM_HOST_CXX="$host" \
-  OBJ="../$stage/library" "$@"
+  OBJ="../$stage/library" LOWIR_LIBRARY_REUSE_OBJDIR="../$stage/pic/inception/shared/release" "$@"
