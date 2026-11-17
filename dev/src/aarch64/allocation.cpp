@@ -128,7 +128,7 @@ void Selector::allocate()
 			if (reg < 8 &&
 				(!calls.empty() || (range.first == 0 && (range.id >= incoming.size() || incoming[range.id] != reg))))
 				continue;
-			if (available[reg] > range.first || (reg < 19 && across_call))
+			if ((dynamic_stack_ && reg == 28) || available[reg] > range.first || (reg < 19 && across_call))
 				continue;
 			if (reg >= 19 && available[reg] == 0)
 				preserved_.push_back({ reg, reserve(8, 8) });

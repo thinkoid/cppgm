@@ -50,6 +50,7 @@ my $objdump = $ENV{CPPGM_AARCH64_OBJDUMP} // 'llvm-objdump';
 my $ar = $ENV{CPPGM_AARCH64_AR} // 'llvm-ar';
 my $qemu = $ENV{CPPGM_AARCH64_QEMU} // 'qemu-aarch64';
 my $support = "$FindBin::Bin/../pa39/support";
+my @assembly;
 my @libraries;
 if ($expect->{builtins}) {
     my $archive = $ENV{CPPGM_AARCH64_BUILTINS} // '/usr/lib/gcc-cross/aarch64-linux-gnu/14/libgcc.a';
@@ -85,12 +86,12 @@ sub execute_image {
 }
 
 sub link_external {
-    run(0, $lld, '-m', 'aarch64elf', '-static', '-e', '_start', "$directory/start.o", @_, @libraries, '-o', "$directory/program");
+    run(0, $lld, '-m', 'aarch64elf', '-static', '-e', '_start', "$directory/start.o", @_, @assembly, @libraries, '-o', "$directory/program");
     execute_image('lld');
 }
 
 sub link_course {
-    run(0, $compiler, @target, @_, @libraries, '-o', "$directory/program");
+    run(0, $compiler, @target, @_, @assembly, @libraries, '-o', "$directory/program");
     execute_image('course');
 }
 
@@ -106,6 +107,10 @@ sub link_hosted {
 }
 
 run(0, $clang, @target, '-march=armv8-a', '-c', "$support/start.S", '-o', "$directory/start.o");
+if ($expect->{assembly}) {
+    push @assembly, "$directory/witness.o";
+    run(0, $clang, @target, '-march=armv8-a', '-c', "$support/$expect->{assembly}", '-o', $assembly[0]);
+}
 for my $level (0..3) {
     $level_name = "O$level";
     $producers = 'clang';
@@ -125,6 +130,19 @@ for my $level (0..3) {
         die "$test: missing function $symbol\n" unless $assembly =~ /<\Q$symbol\E>:/;
         die "$test: register-only leaf $symbol accesses memory or calls\n"
             if $assembly =~ /\b(?:ld\w*|st\w*|bl|blr|sp)\b/i;
+    }
+    if ($level == 3 && $expect->{quality}) {
+        my $quality = $expect->{quality};
+        my $symbol = $quality->{symbol};
+        for my $unit ($other, $object) {
+            my $assembly = run(0, $objdump, '-d', '--no-show-raw-insn', "--disassemble-symbols=$symbol", $unit);
+            my @instructions = $assembly =~ /^\s*[0-9a-f]+:\s+(\S+[^\n]*)$/mg;
+            @instructions or die "$test: no instructions for $symbol\n";
+            my @memory = grep { /^(?:ld|st)/ } @instructions;
+            my @stack = grep { /\[sp\b/ } @memory;
+            die "$test: $symbol exceeds O3 code-size or memory-traffic limits\n" if
+                @instructions > $quality->{instructions} || @memory > $quality->{memory} || @stack > $quality->{stack};
+        }
     }
     for my $optimized (0,1) {
         my @emit = $optimized ? ("-O$level", '-S', '-emit-lowir') :
@@ -173,6 +191,17 @@ for my $level (0..3) {
         run(0, $backend, @flags, "$directory/raw.lowir", '-o', "$directory/program");
         execute_image('lowir2native');
     }
+}
+if ($expect->{link_errors}) {
+    my $bad = "$directory/invalid.o";
+    run(0, $clang, @target, '-c', "$support/absolute-relocation.S", '-o', $bad);
+    run(1, $compiler, @target, $bad, '-o', "$directory/invalid");
+    read_file("$directory/err") =~ /unsupported.*relocation/i or die "$test: missing relocation diagnostic\n";
+    run(0, $clang, '--target=x86_64-linux-gnu', '-c', '-x', 'c++', $test, '-o', $bad);
+    run(1, $compiler, @target, $bad, '-o', "$directory/invalid");
+    read_file("$directory/err") =~ /architecture|target mismatch/i or die "$test: missing target diagnostic\n";
+    run(1, $compiler, @target, "$directory/unit.o", '-o', "$directory/invalid");
+    read_file("$directory/err") =~ /undefined symbol/ or die "$test: missing undefined-symbol diagnostic\n";
 }
 if ($bundle) {
     open(my $file, '>', "$bundle/executions.tsv.tmp") or die "manifest: $!";

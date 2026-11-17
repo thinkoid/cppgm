@@ -49,3 +49,36 @@ The PA39 browser gate runs the WASI compiler and the packaged incpption Emscript
 **Feasibility check on this checkout.** On x86-64 Linux, Clang 22.1.2 compiled a four-float aggregate callee for `aarch64-linux-gnu -march=armv8-a -O2`. A separate assembly caller supplied 1, 2, 4 and 8 in s0–s3. LLVM reported `EM_AARCH64` and an `R_AARCH64_CALL26` relocation to the callee. LLD linked a static executable without a sysroot. QEMU 10.2.1 with `-cpu cortex-a53` ran it and returned the expected 15. QEMU came from the distribution package extracted into a temporary directory. This exercises the proposed independent test path ahead of the cppgm implementation. [LLD ELF cross-linker](https://lld.llvm.org/)
 
 For production changes, run the PA39 controls plus the repository's strict report, debug-info checks, PA35 through PA5, PA36 backend smoke, architecture/file/placement/format audits and harness tests. Run inception for self-host changes and the PA36 release check for release qualification. Re-run PA37 and the optional PA38 native/Wasm controls when changing shared target facts. Keep target-independent regressions in their earliest owning lane and Arm-specific controls in PA39. Publish implementation-specific performance regressions in the maintainer lane and calibrated behavioral bounds in the student lane. [Testing and references](../TESTING_AND_REFERENCES.md)
+
+## Implementation and qualification
+
+PA39 now emits and links Linux AArch64 and Apple Silicon objects from C++ and
+LowIR. Its fixtures cover the ABI, 64-byte aligned by-value arguments, dynamic
+frames, a fixed-seed full-width register preservation probe, NEON, atomics,
+initializers and address rebasing, archives, exceptions and TLS. The course
+driver accepts source or objects and produces the executable in one invocation.
+Applications using the operating system's C++ runtime can pass the ordinary
+target startup files and archives or SDK interfaces to LLD. The browser test
+exercises cross-unit exception handling with the GNU/Linux C++ runtime on both
+architectures and imports a libSystem symbol on both macOS architectures.
+
+The PA39 cross lane runs Linux guests on Cortex-A53 QEMU and packages the exact
+Linux executables, Mach-O objects, and course-linked Mach-O executables for
+native replay. The Mach-O checker verifies every SHA-256 code-signature page.
+Apple's SDK, dyld, unwind runtime and pthread tests run on the macOS workflow.
+Local x86 runs cover cross-generation and emulation. Native performance and
+execution under dyld require results from their respective hardware runners.
+
+For performance, freeze a bundle with
+`python3 scripts/aarch64_benchmarks.py build obj/pa39-bench` on x86. Provide
+`CPPGM_AARCH64_GXX` for cross GCC and the checker variables for Clang, LLD
+and QEMU. The default compares cppgm O0 and O3. Pass `--baseline PATH` to
+compare two immutable O3 compilers. Both baselines also have independent GCC
+and Clang O3 witnesses. The common driver writes an eight-byte checksum per
+workload. It exercises PA36's hash table and observer call, PA39's memory loop,
+and integer and floating-point NEON. On quiet Linux AArch64 run
+`python3 scripts/aarch64_benchmarks.py measure obj/pa39-bench obj/pa39-times`.
+Each block retains every observation, A/A calibration and ABBA or BAAB order.
+`--perf` adds separate hardware-counter readings when supported. Hosted CI
+timings are observations from shared machines. Native throughput budgets are
+pending calibration on stable Arm hardware.

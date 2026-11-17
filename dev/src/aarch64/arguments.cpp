@@ -12,7 +12,8 @@ using namespace lowir;
 void Selector::darwin_tls_address(unsigned reg, SymbolId symbol)
 {
 	out_.emit(Op::SubI, 31, 31, 0, 48 << 10);
-	out_.frame_rule(FrameRule::Offset, 31, frame_ + 48);
+	if (!dynamic_stack_)
+		out_.frame_rule(FrameRule::Offset, 31, frame_ + 48);
 	access(true, 0, 31, 0, 8);
 	access(true, 16, 31, 8, 8);
 	access(true, 17, 31, 16, 8);
@@ -28,18 +29,8 @@ void Selector::darwin_tls_address(unsigned reg, SymbolId symbol)
 	access(false, 30, 31, 24, 8);
 	access(false, reg, 31, 32, 8);
 	out_.emit(Op::AddI, 31, 31, 0, 48 << 10);
-	out_.frame_rule(FrameRule::Offset, 31, frame_);
-}
-
-void Selector::frame_address(unsigned reg, uint32_t offset)
-{
-	if (offset <= 4095)
-		out_.emit(Op::AddI, reg, 31, 0, offset << 10);
-	else
-	{
-		constant(reg, offset);
-		out_.emit(Op::Add, reg, 31, reg, 0x206000);
-	}
+	if (!dynamic_stack_)
+		out_.frame_rule(FrameRule::Offset, 31, frame_);
 }
 
 // dst and src are address registers. A zero-register source fills with zero.
@@ -109,14 +100,29 @@ void Selector::fp_move(bool to_fp, unsigned fp, unsigned gp, Type type)
 		out_.emit(single ? Op::FmovWS : Op::FmovXD, gp, fp);
 }
 
-// Register pieces of a memory-resident SSA value. Frame homes and caller-owned
-// slots reserve complete eightbyte carriers for the final partial GP piece.
-void Selector::transfer(bool load, const Argument& arg, unsigned base, Type)
+// An aggregate may end at the last byte of a mapped page. Access only
+// the bytes belonging to each general-register piece, including its tail.
+void Selector::transfer(bool load, const Argument& arg, unsigned base, Type type)
 {
 	for (unsigned i = 0; i < arg.pieces; ++i)
 	{
 		if (arg.bank == Bank::General)
-			access(!load, arg.first + i, base, i * 8, 8);
+		{
+			const unsigned reg = arg.first + i;
+			unsigned offset = 0, bytes = std::min<uint64_t>(8, storage_bytes(type) - i * 8);
+			for (unsigned chunk : { 8u, 4u, 2u, 1u })
+			{
+				if (!(bytes & chunk))
+					continue;
+				const unsigned part = offset ? 15 : reg;
+				if (!load && offset)
+					out_.emit(Op::Ubfm, 15, reg, 0, (offset * 8 << 16) | (63u << 10));
+				access(!load, part, base, i * 8 + offset, chunk);
+				if (load && offset)
+					out_.emit(Op::Orr, reg, reg, 15, offset * 8 << 10);
+				offset += chunk;
+			}
+		}
 		else
 		{
 			const Op op = arg.piece_bytes == 16 ? (load ? Op::LdrQ : Op::StrQ)
@@ -144,13 +150,13 @@ void Selector::parameter(TempId id, const Argument& arg)
 	}
 	else if (memory_value(type))
 	{
-		frame_address(10, homes_[id]);
+		home_address(10, id);
 		if (arg.indirect || arg.bank == Bank::Stack)
 		{
 			if (!arg.indirect)
 				frame_address(11, offset);
 			else if (arg.bank == Bank::Stack)
-				access(false, 11, 31, offset, 8);
+				access(false, 11, frame_base(), offset, 8);
 			else
 				move(11, arg.first);
 			copy_bytes(10, 11, storage_bytes(type));
@@ -162,7 +168,7 @@ void Selector::parameter(TempId id, const Argument& arg)
 	{
 		const unsigned dest = registers_[id] == kNoId ? 10 : registers_[id];
 		if (arg.bank == Bank::Stack)
-			access(false, dest, 31, offset, storage_bytes(type));
+			access(false, dest, frame_base(), offset, storage_bytes(type));
 		else if (arg.bank == Bank::Simd)
 			fp_move(false, arg.first, dest, type);
 		else
@@ -195,7 +201,7 @@ Selector::CallLayout Selector::call_layout(const lowir::Instruction& inst) const
 		{
 			bytes = (bytes + 15) & ~uint64_t(15);
 			plan.copies[i] = bytes;
-			bytes += storage_bytes(plan.types[i]);
+			bytes += storage_bytes(plan.types[i]) + (std::max(16u, data_alignment(plan.types[i])) - 16);
 			if (bytes > INT32_MAX)
 				throw AArch64Error("AArch64 call frame too large");
 		}
@@ -209,7 +215,7 @@ void Selector::pass(const Argument& arg, Value src, Type type, unsigned copy_off
 		return;
 	if (arg.indirect)
 	{
-		frame_address(10, copy_offset);
+		base_address(10, 31, copy_offset, data_alignment(type));
 		copy_value(10, src, type);
 		if (arg.bank == Bank::Stack)
 			access(true, 10, 31, arg.first, 8);
@@ -224,7 +230,7 @@ void Selector::pass(const Argument& arg, Value src, Type type, unsigned copy_off
 	{
 		if (arg.bank == Bank::Stack)
 		{
-			frame_address(10, arg.first);
+			base_address(10, 31, arg.first);
 			copy_value(10, src, type);
 		}
 		else
@@ -256,7 +262,7 @@ void Selector::call(const lowir::Instruction& inst)
 		pass(layout.args[i], body_.operands[inst.extra_first + i], layout.types[i], layout.copies[i]);
 	const Argument ret = classify(inst.type, program_.call_boundary(inst)->boundary.result_shape);
 	if (ret.indirect)
-		frame_address(8, homes_[inst.result]);
+		home_address(8, inst.result);
 	if (inst.ops[0].kind == ValueKind::Symbol)
 		out_.reference(Op::Bl, Fixup::Call, inst.ops[0].index);
 	else
@@ -271,7 +277,7 @@ void Selector::call(const lowir::Instruction& inst)
 		save_vector(0, inst.result);
 	else if (memory_value(inst.type))
 	{
-		frame_address(10, homes_[inst.result]);
+		home_address(10, inst.result);
 		transfer(false, ret, 10, inst.type);
 	}
 	else
@@ -293,7 +299,7 @@ void Selector::epilogue(const lowir::Instruction& inst)
 	{
 		if (result_.indirect)
 		{
-			access(false, 10, 31, result_pointer_, 8);
+			access(false, 10, frame_base(), result_pointer_, 8);
 			copy_value(10, inst.ops[0], type);
 		}
 		else
@@ -312,6 +318,11 @@ void Selector::epilogue(const lowir::Instruction& inst)
 	}
 	if (frame_)
 		out_.frame_rule(FrameRule::RememberState);
+	if (dynamic_stack_)
+	{
+		out_.emit(Op::AddI, 31, 28);
+		out_.frame_rule(FrameRule::Register, 31);
+	}
 	if (frame_pointer_ != kNoId)
 	{
 		access(false, 29, 31, frame_pointer_, 8);
@@ -322,14 +333,10 @@ void Selector::epilogue(const lowir::Instruction& inst)
 		access(false, 30, 31, link_, 8);
 		out_.frame_rule(FrameRule::Restore, 30);
 	}
-	for (const auto& reg : preserved_)
-	{
-		access(false, reg.first, 31, reg.second, 8);
-		out_.frame_rule(FrameRule::Restore, reg.first);
-	}
+	saved_registers(false);
 	if (tls_vectors_ != kNoId)
 	{
-		frame_address(16, tls_vectors_);
+		base_address(16, 31, tls_vectors_);
 		for (unsigned v = 0; v < 32; ++v)
 			out_.emit(Op::LdrD, v, 16, 0, v << 10);
 	}

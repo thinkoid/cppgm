@@ -1,1 +1,1 @@
-{"macos":true,"exit":61,"peer":"neon-peer.cpp","register_leaf":"mix"}
+{"macos":true,"exit":61,"peer":"neon-peer.cpp","register_leaf":"mix","quality":{"symbol":"transform","instructions":160,"memory":12,"stack":8}}

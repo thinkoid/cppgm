@@ -51,11 +51,23 @@ def macho_image(path):
     assert (magic, cpu, kind) == (0xfeedfacf, 0x100000c, 2), "expected an arm64 Mach-O executable"
     offset = 32
     segments = []
+    initializers = []
     entry = signature = None
     for _ in range(count):
         command, size = struct.unpack_from("<II", image, offset)
         if command == 0x19:
             name, address, memory, start, length, _, protection = struct.unpack_from("<16s4Q2I", image, offset + 8)
+            section_count, = struct.unpack_from("<I", image, offset + 64)
+            for section in range(section_count):
+                record = offset + 72 + section * 80
+                section_size, file_offset = struct.unpack_from("<QI", image, record + 40)
+                flags, = struct.unpack_from("<I", image, record + 64)
+                kind = flags & 255
+                if kind in (9, 0x16):
+                    width = 8 if kind == 9 else 4
+                    for position in range(file_offset, file_offset + section_size, width):
+                        address_or_offset = int.from_bytes(image[position:position + width], "little")
+                        initializers.append((kind, address_or_offset))
             name = name.rstrip(b"\0")
             if name not in (b"__LINKEDIT", b"__PAGEZERO"):
                 segments.append((name, address, memory, start, length, protection))
@@ -66,12 +78,12 @@ def macho_image(path):
             verify_signature(image, signature, length)
         offset += size
     assert entry is not None and signature and any(s[0] == b"__TEXT" for s in segments)
-    return entry, segments
+    return entry, segments, initializers
 
 
 def execute(directory, status, native, clang):
     binary = directory / "program"
-    entry, segments = macho_image(binary)
+    entry, segments, initializers = macho_image(binary)
     if native:
         run("codesign", "--verify", "--strict", binary)
         run(binary, expected=status)
@@ -88,8 +100,13 @@ def execute(directory, status, native, clang):
                          f'.space {memory-size}'])
         addresses.append(f"--section-start={section}={address:#x}")
         if name == b"__TEXT":
-            main = address + entry - start
-    assembly.extend([".text", ".globl _start", "_start:", f"ldr x16, ={main:#x}", "blr x16", "mov x8, #93", "svc #0"])
+            text_base = address - start
+            main = text_base + entry
+    assembly.extend([".text", ".globl _start", "_start:"])
+    for kind, value in initializers:
+        address = value if kind == 9 else text_base + value
+        assembly += [f"ldr x16, ={address:#x}", "blr x16"]
+    assembly.extend([f"ldr x16, ={main:#x}", "blr x16", "mov x8, #93", "svc #0"])
     (directory / "launch.S").write_text("\n".join(assembly) + "\n")
     run(clang, "--target=aarch64-linux-gnu", "-c", "launch.S", "-o", "launch.o", cwd=directory)
     run(os.getenv("CPPGM_AARCH64_LLD", "ld.lld"), "-static", "-e", "_start", *addresses,

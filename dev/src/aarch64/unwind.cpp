@@ -109,6 +109,10 @@ void emit_unwind(const Function& function, uint32_t symbol, uint32_t shared_sect
 		pc = event.pc;
 		switch (event.rule)
 		{
+		case FrameRule::Register:
+			rules.push_back(0x0d); // DW_CFA_def_cfa_register
+			bytes.uleb(event.reg);
+			break;
 		case FrameRule::Offset:
 			rules.push_back(0x0e);
 			bytes.uleb(event.offset);

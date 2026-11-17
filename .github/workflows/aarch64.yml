@@ -5,6 +5,10 @@ on:
     paths:
       - dev/**
       - pa39/**
+      - benchmarks/aarch64/**
+      - pa36/kernels/**
+      - scripts/aarch64_benchmarks.py
+      - scripts/benchmark_timing.py
       - scripts/check_aarch64.pl
       - scripts/replay_aarch64.pl
       - scripts/check_arm64_macos.py
@@ -32,13 +36,20 @@ jobs:
     steps:
       - run: |
           apt-get update
-          apt-get install -y --no-install-recommends build-essential ca-certificates git perl \
+          apt-get install -y --no-install-recommends build-essential ca-certificates git perl python3 \
             clang-22=1:22.1.2-1ubuntu1 llvm-22=1:22.1.2-1ubuntu1 lld-22=1:22.1.2-1ubuntu1 \
-            qemu-user=1:10.2.1+ds-1ubuntu3.3 libgcc-14-dev-arm64-cross=14.3.0-14ubuntu1cross1 \
+            g++-14-aarch64-linux-gnu=14.3.0-14ubuntu1cross1 qemu-user=1:10.2.1+ds-1ubuntu3.3 libgcc-14-dev-arm64-cross=14.3.0-14ubuntu1cross1 \
             libstdc++-14-dev-arm64-cross=14.3.0-14ubuntu1cross1 libc6-dev-arm64-cross=2.43-2ubuntu2cross1
       - uses: actions/checkout@v6
       - run: make test-pa39
       - run: python3 scripts/replay_arm64_macos.py build obj/pa39-macho
+      - if: github.event_name != 'pull_request'
+        run: python3 scripts/aarch64_benchmarks.py build obj/pa39-benchmarks
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v6
+        with:
+          name: pa39-benchmarks
+          path: obj/pa39-benchmarks
       - uses: actions/upload-artifact@v6
         with:
           name: pa39-macho
@@ -59,6 +70,15 @@ jobs:
           name: pa39-guests
           path: guests
       - run: perl scripts/replay_aarch64.pl guests
+      - uses: actions/download-artifact@v7
+        with:
+          name: pa39-benchmarks
+          path: benchmarks-native
+      - run: python3 scripts/aarch64_benchmarks.py measure benchmarks-native timings --blocks 2
+      - uses: actions/upload-artifact@v6
+        with:
+          name: pa39-native-observations
+          path: timings
 
   native-macos:
     needs: cross

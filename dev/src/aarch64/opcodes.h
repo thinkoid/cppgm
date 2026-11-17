@@ -10,6 +10,7 @@
 	M(MulW, 0x1b007c00) \
 	M(SDiv, 0x9ac00c00) \
 	M(UDiv, 0x9ac00800) \
+	M(AndI, 0x92400000) \
 	M(And, 0x8a000000) \
 	M(AndW, 0x0a000000) \
 	M(Orr, 0xaa000000) \
@@ -38,6 +39,8 @@
 	M(LdrW, 0xb9400000) \
 	M(StrW, 0xb9000000) \
 	M(LdrX, 0xf9400000) \
+	M(LdpX, 0xa9400000) \
+	M(StpX, 0xa9000000) \
 	M(StrX, 0xf9000000) \
 	M(B, 0x14000000) \
 	M(Cbz, 0xb4000000) \

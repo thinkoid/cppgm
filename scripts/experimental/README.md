@@ -502,10 +502,27 @@ The lane here keeps the full W1/W2/W3, native/WASI x86 and embedding checks.
 
 ## Download native programs from the browser
 
-The optional PA39 cross test compiles two source files with `cppgm.wasm` in Chromium, links the resulting objects with the LLD module packaged by incpption, and saves four actual browser downloads. The arguments select `ld.lld` for x86-64 and AArch64 Linux ELF, and `ld64.lld` for Intel and Apple Silicon Mach-O. Linux uses a small target entry object. The macOS test supplies a minimal libSystem link interface. Applications using hosted libraries need their target headers and runtime link inputs.
+The optional PA39 cross test compiles two source files with `cppgm.wasm` in Chromium, links the resulting objects with the LLD module packaged by incpption, and saves four actual browser downloads. The arguments select `ld.lld` for x86-64 and AArch64 Linux ELF, and `ld64.lld` for Intel and Apple Silicon Mach-O. Linux uses a small target entry object. The macOS test supplies a minimal libSystem link interface and resolves a call to `exit`. Applications using hosted libraries need their target headers and runtime link inputs.
 
 ```sh
-node scripts/experimental/browser_native_downloads.cjs   /path/to/prepared-package-with-w1 /path/to/incpption /path/to/new-downloads
+node scripts/experimental/browser_native_downloads.cjs \
+  /path/to/prepared-package-with-w1 /path/to/incpption /path/to/new-downloads
 ```
 
 The incpption checkout supplies its `dist/clang-seed` package, browser glue and installed Playwright. The test verifies the packaged LLD hash and the executable type and architecture of each download. The example returns 39. Run the Linux images directly or under QEMU and the Mach-O images on the corresponding Macs. This experiment lives in the compiler checkout and requires no changes to the deployed site.
+
+To exercise hosted C++ on Linux, pass a fourth argument naming a JSON file
+with the runtime directories for either or both Linux targets. For example:
+
+```json
+{
+  "linux-x86_64": {"libc": "/usr/lib/x86_64-linux-gnu", "gcc": "/usr/lib/gcc/x86_64-linux-gnu/15"},
+  "linux-arm64": {"libc": "/usr/aarch64-linux-gnu/lib", "gcc": "/usr/lib/gcc-cross/aarch64-linux-gnu/14"}
+}
+```
+
+For these targets the worker compiles a throw and a catch in separate units.
+It passes the startup objects and ordinary libstdc++, libc, libgcc and unwinder
+archives to LLD. A successful run catches the integer and exits with status 39.
+The Mac downloads use the system-provided implementation of `exit`. A hosted
+C++ application on macOS also needs the SDK interfaces for its C++ libraries.

@@ -51,7 +51,7 @@ void Selector::read_variadic_value(const lowir::Instruction& inst, const Argumen
 		save_vector(16, inst.result);
 		return;
 	}
-	frame_address(10, homes_[inst.result]);
+	home_address(10, inst.result);
 	if (arg.indirect)
 		access(false, 11, 11, 0, 8);
 	if (!stacked && arg.bank == Bank::Simd && arg.pieces > 1 && arg.piece_bytes < 16)

@@ -30,6 +30,12 @@ def build(directory, compiler):
                 continue
             fixture = expect.with_suffix(".t")
             peer = spec.get("peer") or spec.get("hosted_peer")
+            assembly = []
+            if spec.get("assembly"):
+                name = fixture.stem + "-witness.o"
+                run(clang, "--target=arm64-apple-macos11", "-c", root / "support" / spec["assembly"], "-o", directory / name)
+                manifest["objects"][name] = digest(directory / name)
+                assembly.append(name)
             for level in range(4):
                 units = [fixture] + ([root / "support" / peer] if peer else [])
                 for tool, label in [(compiler, "cppgm"), (clang, "clang")]:
@@ -43,6 +49,7 @@ def build(directory, compiler):
                     ("clang",), ("cppgm",)]
                 for producers in pairs:
                     names = [f"{fixture.stem}-O{level}-{label}-{i}.o" for i, label in enumerate(producers)]
+                    names += assembly
                     manifest["programs"].append({"inputs": names, "exit": spec["exit"]})
                     if not spec.get("hosted_peer") and all(label == "cppgm" for label in producers):
                         run(compiler, "--target=arm64-apple-macos11", *(directory / name for name in names),

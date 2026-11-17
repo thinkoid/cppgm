@@ -44,9 +44,7 @@ Argument Arguments::next(Type type, ir_model::AggregateShape shape, bool unnamed
 	if (darwin && shape.element == ir_model::AggregateElement::Empty)
 		return Argument{ Bank::General, 0, 0, 0, false };
 	unsigned& used = arg.bank == Bank::Simd ? simd : general;
-	const unsigned alignment = arg.indirect ? 8 : data_alignment(type);
-	if (alignment > 16)
-		throw AArch64Error("over-aligned AArch64 call argument");
+	const unsigned alignment = arg.indirect ? 8 : std::min(16u, data_alignment(type));
 	if (!darwin && arg.bank == Bank::General && alignment == 16)
 		used = (used + 1) & ~1u;
 	if (!(darwin && unnamed) && used + arg.pieces <= 8)

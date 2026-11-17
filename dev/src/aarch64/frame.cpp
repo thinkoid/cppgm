@@ -17,8 +17,13 @@ Selector::Selector(const Program& program, SymbolId symbol, Function& out, int l
 
 uint32_t Selector::reserve(uint64_t size, uint32_t alignment)
 {
-	if (alignment > 16 || size > UINT32_MAX)
+	if (size > UINT32_MAX)
 		throw AArch64Error("unsupported AArch64 frame alignment or size");
+	if (alignment > 16)
+	{
+		size += alignment - 16;
+		alignment = 16;
+	}
 	const uint64_t start = (uint64_t(frame_) + alignment - 1) & ~uint64_t(alignment - 1);
 	if (start + size > INT32_MAX)
 		throw AArch64Error("AArch64 stack frame exceeds 2 GiB");
@@ -46,6 +51,10 @@ void Selector::plan()
 			if (named_.darwin && !calls)
 				for (const auto operand : inst.ops)
 					calls |= tls_access(operand);
+			dynamic_stack_ |= inst.op == Opcode::StackSave || inst.op == Opcode::StackAlloc ||
+				inst.op == Opcode::StackRestore;
+			if (inst.op == Opcode::FrameAddress)
+				frame_pointer_ = 0;
 			starts_variadic |= inst.op == Opcode::VaStart;
 			eh |= (inst.op >= Opcode::EhTry && inst.op <= Opcode::Resume) || inst.op == Opcode::Exception ||
 				inst.op == Opcode::ExceptionSelector;
@@ -64,16 +73,17 @@ void Selector::plan()
 		}
 		max_phis = std::max(max_phis, count);
 	}
-	reserve(outgoing, 16);
+	outgoing_ = (outgoing + 15) & ~15u;
+	reserve(outgoing_, 16);
 	if (eh)
 		prepare_exceptions();
 	if (starts_variadic && !named_.darwin)
 		variadic_area_ = reserve(64 + 128, 16);
 	if (result_.indirect)
 		result_pointer_ = reserve(8, 8);
-	if (calls)
+	if (calls || dynamic_stack_ || frame_pointer_ != kNoId)
 	{
-		if (named_.darwin)
+		if (named_.darwin || frame_pointer_ != kNoId)
 			frame_pointer_ = reserve(8, 16);
 		link_ = reserve(8, 8);
 	}
@@ -86,6 +96,8 @@ void Selector::plan()
 		else
 			slots_.push_back(reserve((storage_bytes(type) + 7) & ~uint64_t(7), data_alignment(type)));
 	}
+	if (dynamic_stack_)
+		preserved_.push_back({ 28, reserve(8, 8) });
 	allocate();
 	if (named_.darwin && program_.symbols[symbol_].metadata.tls_for != kNoId)
 	{
@@ -117,6 +129,27 @@ void Selector::constant(unsigned reg, uint64_t bits)
 	}
 }
 
+void Selector::saved_registers(bool store)
+{
+	for (size_t i = 0; i < preserved_.size(); ++i)
+	{
+		const auto current = preserved_[i];
+		const bool pair = level_ && i + 1 < preserved_.size() && current.second <= 504 &&
+			preserved_[i + 1].second == current.second + 8;
+		const auto rule = store ? FrameRule::Save : FrameRule::Restore;
+		if (pair)
+		{
+			const auto next = preserved_[++i];
+			out_.emit(
+				store ? Op::StpX : Op::LdpX, current.first, 31, 0, (next.first << 10) | ((current.second / 8) << 15));
+			out_.frame_rule(rule, next.first, frame_ - next.second);
+		}
+		else
+			access(store, current.first, 31, current.second, 8);
+		out_.frame_rule(rule, current.first, frame_ - current.second);
+	}
+}
+
 void Selector::stack_adjust(bool subtract)
 {
 	const Op op = subtract ? Op::SubI : Op::AddI;
@@ -133,6 +166,48 @@ void Selector::stack_adjust(bool subtract)
 		out_.emit(op, 31, 31, 0, amount << 10);
 		out_.frame_rule(FrameRule::Offset, 31, subtract ? frame_ : 0);
 	}
+}
+
+// SP and the fixed frame base are 16-byte aligned. Over-aligned objects
+// reserve padding inside the frame, leaving DWARF save offsets constant.
+void Selector::base_address(unsigned reg, unsigned base, uint32_t offset, unsigned alignment)
+{
+	if (alignment > 16)
+		offset += alignment - 16;
+	if (offset <= 4095)
+		out_.emit(Op::AddI, reg, base, 0, offset << 10);
+	else
+	{
+		const unsigned scratch = reg == base ? 16 : reg;
+		constant(scratch, offset);
+		out_.emit(Op::Add, reg, base, scratch, 0x206000);
+	}
+	if (alignment > 16)
+	{
+		unsigned bits = 0;
+		for (; (1u << bits) < alignment; ++bits)
+		{
+		}
+		out_.emit(Op::AndI, reg, reg, 0, ((64 - bits) << 16) | ((63 - bits) << 10));
+	}
+}
+
+void Selector::home_address(unsigned reg, TempId temp)
+{
+	base_address(reg, frame_base(), homes_[temp], data_alignment(body_.temps[temp].type));
+}
+
+void Selector::stack_alloc(const lowir::Instruction& inst)
+{
+	const Type size = type_of(inst.ops[0], Type::scalar(TypeKind::I64));
+	value(11, inst.ops[0], size);
+	out_.emit(Op::AddI, 9, 31);
+	out_.emit(Op::Sub, 9, 9, 11);
+	out_.emit(Op::AndI, 9, 9, 0, (60u << 16) | (59u << 10));
+	out_.emit(Op::AddI, 31, 9);
+	// Keep space for this function's outgoing stack arguments at the new SP.
+	base_address(9, 9, outgoing_);
+	save(9, inst.result);
 }
 
 void Selector::extend(unsigned reg, unsigned bits, bool sign)
@@ -163,10 +238,13 @@ void Selector::access(bool store, unsigned reg, unsigned base, uint32_t offset, 
 	}
 	if (offset % bytes || offset / bytes >= 4096)
 	{
-		constant(16, offset);
+		unsigned scratch = 16;
+		if (base == scratch || (store && reg == scratch))
+			scratch = (base == 17 || (store && reg == 17)) ? 15 : 17;
+		constant(scratch, offset);
 		// ADD (extended register), UXTX. This form can use SP as the base.
-		out_.emit(Op::Add, 16, base, 16, 0x206000);
-		base = 16;
+		out_.emit(Op::Add, scratch, base, scratch, 0x206000);
+		base = scratch;
 		offset = 0;
 	}
 	out_.emit(op, reg, base, 0, (offset / bytes) << 10);
@@ -184,9 +262,9 @@ Type Selector::type_of(Value v, Type fallback) const
 void Selector::address(unsigned reg, Value operand)
 {
 	if (operand.kind == ValueKind::Slot)
-		frame_address(reg, slots_[operand.index]);
+		base_address(reg, frame_base(), slots_[operand.index], data_alignment(body_.slots[operand.index].type));
 	else if (operand.kind == ValueKind::Temp && memory_value(body_.temps[operand.index].type))
-		frame_address(reg, homes_[operand.index]);
+		home_address(reg, operand.index);
 	else if (operand.kind == ValueKind::Symbol)
 	{
 		if (program_.symbols[operand.index].metadata.storage == ir_model::GSM_THREAD_LOCAL)
@@ -241,10 +319,11 @@ void Selector::value(unsigned reg, Value operand, Type type)
 		else if (registers_[operand.index] != kNoId)
 			move(reg, registers_[operand.index]);
 		else
-			access(false, reg, 31, homes_[operand.index], 8);
+			access(false, reg, frame_base(), homes_[operand.index], 8);
 		break;
 	case ValueKind::Slot:
-		access(false, reg, 31, slots_[operand.index], storage_bytes(type));
+		address(reg, operand);
+		access(false, reg, reg, 0, storage_bytes(type));
 		break;
 	case ValueKind::Symbol:
 		address(reg, operand);
@@ -264,7 +343,7 @@ void Selector::save(unsigned reg, TempId temp, bool normalized)
 	if (registers_[temp] != kNoId)
 		move(registers_[temp], reg);
 	else
-		access(true, reg, 31, homes_[temp], 8);
+		access(true, reg, frame_base(), homes_[temp], 8);
 }
 
 } // namespace aarch64

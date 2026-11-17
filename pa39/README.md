@@ -86,3 +86,9 @@ Copy that directory to Linux AArch64 and run
 `perl scripts/replay_aarch64.pl obj/pa39-guests`. Each manifest records the
 SHA-256, exit status, optimization level, producers and linker. Native replay
 checks the digest and status for every recorded execution.
+
+The O3 `transform` loop, including its setup and scalar tail, permits 160
+instructions, 12 loads or stores, and eight stack loads or stores. LLVM 22.1.2
+emits 35, four and zero for the same source. Both objects run the same odd-sized
+input. The separate vector leaf has zero memory traffic. These budgets track
+generated code on x86 while native runs measure execution time.

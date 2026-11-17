@@ -36,7 +36,11 @@ private:
 	void stack_va_arg(const lowir::Instruction& inst, const Argument& arg, bool aligned);
 	void va_arg(const lowir::Instruction& inst);
 	void read_variadic_value(const lowir::Instruction& inst, const Argument& arg, bool stacked);
-	void frame_address(unsigned reg, uint32_t offset);
+	unsigned frame_base() const { return dynamic_stack_ ? 28 : 31; }
+	void base_address(unsigned reg, unsigned base, uint32_t offset, unsigned alignment = 1);
+	void frame_address(unsigned reg, uint32_t offset) { base_address(reg, frame_base(), offset); }
+	void home_address(unsigned reg, lowir::TempId temp);
+	void stack_alloc(const lowir::Instruction& inst);
 	void copy_bytes(unsigned dst, unsigned src, uint64_t size);
 	void copy_value(unsigned dst, lowir::Value src, lowir::Type type);
 	struct CallLayout
@@ -55,6 +59,7 @@ private:
 	bool floating(const lowir::Instruction& inst) const;
 	uint32_t reserve(uint64_t size, uint32_t alignment);
 	void stack_adjust(bool subtract);
+	void saved_registers(bool store);
 	void constant(unsigned reg, uint64_t bits);
 	void move(unsigned to, unsigned from);
 	void extend(unsigned reg, unsigned bits, bool sign);
@@ -64,6 +69,8 @@ private:
 	void value(unsigned reg, lowir::Value value, lowir::Type type);
 	void save(unsigned reg, lowir::TempId temp, bool normalized = false);
 	lowir::Type type_of(lowir::Value v, lowir::Type fallback) const;
+	bool register_edge(lowir::BlockId from, lowir::BlockId to);
+	void copy_edge(lowir::BlockId from, lowir::BlockId to);
 	void edge(lowir::BlockId from, lowir::BlockId to);
 	void select(const lowir::Instruction& inst, lowir::BlockId block);
 	void atomic(const lowir::Instruction& inst);
@@ -85,6 +92,8 @@ private:
 	Function& out_;
 	int level_;
 	bool pic_;
+	bool dynamic_stack_ = false;
+	uint32_t outgoing_ = 0;
 	std::vector<uint32_t> slots_, homes_, registers_, vectors_;
 	std::vector<std::pair<unsigned, uint32_t>> preserved_;
 	machine::PhiInputs phis_;

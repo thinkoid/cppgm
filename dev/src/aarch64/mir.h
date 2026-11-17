@@ -46,6 +46,7 @@ struct Instruction
 
 enum class FrameRule
 {
+	Register,
 	Offset,
 	Save,
 	Restore,

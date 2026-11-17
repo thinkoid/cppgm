@@ -52,17 +52,17 @@ void Selector::landing(BlockId block)
 	if (index == kNoId)
 		return;
 	out_.pads[index] = 4 * out_.code.size();
-	access(true, 0, 31, exception_slot_, 8);
+	access(true, 0, frame_base(), exception_slot_, 8);
 	extend(1, 32, true);
-	access(true, 1, 31, exception_slot_ + 16, 8);
+	access(true, 1, frame_base(), exception_slot_ + 16, 8);
 	if (selectors_[index] == kNoId || !plan.analysis.eh_translate_[index])
-		access(true, 1, 31, exception_slot_ + 8, 8);
+		access(true, 1, frame_base(), exception_slot_ + 8, 8);
 	if (selectors_[index] == kNoId)
 		return;
 	if (!plan.analysis.eh_translate_[index])
 		out_.reference(Op::B, Fixup::Block, block);
 	out_.bind(selectors_[index]);
-	access(false, 10, 31, exception_slot_ + 16, 8);
+	access(false, 10, frame_base(), exception_slot_ + 16, 8);
 	const auto& table = plan.tables.landings[index];
 	constant(9, 0);
 	for (uint32_t k = table.map_count; k-- > 0;)
@@ -73,12 +73,12 @@ void Selector::landing(BlockId block)
 		constant(11, plan.tables.map[pos + 1]);
 		out_.emit(Op::Csel, 9, 11, 9);
 	}
-	access(true, 9, 31, exception_slot_ + 8, 8);
+	access(true, 9, frame_base(), exception_slot_ + 8, 8);
 }
 
 void Selector::exception_value(const lowir::Instruction& inst)
 {
-	access(false, 9, 31, exception_slot_ + (inst.op == Opcode::Exception ? 0 : 8), 8);
+	access(false, 9, frame_base(), exception_slot_ + (inst.op == Opcode::Exception ? 0 : 8), 8);
 	save(9, inst.result);
 }
 
@@ -86,7 +86,7 @@ void Selector::resume(uint32_t site)
 {
 	if (site == 0 || site == machine::ExceptionAnalysis::kResumeTerminal)
 	{
-		access(false, 0, 31, exception_slot_, 8);
+		access(false, 0, frame_base(), exception_slot_, 8);
 		out_.needs_resume = true;
 		out_.reference(Op::Bl, Fixup::Resume, 0);
 		const uint32_t end = 4 * out_.code.size();

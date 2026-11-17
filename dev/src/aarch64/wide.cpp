@@ -31,7 +31,7 @@ void Selector::pair(Value src, unsigned lo, unsigned hi)
 
 void Selector::save_pair(TempId dest, unsigned lo, unsigned hi)
 {
-	frame_address(17, homes_[dest]);
+	home_address(17, dest);
 	access(true, lo, 17, 0, 8);
 	access(true, hi, 17, 8, 8);
 }

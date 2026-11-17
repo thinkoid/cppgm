@@ -40,7 +40,7 @@ void Selector::save_vector(unsigned reg, TempId id)
 		vector_move(vectors_[id], reg);
 	else
 	{
-		frame_address(16, homes_[id]);
+		home_address(16, id);
 		out_.emit(Op::StrQ, reg, 16);
 	}
 }

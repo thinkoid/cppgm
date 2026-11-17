@@ -45,60 +45,6 @@ void Selector::compare(const lowir::Instruction& inst)
 	out_.emit(Op::Csinc, result_reg, 31, 31, (conditions[inst.sub] ^ 1) << 12);
 }
 
-void Selector::edge(BlockId from, BlockId to)
-{
-	// Snapshot all sources before committing any destination of this parallel copy.
-	uint32_t offset = phi_area_;
-	const InstId first = body_.blocks[to].first;
-	for (InstId i = first; i != kNoId && body_.instructions[i].op == Opcode::Phi; i = body_.instructions[i].next)
-	{
-		const Type type = body_.instructions[i].type;
-		const auto source = phis_.incoming(body_, i, from);
-		if (memory_value(type))
-		{
-			frame_address(10, offset);
-			copy_value(10, source, type);
-		}
-		else
-		{
-			value(left, source, type);
-			access(true, left, 31, offset, 8);
-		}
-		offset += (storage_bytes(type) + 7) & ~uint64_t(7);
-	}
-	offset = phi_area_;
-	for (InstId i = first; i != kNoId && body_.instructions[i].op == Opcode::Phi; i = body_.instructions[i].next)
-	{
-		const auto& phi = body_.instructions[i];
-		if (memory_value(phi.type))
-		{
-			frame_address(11, offset);
-			if (phi.type.kind() == TypeKind::V128)
-			{
-				out_.emit(Op::LdrQ, 16, 11);
-				save_vector(16, phi.result);
-			}
-			else
-			{
-				frame_address(10, homes_[phi.result]);
-				copy_bytes(10, 11, storage_bytes(phi.type));
-			}
-		}
-		else
-		{
-			access(false, left, 31, offset, 8);
-			save(left, phi.result);
-		}
-		offset += (storage_bytes(phi.type) + 7) & ~uint64_t(7);
-	}
-	if (out_.exceptions && out_.exceptions->entry_selectors[to] != 0)
-	{
-		constant(9, out_.exceptions->entry_selectors[to]);
-		access(true, 9, 31, exception_slot_ + 8, 8);
-	}
-	out_.reference(Op::B, Fixup::Block, to);
-}
-
 void Selector::select(const lowir::Instruction& inst, BlockId block)
 {
 	if ((inst.type.kind() == TypeKind::I128 ||
@@ -123,7 +69,7 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		}
 		if (memory_value(inst.type))
 		{
-			frame_address(10, homes_[inst.result]);
+			home_address(10, inst.result);
 			copy_value(10, inst.ops[0], inst.type);
 			return;
 		}
@@ -151,7 +97,7 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		}
 		if (memory_value(inst.type))
 		{
-			frame_address(10, homes_[inst.result]);
+			home_address(10, inst.result);
 			address(11, inst.ops[0]);
 			copy_bytes(10, 11, storage_bytes(inst.type));
 			return;
@@ -176,7 +122,16 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		const Type index = type_of(inst.ops[1], word);
 		value(right, inst.ops[1], index);
 		extend(right, integer_bits(index.kind()), !is_unsigned(index.kind()) && index.kind() != TypeKind::I1);
-		constant(result_reg, storage_bytes(inst.type));
+		const uint64_t stride = storage_bytes(inst.type);
+		if (level_ && stride && (stride & (stride - 1)) == 0)
+		{
+			unsigned shift = 0;
+			while ((uint64_t(1) << shift) != stride)
+				++shift;
+			out_.emit(Op::Add, result_reg, left, right, shift << 10);
+			break;
+		}
+		constant(result_reg, stride);
 		out_.emit(Op::Mul, result_reg, right, result_reg);
 		out_.emit(Op::Add, result_reg, left, result_reg);
 		break;
@@ -246,15 +201,37 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		return;
 	case Opcode::Branch:
 	{
-		value(left, inst.ops[0], type_of(inst.ops[0], word));
+		const unsigned condition = operand_register(inst.ops[0], type_of(inst.ops[0], word), left);
+		const auto false_block = inst.ops[2].index;
+		const auto first = body_.blocks[false_block].first;
+		if (level_ && (first == kNoId || body_.instructions[first].op != Opcode::Phi) &&
+			(!out_.exceptions || !out_.exceptions->entry_selectors[false_block]))
+		{
+			out_.reference(Op::Cbz, Fixup::Block, false_block, condition);
+			edge(block, inst.ops[1].index);
+			return;
+		}
 		const uint32_t other = out_.labels.size();
 		out_.labels.push_back(kNoId);
-		out_.reference(Op::Cbz, Fixup::Block, other, left);
+		out_.reference(Op::Cbz, Fixup::Block, other, condition);
 		edge(block, inst.ops[1].index);
 		out_.bind(other);
 		edge(block, inst.ops[2].index);
 		return;
 	}
+	case Opcode::StackAlloc:
+		stack_alloc(inst);
+		return;
+	case Opcode::StackSave:
+		out_.emit(Op::AddI, result_reg, 31);
+		break;
+	case Opcode::StackRestore:
+		value(left, inst.ops[0], program_.pointer_type());
+		out_.emit(Op::AddI, 31, left);
+		return;
+	case Opcode::FrameAddress:
+		move(result_reg, 29);
+		break;
 	case Opcode::VaStart:
 		va_start(inst);
 		return;
@@ -282,15 +259,11 @@ void Selector::run()
 	stack_adjust(true);
 	if (tls_vectors_ != kNoId)
 	{
-		frame_address(16, tls_vectors_);
+		base_address(16, 31, tls_vectors_);
 		for (unsigned v = 0; v < 32; ++v)
 			out_.emit(Op::StrD, v, 16, 0, v << 10);
 	}
-	for (const auto& reg : preserved_)
-	{
-		access(true, reg.first, 31, reg.second, 8);
-		out_.frame_rule(FrameRule::Save, reg.first, frame_ - reg.second);
-	}
+	saved_registers(true);
 	if (frame_pointer_ != kNoId)
 	{
 		access(true, 29, 31, frame_pointer_, 8);
@@ -301,10 +274,15 @@ void Selector::run()
 		access(true, 30, 31, link_, 8);
 		out_.frame_rule(FrameRule::Save, 30, frame_ - link_);
 		if (frame_pointer_ != kNoId)
-			frame_address(29, frame_pointer_);
+			base_address(29, 31, frame_pointer_);
+	}
+	if (dynamic_stack_)
+	{
+		out_.emit(Op::AddI, 28, 31);
+		out_.frame_rule(FrameRule::Register, 28);
 	}
 	if (result_.indirect)
-		access(true, 8, 31, result_pointer_, 8);
+		access(true, 8, frame_base(), result_pointer_, 8);
 	save_variadic_registers();
 	for (unsigned i = 0; i < body_.parameter_count; ++i)
 	{
