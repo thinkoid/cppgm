@@ -88,3 +88,23 @@ uses PA37’s `source`, `units`, `flags`, `target`, `llvm_interop` and `commands
 conventions. Target-specific checks inspect ELF and Mach-O relocations, code
 size and stack traffic. Additional C++ translation units live beside their
 main fixture. The primary executable checker and both native replay tools are Perl.
+
+### Recorded x86 qualification
+
+The checked PA39 fixture set has 22 controls. The Linux replay executed 416
+cross-built guests. The Darwin bundle contains 265 objects, 52 course-linked
+images and 256 Apple SDK link cases. The cross host checked the code-directory
+hashes and executed the SDK-free programs. Native macOS replay and native Arm
+timings remain open. The PA37 suite passed all 216 controls and nine regressions
+after sharing its Perl reader and quality-bound checks with PA39.
+
+On the O3 `transform` fixture, address folding, register phi copies and paired
+register saves reduced the emitted function from 201 to 149 instructions and
+from 26 to six stack accesses. Clang 22.1.2 emitted 35 instructions and zero
+stack accesses. Cross GCC 14.3, Clang and cppgm agreed on all eight bytes of
+each benchmark checksum. The x86-host compile comparison with upstream produced
+byte-identical objects. Its 9.95% wall-time A/A difference exceeded the measured
+A/B difference, so it supports no compile-time speedup claim. The PA36 release
+check initially missed its compile-scaling margin at 2.60. A second measurement
+of the speed group yielded 2.39 and cleared the 25% margin, with all 17
+release gates passing. Both sets of observations were retained.
