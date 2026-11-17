@@ -122,7 +122,5 @@ jobs:
   arm:
     needs: select
     uses: ./.github/workflows/aarch64-benchmarks.yml
-    permissions:
-      actions: read
-      contents: read
+    permissions: *publish-permissions
     with: *build-inputs

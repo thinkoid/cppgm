@@ -146,6 +146,12 @@ jobs:
             perl scripts/wasm_benchmarks.pl --tools obj/wasm-tools \
               --level "$level" --output "obj/wasm/O$level"
           done
+      - name: Measure the shared public programs on WASI
+        run: |
+          python3 scripts/portable_public_benchmarks.py --target wasm32-wasip1 \
+            --clang obj/wasm-tools/wasi-sdk/bin/clang++ --wasmtime "$PWD/obj/wasm-tools/bin/wasmtime" \
+            --output obj/wasm/portable
+          cat obj/wasm/portable/report.md >> "$GITHUB_STEP_SUMMARY"
       - name: Generate standard records and tables
         env:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -209,6 +215,8 @@ jobs:
         run: |
           python3 tools/scripts/wasm_benchmark_results.py publish artifact/O0 artifact/O3 \
             --target badge-branch --revision "$REVISION" --run-url "$RUN_URL"
+          python3 tools/scripts/publish_backend_benchmarks.py artifact/portable wasm32-wasip1 badge-branch \
+            --revision "$REVISION" --run-url "$RUN_URL"
           freshness_revision=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
           python3 tools/scripts/internal_cpp_benchmarks.py seed badge-branch
           python3 tools/scripts/benchmark_freshness.py badge-branch \

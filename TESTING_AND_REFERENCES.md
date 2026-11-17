@@ -110,7 +110,13 @@ Arm64 and the Mach-O interoperability suite on Apple Silicon. On Linux Arm64 it
 also runs PA37's eight scalar/SIMD workloads at O0 and O3 against the same
 independent checksums as Wasm, checks the optimized NEON instructions, and uses
 PA35's full `compare-cppgm-inception` with GCC 14 and LLD linking static Arm
-ELFs before repeating the SIMD checks with the self-built compiler. Native timing runs in the benchmark queue.
+ELFs before repeating the SIMD checks with the self-built compiler.
+
+The benchmark queue measures cold GCC, Clang and cppgm builds, paired full
+rebuilds, and four native Arm kernels. The x86-64, AArch64 and WASI jobs also
+run five identical public programs, linked against the target runtime. Their
+public-subset badges show a geometric mean of the per-program runtime speedups
+against Clang. Each report links the underlying observations.
 
 <a id="boost-advisory-ci"></a>
 

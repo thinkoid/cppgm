@@ -8,9 +8,11 @@ import re
 import subprocess
 import xml.etree.ElementTree as ET
 
+from benchmark_hosts import BACKEND_CAPTIONS
 from library_benchmark_badges import HOSTS
 from publish_benchmark_badges import badge_svg
 
+CAPTIONS = {**HOSTS, **BACKEND_CAPTIONS}
 STALE_COMMITS = 10
 HIDDEN_COMMITS = 100
 NS = '{http://www.w3.org/2000/svg}'
@@ -38,6 +40,10 @@ def groups(target):
         for workload in ('index-cpp', 'simdjson', 'godot', 'boost/o3', 'internal', 'wasm', 'wasm-selfbuild'):
             directory = target / workload
             yield workload, host, directory / host / 'metadata.json', directory.glob(host + '-*.svg'), directory / host / 'report.md'
+
+    for backend in BACKEND_CAPTIONS:
+        directory = target / 'backend' / backend
+        yield 'Backend performance', backend, directory / 'metadata.json', directory.glob('*.svg'), directory / 'report.md'
 
 
 def keep_newest(target, repo, compare=comparison):
@@ -140,7 +146,7 @@ def refresh(target, main, repo, compare=comparison):
             rows.append(dict(workload=workload, host=host, revision=revision,
                              cpu=metadata['cpu'], report=str(report.relative_to(target)), **age))
         for path in sorted(paths):
-            replacements[path] = render(path, HOSTS[host], metadata, age)
+            replacements[path] = render(path, CAPTIONS[host], metadata, age)
     # Validate every source and comparison before changing the retained badges.
     for path, text in replacements.items():
         path.write_text(text)
@@ -162,7 +168,7 @@ def refresh(target, main, repo, compare=comparison):
             age += ' (badge not shown)'
         revision = row['revision']
         cpu = row['cpu'].replace('|', '\\|').replace('\n', ' ')
-        lines.append(f"| {row['workload']} | {HOSTS[row['host']]} | {cpu} | "
+        lines.append(f"| {row['workload']} | {CAPTIONS[row['host']]} | {cpu} | "
                      f"[`{revision[:9]}`](https://github.com/{repo}/commit/{revision}) | "
                      f"{row['measured_at']} | {age} | [Results]({row['report']}) |")
     (target / 'freshness.md').write_text('\n'.join(lines) + '\n')
@@ -175,11 +181,13 @@ def main():
     parser.add_argument('--revision', required=True)
     parser.add_argument('--repo', default='vishvananda/cppgm')
     args = parser.parse_args()
+    from publish_backend_benchmarks import seed as seed_backends
     from wasm_benchmark_results import seed
     for row in keep_newest(args.target, args.repo):
         print(f"{row['workload']} on {row['host']}: kept the measurement of {row['published']}; "
               f"{row['measured']} is its ancestor")
     seed(args.target)
+    seed_backends(args.target)
     refresh(args.target, args.revision, args.repo)
 
 

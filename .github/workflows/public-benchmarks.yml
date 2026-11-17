@@ -85,6 +85,11 @@ jobs:
       - name: Fetch pinned sources
         run: python3 scripts/public_benchmarks.py fetch --cache obj/public-benchmarks/src
 
+      - name: Measure the shared public programs on x86-64
+        run: |
+          python3 scripts/portable_public_benchmarks.py --target x86_64-linux-gnu --output obj/public-benchmarks/portable
+          cat obj/public-benchmarks/portable/report.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build, run and compare
         run: |
           python3 scripts/public_benchmarks.py run \
@@ -119,6 +124,7 @@ jobs:
             obj/public-benchmarks/work/timing/
             obj/public-benchmarks/badges/
             obj/public-benchmarks/course-quality/
+            obj/public-benchmarks/portable/
           if-no-files-found: warn
           retention-days: 14
 
@@ -160,6 +166,8 @@ jobs:
         run: |
           python3 tools/scripts/publish_benchmark_badges.py artifact badge-branch \
             --component public --platform github --revision "$REVISION" --run-url "$RUN_URL" --legacy-epyc
+          python3 tools/scripts/publish_backend_benchmarks.py artifact/portable x86_64-linux-gnu badge-branch \
+            --revision "$REVISION" --run-url "$RUN_URL"
           freshness_revision=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
           python3 tools/scripts/internal_cpp_benchmarks.py seed badge-branch
           python3 tools/scripts/benchmark_freshness.py badge-branch \

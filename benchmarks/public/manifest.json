@@ -250,6 +250,7 @@
   },
   {
    "name": "Prolangs-C++/primes",
+   "portable_stdout_sha256": "3de56e8ffb05dd94f535ca1841d70e50a235c12c8c111d23ddb75c614928654a",
    "source": "llvm-test-suite",
    "dir": "MultiSource/Benchmarks/Prolangs-C++/primes",
    "srcs": ["primes.cpp"],
@@ -355,6 +356,7 @@
   },
   {
    "name": "Stanford/Bubblesort",
+   "portable_stdout_sha256": "5fae9b6afd5af80543c442e15544576cd927ef7937bb1447ca9377e95bba896a",
    "source": "llvm-test-suite",
    "dir": "SingleSource/Benchmarks/Stanford",
    "srcs": ["Bubblesort.c"],
@@ -363,6 +365,7 @@
   },
   {
    "name": "Stanford/FloatMM",
+   "portable_stdout_sha256": "1b89813c61fe5461ce88537980565fee76acc7f2aa60fee9886aadacede75c6e",
    "source": "llvm-test-suite",
    "dir": "SingleSource/Benchmarks/Stanford",
    "srcs": ["FloatMM.c"],
@@ -371,6 +374,7 @@
   },
   {
    "name": "Stanford/Puzzle",
+   "portable_stdout_sha256": "9e562cdb89a43aa4dde0c69344c75a431f93625e9548c3f939db18f64f1767c8",
    "source": "llvm-test-suite",
    "dir": "SingleSource/Benchmarks/Stanford",
    "srcs": ["Puzzle.c"],
@@ -379,6 +383,7 @@
   },
   {
    "name": "Stanford/Treesort",
+   "portable_stdout_sha256": "f98e3a687d002688a177b3eab59f7e1f052b2e418a92d13cd15c2b1caf7e6d87",
    "source": "llvm-test-suite",
    "dir": "SingleSource/Benchmarks/Stanford",
    "srcs": ["Treesort.c"],

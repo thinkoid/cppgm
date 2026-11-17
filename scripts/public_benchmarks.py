@@ -900,21 +900,21 @@ def build_cpu(command, log=None, root=None):
     return round(spent() - before, 2)
 
 
-def selfhost_commands(work, jobs, clangxx='clang++'):
+def selfhost_commands(work, jobs, clangxx='clang++', host='g++'):
     """Build identical compiler sources at O3, with isolated objects per role."""
     work = Path(work).resolve()
-    pa35 = ['make', '-C', 'pa35', f'-j{jobs}', 'CXX=../dev/cppgm', 'CPPGM_HOST_CXX=g++',
+    pa35 = ['make', '-C', 'pa35', f'-j{jobs}', 'CXX=../dev/cppgm', f'CPPGM_HOST_CXX={host}',
             f'INCEPTION_OBJ_ROOT_BASE={work}/pa35', f'INCEPTION_BUILD_JOBS={jobs}',
             f'INCEPTION_OBJECT_BUILD_JOBS={jobs}']
-    return (('gcc', ['make', '-C', 'dev', f'-j{jobs}', 'cppgm', f'OBJ={work}/gcc', 'CXX=g++', 'CPPGM_HOST_CXX=g++']),
+    return (('gcc', ['make', '-C', 'dev', f'-j{jobs}', 'cppgm', f'OBJ={work}/gcc', f'CXX={host}', f'CPPGM_HOST_CXX={host}']),
             ('self', pa35 + ['cppgm-self']),
             ('inception', pa35 + ['cppgm-inception']),
             ('clang', ['make', '-C', 'dev', f'-j{jobs}', 'cppgm', f'OBJ={work}/clang',
-                       f'CXX={clangxx}', 'CPPGM_HOST_CXX=g++']))
+                       f'CXX={clangxx}', f'CPPGM_HOST_CXX={host}']))
 
 
-def paired_rebuilds(directory, jobs, seed, compiler, blocks, reference, root=None):
-    rebuild = timing.Rebuild(root or ROOT, directory, jobs, seed, compiler, measure)
+def paired_rebuilds(directory, jobs, seed, compiler, blocks, reference, root=None, host='g++'):
+    rebuild = timing.Rebuild(root or ROOT, directory, jobs, seed, compiler, measure, host)
     paired = dict(method='ABBA/BAAB', reference=reference,
                   compiler_sha256=rebuild.hashes, samples=rebuild.samples)
 
@@ -946,17 +946,18 @@ def selfhost(arguments):
     seed = directory / 'bootstrap-seed'
     clang_seed = directory / 'clang-seed'
     clangxx = getattr(arguments, 'clangxx', 'clang++')
+    host = getattr(arguments, 'host_cxx', 'g++')
     inputs = compiler_source_hashes(root)
     builds['metadata'] = dict(cpu=cpu_model(), jobs=arguments.jobs,
                               revision=tool_version(['git', '-C', str(root), 'rev-parse', 'HEAD']),
-                              gcc=tool_version(['g++', '--version']),
+                              gcc=tool_version(shlex.split(host) + ['--version']),
                               clang=tool_version(shlex.split(clangxx) + ['--version']),
-                              configured_host='g++', source_sha256=inputs)
+                              configured_host=host, source_sha256=inputs)
     builds['metadata']['runner_sha256'] = {p.name: timing.sha(p) for p in
                                            [Path(__file__), Path(timing.__file__)]}
     builds['bootstrap'] = {}
     try:
-        for key, command in selfhost_commands(bootstrap, arguments.jobs, clangxx):
+        for key, command in selfhost_commands(bootstrap, arguments.jobs, clangxx, host):
             log = directory / f'bootstrap-{key}.log'
             builds[key] = build_cpu(command, log, root)
             builds['bootstrap'][key] = dict(command=command, cpu=builds[key], stdout=str(log),
@@ -977,9 +978,9 @@ def selfhost(arguments):
         inception = bootstrap / 'pa35/bin/inception/cppgm-inception'
         require(timing.sha(compiler) == timing.sha(inception),
                 'self and inception compiler binaries differ')
-        builds['paired_self'] = paired_rebuilds(directory, arguments.jobs, seed, compiler, arguments.paired_blocks, 'GCC-built cppgm', root)
+        builds['paired_self'] = paired_rebuilds(directory, arguments.jobs, seed, compiler, arguments.paired_blocks, 'GCC-built cppgm', root, host)
         clang_directory = Path(tempfile.mkdtemp(prefix='paired-clang-', dir=work))
-        builds['paired_clang'] = paired_rebuilds(clang_directory, arguments.jobs, clang_seed, compiler, arguments.paired_blocks, 'Clang-built cppgm', root)
+        builds['paired_clang'] = paired_rebuilds(clang_directory, arguments.jobs, clang_seed, compiler, arguments.paired_blocks, 'Clang-built cppgm', root, host)
         require(inputs and inputs == compiler_source_hashes(root), 'compiler source inputs changed during measurement')
     except (RuntimeError, ValueError, OSError) as error:
         builds['status'] = str(error)
@@ -1027,6 +1028,7 @@ def main():
     command.set_defaults(handler=report)
 
     command = commands.add_parser('selfhost')
+    command.add_argument('--host-cxx', default='g++', help='GCC host compiler and link flags for the native target')
     command.add_argument('--repo-root', type=Path, help='compiler checkout to measure (default: this checkout)')
     command.add_argument('--work', required=True)
     command.add_argument('--output', required=True)

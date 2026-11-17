@@ -36,6 +36,7 @@ def build(args):
     kernels = ["pa36/kernels/lookup.cpp", "pa36/kernels/accessor.cpp", "pa39/tests/quality/700-neon-arithmetic.t"]
     sources = ["pa39/support/start.S", "benchmarks/aarch64/report.S", "benchmarks/aarch64/workload.cpp"]
     manifest = dict(inputs={s: sha(ROOT / s) for s in kernels + sources}, guests={}, checksums={}, commands=[])
+    manifest["revision"] = checked(["git", "-C", ROOT, "rev-parse", "HEAD"]).decode().strip()
     def record(command):
         manifest["commands"].append(list(map(str, command)))
         return checked(command)
@@ -82,7 +83,8 @@ def measure(args):
             guest.chmod(0o555)
     verify()
     samples = output / "observations.jsonl"
-    report = {"machine": platform.uname()._asdict(), "manifest_sha256": sha(directory / "manifest.json"), "cases": {}}
+    report = {"machine": platform.uname()._asdict(), "manifest_sha256": sha(directory / "manifest.json"),
+              "revision": manifest.get("revision"), "cases": {}}
     for case in CASES:
         def run(label, phase, block, position):
             command = [directory / label, case]
@@ -110,6 +112,15 @@ def measure(args):
                     raise ValueError(f"{case} checksum mismatch under perf")
         write(output / "results.json", report)
     verify()
+    lines = ["### Native Arm64 kernel runtime", "", "| Kernel | vs GCC O3 | vs Clang O3 |",
+             "| --- | ---: | ---: |"]
+    for case, measurements in report["cases"].items():
+        speedups = []
+        for reference in ("gcc", "clang"):
+            ratio = measurements[reference]["ratio"]
+            speedups.append(f"{1 / ratio:.2f}×" if ratio else "n/m")
+        lines.append(f"| {case} | {' | '.join(speedups)} |")
+    (output / "report.md").write_text("\n".join(lines) + "\n")
 
 
 if __name__ == "__main__":

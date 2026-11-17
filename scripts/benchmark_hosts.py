@@ -3,6 +3,9 @@ import json
 import subprocess
 
 
+BACKEND_CAPTIONS = {'x86_64-linux-gnu': 'x86-64', 'wasm32-wasip1': 'WASI', 'aarch64-linux-gnu': 'Arm64'}
+
+
 def hosted_platform(cpu):
     normalized = cpu.casefold()
     if 'amd epyc' in normalized:

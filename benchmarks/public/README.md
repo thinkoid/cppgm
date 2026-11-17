@@ -1,9 +1,38 @@
 # Public benchmarks
 
 The benchmarks build third-party programs with `cppgm`, `g++` and `clang++`
-and compare the results. **Public benchmarks** and **Self-build benchmarks**
-run independently on each push to `main` and on each pull request that changes the
-compiler or the files of the measurement, with separate time budgets, reports and artifacts.
+and compare the results. The benchmark queue runs after the tests for a push to `main`.
+Applying the `run-benchmarks` label approves a pull request revision. Public
+programs and the full compiler self-build have separate reports and artifacts.
+
+## Shared backend workloads
+
+Five of the 81 public programs run at O3 on x86-64 Linux, AArch64 Linux and
+wasm32-wasip1. The two sorting programs exercise array and tree access, FloatMM
+uses floating-point matrix multiplication, Puzzle uses recursive backtracking,
+and Prolangs-C++/primes builds a sieve out of virtual C++ filters. The manifest
+identifies each by its expected stdout SHA-256. The same upstream source, flags,
+inputs and byte-exact output apply to every target.
+
+Each target links cppgm and Clang objects with the same target driver. The runner
+checks every execution's output and exit status, calibrates with Clang against
+itself, then alternates Clang and cppgm executables in ABBA/BAAB blocks. It
+records process CPU time, including process startup. Wasmtime precompiles both
+modules before timing and uses an 8 MiB call stack for the recursive sieve.
+Native speed measurements require matching Linux hardware. With `--check-only`
+an emulator can validate the artifacts on a different machine.
+
+```sh
+python3 scripts/portable_public_benchmarks.py --target x86_64-linux-gnu --output obj/public-x86
+python3 scripts/portable_public_benchmarks.py --target aarch64-linux-gnu --output obj/public-arm
+python3 scripts/portable_public_benchmarks.py --target wasm32-wasip1 \
+  --clang obj/wasm-tools/wasi-sdk/bin/clang++ --wasmtime obj/wasm-tools/bin/wasmtime --output obj/public-wasi
+```
+
+The 81-program suite additionally uses host libraries such as GMP and pthreads.
+The index-cpp runner uses its original 50 checksums, threaded workloads and Linux
+CPU affinity. Both broader campaigns run on x86-64. The shared subset has its
+own results and raw observations on each backend.
 
 ## Files
 

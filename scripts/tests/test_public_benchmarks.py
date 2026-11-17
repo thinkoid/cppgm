@@ -13,6 +13,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import public_benchmarks as pb
+import publish_backend_benchmarks as backend
 import publish_benchmark_badges as publication
 import run_intel_benchmarks_once as intel_runner
 
@@ -798,6 +799,69 @@ class BadgePublicationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'color'):
             self.self_build()
         self.assertEqual({p.name: p.read_bytes() for p in (self.target / 'intel').iterdir()}, previous)
+
+
+class BackendPublicationTests(unittest.TestCase):
+    def test_arm_placeholders_and_published_self_build_and_neon_badges(self):
+        sha = 'b' * 40
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            measured = root / 'timings'
+            portable = measured / 'portable'
+            portable.mkdir(parents=True)
+            directory = root / 'backend/aarch64-linux-gnu'
+            backend.seed(root)
+            expected = {'public-runtime-clang', 'vectors-gcc', 'vectors-clang', *(row[2] for row in pb.BUILDS)}
+            self.assertEqual({p.stem for p in directory.glob('*.svg')}, expected)
+            self.assertIn('n/m', (directory / 'self-built.svg').read_text())
+            cases = {p['name']: dict(stdout_sha256=p['portable_stdout_sha256'], AA={'ratio': 1}, AB={'ratio': .5})
+                     for p in pb.load_manifest()['programs'] if 'portable_stdout_sha256' in p}
+            (portable / 'results.json').write_text(json.dumps(dict(revision=sha, dirty=False, target='aarch64-linux-gnu',
+                                                                   cpu='test host', cases=cases)))
+            builds = dict(status='ok', metadata={'revision': sha}, gcc=4, clang=6, self=2, inception=2,
+                          paired_self={'comparison': {'ratio': .5}}, paired_clang={'comparison': {'ratio': .25}})
+            kernels = dict(revision=sha, cases={'vectors': dict(gcc={'ratio': 2}, clang={'ratio': .5})})
+            (measured / 'self-build.json').write_text(json.dumps(builds))
+            (measured / 'results.json').write_text(json.dumps(kernels))
+            for report in (portable / 'report.md', measured / 'self-build.md', measured / 'report.md'):
+                report.write_text('Measured results')
+            backend.publish(portable, 'aarch64-linux-gnu', root, sha, 'https://example.org/run')
+            backend.seed(root)
+            self.assertIn('4.00×', (directory / 'self-built-clang.svg').read_text())
+            self.assertIn('0.50×', (directory / 'vectors-gcc.svg').read_text())
+            self.assertIn('2.00×', (directory / 'vectors-clang.svg').read_text())
+
+    def test_shared_badge_requires_every_measured_program_at_the_requested_revision(self):
+        revision = 'a' * 40
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            cases = {p['name']: dict(stdout_sha256=p['portable_stdout_sha256'], AA={'ratio': 1}, AB={'ratio': .5})
+                     for p in pb.load_manifest()['programs'] if 'portable_stdout_sha256' in p}
+            self.assertEqual(len(cases), 5)
+            data = dict(revision=revision, dirty=False, target='wasm32-wasip1', cpu='test host', cases=cases)
+            (root / 'report.md').write_text('Per-program results')
+
+            def publish(sha=revision):
+                (root / 'results.json').write_text(json.dumps(data))
+                backend.publish(root, data['target'], root, sha, 'https://example.org/run')
+
+            publish()
+            out = root / 'backend/wasm32-wasip1'
+            self.assertIn('2.00×', (out / 'public-runtime-clang.svg').read_text())
+            self.assertIn(revision, (out / 'report.md').read_text())
+            data['dirty'] = True
+            with self.assertRaises(ValueError):
+                publish()
+            data['dirty'] = False
+            with self.assertRaises(ValueError):
+                publish('b' * 40)
+            case = cases['Prolangs-C++/primes']
+            del case['AB']
+            with self.assertRaises(ValueError):
+                publish()
+            del cases['Prolangs-C++/primes']
+            with self.assertRaises(ValueError):
+                publish()
 
 
 class IntelRunnerTests(unittest.TestCase):
