@@ -35,7 +35,7 @@ cppgm --target=arm64-apple-macos11 main.cpp sum.o -o program
 xcrun clang++ -arch arm64 -mmacosx-version-min=11.0 main.o sum.o -o hosted-program
 ```
 
-The course link accepts self-contained source and object inputs. Compile hosted translation units with `-c`, then use Apple’s SDK linker for libc++, exceptions and pthreads. On Linux, LLVM’s Mach-O LLD can independently link the self-contained fixtures. The selected output runs natively on Apple Silicon. The compiler currently builds on an x86 host with x87 long double.
+The course link accepts self-contained source and object inputs. Compile hosted translation units with `-c`, then use Apple’s SDK linker for libc++, exceptions and pthreads. On Linux, LLVM’s Mach-O LLD can independently link the self-contained fixtures. The selected output runs natively on Apple Silicon. You can build the compiler on x86-64 or AArch64 Linux and select the Apple target explicitly.
 
 ```sh
 # On x86 Linux, build and hash the macOS interoperability objects.

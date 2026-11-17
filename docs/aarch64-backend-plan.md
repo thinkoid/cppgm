@@ -98,6 +98,13 @@ hashes and executed the SDK-free programs. Native macOS replay and native Arm
 timings remain open. The PA37 suite passed all 216 controls and nine regressions
 after sharing its Perl reader and quality-bound checks with PA39.
 
+The Linux Arm compiler also ran both PA35 self-build generations under QEMU
+10.2.1 on x86. All 492 object files and the final static ELF matched byte for
+byte. Both the seed and self-built compiler passed 256 PA37 workload checks
+across O0/O3 and scalar/NEON configurations. The native Arm CI job repeats
+this check on hardware. The Apple Silicon job runs the macOS interoperability
+suite against the SDK.
+
 On the O3 `transform` fixture, address folding, register phi copies and paired
 register saves reduced the emitted function from 201 to 149 instructions and
 from 26 to six stack accesses. Clang 22.1.2 emitted 35 instructions and zero
