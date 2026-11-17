@@ -94,7 +94,7 @@ copy_tracked_paths() {
         # Export reviewed student documents only, including public doc/ texts.
         next if (m{\.md$}i || m{^doc/}) && !$documents{$_};
         next if m{(^|/)[^/]+-ref$};
-        next if m{\.py$} && !m{^scripts/(?:check_lowir_seams|lowir_seam_rewrite|check_optimization_quality|check_macho|run_resource_limited|test_lowir_library|generate_lowir_c_vocabulary)\.py$};
+        next if m{\.py$} && !m{^scripts/(?:check_lowir_seams|lowir_seam_rewrite|check_optimization_quality|check_macho|check_arm64_macos|replay_arm64_macos|run_resource_limited|test_lowir_library|generate_lowir_c_vocabulary)\.py$};
         next if m{\.diff$};
         next if m{(^|/)[^/]+\.my(?:\.|$)};
         # Tests-first audit controls run only under the maintainer
