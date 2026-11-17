@@ -24,6 +24,7 @@ bool write_elf_object(const ObjectFile& object, const std::string& path, std::st
 // subset (other machines or types, REL tables, thread-local storage,
 // indirect functions, extended section indexes) or a malformed image.
 bool decode_elf_object(const std::vector<uint8_t>& image, ObjectFile& object, std::string& error);
+bool read_object_bytes(const std::string& path, std::vector<uint8_t>& image, std::string& error);
 bool read_elf_object(const std::string& path, ObjectFile& object, std::string& error);
 
 // Whether a file starts with the ELF magic (an object input in link mode).

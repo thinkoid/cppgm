@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "lowir/assembly.h"
+#include "machine/wide_helpers.h"
 #include "opt/optimizer.h"
 #include "support/telemetry.h"
 #include "wasm/object_reader.h"
@@ -96,7 +97,8 @@ bool compile_object(
 		const auto object_start = std::chrono::steady_clock::now();
 #endif
 		prepare_finalizers(program);
-		legalize_wide_helpers(program);
+		if (!machine::legalize_wide_helpers(program))
+			throw WasmError("conflicting Wasm arithmetic helper identity");
 		make_object(program, options, object, dump);
 #if CPPGM_TELEMETRY_ENABLED
 		if (options.stats)

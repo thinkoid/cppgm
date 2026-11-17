@@ -502,3 +502,11 @@ tail. It still displays assignments in course order. PA11's maintainer seam lane
 runs the comparison checks that need a built backend and checks rewrites of the
 actual fixture outputs. Pure comparison-harness unit tests belong to
 `make test-harness`; CI runs them once per Ubuntu image and once on macOS.
+
+PA39 is the optional AArch64 Linux backend assignment. Run `make test-pa39`
+on x86 Linux with the cross tools from the [PA39 handout](pa39/README.md).
+The checker links mixed cppgm/Clang objects and executes static Arm programs
+at O0 through O3. Set `CPPGM_AARCH64_ARTIFACTS` to an empty output directory
+to retain the guests and their expected outcomes for native replay. Set
+`CPPGM_EXPORT_TEST_AARCH64=1` when qualifying the student export on a host
+with these tools.

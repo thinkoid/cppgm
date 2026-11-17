@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "target_model.h"
 #include <string>
 #include <vector>
 
@@ -149,6 +150,7 @@ struct ObjectFile
 	uint32_t add_section(uint32_t name, SectionKind kind, uint64_t align);
 	uint32_t add_symbol(const Symbol& symbol);
 
+	target_model::Architecture architecture = target_model::Architecture::X86_64;
 	// The input's name in diagnostics.
 	std::string path;
 	// NUL-terminated names; offset 0 is the empty name.

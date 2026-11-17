@@ -1484,7 +1484,8 @@ RValue FunctionLowering::builtin_trait_value(const syntax::BuiltinTraitExpr& tra
 	const lowir::Type type = lowering_.storage_type(facts->type);
 	const sema::ClassEntity* entity = sema::ClassOf(facts->type);
 	if (entity != nullptr &&
-		!((lowering_.object_mode() || target_model::is_wasm(program_.target)) && lowering_.passed_directly(entity)))
+		!((lowering_.object_mode() || target_model::needs_aggregate_shape(program_.target)) &&
+			lowering_.passed_directly(entity)))
 	{
 		// A class object a caller passes to `...` through the address of
 		// its copy (the course's form; see arguments): that address, then
@@ -1509,7 +1510,7 @@ RValue FunctionLowering::builtin_trait_value(const syntax::BuiltinTraitExpr& tra
 	// or binary128 value's.
 	const uint8_t classes = lowering_.object_mode() ? lowering_.object_classes(facts->type) : 0;
 	const lowir::InstId instruction = builder_.last_instruction(builder_.insertion_block());
-	if (target_model::is_wasm(program_.target) && read.is_object())
+	if (target_model::needs_aggregate_shape(program_.target) && read.is_object())
 		builder_.body().argument_facts.push_back(
 			lowir::ArgumentFacts{ instruction, 0, classes, lowering_.aggregate_shape(facts->type) });
 	else if (classes != 0)
@@ -2888,11 +2889,12 @@ void FunctionLowering::push_converted(
 		temporary.storage = lowir::Value::slot(generated_slot(lowir::SlotKind::Arg, lowering_.storage_type(type)));
 		const lowir::Value object = address_of(temporary);
 		initialize_from(argument, conversion, object, argument.location);
-		if ((lowering_.object_mode() || target_model::is_wasm(program_.target)) &&
+		if ((lowering_.object_mode() || target_model::needs_aggregate_shape(program_.target)) &&
 			lowering_.passed_directly(sema::ClassOf(type)))
 		{
 			variadic_argument_fact(lowering_.object_mode() ? lowering_.object_classes(type) : 0, lowir::TypeKind::Void,
-				target_model::is_wasm(program_.target) ? lowering_.aggregate_shape(type) : ir_model::AggregateShape());
+				target_model::needs_aggregate_shape(program_.target) ? lowering_.aggregate_shape(type)
+																	 : ir_model::AggregateShape());
 			arguments_.push_back(temporary.storage);
 		}
 		else
@@ -2915,12 +2917,12 @@ void FunctionLowering::push_converted(
 					  ? conversion->target
 					  : WithoutParentheses(&argument)->facts->type)
 			: 0;
-		const lowir::TypeKind passed_type = parameter == nullptr && target_model::is_wasm(program_.target) &&
-				!value.type.is_object()
+		const lowir::TypeKind passed_type = parameter == nullptr &&
+				target_model::needs_aggregate_shape(program_.target) && !value.type.is_object()
 			? value.type.kind()
 			: lowir::TypeKind::Void;
 		ir_model::AggregateShape passed_shape;
-		if (parameter == nullptr && target_model::is_wasm(program_.target) && value.type.is_object())
+		if (parameter == nullptr && target_model::needs_aggregate_shape(program_.target) && value.type.is_object())
 			passed_shape = lowering_.aggregate_shape(conversion != nullptr && conversion->target != nullptr
 					? conversion->target
 					: WithoutParentheses(&argument)->facts->type);

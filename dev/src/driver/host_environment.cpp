@@ -1,4 +1,5 @@
 #include "driver/host_environment.h"
+#include "driver/aarch64_environment.h"
 
 #include <dirent.h>
 #include <sys/stat.h>
@@ -77,6 +78,11 @@ void prune_include_paths(PreprocessorOptions& options)
 void configure_target_environment(PreprocessorOptions& options, native::Target target)
 {
 	options.target = target;
+	if (target == native::Target::AArch64Linux)
+	{
+		configure_aarch64_environment(options);
+		return;
+	}
 	if (target_model::is_wasm(target))
 	{
 		configure_wasm_environment(options);

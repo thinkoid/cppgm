@@ -4,6 +4,11 @@ namespace target {
 
 bool parse(const std::string& text, Target& result)
 {
+	if (text == spelling(Target::AArch64Linux) || text == "aarch64-unknown-linux-gnu")
+	{
+		result = Target::AArch64Linux;
+		return true;
+	}
 	if (text == spelling(Target::Wasm32))
 	{
 		result = Target::Wasm32;

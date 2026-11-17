@@ -639,7 +639,8 @@ SoftFloat SoftFloatOfValue(lowir::Type type)
 uint8_t ProgramLowering::soft_float_classes(SoftFloat kind) const
 {
 	// Wasm passes them by its own convention (the shape), as object_classes.
-	if (!object_mode_ || kind == SoftFloat::None || target_model::is_wasm(program_.target))
+	if (!object_mode_ || kind == SoftFloat::None ||
+		target_model::describe(program_.target).architecture != target_model::Architecture::X86_64)
 		return 0;
 	return static_cast<uint8_t>(
 		lowir::OC_STATED | lowir::EB_SSE | (kind == SoftFloat::Quad ? lowir::EB_SSEUP << 2 : lowir::EB_NONE));
@@ -670,7 +671,7 @@ lowir::SymbolId ProgramLowering::soft_float_helper(SoftFloatHelper which)
 		parameter.classes = darwin_host_objects() && spec.parameters[i] == 'h'
 			? static_cast<uint8_t>(lowir::OC_STATED | lowir::EB_INTEGER)
 			: soft_float_classes(SpecKind(spec.parameters[i]));
-		if (target_model::is_wasm(program_.target) && spec.parameters[i] == 'q')
+		if (target_model::needs_aggregate_shape(program_.target) && spec.parameters[i] == 'q')
 		{
 			parameter.shape.count = 1;
 			parameter.shape.element = ir_model::AggregateElement::F128;
@@ -682,7 +683,7 @@ lowir::SymbolId ProgramLowering::soft_float_helper(SoftFloatHelper which)
 	signature.boundary.result_classes = darwin_host_objects() && spec.result == 'h'
 		? static_cast<uint8_t>(lowir::OC_STATED | lowir::EB_INTEGER)
 		: soft_float_classes(SpecKind(spec.result));
-	if (target_model::is_wasm(program_.target) && spec.result == 'q')
+	if (target_model::needs_aggregate_shape(program_.target) && spec.result == 'q')
 	{
 		signature.boundary.result_shape.count = 1;
 		signature.boundary.result_shape.element = ir_model::AggregateElement::F128;

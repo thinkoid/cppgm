@@ -108,7 +108,8 @@ bool IntegralKindOf(const Type* type, IntegralKind& kind)
 		return false;
 	if (type->fundamental == FundamentalType::LongInt || type->fundamental == FundamentalType::UnsignedLongInt)
 		kind.bits = target_model::data_layout(type->target).long_bytes * 8;
-	kind.is_signed = kind.is_signed && !type->plain_char_unsigned;
+	kind.is_signed = kind.is_signed && !type->plain_char_unsigned &&
+		!(type->fundamental == FundamentalType::WcharT && type->target == target_model::Target::AArch64Linux);
 	return true;
 }
 
@@ -421,8 +422,10 @@ const Type* PromotedType(TypeTable& types, const Type* type)
 	case FundamentalType::ShortInt:
 	case FundamentalType::UnsignedShortInt:
 	case FundamentalType::Char16T:
-	case FundamentalType::WcharT:
 		return types.fundamental(FundamentalType::Int);
+	case FundamentalType::WcharT:
+		return types.fundamental(
+			type->target == target_model::Target::AArch64Linux ? FundamentalType::UnsignedInt : FundamentalType::Int);
 	case FundamentalType::Char32T:
 		return types.fundamental(FundamentalType::UnsignedInt);
 	default:

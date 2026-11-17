@@ -81,7 +81,8 @@ void ProgramLowering::lower_unit(
 	stack_base_ = reinterpret_cast<std::uintptr_t>(&marker);
 	graph_ = &graph;
 	program_.target = graph.types.target();
-	program_.explicit_target = target_model::is_wasm(program_.target);
+	program_.explicit_target = target_model::describe(program_.target).architecture !=
+		target_model::Architecture::X86_64;
 	if (program_.explicit_target)
 		program_.exception_abi = lowir::ExceptionAbi::Cxx;
 	analyzer_ = &analyzer;
@@ -1297,7 +1298,7 @@ lowir::SymbolId ProgramLowering::aggregate_helper(const sema::ClassEntity* entit
 		parameter.type = variable->type->kind == sema::TypeKind::Array || variable->type->is_reference()
 			? program_.pointer_type()
 			: storage_type(variable->type);
-		if (target_model::is_wasm(program_.target) && parameter.type.is_object())
+		if (target_model::needs_aggregate_shape(program_.target) && parameter.type.is_object())
 			parameter.shape = aggregate_shape(variable->type);
 		// A reference member's referent is passed by its address, as a
 		// reference parameter's is (with its complete object's size).
@@ -1392,8 +1393,9 @@ lowir::Type ProgramLowering::storage_type(const sema::Type* type)
 		case FundamentalType::UnsignedShortInt:
 		case FundamentalType::Char16T:
 			return Type::scalar(TypeKind::U16);
-		case FundamentalType::Int:
 		case FundamentalType::WcharT:
+			return Type::scalar(type->target == target_model::Target::AArch64Linux ? TypeKind::U32 : TypeKind::I32);
+		case FundamentalType::Int:
 			return Type::scalar(TypeKind::I32);
 		case FundamentalType::UnsignedInt:
 		case FundamentalType::Char32T:
@@ -1416,7 +1418,7 @@ lowir::Type ProgramLowering::storage_type(const sema::Type* type)
 			return Type::scalar(TypeKind::F64);
 		case FundamentalType::LongDouble:
 		case FundamentalType::Float64x:
-			return target_model::is_wasm(type->target)
+			return target_model::data_layout(type->target).long_double_format == target_model::ExtendedFloat::Binary128
 				? Type::object(16, target_model::data_layout(type->target).long_double_alignment == 8 ? 3 : 4)
 				: Type::scalar(TypeKind::F80);
 		case FundamentalType::Float16:

@@ -68,6 +68,7 @@ my %explicit_throw_type = (
 	'ExceptionError' => 'dev/src/machine/',
 	'BackendError' => 'dev/src/native/',
 	'WasmError' => 'dev/src/wasm/',
+	'AArch64Error' => 'dev/src/aarch64/',
 	'std::bad_alloc' => 'dev/src/support/memory/',
 );
 

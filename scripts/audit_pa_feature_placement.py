@@ -27,12 +27,12 @@ from audit_test_requirements import scan_optimization_requirements
 
 DEFAULT_TRACKER = Path("scripts/architecture/pa-feature-placement.md")
 COURSE_PA_COUNT = 37
-OPTIONAL_PAS = ("pa38",)
+OPTIONAL_PAS = ("pa38", "pa39")
 COURSE_PAS = tuple(f"pa{i}" for i in range(1, COURSE_PA_COUNT + 1))
 AUDITED_PAS = COURSE_PAS + OPTIONAL_PAS
 # Self-hosting, compiler performance and the second backend introduce no
 # language feature; ownership of language rules stays in the earlier PAs.
-NO_FEATURE_PAS = frozenset({"pa35", "pa36", "pa37"})
+NO_FEATURE_PAS = frozenset({"pa35", "pa36", "pa37", "pa39"})
 DEFAULT_PAS = tuple(pa for pa in COURSE_PAS if pa not in {"pa35", "pa36"}) + OPTIONAL_PAS
 LOCAL_TEST_HYGIENE_PAS = AUDITED_PAS
 STRICT_TEMPLATE_PAS = ("pa14", "pa15", "pa17", "pa18", "pa19")

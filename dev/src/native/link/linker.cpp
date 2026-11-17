@@ -6,6 +6,7 @@
 
 #include "native/image/executable_file.h"
 #include "native/link/runtime_library.h"
+#include "aarch64/link.h"
 #include "support/flat_map.h"
 
 namespace native {
@@ -121,8 +122,8 @@ struct Location
 class Linker
 {
 public:
-	Linker(std::vector<ObjectFile>& objects, LinkStats& stats, std::string& error, Target target)
-		: objects_(objects), stats_(stats), error_(error), target_(target)
+	Linker(std::vector<ObjectFile>& objects, LinkStats& stats, std::string& error, Target target, bool startup)
+		: objects_(objects), stats_(stats), error_(error), target_(target), startup_(startup)
 	{}
 
 	bool link(const std::string& output);
@@ -148,6 +149,8 @@ private:
 	std::vector<uint8_t>* segment_buffer(uint8_t segment);
 	bool got_relocation(uint32_t type) const
 	{
+		if (target_ == Target::AArch64Linux)
+			return type == aarch64::GotPage || type == aarch64::GotLo12;
 		return type == object::R_X86_64_GOTPCREL || type == object::R_X86_64_GOTPCRELX ||
 			type == object::R_X86_64_REX_GOTPCRELX;
 	}
@@ -157,6 +160,7 @@ private:
 	LinkStats& stats_;
 	std::string& error_;
 	Target target_;
+	bool startup_;
 	FlatMap<NameKey, uint32_t, NameHash> names_;
 	FlatMap<NameKey, uint32_t, NameHash> groups_;
 	std::vector<GlobalSymbol> globals_;
@@ -192,6 +196,8 @@ bool Linker::define(GlobalSymbol& global, State state, uint32_t object, uint32_t
 bool Linker::add_object(uint32_t index)
 {
 	ObjectFile& file = objects_[index];
+	if (file.architecture != target_model::describe(target_).architecture)
+		return fail(file.path + ": object architecture differs from link target");
 	location_[index].assign(file.sections.size(), Location{ kNoSegment, 0 });
 	std::vector<uint8_t>& kept = kept_[index];
 	kept.assign(file.sections.size(), 0);
@@ -304,7 +310,13 @@ bool Linker::add_runtime()
 			wanted.push_back(name);
 	}
 	const uint32_t first = static_cast<uint32_t>(objects_.size());
-	if (!build_runtime(wanted, objects_, error_, target_))
+	if (target_ == Target::AArch64Linux)
+	{
+		const auto entry = names_.find(key_of(kEntrySymbol));
+		if (startup_ && (entry == nullptr || globals_[*entry].state == State::Undefined))
+			aarch64::add_startup(objects_);
+	}
+	else if (!build_runtime(wanted, objects_, error_, target_))
 		return false;
 	stats_.runtime_members = wanted.size() + 1;
 	global_of_.resize(objects_.size());
@@ -662,6 +674,8 @@ bool Linker::apply(uint32_t object, const Relocation& relocation, uint8_t* field
 	}
 	// The GOT-based forms (psABI 4.4.1): GOTOFF64 is S + A - GOT, GOTPC*
 	// GOT + A - P.
+	if (target_ == Target::AArch64Linux)
+		return aarch64::apply_relocation(relocation.type, field, room, symbol + relocation.addend, place, error_);
 	const uint64_t got = layout_.data_address + got_base_;
 	if (relocation.type == object::R_X86_64_GOTOFF64)
 		symbol -= got;
@@ -803,7 +817,7 @@ bool Linker::link(const std::string& output)
 } // namespace
 
 bool link_executable(std::vector<object::ObjectFile>& objects, const std::string& output, std::string& error,
-	LinkStats* stats, Target target)
+	LinkStats* stats, Target target, bool startup)
 {
 	if (target_model::is_wasm(target))
 	{
@@ -811,7 +825,7 @@ bool link_executable(std::vector<object::ObjectFile>& objects, const std::string
 		return false;
 	}
 	LinkStats local;
-	Linker linker(objects, stats != nullptr ? *stats : local, error, target);
+	Linker linker(objects, stats != nullptr ? *stats : local, error, target, startup);
 	return linker.link(output);
 }
 

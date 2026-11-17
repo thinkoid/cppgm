@@ -35,7 +35,8 @@ enum class CallingConvention : std::uint8_t
 {
 	SysVAmd64,
 	DarwinAmd64,
-	WasmBasicC
+	WasmBasicC,
+	Aapcs64
 };
 
 enum class MemberFunctionTag : std::uint8_t
@@ -71,7 +72,8 @@ enum class Target : std::uint8_t
 	MacOS,
 	Wasm32,
 	Wasi,
-	Emscripten
+	Emscripten,
+	AArch64Linux
 };
 
 enum class WasmFunctionAttribute : std::uint8_t
@@ -130,9 +132,11 @@ constexpr bool is_wasm(Target target)
 
 constexpr DataLayout data_layout(Target target)
 {
-	return is_wasm(target) ? DataLayout{ 4, 4, 16, target == Target::Emscripten ? std::uint8_t(8) : std::uint8_t(16),
-		ExtendedFloat::Binary128, ByteOrder::Little }
-						   : DataLayout{ 8, 8, 16, 16, ExtendedFloat::X87, ByteOrder::Little };
+	return is_wasm(target)
+		? DataLayout{ 4, 4, 16, target == Target::Emscripten ? std::uint8_t(8) : std::uint8_t(16),
+			  ExtendedFloat::Binary128, ByteOrder::Little }
+		: DataLayout{ 8, 8, 16, 16, target == Target::AArch64Linux ? ExtendedFloat::Binary128 : ExtendedFloat::X87,
+			  ByteOrder::Little };
 }
 
 constexpr unsigned default_new_alignment(Target target)
@@ -142,25 +146,33 @@ constexpr unsigned default_new_alignment(Target target)
 
 constexpr Description describe(Target target)
 {
-	return Description{ is_wasm(target) ? Architecture::Wasm32 : Architecture::X86_64,
-		target == Target::Linux            ? Environment::Linux
-			: target == Target::MacOS      ? Environment::Darwin
-			: target == Target::Wasi       ? Environment::WasiPreview1
-			: target == Target::Emscripten ? Environment::Emscripten
-										   : Environment::Freestanding,
-		is_wasm(target)               ? ObjectFormat::WebAssembly
-			: target == Target::MacOS ? ObjectFormat::MachO
-									  : ObjectFormat::Elf,
-		is_wasm(target)               ? CallingConvention::WasmBasicC
-			: target == Target::MacOS ? CallingConvention::DarwinAmd64
-									  : CallingConvention::SysVAmd64,
-		data_layout(target) };
+	return target == Target::AArch64Linux ? Description{ Architecture::AArch64, Environment::Linux, ObjectFormat::Elf,
+		CallingConvention::Aapcs64, data_layout(target) }
+										  : Description{ is_wasm(target) ? Architecture::Wasm32 : Architecture::X86_64,
+												target == Target::Linux            ? Environment::Linux
+													: target == Target::MacOS      ? Environment::Darwin
+													: target == Target::Wasi       ? Environment::WasiPreview1
+													: target == Target::Emscripten ? Environment::Emscripten
+																				   : Environment::Freestanding,
+												is_wasm(target)               ? ObjectFormat::WebAssembly
+													: target == Target::MacOS ? ObjectFormat::MachO
+																			  : ObjectFormat::Elf,
+												is_wasm(target)               ? CallingConvention::WasmBasicC
+													: target == Target::MacOS ? CallingConvention::DarwinAmd64
+																			  : CallingConvention::SysVAmd64,
+												data_layout(target) };
+}
+
+constexpr bool needs_aggregate_shape(Target target)
+{
+	return is_wasm(target) || target == Target::AArch64Linux;
 }
 
 constexpr OptimizationModel optimization_model(Target target)
 {
-	return is_wasm(target) ? OptimizationModel{ false, true, false, true }
-						   : OptimizationModel{ true, false, true, false };
+	return target == Target::AArch64Linux ? OptimizationModel{ true, false, false, true }
+		: is_wasm(target)                 ? OptimizationModel{ false, true, false, true }
+										  : OptimizationModel{ true, false, true, false };
 }
 
 // The course's Linux runtime provides GNU's combined sin/cos call ABI.
@@ -172,8 +184,9 @@ constexpr bool has_gnu_sincos(Target target)
 constexpr CxxAbi cxx_abi(Target target)
 {
 	return CxxAbi{ data_layout(target).pointer_bytes,
-		is_wasm(target) ? MemberFunctionTag::Adjustment : MemberFunctionTag::Function, is_wasm(target), is_wasm(target),
-		is_wasm(target) ? std::uint8_t(4) : std::uint8_t(8) };
+		(is_wasm(target) || target == Target::AArch64Linux) ? MemberFunctionTag::Adjustment
+															: MemberFunctionTag::Function,
+		is_wasm(target), is_wasm(target), is_wasm(target) ? std::uint8_t(4) : std::uint8_t(8) };
 }
 
 // An object-to-integer signature rewrite must retain its public call ABI.
@@ -199,6 +212,8 @@ inline const char* spelling(Target target)
 		return "wasm32-wasip1";
 	case Target::Emscripten:
 		return "wasm32-unknown-emscripten";
+	case Target::AArch64Linux:
+		return "aarch64-linux-gnu";
 	}
 	return "";
 }
@@ -206,10 +221,10 @@ inline const char* spelling(Target target)
 // Version-one LowIR profile names; distinct from command-line aliases.
 inline const char* lowir_spelling(Target target)
 {
-	static const char* const names[] = { "linux", "macos", "wasm32", "wasi", "emscripten" };
+	static const char* const names[] = { "linux", "macos", "wasm32", "wasi", "emscripten", "aarch64" };
 	return names[static_cast<unsigned>(target)];
 }
 
-const unsigned kTargetCount = static_cast<unsigned>(Target::Emscripten) + 1;
+const unsigned kTargetCount = static_cast<unsigned>(Target::AArch64Linux) + 1;
 
 } // namespace target_model

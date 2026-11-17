@@ -84,7 +84,9 @@ bool Decoder::decode()
 		return fail("not a little-endian ELF64 object");
 	if (get_le(at(16), 2) != kEtRel)
 		return fail("not a relocatable object");
-	if (get_le(at(18), 2) != kEmX86_64)
+	if (get_le(at(18), 2) == kEmAArch64)
+		object_.architecture = target_model::Architecture::AArch64;
+	else if (get_le(at(18), 2) != kEmX86_64)
 		return fail("not an x86-64 object");
 	return read_headers() && read_strings() && add_sections() && read_sections() && read_symbols() && read_groups() &&
 		read_relocations();
@@ -365,7 +367,7 @@ bool decode_elf_object(const std::vector<uint8_t>& image, ObjectFile& object, st
 	return decoder.decode();
 }
 
-bool read_elf_object(const std::string& path, ObjectFile& object, std::string& error)
+bool read_object_bytes(const std::string& path, std::vector<uint8_t>& image, std::string& error)
 {
 	std::FILE* file = std::fopen(path.c_str(), "rb");
 	if (file == nullptr)
@@ -375,7 +377,6 @@ bool read_elf_object(const std::string& path, ObjectFile& object, std::string& e
 	}
 	// The file is read into a buffer of its size (a FIFO or a file that
 	// grows meanwhile is read to its end in chunks).
-	std::vector<uint8_t> image;
 	struct stat status;
 	if (fstat(fileno(file), &status) == 0 && S_ISREG(status.st_mode))
 		image.reserve(static_cast<size_t>(status.st_size));
@@ -390,8 +391,14 @@ bool read_elf_object(const std::string& path, ObjectFile& object, std::string& e
 		error = "cannot read " + path;
 		return false;
 	}
+	return true;
+}
+
+bool read_elf_object(const std::string& path, ObjectFile& object, std::string& error)
+{
+	std::vector<uint8_t> image;
 	object.path = path;
-	return decode_elf_object(image, object, error);
+	return read_object_bytes(path, image, error) && decode_elf_object(image, object, error);
 }
 
 } // namespace object

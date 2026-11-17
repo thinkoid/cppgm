@@ -1025,7 +1025,8 @@ explicit boundary and does not carry an object shape.
   subobjects of one kind. Count is 1–65535. Elements are `i1`, `i8`, `u8`,
   `i16`, `u16`, `i32`, `u32`, `i64`, `i128`, `f32`, `f64`, `f128`, `ptr`
   and `v128`. Array elements and nonempty bases participate; union alternatives
-  are counted individually. Ignore empty subobjects and unnamed bit-fields.
+  are counted individually on wasm32. On the AArch64 profile, homogeneous union
+  alternatives contribute their maximum count because they overlap. Ignore empty subobjects and unnamed bit-fields.
   A composition beyond this count range may conservatively state `mixed`.
 
 These are semantic shape facts, not physical ABI classifications or a list of
@@ -2297,7 +2298,7 @@ function's declarations and definition and in every call signature that
 copies the boundary. The psABI requires the caller to provide a result
 buffer that nothing else names.
 
-`shape` and `result_shape` on wasm32 object boundaries: derive the scalar
+`shape` and `result_shape` on wasm32 and AArch64 object boundaries: derive the scalar
 composition from completed semantic layout as specified in Aggregate Layout
 Facts. These facts do not choose the target's physical argument/result
 representation. Retain semantic by-address boundaries for classes non-trivial

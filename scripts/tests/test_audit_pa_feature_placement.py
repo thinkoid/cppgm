@@ -1495,6 +1495,7 @@ function @main() -> i32 {
         self.assertIn("pa29", audit.LOCAL_TEST_HYGIENE_PAS)
         self.assertIn("pa38", audit.LOCAL_TEST_HYGIENE_PAS)
         self.assertIn("pa38", audit.DEFAULT_PAS)
+        self.assertIn("pa39", audit.DEFAULT_PAS)
 
     def test_feature_owners_exclude_assignments_without_language_features(self) -> None:
         def table(*owners: str) -> dict[str, object]:
@@ -1510,12 +1511,13 @@ function @main() -> i32 {
             }
 
         self.assertEqual(audit.feature_owner_errors(table("pa1", "pa30", "pa34", "pa29", "pa38")), [])
-        errors = audit.feature_owner_errors(table("pa35", "pa36", "pa37", "pa39"))
-        self.assertEqual(len(errors), 4)
+        errors = audit.feature_owner_errors(table("pa35", "pa36", "pa37", "pa39", "pa40"))
+        self.assertEqual(len(errors), 5)
         self.assertIn("feature feature.pa35 names owner pa35, which adds no language feature", errors)
         self.assertIn("feature feature.pa36 names owner pa36, which adds no language feature", errors)
         self.assertIn("feature feature.pa37 names owner pa37, which adds no language feature", errors)
-        self.assertTrue(any("pa39" in error and "37 assignments" in error for error in errors))
+        self.assertIn("feature feature.pa39 names owner pa39, which adds no language feature", errors)
+        self.assertTrue(any("pa40" in error and "37 assignments" in error for error in errors))
 
     def test_live_feature_table_names_only_feature_owning_assignments(self) -> None:
         features = audit.load_feature_table(REPO_ROOT / audit.DEFAULT_TRACKER)

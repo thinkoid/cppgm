@@ -1,0 +1,84 @@
+#pragma once
+
+#include "aarch64/mir.h"
+#include "aarch64/abi.h"
+#include "machine/phi_inputs.h"
+
+namespace aarch64 {
+
+class Selector
+{
+public:
+	Selector(const lowir::Program& program, const lowir::Function& function, Function& out, int level, bool pic);
+	void run();
+
+private:
+	void plan();
+	void allocate();
+	void pair(lowir::Value src, unsigned lo, unsigned hi);
+	void save_pair(lowir::TempId dest, unsigned lo, unsigned hi);
+	void wide_binary(const lowir::Instruction& inst);
+	void wide_shift(lowir::BinaryOp op);
+	bool wide(const lowir::Instruction& inst);
+	void save_variadic_registers();
+	void va_start(const lowir::Instruction& inst);
+	void va_arg(const lowir::Instruction& inst);
+	void read_variadic_value(const lowir::Instruction& inst, const Argument& arg, bool stacked);
+	void frame_address(unsigned reg, uint32_t offset);
+	void copy_bytes(unsigned dst, unsigned src, uint64_t size);
+	void copy_value(unsigned dst, lowir::Value src, lowir::Type type);
+	struct CallLayout
+	{
+		std::vector<Argument> args;
+		std::vector<lowir::Type> types;
+		std::vector<unsigned> copies;
+		unsigned size;
+	};
+	CallLayout call_layout(const lowir::Instruction& inst) const;
+	void parameter(lowir::TempId id, const Argument& arg);
+	void pass(const Argument& arg, lowir::Value src, lowir::Type type, unsigned copy_offset);
+	void transfer(bool load, const Argument& arg, unsigned base, lowir::Type type);
+	void float_instruction(const lowir::Instruction& inst);
+	void fp_move(bool to_fp, unsigned fp, unsigned gp, lowir::Type type);
+	bool floating(const lowir::Instruction& inst) const;
+	uint32_t reserve(uint64_t size, uint32_t alignment);
+	void stack_adjust(bool subtract);
+	void constant(unsigned reg, uint64_t bits);
+	void move(unsigned to, unsigned from);
+	void extend(unsigned reg, unsigned bits, bool sign);
+	void access(bool store, unsigned reg, unsigned base, uint32_t offset, unsigned bytes);
+	void address(unsigned reg, lowir::Value value);
+	void value(unsigned reg, lowir::Value value, lowir::Type type);
+	void save(unsigned reg, lowir::TempId temp, bool normalized = false);
+	lowir::Type type_of(lowir::Value v, lowir::Type fallback) const;
+	void edge(lowir::BlockId from, lowir::BlockId to);
+	void select(const lowir::Instruction& inst, lowir::BlockId block);
+	void atomic(const lowir::Instruction& inst);
+	void switch_edges(const lowir::Instruction& inst, lowir::BlockId block);
+	unsigned operand_register(lowir::Value operand, lowir::Type type, unsigned scratch);
+	bool simple_binary(const lowir::Instruction& inst);
+	void integer_unary(const lowir::Instruction& inst);
+	void binary(const lowir::Instruction& inst);
+	void compare(const lowir::Instruction& inst);
+	void call(const lowir::Instruction& inst);
+	void epilogue(const lowir::Instruction& inst);
+
+	const lowir::Program& program_;
+	const lowir::FunctionBody& body_;
+	const lowir::Signature& signature_;
+	Function& out_;
+	int level_;
+	bool pic_;
+	std::vector<uint32_t> slots_, homes_, registers_;
+	std::vector<std::pair<unsigned, uint32_t>> preserved_;
+	machine::PhiInputs phis_;
+	std::vector<CallLayout> calls_;
+	std::vector<uint32_t> call_indices_;
+	Argument result_ = {};
+	Arguments named_;
+	uint32_t variadic_area_ = lowir::kNoId;
+	uint32_t result_pointer_ = lowir::kNoId;
+	uint32_t frame_ = 0, phi_area_ = 0, link_ = lowir::kNoId;
+};
+
+} // namespace aarch64

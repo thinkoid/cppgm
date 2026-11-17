@@ -10,7 +10,10 @@ namespace native {
 namespace {
 
 const uint64_t kBase = 0x400000;
-const uint64_t kPage = 0x1000;
+uint64_t page_size(Target target)
+{
+	return target == Target::AArch64Linux ? 65536 : 4096;
+}
 
 uint64_t align_up(uint64_t value, uint64_t align)
 {
@@ -42,6 +45,8 @@ ExecutableLayout layout_executable(uint64_t text_bytes, uint64_t rodata_bytes, u
 	// section alignment the linker accepts), so aligning an offset aligns
 	// its address.
 	ExecutableLayout layout;
+	layout.target = target;
+	const uint64_t kPage = page_size(target);
 	layout.has_rodata = rodata_bytes != 0;
 	layout.has_data = data_bytes != 0 || bss_bytes != 0;
 	layout.headers = 2 + (layout.has_rodata ? 1 : 0) + (layout.has_data ? 1 : 0);
@@ -64,12 +69,13 @@ bool write_executable_file(const std::string& path, const ExecutableLayout& layo
 {
 	if (layout.target == Target::MacOS)
 		return write_macho_executable(path, layout, text, rodata, data, bss_bytes, entry, error);
+	const uint64_t kPage = page_size(layout.target);
 	const uint64_t text_end = layout.text_offset + text.size();
 	std::vector<uint8_t> out;
 	out.reserve(layout.text_offset);
 	object::put_elf_ident(out);
 	object::put16(out, object::kEtExec);
-	object::put16(out, object::kEmX86_64);
+	object::put16(out, layout.target == Target::AArch64Linux ? object::kEmAArch64 : object::kEmX86_64);
 	object::put32(out, 1);
 	object::put64(out, entry);
 	object::put64(out, object::kElfHeaderBytes);

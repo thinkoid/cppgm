@@ -76,7 +76,8 @@ ExprFacts* Analyzer::literal(const syntax::LiteralExpr& expr)
 			if (!character.valid || character.suffix_begin != spelling.length)
 				error(expr.location, "invalid or user-defined character literal");
 			const Type* type = types_.fundamental(c_source_
-					? (parts.prefix == EncodingPrefix::None ? FundamentalType::Int : CCharacterType(character.type))
+					? (parts.prefix == EncodingPrefix::None ? FundamentalType::Int
+															: CCharacterType(character.type, types_.target()))
 					: character.type);
 			ExprFacts* facts = new_facts(expr, type, ValueCategory::PRValue);
 			IntegralKind kind;
@@ -89,7 +90,8 @@ ExprFacts* Analyzer::literal(const syntax::LiteralExpr& expr)
 		if (!AnalyzeStringLiteral(spelling, string, cxx20_))
 			error(expr.location, "invalid string literal");
 		const Type* element = types_.qualified(
-			types_.fundamental(c_source_ ? CCharacterType(string.element) : string.element), c_source_ ? 0 : kConst);
+			types_.fundamental(c_source_ ? CCharacterType(string.element, types_.target()) : string.element),
+			c_source_ ? 0 : kConst);
 		if (string.suffix_length != 0)
 			return user_string_literal(expr, types_.array(element, string.units), string);
 		return new_facts(expr, types_.array(element, string.units), ValueCategory::LValue);

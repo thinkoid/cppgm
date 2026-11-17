@@ -1,0 +1,54 @@
+name: Experimental AArch64 backend
+
+on:
+  pull_request:
+    paths:
+      - dev/**
+      - pa39/**
+      - scripts/check_aarch64.pl
+      - scripts/replay_aarch64.pl
+      - .github/workflows/aarch64.yml
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cross:
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    timeout-minutes: 90
+    env:
+      CPPGM_AARCH64_CLANG: clang-22
+      CPPGM_AARCH64_LLD: ld.lld-22
+      CPPGM_AARCH64_AR: llvm-ar-22
+      CPPGM_AARCH64_READOBJ: llvm-readobj-22
+      CPPGM_AARCH64_OBJDUMP: llvm-objdump-22
+      CPPGM_AARCH64_ARTIFACTS: ${{ github.workspace }}/obj/pa39-guests
+    steps:
+      - run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential ca-certificates git perl \
+            clang-22=1:22.1.2-1ubuntu1 llvm-22=1:22.1.2-1ubuntu1 lld-22=1:22.1.2-1ubuntu1 \
+            qemu-user=1:10.2.1+ds-1ubuntu3.3 libgcc-14-dev-arm64-cross=14.3.0-14ubuntu1cross1 \
+            libstdc++-14-dev-arm64-cross=14.3.0-14ubuntu1cross1 libc6-dev-arm64-cross=2.43-2ubuntu2cross1
+      - uses: actions/checkout@v6
+      - run: make test-pa39
+      - uses: actions/upload-artifact@v6
+        with:
+          name: pa39-guests
+          path: obj/pa39-guests
+  native:
+    if: github.event_name != 'pull_request'
+    needs: cross
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
+        with:
+          name: pa39-guests
+          path: guests
+      - run: perl scripts/replay_aarch64.pl guests

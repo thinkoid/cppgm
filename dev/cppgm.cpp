@@ -1,6 +1,7 @@
 // Student-facing scaffold for the PA5+ `cppgm` binary.
 
 #include "driver/host_environment.h"
+#include "driver/aarch64_environment.h"
 #include "driver/wasm_environment.h"
 #include "driver/wasm_link_options.h"
 #include "driver/toolchain.h"
@@ -208,7 +209,7 @@ struct SourceOutputInvocation
 	bool hosted = false;
 	bool nostdinc = false;
 	string gcc_install_dir;
-	bool plain_char_unsigned = false;
+	int plain_char_unsigned = -1;
 	bool popcnt = false;
 	bool popcnt_explicit = false;
 	uint8_t sse_level = 0;
@@ -774,7 +775,8 @@ PreprocessorOptions source_preprocessor_options(const SourceOutputInvocation& in
 	options.system_include_paths = invocation.system_include_paths;
 	options.command_line = invocation.command_line;
 	driver::configure_source_language(invocation.language, invocation.standard, options);
-	options.plain_char_unsigned = invocation.plain_char_unsigned;
+	options.plain_char_unsigned = invocation.plain_char_unsigned < 0 ? invocation.target == native::Target::AArch64Linux
+																	 : invocation.plain_char_unsigned != 0;
 	options.popcnt = invocation.popcnt;
 	options.modes.exceptions = invocation.exceptions;
 	options.modes.rtti = invocation.rtti;
@@ -792,6 +794,11 @@ PreprocessorOptions source_preprocessor_options(const SourceOutputInvocation& in
 	{
 		if (!invocation.nostdinc)
 			driver::add_wasm_headers(options, invocation.sysroot, invocation.resource_directory);
+	}
+	else if (invocation.target == native::Target::AArch64Linux)
+	{
+		if (!invocation.nostdinc)
+			driver::add_aarch64_headers(options, invocation.sysroot, invocation.resource_directory);
 	}
 	else if (!invocation.sysroot.empty() || !invocation.resource_directory.empty())
 		throw InvocationError("target header directories currently require a Wasm target");

@@ -255,8 +255,9 @@ void Parser::parse_target()
 			advance();
 			expect(TokenKind::RBracket, "]");
 		}
-		if (abi != ExceptionAbi::Opaque && !target_model::is_wasm(incoming))
-			fail("exception ABI requires a Wasm target");
+		if (abi != ExceptionAbi::Opaque &&
+			target_model::describe(incoming).architecture == target_model::Architecture::X86_64)
+			fail("exception ABI requires a Wasm or AArch64 target");
 	}
 	if ((unit_seen_ || program_.explicit_target) && (program_.target != incoming || program_.exception_abi != abi))
 		fail("incompatible LowIR target profiles");

@@ -17,6 +17,7 @@ const unsigned kRelaBytes = 24;
 const uint16_t kEtRel = 1;
 const uint16_t kEtExec = 2;
 const uint16_t kEmX86_64 = 62;
+const uint16_t kEmAArch64 = 183;
 
 const uint32_t kShtProgbits = 1;
 const uint32_t kShtSymtab = 2;

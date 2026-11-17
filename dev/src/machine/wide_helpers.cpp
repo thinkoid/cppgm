@@ -1,11 +1,11 @@
-#include "wasm/abi.h"
+#include "machine/wide_helpers.h"
 
 #include <cstring>
 #include <map>
 
 #include "lowir/builder.h"
 
-namespace wasm {
+namespace machine {
 
 namespace {
 
@@ -18,7 +18,7 @@ struct Helper
 	unsigned count;
 };
 
-Helper helper_for(const lowir::Instruction& inst)
+Helper helper_for(const lowir::Instruction& inst, bool native_multiply)
 {
 	const Type wide = Type::scalar(TypeKind::I128);
 	if (inst.op == Opcode::Binary && inst.type == wide)
@@ -27,7 +27,7 @@ Helper helper_for(const lowir::Instruction& inst)
 		switch (static_cast<BinaryOp>(inst.sub))
 		{
 		case BinaryOp::Mul:
-			name = "__multi3";
+			name = native_multiply ? nullptr : "__multi3";
 			break;
 		case BinaryOp::Div:
 			name = "__divti3";
@@ -69,11 +69,13 @@ Helper helper_for(const lowir::Instruction& inst)
 
 SymbolId declare_helper(Program& program, Helper helper, Type result)
 {
-	const std::string internal = std::string("__cppgm_wasm_runtime_") + helper.name;
+	const std::string internal = std::string(target_model::is_wasm(program.target) ? "__cppgm_wasm_runtime_"
+																				   : "__cppgm_aarch64_runtime_") +
+		helper.name;
 	const NameId name = program.names.intern(internal.data(), static_cast<uint32_t>(internal.size()));
 	const SymbolId symbol = program.symbol_for(name);
 	if (program.symbols[symbol].kind != SymbolKind::Unresolved)
-		throw WasmError("conflicting Wasm arithmetic helper identity");
+		return kNoId;
 	lowir::Signature signature = lowir::Signature();
 	signature.first_parameter = static_cast<uint32_t>(program.parameters.size());
 	signature.parameter_count = helper.count;
@@ -95,7 +97,7 @@ SymbolId declare_helper(Program& program, Helper helper, Type result)
 
 } // namespace
 
-void legalize_wide_helpers(lowir::Program& program)
+bool legalize_wide_helpers(lowir::Program& program)
 {
 	using namespace lowir;
 	std::map<std::string, SymbolId> helpers;
@@ -109,13 +111,15 @@ void legalize_wide_helpers(lowir::Program& program)
 			for (InstId id = body->blocks[block].first; id != kNoId; id = body->instructions[id].next)
 			{
 				auto& inst = body->instructions[id];
-				const Helper helper = helper_for(inst);
+				const Helper helper = helper_for(inst, program.target == target_model::Target::AArch64Linux);
 				if (helper.name == nullptr)
 					continue;
 				auto found = helpers.find(helper.name);
 				const SymbolId symbol = found == helpers.end()
 					? helpers.emplace(helper.name, declare_helper(program, helper, inst.type)).first->second
 					: found->second;
+				if (symbol == kNoId)
+					return false;
 				const auto first = static_cast<uint32_t>(body->operands.size());
 				for (unsigned i = 0; i < helper.count; ++i)
 					body->operands.push_back(inst.ops[i]);
@@ -129,6 +133,7 @@ void legalize_wide_helpers(lowir::Program& program)
 				inst = call;
 			}
 	}
+	return true;
 }
 
-} // namespace wasm
+} // namespace machine

@@ -13,6 +13,9 @@
 #include "abi/itanium/abi_encoding_error.h"
 #include "driver/host_environment.h"
 #include "driver/native_assembly.h"
+#include "driver/aarch64_environment.h"
+#include "aarch64/backend.h"
+#include "aarch64/link.h"
 #include "driver/wasm_environment.h"
 #include "driver/wasm_link_options.h"
 #include "lex/post_token_writer.h"
@@ -287,6 +290,12 @@ void configure_target_runtime(Invocation& invocation, bool nostdinc)
 		if (!invocation.sysroot.empty())
 			invocation.library_paths.push_back(invocation.sysroot + "/lib/wasm32-wasip1");
 	}
+	else if (invocation.target == native::Target::AArch64Linux && !invocation.wasm_link.requested() &&
+		invocation.wasm_stack_size == 0 && !invocation.wasm_atomics_explicit)
+	{
+		if (!nostdinc)
+			add_aarch64_headers(invocation.preprocessor, invocation.sysroot, invocation.resource_directory);
+	}
 	else if (!invocation.sysroot.empty() || !invocation.resource_directory.empty() ||
 		invocation.no_standard_libraries || invocation.no_startfiles || invocation.wasm_stack_size != 0 ||
 		(invocation.wasm_atomics_explicit && invocation.wasm_atomics) || invocation.wasm_link.requested())
@@ -335,6 +344,26 @@ void lowir_output(Invocation& invocation, bool assembly_output)
 	invocation.compile_only = invocation.compile_only || invocation.emit_lowir;
 }
 
+void configure_mode_macros(Invocation& invocation, bool optimize_size, unsigned pic_level, unsigned pie_level)
+{
+	// These macros describe this invocation. Explicit -D/-U retain their
+	// precedence over target and optimization defaults.
+	std::string mode_macros = invocation.optimizer.level > 0 ? "#define __OPTIMIZE__ 1\n" : "";
+	if (invocation.optimizer.level == 0 || !invocation.optimizer.optional_inlining)
+		mode_macros += "#define __NO_INLINE__ 1\n";
+	if (optimize_size)
+		mode_macros += "#define __OPTIMIZE_SIZE__ 1\n";
+	if (invocation.target == native::Target::MacOS && pic_level == 0)
+		pic_level = 2;
+	if (pic_level != 0)
+		mode_macros += "#define __PIC__ " + std::to_string(pic_level) + "\n#define __pic__ " +
+			std::to_string(pic_level) + "\n";
+	if (pie_level != 0)
+		mode_macros += "#define __PIE__ " + std::to_string(pie_level) + "\n#define __pie__ " +
+			std::to_string(pie_level) + "\n";
+	invocation.preprocessor.command_line.insert(0, mode_macros);
+}
+
 Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions& base)
 {
 	Invocation invocation;
@@ -344,7 +373,7 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 	std::string gcc_install_dir;
 	bool nostdinc = false;
 	bool pthread = false;
-	bool optimize_size = false, popcnt_explicit = false;
+	bool optimize_size = false, popcnt_explicit = false, char_signedness_explicit = false;
 	unsigned pic_level = 0, pie_level = 0;
 	bool assembly_output = false;
 	const size_t base_defines = invocation.preprocessor.command_line.size();
@@ -447,7 +476,10 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 			invocation.preprocessor.modes.rtti = arg == "-frtti";
 		else if (arg == "-funsigned-char" || arg == "-fno-signed-char" || arg == "-fsigned-char" ||
 			arg == "-fno-unsigned-char")
+		{
+			char_signedness_explicit = true;
 			invocation.preprocessor.plain_char_unsigned = arg == "-funsigned-char" || arg == "-fno-signed-char";
+		}
 		else if (arg == "-Wno-narrowing" || arg == "-Wnarrowing" || arg == "-Werror=narrowing")
 			invocation.ignore_narrowing = arg == "-Wno-narrowing";
 		else if (arg == "--stats")
@@ -552,24 +584,11 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 	if (pthread)
 		invocation.preprocessor.command_line.insert(base_defines, "#define _REENTRANT 1\n");
 	invocation.preprocessor.command_line += forced_includes;
+	if (!char_signedness_explicit && invocation.target == native::Target::AArch64Linux)
+		invocation.preprocessor.plain_char_unsigned = true;
 	if (!popcnt_explicit)
 		invocation.preprocessor.popcnt = invocation.preprocessor.sse_level >= 4;
-	// These macros describe this invocation. Explicit -D/-U retain their
-	// precedence over target and optimization defaults.
-	std::string mode_macros = invocation.optimizer.level > 0 ? "#define __OPTIMIZE__ 1\n" : "";
-	if (invocation.optimizer.level == 0 || !invocation.optimizer.optional_inlining)
-		mode_macros += "#define __NO_INLINE__ 1\n";
-	if (optimize_size)
-		mode_macros += "#define __OPTIMIZE_SIZE__ 1\n";
-	if (invocation.target == native::Target::MacOS && pic_level == 0)
-		pic_level = 2;
-	if (pic_level != 0)
-		mode_macros += "#define __PIC__ " + std::to_string(pic_level) + "\n#define __pic__ " +
-			std::to_string(pic_level) + "\n";
-	if (pie_level != 0)
-		mode_macros += "#define __PIE__ " + std::to_string(pie_level) + "\n#define __pie__ " +
-			std::to_string(pie_level) + "\n";
-	invocation.preprocessor.command_line.insert(0, mode_macros);
+	configure_mode_macros(invocation, optimize_size, pic_level, pie_level);
 	// Preserve named objects and statement boundaries in the debugging level.
 	// Preprocessing still observes GCC's __OPTIMIZE__ for -Og.
 	if (invocation.debug_optimization && invocation.debug_types)
@@ -672,7 +691,8 @@ void optimize_unit(lowir::Program& program, const Invocation& invocation, native
 	options.inline_thunk_targets = eh_model == native::EhModel::Course;
 	opt::optimize_program(program, options, nullptr);
 	program.jump_thunks.clear();
-	native::recover_jump_thunks(program, eh_model);
+	if (invocation.target != native::Target::AArch64Linux)
+		native::recover_jump_thunks(program, eh_model);
 }
 
 bool lower_source(const std::string& path, const Invocation& invocation, lower::ProgramLowering& lowering,
@@ -753,16 +773,19 @@ bool compile_native_sources(SourceInputs sources, const Invocation& invocation, 
 	native::ObjectStats stats;
 	stats.clocks = invocation.stats;
 	stats.census = invocation.function_census;
-	native::ObjectBuilder builder(program, stats, eh_model, invocation.optimizer.level, invocation.position_independent,
-		invocation.target, invocation.red_zone, invocation.function_sections);
+	const bool arm = invocation.target == native::Target::AArch64Linux;
+	std::unique_ptr<native::ObjectBuilder> builder;
+	if (!arm)
+		builder.reset(new native::ObjectBuilder(program, stats, eh_model, invocation.optimizer.level,
+			invocation.position_independent, invocation.target, invocation.red_zone, invocation.function_sections));
 	// At -O0 each definition is encoded (or written) as the lowering
 	// completes it; an optimizing level keeps the program until the
 	// optimizer has run.
 	lowir::DefinitionStream definitions;
-	const bool streaming = invocation.optimizer.level == 0;
+	const bool streaming = invocation.optimizer.level == 0 && (!arm || lowir_output != nullptr);
 	if (streaming)
 		lowering.set_definition_stream(
-			lowir_output != nullptr ? static_cast<lowir::DefinitionSink*>(&definitions) : &builder);
+			lowir_output != nullptr ? static_cast<lowir::DefinitionSink*>(&definitions) : builder.get());
 	lowering.set_object_mode(true);
 	lowering.set_debug_locations(invocation.debug_info);
 	lowering.set_debug_types(invocation.debug_types);
@@ -795,7 +818,11 @@ bool compile_native_sources(SourceInputs sources, const Invocation& invocation, 
 		if (lowir_output != nullptr)
 			return write_unit_lowir(program, streaming ? &definitions : nullptr, *lowir_output);
 		object.path = sources.begin->name;
-		builder.finish(object);
+		if (arm)
+			aarch64::compile_object(program, object, invocation.optimizer.level, invocation.position_independent,
+				nullptr, invocation.function_sections);
+		else
+			builder->finish(object);
 	}
 	// The unit's errors without a source position. An InternalError (a
 	// compiler bug, not an error of the program) leaves for the tool to
@@ -844,7 +871,11 @@ bool compile_lowir_unit(const std::string& path, const Invocation& invocation, n
 		std::cerr << "ERROR: " << error << std::endl;
 		return false;
 	}
-	native::recover_jump_thunks(program, eh_model);
+	if (program.explicit_target && program.target != invocation.target)
+		throw InvocationError("input and output target profiles differ");
+	program.target = invocation.target;
+	if (invocation.target != native::Target::AArch64Linux)
+		native::recover_jump_thunks(program, eh_model);
 	optimize_unit(program, invocation, eh_model);
 	if (lowir_output != nullptr)
 		return write_unit_lowir(program, nullptr, *lowir_output);
@@ -852,6 +883,19 @@ bool compile_lowir_unit(const std::string& path, const Invocation& invocation, n
 	stats.clocks = invocation.stats;
 	stats.census = invocation.function_census;
 	object.path = path;
+	if (invocation.target == native::Target::AArch64Linux)
+	{
+		try
+		{
+			aarch64::compile_object(program, object, invocation.optimizer.level, invocation.position_independent,
+				nullptr, invocation.function_sections);
+		}
+		catch (const native::BackendError& e)
+		{
+			throw InvocationError(e.what());
+		}
+		return true;
+	}
 	if (!native::compile_object(program, object, error, &stats, eh_model, invocation.optimizer.level,
 			invocation.position_independent, invocation.target, invocation.red_zone, invocation.function_sections))
 	{
@@ -985,7 +1029,8 @@ std::string find_library(const Invocation& invocation, const std::string& name)
 		const std::string base = directory + (ends_with(directory, "/") ? "" : "/") + "lib" + name;
 		for (const char* suffix : { ".o", ".obj", ".a" })
 		{
-			if ((std::string(suffix) != ".a" || target_model::is_wasm(invocation.target)) &&
+			if ((std::string(suffix) != ".a" || target_model::is_wasm(invocation.target) ||
+					invocation.target == native::Target::AArch64Linux) &&
 				regular_file(base + suffix))
 				return base + suffix;
 		}
@@ -1003,11 +1048,10 @@ int link_mode(const Invocation& invocation)
 	const Input* end = invocation.inputs.data() + invocation.inputs.size();
 	for (const Input* next = invocation.inputs.data(); next != end;)
 	{
-		objects.emplace_back();
-		native::object::ObjectFile& object = objects.back();
 		if (next == sources.begin)
 		{
-			if (!compile_native_sources(sources, invocation, native::EhModel::Course, object))
+			objects.emplace_back();
+			if (!compile_native_sources(sources, invocation, native::EhModel::Course, objects.back()))
 				return EXIT_FAILURE;
 			next = sources.end;
 			continue;
@@ -1016,14 +1060,24 @@ int link_mode(const Invocation& invocation)
 		if (input.kind == Input::Kind::Source || input.kind == Input::Kind::LowIR ||
 			input.kind == Input::Kind::Assembly)
 		{
-			if (!compile_input(input, invocation, native::EhModel::Course, object))
+			objects.emplace_back();
+			if (!compile_input(input, invocation, native::EhModel::Course, objects.back()))
 				return EXIT_FAILURE;
 			continue;
 		}
 		const std::string path = input.kind == Input::Kind::Library ? find_library(invocation, input.name) : input.name;
 		std::string error;
-		if (!(invocation.target == native::Target::MacOS ? native::object::read_macho_object(path, object, error)
-														 : native::object::read_elf_object(path, object, error)))
+		bool loaded;
+		if (invocation.target == native::Target::AArch64Linux)
+			loaded = aarch64::read_input(path, objects, error);
+		else
+		{
+			objects.emplace_back();
+			loaded = invocation.target == native::Target::MacOS
+				? native::object::read_macho_object(path, objects.back(), error)
+				: native::object::read_elf_object(path, objects.back(), error);
+		}
+		if (!loaded)
 		{
 			std::cerr << "ERROR: " << error << std::endl;
 			return EXIT_FAILURE;
@@ -1031,7 +1085,8 @@ int link_mode(const Invocation& invocation)
 	}
 	native::LinkStats stats;
 	std::string error;
-	if (!native::link_executable(objects, output, error, &stats, invocation.target))
+	if (!native::link_executable(objects, output, error, &stats, invocation.target,
+			!invocation.no_standard_libraries && !invocation.no_startfiles))
 	{
 		// No stale executable is left behind (as the host linker removes it).
 		std::remove(output.c_str());

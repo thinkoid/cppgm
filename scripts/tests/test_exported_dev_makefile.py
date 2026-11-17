@@ -34,6 +34,7 @@ ASSIGNMENT_REFERENCE_TARGETS = {
     "pa33": "lowiropt",
     "pa34": "lowir2native",
     "pa38": "cppgm",
+    "pa39": "cppgm",
 }
 
 

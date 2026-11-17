@@ -1,6 +1,7 @@
 #include "lower/program_lowering.h"
 
 #include "sema/analyzer.h"
+#include <algorithm>
 
 namespace lower {
 
@@ -109,7 +110,13 @@ ir_model::AggregateShape ProgramLowering::aggregate_shape(const sema::Type* type
 	{
 		if (member->bit_field && (member->width == 0 || member->variable->name == nullptr))
 			continue;
-		merge(result, aggregate_shape(member->variable->type));
+		const AggregateShape part = aggregate_shape(member->variable->type);
+		// Overlapping union alternatives occupy the same register lanes in AAPCS64.
+		if (program_.target == target_model::Target::AArch64Linux && cls->key == TokenKind::KW_UNION &&
+			result.element == part.element)
+			result.count = std::max(result.count, part.count);
+		else
+			merge(result, part);
 	}
 	aggregate_shapes_.set(cls, (static_cast<uint32_t>(result.element) << 16) | result.count);
 	return result;

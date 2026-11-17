@@ -364,7 +364,7 @@ void Encoder::write(std::vector<uint8_t>& out)
 	out.reserve(header_table + kSectionHeaderBytes * count);
 	put_elf_ident(out);
 	put16(out, kEtRel);
-	put16(out, kEmX86_64);
+	put16(out, object_.architecture == target_model::Architecture::AArch64 ? kEmAArch64 : kEmX86_64);
 	put32(out, 1);
 	put64(out, 0);
 	put64(out, 0);

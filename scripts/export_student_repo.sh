@@ -18,6 +18,8 @@ Environment:
                        Path where the reference-binary bundle should be written.
   CPPGM_REFERENCE_BUNDLE_URL
                        URL embedded in the student manifest for auto-download.
+  CPPGM_EXPORT_TEST_AARCH64
+                       Set to 1 to verify PA39 using the installed AArch64 tools.
   CPPGM_EXPORT_ALLOW_NON_LINUX
                        Set to 1 for local smoke exports on non-Linux hosts.
 EOF
@@ -409,6 +411,8 @@ shared_scripts=(
   scripts/check_macho.py
   scripts/check_optimization_quality.py
   scripts/check_object_expectations.pl
+  scripts/check_aarch64.pl
+  scripts/replay_aarch64.pl
   scripts/check_wasm.pl
   scripts/CppgmWasmModule.pm
   scripts/CppgmWasmCheckCache.pm
@@ -770,6 +774,7 @@ pa_ref_pairs=(
   pa33:lowiropt
   pa34:lowir2native
   pa38:cppgm
+  pa39:cppgm
 )
 
 source_sha=$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || echo unknown)
@@ -845,6 +850,9 @@ CPPGM_KEEP_FAILED_REFERENCE_STDOUT=1 make -s -C "$dest/pa38" ref-test \
   CPPGM_HOST_CXX="${CPPGM_HOST_CXX:-${CXX:-g++}}" \
   CPPGM_STDLIB_FLAGS="${CPPGM_STDLIB_FLAGS:-}" \
   CPPGM_TEST_RUNNER=1
+if [[ "${CPPGM_EXPORT_TEST_AARCH64:-0}" == 1 ]]; then
+  make -s -C "$dest/pa39" ref-test CPPGM_SKIP_DEV_REBUILD=1
+fi
 find "$dest" -type f \( -name '*.my' -o -name '*.my.*' -o -name '.test_counts' -o -name '.test_failed' -o -name '.test_counts.*' -o -name '.test_failed.*' \) -delete
 make -s -C "$dest" ref-test-debuginfo \
   CXX="${CXX:-g++}" \

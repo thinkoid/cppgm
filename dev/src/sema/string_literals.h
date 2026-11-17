@@ -21,11 +21,11 @@ struct Type;
 bool IsCharacterArrayElement(const Type* type);
 
 // C's prefixed literals use the compatible integer typedef types, rather
-// than C++'s distinct wchar_t/char16_t/char32_t fundamental types. Every
-// supported target uses a signed 32-bit wchar_t.
-inline FundamentalType CCharacterType(FundamentalType type)
+// than C++'s distinct wchar_t/char16_t/char32_t fundamental types.
+inline FundamentalType CCharacterType(FundamentalType type, target_model::Target target)
 {
-	return type == FundamentalType::WcharT ? FundamentalType::Int
+	return type == FundamentalType::WcharT
+		? (target == target_model::Target::AArch64Linux ? FundamentalType::UnsignedInt : FundamentalType::Int)
 		: type == FundamentalType::Char16T ? FundamentalType::UnsignedShortInt
 		: type == FundamentalType::Char32T ? FundamentalType::UnsignedInt
 										   : type;
