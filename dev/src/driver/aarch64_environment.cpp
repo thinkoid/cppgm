@@ -28,6 +28,8 @@ void configure_aarch64_environment(PreprocessorOptions& options)
 	std::string macros = "#undef __x86_64__\n#undef __SSE__\n#undef __SSE2__\n"
 						 "#define __aarch64__ 1\n#define __AARCH64EL__ 1\n#define __ARM_ARCH 8\n#define __ARM_NEON 1\n"
 						 "#define __ARM_PCS_AAPCS64 1\n"
+						 "#define __LONG_MAX__ 9223372036854775807L\n#define __INTMAX_MAX__ 9223372036854775807L\n"
+						 "#define __GCC_ATOMIC_TEST_AND_SET_TRUEVAL 1\n#define __GCC_ATOMIC_INT_LOCK_FREE 2\n"
 						 "#define __ATOMIC_RELAXED 0\n#define __ATOMIC_CONSUME 1\n#define __ATOMIC_ACQUIRE 2\n"
 						 "#define __ATOMIC_RELEASE 3\n#define __ATOMIC_ACQ_REL 4\n#define __ATOMIC_SEQ_CST 5\n"
 						 "#define __LP64__ 1\n#define _LP64 1\n#define __CHAR_BIT__ 8\n"
@@ -55,6 +57,8 @@ void configure_aarch64_environment(PreprocessorOptions& options)
 			"#define __WCHAR_TYPE__ unsigned int\n#define __WCHAR_UNSIGNED__ 1\n#define __WCHAR_MAX__ 4294967295U\n"
 			"#define __SIZEOF_LONG_DOUBLE__ 16\n";
 		macros += kBinary128NumericPredefines;
+		if (options.language != SourceLanguage::C)
+			macros += "#define _GNU_SOURCE 1\n";
 	}
 	options.command_line.insert(0, macros);
 }

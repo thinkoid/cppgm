@@ -214,7 +214,7 @@ Decoded DecodeExtended(long double value)
 {
 	// x87's format: an explicit integer bit in a 64-bit significand.
 	unsigned char bytes[16];
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	StoreExtended80(value, bytes);
 #else
 	std::memcpy(bytes, &value, sizeof bytes);
@@ -463,7 +463,7 @@ bool SoftStaticConverted(const StaticValue& value, SoftFloat source, const sema:
 			std::memcpy(bytes, &significand, 8);
 			bytes[8] = 0xff;
 			bytes[9] = 0x7f;
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 			special = LoadExtended80(bytes);
 #else
 			std::memcpy(&special, bytes, sizeof special);

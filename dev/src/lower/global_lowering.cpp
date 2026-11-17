@@ -115,7 +115,7 @@ template<typename T>
 long double FloatingArithmetic(TokenKind op, long double left, long double right)
 {
 	const T a = static_cast<T>(left), b = static_cast<T>(right);
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	return CalculateIeeeFloat(op == TokenKind::OP_PLUS ? '+'
 			: op == TokenKind::OP_MINUS                ? '-'
 			: op == TokenKind::OP_STAR                 ? '*'
@@ -913,7 +913,7 @@ lowir::SymbolId ProgramLowering::thread_local_wrapper_symbol(
 	const std::string object = tls_wrapper_object(variable);
 	const bool local = unit_local(variable);
 	const lowir::SymbolId wrapper = found != PointerMap::kMissing ? found
-		: local                                                   ? new_symbol("__cppgm_tls_wrapper__" + base)
+		: local ? new_symbol("__cppgm_tls_wrapper__" + base)
 				: external_symbol(object, "__cppgm_tls_wrapper__" + base);
 	lowir::Symbol& symbol = program_.symbols[wrapper];
 	if (symbol.kind == lowir::SymbolKind::Unresolved)
@@ -2371,7 +2371,7 @@ bool ProgramLowering::static_value(const syntax::Expr& expr, StaticValue& out, b
 			out.floating = static_cast<double>(FloatingArithmetic<double>(binary->op, left.floating, right.floating));
 			break;
 		default:
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 			out.floating = CalculateExtended80(binary->op == TokenKind::OP_PLUS ? '+'
 					: binary->op == TokenKind::OP_MINUS                         ? '-'
 					: binary->op == TokenKind::OP_STAR                          ? '*'

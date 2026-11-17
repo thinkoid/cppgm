@@ -101,7 +101,7 @@ long double float_of(const Constant& c, TypeKind kind)
 	if (c.kind == ValueKind::Float)
 		return float_value(c.float_kind, c.bits);
 	// An integer literal in a floating context is its value.
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	return float_value(TypeKind::F80, integer_as_float(TypeKind::F80, c.bits));
 #else
 	return static_cast<long double>(static_cast<s128>(to_u128(c.bits)));
@@ -124,7 +124,7 @@ long double round_to(TypeKind kind, long double value)
 		return static_cast<float>(value);
 	if (kind == TypeKind::F64)
 		return static_cast<double>(value);
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	return RoundExtended80(value);
 #else
 	return value;
@@ -135,7 +135,7 @@ template<typename T>
 bool fold_float_binary_in_precision(BinaryOp op, TypeKind kind, long double a, long double b, Constant& out)
 {
 	const T x = static_cast<T>(a), y = static_cast<T>(b);
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	if (op != BinaryOp::Add && op != BinaryOp::Sub && op != BinaryOp::Mul && op != BinaryOp::Div)
 		return false;
 	out = float_constant(kind,
@@ -174,7 +174,7 @@ bool fold_float_binary(BinaryOp op, TypeKind kind, long double a, long double b,
 		return fold_float_binary_in_precision<float>(op, kind, a, b, out);
 	if (kind == TypeKind::F64)
 		return fold_float_binary_in_precision<double>(op, kind, a, b, out);
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	if (op != BinaryOp::Add && op != BinaryOp::Sub && op != BinaryOp::Mul && op != BinaryOp::Div)
 		return false;
 	out = float_constant(kind,

@@ -1,6 +1,6 @@
 #include "lowir/literals.h"
 #include "lex/extended_float.h"
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 #include "lex/interchange_float.h"
 #endif
 
@@ -13,7 +13,7 @@
 
 namespace lowir {
 
-#ifndef __wasi__
+#if __LDBL_MANT_DIG__ != 113
 static_assert(sizeof(long double) == 16 && LDBL_MANT_DIG == 64, "x87 extended long double");
 #endif
 
@@ -146,7 +146,7 @@ bool reads_back(TypeKind kind, const char* text, long double value)
 			static_cast<float>(std::strtod(text, nullptr)) == static_cast<float>(value);
 	if (kind == TypeKind::F64)
 		return std::strtod(text, nullptr) == static_cast<double>(value);
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	return RoundExtended80(std::strtold(text, nullptr)) == value;
 #else
 	return std::strtold(text, nullptr) == value;
@@ -218,7 +218,7 @@ bool scan_float_literal(const char* text, uint32_t length, bool negative, TypeKi
 	}
 	kind = float_rank(context) != 0 ? context : written;
 	scratch.assign(text, digits);
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	if (kind == TypeKind::F80)
 	{
 		if (!ScanInterchangeValue(scratch.data(), scratch.size(), kExtended80, bits.low, bits.high))
@@ -286,7 +286,7 @@ Literal float_literal(TypeKind kind, long double value)
 		// of its x87 significand (a hardware conversion would quiet a
 		// signaling one); one left with no fraction bit is quiet.
 		unsigned char bytes[sizeof(long double)];
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 		StoreExtended80(value, bytes);
 #else
 		std::memcpy(bytes, &value, sizeof value);
@@ -319,7 +319,7 @@ Literal float_literal(TypeKind kind, long double value)
 	else
 	{
 		unsigned char bytes[sizeof(long double)];
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 		StoreExtended80(value, bytes);
 #else
 		std::memcpy(bytes, &value, sizeof value);
@@ -351,7 +351,7 @@ long double float_value(TypeKind kind, const Literal& bits)
 	std::memcpy(bytes, &bits.low, 8);
 	const uint16_t sign_exponent = static_cast<uint16_t>(bits.high);
 	std::memcpy(bytes + 8, &sign_exponent, 2);
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	return LoadExtended80(bytes);
 #else
 	long double value;
@@ -367,7 +367,7 @@ Literal integer_as_float(TypeKind kind, const Literal& bits, bool negative_zero)
 	const bool negative = (bits.high >> 63) != 0;
 	if (negative)
 		negate(magnitude);
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	long double value = IntegerExtended80(magnitude.low, magnitude.high, false);
 #else
 	long double value = static_cast<long double>(magnitude.high) * 18446744073709551616.0L +
@@ -455,7 +455,7 @@ void append_float_literal(std::string& out, TypeKind kind, const Literal& bits, 
 	{
 		// A subnormal value as exact hexadecimal floating text: its decimal
 		// reads back only with an underflow the reference reader rejects.
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 		if (kind == TypeKind::F80)
 		{
 			// Keep the x87 printf spelling even on a binary128 host.

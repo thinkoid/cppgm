@@ -88,18 +88,29 @@ PA30's optional x86 target-feature checks run with `make test-target-features`
 
 ## Measurement workflows
 
-The measurement workflows are Boost, Godot, simdjson, index-cpp, internal-cpp,
-Public benchmarks, Self-build benchmarks and Wasm32. Each one runs on a push
-to `main`, on a manual request, and on a pull request that changes `dev/`,
-`benchmarks/`, `scripts/`, `.github/actions/` or the workflow's own file. The
-Self-build workflow also runs for a change in `pa35/`, and the Wasm32 workflow
-for a change in `pa37/`. A new push to a pull request cancels that pull
-request's earlier run.
+The **Benchmark queue** starts automatically when **Tests** finishes for a push to
+`main`. It measures that exact commit even if a later commit has landed. The
+Ubuntu 26.04 GCC build is retained for 14 days. Boost, Godot, simdjson, index-cpp,
+internal-cpp, public, Clang, Wasm and Arm measurements download it. The native
+self-build benchmark times clean rebuilds with GCC, Clang and cppgm, so it builds
+its own compilers. There are two repository-wide hosted measurement slots. One
+serves long builds and one serves the other suites. Assignment tests, Arm
+correctness and inception use their own jobs and can start while those slots are
+busy. Dedicated Intel runs retain their manual dispatch.
 
-These workflows and the Clang build make `dev/cppgm` with
-`.github/actions/build-compiler`. The action restores a build of the same
-`dev/` files by the same host compiler from the cache. Without one, it builds
-the compiler and saves the build. The Tests workflow always builds.
+To approve benchmarks on a pull request, apply the **run-benchmarks** label.
+Applying the label starts one batch for the current merge revision. To approve
+a later revision, remove and reapply the label. The queue looks up the exact
+compiler artifact from Tests. An early approval or an individual suite dispatched
+manually can use the existing compiler cache. Pull requests retain their results
+as artifacts. Only measurements from a push to `main` publish badges.
+
+The **Experimental AArch64 backend** workflow runs the PA39 executables on Linux
+Arm64 and the Mach-O interoperability suite on Apple Silicon. On Linux Arm64 it
+also runs PA37's eight scalar/SIMD workloads at O0 and O3 against the same
+independent checksums as Wasm, checks the optimized NEON instructions, and uses
+PA35's full `compare-cppgm-inception` with GCC 14 and LLD linking static Arm
+ELFs before repeating the SIMD checks with the self-built compiler. Native timing runs in the benchmark queue.
 
 <a id="boost-advisory-ci"></a>
 
@@ -132,8 +143,7 @@ part of `make test-harness`.
 
 ## Clang build CI
 
-The **Clang build** workflow runs on each push to `main` and on each pull
-request that changes `dev/` or the check. It builds the `clang` target of
+The **Clang build** workflow runs in the benchmark queue. It builds the `clang` target of
 LLVM 22.1.2 with `cppgm` at `-O3`; the host compiler links. The built Clang
 then compiles a checked program at `-O0` and `-O2`, and the output of the
 program must match. A source that `cppgm` does not compile fails the job;

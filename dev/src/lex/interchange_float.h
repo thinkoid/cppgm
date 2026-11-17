@@ -14,7 +14,7 @@ struct InterchangeFormat
 extern const InterchangeFormat kBinary16;
 extern const InterchangeFormat kBinary128;
 extern const InterchangeFormat kBFloat16;
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 extern const InterchangeFormat kExtended80;
 #endif
 

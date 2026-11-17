@@ -1,16 +1,14 @@
 name: Public benchmarks
 
 on:
-  push:
-    branches: [main]
-  # A pull request that changes none of these files cannot change the results.
-  pull_request:
-    paths:
-      - dev/**
-      - benchmarks/**
-      - scripts/**
-      - .github/actions/**
-      - .github/workflows/public-benchmarks.yml
+  workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+      build_run_id:
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       platform:
@@ -32,10 +30,11 @@ on:
         default: false
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
-  group: public-benchmarks-${{ github.ref }}-${{ inputs.platform || 'github' }}
+  group: public-benchmarks-${{ github.event.pull_request.number || github.run_id }}-${{ inputs.platform || 'github' }}
   cancel-in-progress: true
 
 env:
@@ -45,6 +44,9 @@ jobs:
   benchmarks:
     name: public benchmarks
     if: inputs.platform != 'intel'
+    concurrency:
+      group: hosted-benchmark-suites
+      queue: max
     runs-on: ubuntu-24.04
     container: ubuntu:26.04
     # A wrong output or a build failure fails this job. A changed count warns.
@@ -65,9 +67,14 @@ jobs:
             build-essential ca-certificates clang git libgmp-dev patch python3 time valgrind
 
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
 
-      - name: Build compiler
-        uses: ./.github/actions/build-compiler
+      - name: Restore or build compiler
+        uses: ./.github/actions/benchmark-compiler
+        with:
+          build-run-id: ${{ inputs.build_run_id }}
 
       - name: Cache pinned sources
         uses: actions/cache@v4
@@ -105,7 +112,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: public-benchmarks-${{ github.sha }}
+          name: public-benchmarks-${{ inputs.source_sha || github.sha }}
           path: |
             obj/public-benchmarks/results.json
             obj/public-benchmarks/details.md
@@ -119,7 +126,7 @@ jobs:
     name: publish README badges
     needs: benchmarks
     # Only this job has the write token. Do not run third-party code here.
-    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: always() && github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-24.04
     continue-on-error: true
     timeout-minutes: 5
@@ -133,6 +140,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.source_sha || github.sha }}
           path: tools
           persist-credentials: false
       - uses: actions/checkout@v6
@@ -141,12 +149,12 @@ jobs:
           path: badge-branch
       - uses: actions/download-artifact@v7
         with:
-          name: public-benchmarks-${{ github.sha }}
+          name: public-benchmarks-${{ inputs.source_sha || github.sha }}
           path: artifact
 
       - name: Publish to the badge branch
         env:
-          REVISION: ${{ github.sha }}
+          REVISION: ${{ inputs.source_sha || github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_TOKEN: ${{ github.token }}
         run: |

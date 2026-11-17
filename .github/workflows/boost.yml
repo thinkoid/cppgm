@@ -1,16 +1,14 @@
 name: Boost benchmarks
 
 on:
-  push:
-    branches: [main]
-  # A pull request that changes none of these files cannot change the results.
-  pull_request:
-    paths:
-      - dev/**
-      - benchmarks/**
-      - scripts/**
-      - .github/actions/**
-      - .github/workflows/boost.yml
+  workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+      build_run_id:
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       platform:
@@ -28,9 +26,9 @@ on:
         default: cppgm-intel
 
 permissions:
+  actions: read
   contents: read
 
-# A new push to a pull request cancels that pull request's earlier run. No other run is cancelled.
 concurrency:
   group: boost-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
@@ -39,6 +37,9 @@ jobs:
   benchmarks:
     if: inputs.platform != 'intel'
     name: Boost correctness and performance
+    concurrency:
+      group: hosted-benchmark-suites
+      queue: max
     runs-on: ubuntu-24.04
     container: ubuntu:26.04
     timeout-minutes: 120
@@ -58,11 +59,14 @@ jobs:
             build-essential binutils ca-certificates clang curl git python3 bzip2 gdb
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
       - name: Trust the mounted checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Build compiler
-        uses: ./.github/actions/build-compiler
+      - name: Restore or build compiler
+        uses: ./.github/actions/benchmark-compiler
+        with:
+          build-run-id: ${{ inputs.build_run_id }}
       - name: Cache pinned Boost archive
         uses: actions/cache@v4
         with:
@@ -97,7 +101,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: boost-${{ github.sha }}-${{ github.run_id }}
+          name: boost-${{ inputs.source_sha || github.sha }}-${{ github.run_id }}
           path: obj/boost-evidence/
           if-no-files-found: warn
           retention-days: 14
@@ -105,7 +109,7 @@ jobs:
   publish:
     name: publish Boost results
     needs: benchmarks
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -117,6 +121,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.source_sha || github.sha }}
           path: tools
           persist-credentials: false
       - uses: actions/checkout@v6
@@ -125,11 +130,11 @@ jobs:
           path: badge-branch
       - uses: actions/download-artifact@v7
         with:
-          name: boost-${{ github.sha }}-${{ github.run_id }}
+          name: boost-${{ inputs.source_sha || github.sha }}-${{ github.run_id }}
           path: artifact
       - name: Publish comparisons and retained history
         env:
-          REVISION: ${{ github.sha }}
+          REVISION: ${{ inputs.source_sha || github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_TOKEN: ${{ github.token }}
         run: |

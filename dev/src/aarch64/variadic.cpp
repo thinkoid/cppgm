@@ -18,7 +18,7 @@ void Selector::save_variadic_registers()
 	}
 }
 
-void Selector::va_start(const lowir::Instruction& inst)
+void Selector::emit_va_start(const lowir::Instruction& inst)
 {
 	value(15, inst.ops[0], program_.pointer_type());
 	frame_address(10, frame_ + (named_.darwin ? (named_.stack + 7) & ~7u : named_.stack));
@@ -81,7 +81,7 @@ void Selector::stack_va_arg(const lowir::Instruction& inst, const Argument& arg,
 	read_variadic_value(inst, arg, true);
 }
 
-void Selector::va_arg(const lowir::Instruction& inst)
+void Selector::emit_va_arg(const lowir::Instruction& inst)
 {
 	const auto arg = classify(inst.type, machine::argument_shape(body_, inst, 0));
 	const bool simd = arg.bank == Bank::Simd;

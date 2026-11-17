@@ -1,0 +1,128 @@
+name: Benchmark queue
+
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+    branches: [main]
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+# Queue whole revisions so one burst of merges does not fill each measurement
+# queue with nine separate suites per commit. Unrelated labels bypass the queue.
+concurrency:
+  group: >-
+    ${{ ((github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_repository.full_name == github.repository) ||
+         github.event.label.name == 'run-benchmarks') && 'hosted-benchmark-batches' || github.run_id }}
+  queue: max
+
+jobs:
+  select:
+    # workflow_run also fires for PRs whose source branch happens to be named main.
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository) ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'run-benchmarks')
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+    outputs:
+      build: ${{ steps.select.outputs.build }}
+      revision: ${{ steps.select.outputs.revision }}
+    steps:
+      - uses: actions/github-script@v8
+        id: select
+        with:
+          script: |
+            const {workflow_run: main, pull_request: pr} = context.payload;
+            const revision = main ? main.head_sha : context.sha;
+            core.setOutput('revision', revision);
+            const {owner, repo} = context.repo;
+            const runs = main ? [main] : (await github.rest.actions.listWorkflowRuns({
+              owner, repo, workflow_id: 'tests.yml', event: 'pull_request', head_sha: pr.head.sha
+            })).data.workflow_runs.filter(run => run.head_repository?.full_name === pr.head.repo.full_name);
+            // The artifact name identifies the tested merge even if the PR base has advanced.
+            const name = 'cppgm-build-ubuntu-26.04-gcc-' + revision;
+            for (const run of runs) {
+              const {data: {artifacts}} = await github.rest.actions.listWorkflowRunArtifacts({
+                owner, repo, run_id: run.id, name
+              });
+              if (artifacts.some(a => a.name === name && !a.expired)) {
+                core.setOutput('build', String(run.id));
+                return;
+              }
+            }
+            core.info('No matching Tests artifact is available; use the compiler cache.');
+
+  boost:
+    needs: select
+    uses: ./.github/workflows/boost.yml
+    permissions: &publish-permissions
+      actions: read
+      contents: write
+    with: &build-inputs
+      source_sha: ${{ needs.select.outputs.revision }}
+      build_run_id: ${{ needs.select.outputs.build }}
+
+  godot:
+    needs: select
+    uses: ./.github/workflows/godot.yml
+    permissions: *publish-permissions
+    with: *build-inputs
+
+  index-cpp:
+    needs: select
+    uses: ./.github/workflows/index-cpp.yml
+    permissions: *publish-permissions
+    with: *build-inputs
+
+  internal-cpp:
+    needs: select
+    uses: ./.github/workflows/internal-cpp.yml
+    permissions: *publish-permissions
+    with: *build-inputs
+
+  simdjson:
+    needs: select
+    uses: ./.github/workflows/simdjson.yml
+    permissions: *publish-permissions
+    with: *build-inputs
+
+  public:
+    needs: select
+    uses: ./.github/workflows/public-benchmarks.yml
+    permissions: *publish-permissions
+    with: *build-inputs
+
+  self-build:
+    needs: select
+    uses: ./.github/workflows/self-build-benchmarks.yml
+    permissions: *publish-permissions
+    with: *build-inputs
+
+  wasm:
+    needs: select
+    uses: ./.github/workflows/wasm.yml
+    permissions: *publish-permissions
+    with: *build-inputs
+
+  llvm:
+    needs: select
+    uses: ./.github/workflows/llvm.yml
+    permissions:
+      actions: read
+      contents: read
+    with: *build-inputs
+
+  arm:
+    needs: select
+    uses: ./.github/workflows/aarch64-benchmarks.yml
+    permissions:
+      actions: read
+      contents: read
+    with: *build-inputs

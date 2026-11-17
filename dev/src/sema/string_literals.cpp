@@ -110,7 +110,7 @@ long double BuiltinNan(FundamentalType type, const syntax::Expr& text)
 	std::memcpy(bytes, &significand, 8);
 	const uint16_t sign_exponent = 0x7fff;
 	std::memcpy(bytes + 8, &sign_exponent, 2);
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	return LoadExtended80(bytes);
 #else
 	long double value;
@@ -128,7 +128,7 @@ long double BuiltinSignalingNan(FundamentalType type, const syntax::Expr& text)
 	std::memcpy(bytes, &significand, 8);
 	const uint16_t sign_exponent = 0x7fff;
 	std::memcpy(bytes + 8, &sign_exponent, 2);
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	return LoadExtended80(bytes);
 #else
 	long double value;

@@ -116,7 +116,7 @@ long double InPrecision(long double value, const Type* type)
 		return static_cast<double>(value);
 	case FundamentalType::BFloat16:
 		return BFloatRounded(value);
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	case FundamentalType::LongDouble:
 		return RoundExtended80(value);
 #endif
@@ -533,7 +533,7 @@ bool ConstantInterpreter::literal(const syntax::LiteralExpr& expr, ConstValue& o
 		value = scanned;
 	}
 	else
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 		value = LoadExtended80(bytes);
 #else
 		std::memcpy(&value, bytes, sizeof value);
@@ -1251,7 +1251,7 @@ bool ConstantInterpreter::floating_operation(
 		defined = defined && !std::isinf(out);
 		break;
 	default:
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 		out = CalculateExtended80(op == TokenKind::OP_PLUS ? '+'
 				: op == TokenKind::OP_MINUS                ? '-'
 				: op == TokenKind::OP_STAR                 ? '*'
@@ -1984,7 +1984,7 @@ bool ConstantInterpreter::intrinsic_value(const syntax::CallExpr& call_expr, Con
 		// The x87 value's quiet bit (significand bit 62), which a
 		// signaling NaN constant keeps (BuiltinSignalingNan).
 		unsigned char bytes[sizeof(long double)] = {};
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 		StoreExtended80(v, bytes);
 #else
 		std::memcpy(bytes, &v, sizeof v);

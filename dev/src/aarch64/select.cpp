@@ -173,7 +173,7 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		atomic(inst);
 		return;
 	case Opcode::Select:
-		value(result_reg, inst.ops[0], type_of(inst.ops[0], word));
+		move(result_reg, condition_register(inst.ops[0], result_reg));
 		value(left, inst.ops[1], inst.type);
 		value(right, inst.ops[2], inst.type);
 		out_.emit(Op::Subs, 31, result_reg, 31);
@@ -201,7 +201,7 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		return;
 	case Opcode::Branch:
 	{
-		const unsigned condition = operand_register(inst.ops[0], type_of(inst.ops[0], word), left);
+		const unsigned condition = condition_register(inst.ops[0], left);
 		const auto false_block = inst.ops[2].index;
 		const auto first = body_.blocks[false_block].first;
 		if (level_ && (first == kNoId || body_.instructions[first].op != Opcode::Phi) &&
@@ -233,10 +233,10 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		move(result_reg, 29);
 		break;
 	case Opcode::VaStart:
-		va_start(inst);
+		emit_va_start(inst);
 		return;
 	case Opcode::VaArg:
-		va_arg(inst);
+		emit_va_arg(inst);
 		return;
 	case Opcode::Call:
 		call(inst);

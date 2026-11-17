@@ -342,7 +342,7 @@ bool ConstantInterpreter::user_literal(const syntax::LiteralExpr& expr, Result& 
 			}
 			else
 			{
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 				value = LoadExtended80(bytes);
 #else
 				std::memcpy(&value, bytes, sizeof value);

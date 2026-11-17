@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <vector>
 #include <utility>
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 #include <cmath>
 #include <cstring>
 #endif
@@ -14,7 +14,7 @@
 const InterchangeFormat kBinary16 = { 11, 15 };
 const InterchangeFormat kBinary128 = { 113, 16383 };
 const InterchangeFormat kBFloat16 = { 8, 127 };
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 const InterchangeFormat kExtended80 = { 64, 16383 };
 #endif
 
@@ -202,7 +202,7 @@ bool RoundToFormat(
 	// sign 0, the biased exponent, then the fraction (M without its
 	// hidden bit).
 	const unsigned fraction = static_cast<unsigned>(p - 1);
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 	if (p == 64)
 	{
 		low = m.low;
@@ -227,7 +227,7 @@ bool RoundToFormat(
 void Negate(const InterchangeFormat& format, uint64_t& low, uint64_t& high)
 {
 	const unsigned sign = format.precision == 113 ? 127
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 		: format.precision == 64 ? 79
 #endif
 								 : 15;
@@ -391,7 +391,7 @@ bool ScanInterchangeValue(
 	return RoundToFormat(num, den, shift, format, low, high);
 }
 
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 namespace {
 using ExtendedWide = unsigned __int128;
 const uint64_t kExtendedInteger = uint64_t(1) << 63;
@@ -451,7 +451,7 @@ long double ExtendedNaN(long double left, long double right)
 
 long double LoadExtended80(const unsigned char* bytes)
 {
-	static_assert(sizeof(long double) == 16 && __LDBL_MANT_DIG__ == 113, "WASI binary128 host");
+	static_assert(sizeof(long double) == 16 && __LDBL_MANT_DIG__ == 113, "binary128 host");
 	uint64_t significand = 0;
 	uint16_t sign_exponent = 0;
 	std::memcpy(&significand, bytes, 8);

@@ -1,0 +1,69 @@
+name: AArch64 benchmarks
+
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+      build_run_id:
+        type: string
+        default: ''
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build:
+    concurrency:
+      group: hosted-benchmark-suites
+      queue: max
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    timeout-minutes: 30
+    env:
+      CPPGM_AARCH64_CLANG: clang-22
+      CPPGM_AARCH64_LLD: ld.lld-22
+    steps:
+      - run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential ca-certificates git python3 \
+            clang-22=1:22.1.2-1ubuntu1 lld-22=1:22.1.2-1ubuntu1 \
+            g++-14-aarch64-linux-gnu=14.3.0-14ubuntu1cross1 qemu-user=1:10.2.1+ds-1ubuntu3.3
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/benchmark-compiler
+        with:
+          build-run-id: ${{ inputs.build_run_id }}
+      - run: python3 scripts/aarch64_benchmarks.py build obj/pa39-benchmarks
+      - uses: actions/upload-artifact@v6
+        with:
+          name: pa39-benchmarks
+          path: obj/pa39-benchmarks
+  native:
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    concurrency:
+      group: hosted-benchmark-suites
+      queue: max
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v7
+        with:
+          name: pa39-benchmarks
+          path: benchmarks-native
+      - run: python3 scripts/aarch64_benchmarks.py measure benchmarks-native timings --blocks 2
+      - uses: actions/upload-artifact@v6
+        with:
+          name: pa39-native-observations
+          path: timings

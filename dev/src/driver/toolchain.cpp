@@ -820,7 +820,7 @@ bool compile_native_sources(SourceInputs sources, const Invocation& invocation, 
 		object.path = sources.begin->name;
 		if (arm)
 			aarch64::compile_object(program, object, invocation.optimizer.level, invocation.position_independent,
-				nullptr, invocation.function_sections);
+				nullptr, invocation.function_sections, eh_model == native::EhModel::Host);
 		else
 			builder->finish(object);
 	}
@@ -888,7 +888,7 @@ bool compile_lowir_unit(const std::string& path, const Invocation& invocation, n
 		try
 		{
 			aarch64::compile_object(program, object, invocation.optimizer.level, invocation.position_independent,
-				nullptr, invocation.function_sections);
+				nullptr, invocation.function_sections, eh_model == native::EhModel::Host);
 		}
 		catch (const native::BackendError& e)
 		{

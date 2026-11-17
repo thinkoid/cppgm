@@ -24,6 +24,7 @@ private:
 	unsigned vector_value(lowir::Value value, unsigned scratch);
 	void save_vector(unsigned reg, lowir::TempId result);
 	void vector_instruction(const lowir::Instruction& inst);
+	void vector_shift(lowir::VectorOp op, unsigned dest, unsigned source, uint64_t count);
 	void vector_shuffle(const lowir::Instruction& inst, unsigned source);
 	void vector_move(unsigned to, unsigned from);
 	void pair(lowir::Value src, unsigned lo, unsigned hi);
@@ -32,9 +33,9 @@ private:
 	void wide_shift(lowir::BinaryOp op);
 	bool wide(const lowir::Instruction& inst);
 	void save_variadic_registers();
-	void va_start(const lowir::Instruction& inst);
+	void emit_va_start(const lowir::Instruction& inst);
 	void stack_va_arg(const lowir::Instruction& inst, const Argument& arg, bool aligned);
-	void va_arg(const lowir::Instruction& inst);
+	void emit_va_arg(const lowir::Instruction& inst);
 	void read_variadic_value(const lowir::Instruction& inst, const Argument& arg, bool stacked);
 	unsigned frame_base() const { return dynamic_stack_ ? 28 : 31; }
 	void base_address(unsigned reg, unsigned base, uint32_t offset, unsigned alignment = 1);
@@ -75,6 +76,7 @@ private:
 	void select(const lowir::Instruction& inst, lowir::BlockId block);
 	void atomic(const lowir::Instruction& inst);
 	void switch_edges(const lowir::Instruction& inst, lowir::BlockId block);
+	unsigned condition_register(lowir::Value operand, unsigned scratch);
 	unsigned operand_register(lowir::Value operand, lowir::Type type, unsigned scratch);
 	bool simple_binary(const lowir::Instruction& inst);
 	void integer_unary(const lowir::Instruction& inst);

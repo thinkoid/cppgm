@@ -1,0 +1,27 @@
+name: Restore benchmark compiler
+description: Use the tested Ubuntu 26.04 GCC compiler for the checked-out revision.
+inputs:
+  build-run-id:
+    description: Tests workflow run containing the compiler
+    default: ''
+runs:
+  using: composite
+  steps:
+    - if: inputs.build-run-id != ''
+      shell: bash
+      id: source
+      run: echo "sha=$(git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+    - if: inputs.build-run-id != ''
+      uses: actions/download-artifact@v7
+      with:
+        name: cppgm-build-ubuntu-26.04-gcc-${{ steps.source.outputs.sha }}
+        run-id: ${{ inputs.build-run-id }}
+        github-token: ${{ github.token }}
+        path: ${{ runner.temp }}/benchmark-compiler
+    - if: inputs.build-run-id != ''
+      shell: bash
+      run: |
+        tar -xzf "$RUNNER_TEMP/benchmark-compiler/cppgm-build.tar.gz"
+        dev/cppgm --version
+    - if: inputs.build-run-id == ''
+      uses: ./.github/actions/build-compiler

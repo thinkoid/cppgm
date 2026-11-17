@@ -105,9 +105,10 @@ class LLVMCITests(unittest.TestCase):
 
     def test_workflow_builds_the_compiler_then_clang(self):
         workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/llvm.yml').read_text()
-        self.assertIn('pull_request:', workflow)
-        self.assertIn('branches: [main]', workflow)
-        self.assertLess(workflow.index('uses: ./.github/actions/build-compiler'),
+        self.assertIn('workflow_call:', workflow)
+        queue = (Path(__file__).resolve().parents[2] / '.github/workflows/benchmark-queue.yml').read_text()
+        self.assertIn('uses: ./.github/workflows/llvm.yml', queue)
+        self.assertLess(workflow.index('uses: ./.github/actions/benchmark-compiler'),
                         workflow.index('scripts/llvm_ci.py run'))
         self.assertRegex(ci.COMMIT, r'\A[0-9a-f]{40}\Z')
         self.assertTrue(re.search(r'persist-credentials: false', workflow))

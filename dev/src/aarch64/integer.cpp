@@ -14,6 +14,16 @@ unsigned Selector::operand_register(Value operand, Type type, unsigned scratch)
 	return scratch;
 }
 
+unsigned Selector::condition_register(Value operand, unsigned scratch)
+{
+	const Type type = type_of(operand, Type::scalar(TypeKind::I64));
+	if (type.kind() != TypeKind::I128)
+		return operand_register(operand, type, scratch);
+	pair(operand, scratch, 15);
+	out_.emit(Op::Orr, scratch, scratch, 15);
+	return scratch;
+}
+
 bool Selector::simple_binary(const lowir::Instruction& inst)
 {
 	const auto op = static_cast<BinaryOp>(inst.sub);

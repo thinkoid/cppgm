@@ -1,27 +1,30 @@
 name: Clang build
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    paths:
-      - dev/**
-      - scripts/llvm_ci.py
-      - scripts/benchmark_hosts.py
-      - .github/actions/**
-      - .github/workflows/llvm.yml
+  workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+      build_run_id:
+        type: string
+        default: ''
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
-  group: clang-build-${{ github.ref }}
+  group: clang-build-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   clang:
     name: Clang built by cppgm at -O3
+    concurrency:
+      group: hosted-benchmark-builds
+      queue: max
     runs-on: ubuntu-24.04
     container: ubuntu:26.04
     timeout-minutes: 150
@@ -41,11 +44,14 @@ jobs:
             build-essential binutils ca-certificates cmake git ninja-build python3
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
       - name: Trust the mounted checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Build compiler
-        uses: ./.github/actions/build-compiler
+      - name: Restore or build compiler
+        uses: ./.github/actions/benchmark-compiler
+        with:
+          build-run-id: ${{ inputs.build_run_id }}
       - name: Build pinned Clang with cppgm and run the built compiler
         run: python3 scripts/llvm_ci.py run --output obj/llvm
       - name: Report
@@ -58,7 +64,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: llvm-${{ github.sha }}-${{ github.run_id }}
+          name: llvm-${{ inputs.source_sha || github.sha }}-${{ github.run_id }}
           path: |
             obj/llvm/*.json
             obj/llvm/*.md

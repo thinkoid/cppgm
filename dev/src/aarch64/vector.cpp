@@ -45,12 +45,41 @@ void Selector::save_vector(unsigned reg, TempId id)
 	}
 }
 
+void Selector::vector_shift(VectorOp op, unsigned dest, unsigned source, uint64_t count)
+{
+	const bool left = op < VectorOp::Psrlwi;
+	const bool arithmetic = op >= VectorOp::Psrawi;
+	const auto first = left ? VectorOp::Psllwi : arithmetic ? VectorOp::Psrawi : VectorOp::Psrlwi;
+	const unsigned width = 16u << (unsigned(op) - unsigned(first));
+	if (count == 0)
+		vector_move(dest, source);
+	else if (count >= width && !arithmetic)
+		out_.emit(Op::VEor, dest, dest, dest);
+	else
+	{
+		const unsigned shift = left ? width + count : 2 * width - std::min<uint64_t>(count, width);
+		out_.emit(left ? Op::VShl : arithmetic ? Op::VSshr : Op::VUshr, dest, source, 0, shift << 16);
+	}
+}
+
 void Selector::vector_shuffle(const lowir::Instruction& inst, unsigned source)
 {
 	const unsigned mask = body_.literals[inst.ops[2].index].low;
 	// The common splat is one DUP. The remaining shuffles construct each
 	// destination lane while leaving the source intact, including when it is v16.
-	if (((mask & 3) * 0x55) == mask)
+	const auto op = static_cast<VectorOp>(inst.sub);
+	if (op == VectorOp::Pshuflw || op == VectorOp::Pshufhw)
+	{
+		const unsigned first = op == VectorOp::Pshufhw ? 4 : 0;
+		vector_move(17, source);
+		for (unsigned i = 0; i < 4; ++i)
+		{
+			const unsigned lane = (mask >> (2 * i)) & 3;
+			if (i != lane)
+				out_.emit(Op::VInsH, 17, source, 0, ((first + i) << 18) | ((first + lane) << 12));
+		}
+	}
+	else if (((mask & 3) * 0x55) == mask)
 		out_.emit(Op::VDupS, 17, source, 0, (mask & 3) << 19);
 	else
 		for (unsigned i = 0; i < 4; ++i)
@@ -116,12 +145,28 @@ void Selector::vector_instruction(const lowir::Instruction& inst)
 	else
 	{
 		const unsigned left = vector_value(inst.ops[0], 16);
-		if (op == VectorOp::Pshufd)
+		if (op >= VectorOp::Psllwi && op <= VectorOp::Psradi)
+		{
+			vector_shift(op, dest, left, body_.literals[inst.ops[2].index].low);
+			save_vector(dest, inst.result);
+			return;
+		}
+		if (op == VectorOp::Pshufd || op == VectorOp::Pshuflw || op == VectorOp::Pshufhw)
 		{
 			vector_shuffle(inst, left);
 			return;
 		}
 		const unsigned right = shape == VectorShape::Binary ? vector_value(inst.ops[1], 17) : 0;
+		if (op >= VectorOp::Packsswb && op <= VectorOp::Packusdw)
+		{
+			const auto narrow = op < VectorOp::Packuswb ? Op::VSqxtn : Op::VSqxtun;
+			const unsigned size = op == VectorOp::Packssdw || op == VectorOp::Packusdw ? 1u << 22 : 0;
+			// Keep both inputs live until the upper half has been inserted.
+			out_.emit(narrow, 0, left, 0, size);
+			out_.emit(narrow, 0, right, 0, size | (1u << 30));
+			save_vector(0, inst.result);
+			return;
+		}
 		for (const auto& p : patterns)
 			if (op >= p.first && op <= p.last)
 			{

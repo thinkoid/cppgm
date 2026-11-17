@@ -12,7 +12,7 @@
 // Float and double match both hosts. Extended literals retain the x86
 // representation explicitly when the compiler runs on a binary128 host.
 static_assert(sizeof(float) == 4 && sizeof(double) == 8, "IEEE single and double");
-#ifndef __wasi__
+#if __LDBL_MANT_DIG__ != 113
 static_assert(sizeof(long double) == 16 && LDBL_MANT_DIG == 64, "x87 extended long double");
 #endif
 
@@ -412,7 +412,7 @@ bool ScanFloatingValue(const char* text, uint32_t length, FundamentalType type, 
 	}
 	case FundamentalType::LongDouble:
 	{
-#ifdef __wasi__
+#if __LDBL_MANT_DIG__ == 113
 		uint64_t low = 0, high = 0;
 		if (!ScanInterchangeValue(scratch.data(), scratch.size(), kExtended80, low, high))
 			return false;

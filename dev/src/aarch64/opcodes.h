@@ -116,7 +116,13 @@
 	M(VSqsub, 0x4e202c00) \
 	M(VUqsub, 0x6e202c00) \
 	M(VUrhadd, 0x6e201400) \
+	M(VSqxtn, 0x0e214800) \
+	M(VSqxtun, 0x2e212800) \
+	M(VShl, 0x4f005400) \
+	M(VSshr, 0x4f000400) \
+	M(VUshr, 0x6f000400) \
 	M(VDupS, 0x4e040400) \
+	M(VInsH, 0x6e020400) \
 	M(VInsS, 0x6e040400) \
 	M(VInsHi, 0x4e181c00) \
 	M(VZip1, 0x4e003800) \

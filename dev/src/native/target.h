@@ -14,7 +14,9 @@ using target_model::Target;
 
 inline Target host_target()
 {
-#if defined(__APPLE__)
+#if defined(__linux__) && defined(__aarch64__)
+	return Target::AArch64Linux;
+#elif defined(__APPLE__)
 	return Target::MacOS;
 #else
 	return Target::Linux;

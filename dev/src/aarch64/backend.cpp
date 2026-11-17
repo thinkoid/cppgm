@@ -3,6 +3,7 @@
 
 #include "aarch64/selector.h"
 #include "machine/global_data.h"
+#include "native/object/host_builtins.h"
 #include "machine/wide_helpers.h"
 #include "lowir/startup_sections.h"
 #include "aarch64/link.h"
@@ -49,8 +50,16 @@ void define_global(const Program& program, SymbolId id, const std::vector<uint32
 }
 
 void create_symbols(const Program& program, const std::vector<SymbolId>& canonical, std::vector<uint32_t>& symbols,
-	obj::ObjectFile& object)
+	obj::ObjectFile& object, bool host)
 {
+	std::map<NameId, const char*> builtins;
+	if (host)
+		for (const auto& pair : native::kHostBuiltins)
+		{
+			const NameId id = program.names.find(pair[0], std::strlen(pair[0]));
+			if (id)
+				builtins.emplace(id, pair[1]);
+		}
 	for (SymbolId id : program.order)
 	{
 		if (canonical[id] != id)
@@ -58,7 +67,9 @@ void create_symbols(const Program& program, const std::vector<SymbolId>& canonic
 		const auto& src = program.symbols[id];
 		const NameId name = src.metadata.object ? src.metadata.object : src.name;
 		obj::Symbol sym;
-		sym.name = object.add_string(program.spelling(name), program.names.length(name));
+		const auto builtin = builtins.find(src.metadata.object);
+		sym.name = builtin == builtins.end() ? object.add_string(program.spelling(name), program.names.length(name))
+											 : object.add_string(builtin->second);
 		sym.binding = src.metadata.binding == ir_model::SBM_INTERNAL ? obj::Binding::Local
 			: src.metadata.binding == ir_model::SBM_WEAK             ? obj::Binding::Weak
 																	 : obj::Binding::Global;
@@ -111,8 +122,8 @@ void aliases(const Program& program, const std::vector<uint32_t>& symbols, obj::
 
 }
 
-void compile_object(
-	Program& program, obj::ObjectFile& object, int level, bool pic, std::string* dump, bool function_sections)
+void compile_object(Program& program, obj::ObjectFile& object, int level, bool pic, std::string* dump,
+	bool function_sections, bool host)
 {
 	if (program.explicit_target && !target_model::is_aarch64(program.target))
 		throw AArch64Error("input and output target profiles differ");
@@ -126,7 +137,7 @@ void compile_object(
 	if (machine::object_identities(program, canonical) != kNoId)
 		throw AArch64Error("conflicting AArch64 object definitions");
 	std::vector<uint32_t> symbols(program.symbols.size(), kNoId);
-	create_symbols(program, canonical, symbols, object);
+	create_symbols(program, canonical, symbols, object, host);
 	const uint32_t code = object.add_section(".text", obj::SectionKind::Text, 4);
 	const uint32_t eh = object.add_section(".eh_frame", obj::SectionKind::Rodata, 8);
 	for (SymbolId id : program.order)

@@ -212,10 +212,10 @@ jobs:
       - name: Store host compiler build
         uses: actions/upload-artifact@v6
         with:
-          name: cppgm-build-${{ matrix.id }}
+          name: cppgm-build-${{ matrix.id }}-${{ github.sha }}
           path: ${{ runner.temp }}/cppgm-build-upload/
           if-no-files-found: error
-          retention-days: 1
+          retention-days: ${{ matrix.id == 'ubuntu-26.04-gcc' && 14 || 1 }}
 
   c-assignment:
     name: optional C frontend assignment
@@ -232,7 +232,7 @@ jobs:
           echo "$RUNNER_TEMP/wasm-tools/bin" >> "$GITHUB_PATH"
       - uses: actions/download-artifact@v7
         with:
-          name: cppgm-build-ubuntu-24.04-gcc
+          name: cppgm-build-ubuntu-24.04-gcc-${{ github.sha }}
           path: ${{ runner.temp }}/cppgm-build-artifact
       - name: Restore compiler build
         run: tar -xzf "$RUNNER_TEMP/cppgm-build-artifact/cppgm-build.tar.gz"
@@ -259,7 +259,7 @@ jobs:
       - name: Download host compiler build
         uses: actions/download-artifact@v7
         with:
-          name: cppgm-build-ubuntu-24.04-gcc
+          name: cppgm-build-ubuntu-24.04-gcc-${{ github.sha }}
           path: ${{ runner.temp }}/cppgm-build-artifact
 
       - name: Restore host compiler build
@@ -399,7 +399,7 @@ jobs:
       - name: Download host compiler build
         uses: actions/download-artifact@v7
         with:
-          name: cppgm-build-${{ matrix.flavor.id }}
+          name: cppgm-build-${{ matrix.flavor.id }}-${{ github.sha }}
           path: ${{ runner.temp }}/cppgm-build-artifact
 
       - name: Restore host compiler build
