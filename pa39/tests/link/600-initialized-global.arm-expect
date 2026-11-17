@@ -1,1 +1,17 @@
-{"macos":true,"exit":39}
+{
+  "source": true,
+  "llvm_interop": true,
+  "commands": [
+    {
+      "exit": 39,
+      "stdout": ""
+    },
+    {
+      "args": [
+        "A"
+      ],
+      "exit": 104,
+      "stdout": ""
+    }
+  ]
+}

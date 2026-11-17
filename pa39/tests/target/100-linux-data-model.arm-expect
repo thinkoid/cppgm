@@ -1,1 +1,11 @@
-{"exit":24}
+{
+  "source": true,
+  "target": "aarch64-linux-gnu",
+  "llvm_interop": true,
+  "commands": [
+    {
+      "exit": 24,
+      "stdout": ""
+    }
+  ]
+}

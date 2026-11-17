@@ -9,35 +9,30 @@ use File::Copy qw(copy);
 use File::Spec;
 use File::Temp qw(tempdir);
 use FindBin;
-use JSON::PP qw(decode_json);
+use JSON::PP;
 use lib $FindBin::Bin;
-use CppgmBatchWorker qw(collect_tests run_command_capture);
-
-sub sidecar {
-    my ($name) = @_;
-    $name =~ s/\.t$/.arm-expect/;
-    return $name;
-}
+use CppgmBatchWorker qw(run_command_capture);
+use CppgmArm64MachO qw(check_apple_fixture);
+use CppgmBackendFixture qw(backend_tests backend_expectation fixture_units read_bytes check_bounds);
 
 if (@ARGV && $ARGV[0] eq '--list') {
     shift @ARGV;
-    print "$_\n" for grep { -f sidecar($_) } map { collect_tests($_, qr/\.t$/) } @ARGV;
+    print "$_\n" for backend_tests('arm', @ARGV);
     exit 0;
-}
-
-sub read_file {
-    open(my $file, '<:raw', $_[0]) or die "read $_[0]: $!\n";
-    local $/;
-    return <$file> // '';
 }
 
 @ARGV == 2 or die "usage: check_aarch64.pl <cppgm> <fixture>\n";
 my ($compiler, $test) = @ARGV;
 my $directory = tempdir('cppgm-aarch64-XXXXXX', TMPDIR => 1, CLEANUP => 1);
-my $expect = decode_json(read_file(sidecar($test)));
-if (($expect->{platform} // '') eq 'macos') {
-    exec 'python3', "$FindBin::Bin/check_arm64_macos.py", $compiler, $test or die "start Mach-O checker: $!";
+my $expect = backend_expectation($test,'arm');
+if (($expect->{target} // '') eq 'arm64-apple-macos11') {
+    check_apple_fixture($compiler, $test, $directory, $expect);
+    print "AArch64 control passed\n";
+    exit 0;
 }
+die "$test: PA39 expects a source fixture with command outcomes\n"
+    unless $expect->{source} && ($expect->{reject_link} || @{$expect->{commands} // []});
+my @units = fixture_units($test,$expect);
 my $suffix = $compiler =~ /(-ref|-self)$/ ? $1 : '';
 my $bin = dirname($compiler);
 my $opt = "$bin/lowiropt$suffix";
@@ -60,12 +55,13 @@ if ($expect->{builtins}) {
 
 sub run {
     my ($want, @args) = @_;
+    unlink "$directory/out", "$directory/err";
     my $status = run_command_capture(cmd => \@args, stdout => "$directory/out", stderr => "$directory/err",
         timeout => 30, supervisor => $compiler,
         limits => {cpu_seconds => 30, rss_bytes => 2147483648, file_bytes => 67108864});
-    die "@args: expected $want, got $status\n" . read_file("$directory/out") . read_file("$directory/err")
+    die "@args: expected $want, got $status\n" . read_bytes("$directory/out") . read_bytes("$directory/err")
         if $status != $want;
-    return read_file("$directory/out");
+    return read_bytes("$directory/out");
 }
 
 my $bundle;
@@ -76,12 +72,17 @@ if ($ENV{CPPGM_AARCH64_ARTIFACTS}) {
 }
 sub execute_image {
     my ($linker) = @_;
-    run($expect->{exit}, $qemu, '-cpu', 'cortex-a53', "$directory/program");
-    if ($bundle) {
-        my $digest = sha256_hex(read_file("$directory/program"));
-        my $guest = "$bundle/$digest";
-        copy("$directory/program", $guest) or die "copy $guest: $!" unless -f $guest;
-        push @manifest, join("\t", $digest, $expect->{exit}, $level_name, $producers, $linker) . "\n";
+    for my $command (@{$expect->{commands}}) {
+        my @args = @{$command->{args} // []};
+        my $stdout = run($command->{exit}, $qemu, '-cpu', 'cortex-a53', "$directory/program", @args);
+        $stdout eq ($command->{stdout} // '') or die "$test: guest stdout differs\n";
+        if ($bundle) {
+            my $digest = sha256_hex(read_bytes("$directory/program"));
+            my $guest = "$bundle/$digest";
+            copy("$directory/program", $guest) or die "copy $guest: $!" unless -f $guest;
+            push @manifest, join("\t", $digest, $command->{exit}, $level_name, $producers, $linker,
+                JSON::PP->new->ascii->canonical->encode($command)) . "\n";
+        }
     }
 }
 
@@ -107,9 +108,10 @@ sub link_hosted {
 }
 
 run(0, $clang, @target, '-march=armv8-a', '-c', "$support/start.S", '-o', "$directory/start.o");
-if ($expect->{assembly}) {
-    push @assembly, "$directory/witness.o";
-    run(0, $clang, @target, '-march=armv8-a', '-c', "$support/$expect->{assembly}", '-o', $assembly[0]);
+for my $asm (@{$expect->{reference_assembly} // []}) {
+    push @assembly, "$directory/reference-asm-".scalar(@assembly).'.o';
+    run(0, $clang, @target, @{$expect->{reference_flags} // []}, '-c',
+        File::Spec->catfile(dirname($test), $asm), '-o', $assembly[-1]);
 }
 for my $level (0..3) {
     $level_name = "O$level";
@@ -120,28 +122,30 @@ for my $level (0..3) {
     my $other = "$directory/reference.o";
     run(0, @reference, '-c', $test, '-o', $other);
     run(0, $compiler, @flags, '-x', 'c++', '-c', $test, '-o', $object);
+    if ($expect->{reject_link}) {
+        for my $cmd ([$compiler, @target, $object], [$lld, '-m', 'aarch64elf', '-static', '-e', 'main', $other]) {
+            run(1, @$cmd, @assembly, '-o', "$directory/rejected");
+            read_bytes("$directory/err") =~ /\S/ or die "$test: link failed without a diagnostic\n";
+        }
+        next;
+    }
     my $header = run(0, $inspect, '--file-headers', '--relocations', $object);
     die "$test: wrong ELF architecture\n" unless $header =~ /Machine: EM_AARCH64\b/;
     die "$test: expected relocation $expect->{relocation}\n"
         if $expect->{relocation} && index($header, $expect->{relocation}) < 0;
-    if ($level && $expect->{register_leaf}) {
-        my $symbol = $expect->{register_leaf};
-        my $assembly = run(0, $objdump, '-d', '--no-show-raw-insn', "--disassemble-symbols=$symbol", $object);
-        die "$test: missing function $symbol\n" unless $assembly =~ /<\Q$symbol\E>:/;
-        die "$test: register-only leaf $symbol accesses memory or calls\n"
-            if $assembly =~ /\b(?:ld\w*|st\w*|bl|blr|sp)\b/i;
-    }
-    if ($level == 3 && $expect->{quality}) {
-        my $quality = $expect->{quality};
-        my $symbol = $quality->{symbol};
-        for my $unit ($other, $object) {
-            my $assembly = run(0, $objdump, '-d', '--no-show-raw-insn', "--disassemble-symbols=$symbol", $unit);
-            my @instructions = $assembly =~ /^\s*[0-9a-f]+:\s+(\S+[^\n]*)$/mg;
-            @instructions or die "$test: no instructions for $symbol\n";
-            my @memory = grep { /^(?:ld|st)/ } @instructions;
-            my @stack = grep { /\[sp\b/ } @memory;
-            die "$test: $symbol exceeds O3 code-size or memory-traffic limits\n" if
-                @instructions > $quality->{instructions} || @memory > $quality->{memory} || @stack > $quality->{stack};
+    my $quality = $expect->{quality};
+    if ($quality && grep { $_ == $level } @{$quality->{levels} // [1, 2, 3]}) {
+        for my $symbol (sort keys %{$quality->{functions}}) {
+            for my $unit ($other, $object) {
+                my $assembly = run(0, $objdump, '-d', '--no-show-raw-insn', "--disassemble-symbols=$symbol", $unit);
+                my @ins = $assembly =~ /^\s*[0-9a-f]+:\s+(\S+[^\n]*)$/mg;
+                @ins or die "$test: no instructions for $symbol\n";
+                my @memory = grep { /^(?:ld|st)/ } @ins;
+                my %counts = (instructions => scalar(@ins), code_bytes => 4 * @ins, memory_ops => scalar(@memory),
+                    stack_ops => scalar(grep { /\[sp\b/ } @memory), calls => scalar(grep { /^bl(?:r)?\b/ } @ins),
+                    sp_uses => scalar(grep { /\bsp\b/ } @ins));
+                check_bounds(\%counts, $quality->{functions}{$symbol}, "$test: O$level $symbol", 'AArch64');
+            }
         }
     }
     for my $optimized (0,1) {
@@ -153,35 +157,42 @@ for my $level (0..3) {
         copy("$directory/roundtrip.lowir", "$directory/raw.lowir") or die "$!" unless $optimized;
         die "$test: O$level LowIR object differs (optimized=$optimized)\n" if compare($object, "$directory/roundtrip.o");
     }
-    if ($expect->{hosted_peer}) {
-        my $peer = "$support/$expect->{hosted_peer}";
-        run(0, @reference, '-c', $peer, '-o', "$directory/clang-peer.o");
-        run(0, $compiler, @flags, '-c', $peer, '-o', "$directory/cppgm-peer.o");
-        link_hosted($other, "$directory/clang-peer.o");
-        $producers = 'cppgm+clang';
-        link_hosted($object, "$directory/clang-peer.o");
-        $producers = 'clang+cppgm';
-        link_hosted($other, "$directory/cppgm-peer.o");
-    } elsif ($expect->{peer}) {
-        my $peer = "$support/$expect->{peer}";
-        run(0, @reference, '-c', $peer, '-o', "$directory/clang-peer.o");
-        run(0, $compiler, @flags, '-c', $peer, '-o', "$directory/cppgm-peer.o");
-        link_external($other, "$directory/clang-peer.o");
-        for my $pair ([$object, "$directory/clang-peer.o"], [$other, "$directory/cppgm-peer.o"]) {
-            $producers = $pair->[0] eq $object ? 'cppgm+clang' : 'clang+cppgm';
-            link_external(@$pair);
-            link_course(@$pair);
+    if (@units) {
+        my (@clang_peers, @cppgm_peers);
+        for my $i (0 .. $#units) {
+            push @clang_peers, "$directory/clang-peer-$i.o";
+            push @cppgm_peers, "$directory/cppgm-peer-$i.o";
+            run(0, @reference, '-c', $units[$i], '-o', $clang_peers[-1]);
+            run(0, $compiler, @flags, '-x', 'c++', '-c', $units[$i], '-o', $cppgm_peers[-1]);
         }
-        if ($expect->{archive}) {
+        if ($expect->{archive_units}) {
+            for my $pair (['witness', \@clang_peers], ['cppgm', \@cppgm_peers]) {
+                my ($name, $members) = @$pair;
+                my $archive = "$directory/lib$name.a";
+                unlink $archive;
+                run(0, $ar, 'rcs', $archive, @$members);
+                @$members = ($archive);
+            }
+        }
+        my $link = $expect->{hosted} ? \&link_hosted : \&link_external;
+        $link->($other, @clang_peers);
+        $producers = 'cppgm';
+        $link->($object, @cppgm_peers);
+        if ($expect->{llvm_interop}) {
+            for my $pair ([$object, @clang_peers], [$other, @cppgm_peers]) {
+                $producers = $pair->[0] eq $object ? 'cppgm+clang' : 'clang+cppgm';
+                $link->(@$pair);
+                link_course(@$pair) unless $expect->{hosted};
+            }
+        }
+        if ($expect->{archive_units}) {
             $producers = 'cppgm+clang-archive';
-            run(0, @reference, '-c', "$support/archive-unused.cpp", '-o', "$directory/unused.o");
-            run(0, $ar, 'rcs', "$directory/libwitness.a", "$directory/unused.o", "$directory/clang-peer.o");
             link_course($object, "-L$directory", '-lwitness');
             run(0, $backend, @target, "-O$level", '--dump-machine-ir', "$directory/unit.mir",
                 "$directory/raw.lowir", "$directory/libwitness.a", '-o', "$directory/program");
             execute_image('lowir2native');
             die "$test: missing selected Arm instructions\n" unless
-                read_file("$directory/unit.mir") =~ /^machine_ir aarch64 1\nfunction [^\n]+\n  0 \w+ rd=/;
+                read_bytes("$directory/unit.mir") =~ /^machine_ir aarch64 1\nfunction [^\n]+\n  0 \w+ rd=/;
         }
     } else {
         link_external($other);
@@ -192,18 +203,7 @@ for my $level (0..3) {
         execute_image('lowir2native');
     }
 }
-if ($expect->{link_errors}) {
-    my $bad = "$directory/invalid.o";
-    run(0, $clang, @target, '-c', "$support/absolute-relocation.S", '-o', $bad);
-    run(1, $compiler, @target, $bad, '-o', "$directory/invalid");
-    read_file("$directory/err") =~ /unsupported.*relocation/i or die "$test: missing relocation diagnostic\n";
-    run(0, $clang, '--target=x86_64-linux-gnu', '-c', '-x', 'c++', $test, '-o', $bad);
-    run(1, $compiler, @target, $bad, '-o', "$directory/invalid");
-    read_file("$directory/err") =~ /architecture|target mismatch/i or die "$test: missing target diagnostic\n";
-    run(1, $compiler, @target, "$directory/unit.o", '-o', "$directory/invalid");
-    read_file("$directory/err") =~ /undefined symbol/ or die "$test: missing undefined-symbol diagnostic\n";
-}
-if ($bundle) {
+if ($bundle && @manifest) {
     open(my $file, '>', "$bundle/executions.tsv.tmp") or die "manifest: $!";
     print {$file} @manifest or die "manifest: $!";
     close $file or die "manifest: $!";

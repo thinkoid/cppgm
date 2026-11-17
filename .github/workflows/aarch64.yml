@@ -11,8 +11,9 @@ on:
       - scripts/benchmark_timing.py
       - scripts/check_aarch64.pl
       - scripts/replay_aarch64.pl
-      - scripts/check_arm64_macos.py
-      - scripts/replay_arm64_macos.py
+      - scripts/CppgmBackendFixture.pm
+      - scripts/CppgmArm64MachO.pm
+      - scripts/replay_arm64_macos.pl
       - .github/workflows/aarch64.yml
   schedule:
     - cron: '17 4 * * 1'
@@ -42,7 +43,7 @@ jobs:
             libstdc++-14-dev-arm64-cross=14.3.0-14ubuntu1cross1 libc6-dev-arm64-cross=2.43-2ubuntu2cross1
       - uses: actions/checkout@v6
       - run: make test-pa39
-      - run: python3 scripts/replay_arm64_macos.py build obj/pa39-macho
+      - run: perl scripts/replay_arm64_macos.pl build obj/pa39-macho
       - if: github.event_name != 'pull_request'
         run: python3 scripts/aarch64_benchmarks.py build obj/pa39-benchmarks
       - if: github.event_name != 'pull_request'
@@ -90,4 +91,4 @@ jobs:
         with:
           name: pa39-macho
           path: macho
-      - run: python3 scripts/replay_arm64_macos.py replay macho
+      - run: perl scripts/replay_arm64_macos.pl replay macho

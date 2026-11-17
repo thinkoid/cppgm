@@ -82,3 +82,9 @@ Each block retains every observation, A/A calibration and ABBA or BAAB order.
 `--perf` adds separate hardware-counter readings when supported. Hosted CI
 timings are observations from shared machines. Native throughput budgets are
 pending calibration on stable Arm hardware.
+
+PA37 and PA39 use the same Perl fixture discovery and sidecar reader. PA39
+uses PA37’s `source`, `units`, `flags`, `target`, `llvm_interop` and `commands`
+conventions. Target-specific checks inspect ELF and Mach-O relocations, code
+size and stack traffic. Additional C++ translation units live beside their
+main fixture. The primary executable checker and both native replay tools are Perl.

@@ -1,1 +1,21 @@
-{"macos":true,"exit":39,"hosted_peer":"page-boundary-peer.cpp"}
+{
+  "source": true,
+  "units": [
+    "400-object-at-page-end.t.1"
+  ],
+  "llvm_interop": true,
+  "commands": [
+    {
+      "exit": 39,
+      "stdout": ""
+    },
+    {
+      "args": [
+        "verbose"
+      ],
+      "exit": 39,
+      "stdout": "ok\n"
+    }
+  ],
+  "hosted": true
+}

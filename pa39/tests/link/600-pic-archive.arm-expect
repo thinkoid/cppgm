@@ -1,1 +1,19 @@
-{"macos":true,"exit":31,"peer":"archive-data.cpp","flags":["-fPIC"],"archive":true,"relocation":"R_AARCH64_ADR_GOT_PAGE","link_errors":true}
+{
+  "source": true,
+  "units": [
+    "600-pic-archive.t.1",
+    "600-pic-archive.t.2"
+  ],
+  "llvm_interop": true,
+  "commands": [
+    {
+      "exit": 31,
+      "stdout": ""
+    }
+  ],
+  "flags": [
+    "-fPIC"
+  ],
+  "relocation": "R_AARCH64_ADR_GOT_PAGE",
+  "archive_units": true
+}

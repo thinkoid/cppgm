@@ -1,1 +1,14 @@
-{"macos":true,"exit":44,"peer":"mixed-loop.cpp","relocation":"R_AARCH64_CALL26"}
+{
+  "source": true,
+  "units": [
+    "300-mixed-loop.t.1"
+  ],
+  "llvm_interop": true,
+  "commands": [
+    {
+      "exit": 44,
+      "stdout": ""
+    }
+  ],
+  "relocation": "R_AARCH64_CALL26"
+}

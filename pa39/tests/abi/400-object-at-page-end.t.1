@@ -5,7 +5,8 @@ extern "C" int getpagesize();
 extern "C" void* mmap(void*, unsigned long, int, int, int, long);
 extern "C" int mprotect(void*, unsigned long, int);
 extern "C" int munmap(void*, unsigned long);
-int main() {
+extern "C" long write(int, const void*, unsigned long);
+int main(int argc, char** argv) {
     unsigned long page = getpagesize();
 #ifdef __APPLE__
     const int anonymous = 0x1000;
@@ -20,5 +21,6 @@ int main() {
     Triple b = exchange(*v);
     int ok = a.bytes[0]==39 && a.bytes[1]==17 && a.bytes[2]==22 &&
              b.bytes[0]==39 && b.bytes[1]==17 && b.bytes[2]==22;
+    if (argc==2 && argv[1][0]=='v' && write(1,"ok\n",3)!=3) return 3;
     return munmap(base,2*page)==0 && ok ? 39 : 2;
 }

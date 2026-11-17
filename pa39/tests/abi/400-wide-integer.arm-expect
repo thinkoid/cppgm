@@ -1,1 +1,13 @@
-{"macos":true,"exit":47,"peer":"wide-peer.cpp"}
+{
+  "source": true,
+  "units": [
+    "400-wide-integer.t.1"
+  ],
+  "llvm_interop": true,
+  "commands": [
+    {
+      "exit": 47,
+      "stdout": ""
+    }
+  ]
+}

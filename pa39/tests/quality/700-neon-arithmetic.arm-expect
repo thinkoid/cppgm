@@ -1,1 +1,32 @@
-{"macos":true,"exit":61,"peer":"neon-peer.cpp","register_leaf":"mix","quality":{"symbol":"transform","instructions":160,"memory":12,"stack":8}}
+{
+  "source": true,
+  "units": [
+    "700-neon-arithmetic.t.1"
+  ],
+  "llvm_interop": true,
+  "commands": [
+    {
+      "exit": 61,
+      "stdout": ""
+    }
+  ],
+  "quality": {
+    "levels": [
+      1,
+      2,
+      3
+    ],
+    "functions": {
+      "mix": {
+        "memory_ops": 0,
+        "calls": 0,
+        "sp_uses": 0
+      },
+      "transform": {
+        "instructions": 160,
+        "memory_ops": 12,
+        "stack_ops": 8
+      }
+    }
+  }
+}

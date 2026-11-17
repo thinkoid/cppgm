@@ -6,10 +6,16 @@ use Digest::SHA;
 use File::Basename qw(dirname);
 use File::Find;
 use FindBin;
+use File::Temp qw(tempdir);
+use JSON::PP qw(decode_json);
+use lib $FindBin::Bin;
+use CppgmBatchWorker qw(run_command_capture);
+use CppgmBackendFixture qw(read_bytes);
 use Getopt::Long qw(GetOptions);
 
 my $qemu;
 GetOptions('qemu=s' => \$qemu) && @ARGV == 1 or die "usage: replay_aarch64.pl [--qemu path] bundle\n";
+my $scratch = tempdir(CLEANUP => 1);
 my $root = abs_path($ARGV[0]);
 my @manifests;
 find({no_chdir => 1, wanted => sub {
@@ -22,7 +28,8 @@ for my $manifest (sort @manifests) {
     my %verified;
     while (<$file>) {
         chomp;
-        my ($digest, $expected, $level, $producers, $linker) = split /\t/;
+        my ($digest, $expected, $level, $producers, $linker, $json) = split /\t/, $_, 6;
+        my $cmd = defined $json ? decode_json($json) : {};
         defined $linker && $digest =~ /^[a-f0-9]{64}$/ && $expected =~ /^\d+$/ && $expected < 256
             or die "$manifest: malformed execution\n";
         my $guest = dirname($manifest) . "/$digest";
@@ -32,9 +39,11 @@ for my $manifest (sort @manifests) {
             chmod 0755, $guest or die "chmod $guest: $!";
         }
         my @runner = defined($qemu) ? ($qemu, '-cpu', 'cortex-a53') : ();
-        system($^X, "$FindBin::Bin/run_with_timeout.pl", '--timeout-sec', '30', '--label', "$manifest $level $producers $linker",
-            '--', @runner, $guest);
-        $? == $expected << 8 or die "$manifest $level $producers $linker: expected $expected, wait status $?\n";
+        unlink "$scratch/out", "$scratch/err";
+        my $status = run_command_capture(cmd => [@runner, $guest, @{$cmd->{args} // []}], timeout => 30,
+            stdout => "$scratch/out", stderr => "$scratch/err");
+        $status == $expected && read_bytes("$scratch/out") eq ($cmd->{stdout} // '')
+            or die "$manifest $level $producers $linker: status $status (expected $expected) or stdout differs\n";
         ++$observations;
     }
     ++$groups;

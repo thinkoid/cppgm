@@ -1,1 +1,13 @@
-{"macos":true,"exit":103,"peer":"variadic-peer.cpp"}
+{
+  "source": true,
+  "units": [
+    "400-variadic-banks.t.1"
+  ],
+  "llvm_interop": true,
+  "commands": [
+    {
+      "exit": 103,
+      "stdout": ""
+    }
+  ]
+}

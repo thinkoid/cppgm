@@ -1,1 +1,15 @@
-{"platform":"macos","peer":"darwin-abi-peer.cpp","exit":39}
+{
+  "source": true,
+  "target": "arm64-apple-macos11",
+  "units": [
+    "400-apple-calling-convention.t.1"
+  ],
+  "llvm_interop": true,
+  "commands": [
+    {
+      "exit": 39,
+      "stdout": ""
+    }
+  ],
+  "relocation": "ARM64_RELOC_BRANCH26"
+}

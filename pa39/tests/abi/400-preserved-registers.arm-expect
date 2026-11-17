@@ -1,1 +1,16 @@
-{"macos":true,"exit":39,"peer":"register-peer.cpp","assembly":"register-witness.S"}
+{
+  "source": true,
+  "units": [
+    "400-preserved-registers.t.1"
+  ],
+  "llvm_interop": true,
+  "commands": [
+    {
+      "exit": 39,
+      "stdout": ""
+    }
+  ],
+  "reference_assembly": [
+    "400-preserved-registers.S"
+  ]
+}

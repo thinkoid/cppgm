@@ -1,1 +1,27 @@
-{"macos":true,"exit":37,"peer":"leaf-peer.cpp","register_leaf":"kernel"}
+{
+  "source": true,
+  "units": [
+    "700-leaf-arithmetic.t.1"
+  ],
+  "llvm_interop": true,
+  "commands": [
+    {
+      "exit": 37,
+      "stdout": ""
+    }
+  ],
+  "quality": {
+    "levels": [
+      1,
+      2,
+      3
+    ],
+    "functions": {
+      "kernel": {
+        "memory_ops": 0,
+        "calls": 0,
+        "sp_uses": 0
+      }
+    }
+  }
+}

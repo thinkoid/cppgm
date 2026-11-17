@@ -39,9 +39,9 @@ The course link accepts self-contained source and object inputs. Compile hosted 
 
 ```sh
 # On x86 Linux, build and hash the macOS interoperability objects.
-python3 scripts/replay_arm64_macos.py build obj/pa39-macho
+perl scripts/replay_arm64_macos.pl build obj/pa39-macho
 # On an Apple Silicon Mac with the same directory and the Xcode tools.
-python3 scripts/replay_arm64_macos.py replay obj/pa39-macho
+perl scripts/replay_arm64_macos.pl replay obj/pa39-macho
 ```
 
 The cross test executes SDK-free fixtures at their linked Mach-O addresses under a small Linux entry stub. Native replay links the exact objects against Apple's SDK, checks the signatures and runs the executables under dyld, including pthread and C++ exception fixtures.
@@ -87,8 +87,33 @@ Copy that directory to Linux AArch64 and run
 SHA-256, exit status, optimization level, producers and linker. Native replay
 checks the digest and status for every recorded execution.
 
-The O3 `transform` loop, including its setup and scalar tail, permits 160
-instructions, 12 loads or stores, and eight stack loads or stores. LLVM 22.1.2
+At optimized levels the `transform` loop, including its setup and scalar tail, permits 160
+instructions, 12 loads or stores, and eight stack loads or stores. At O3, LLVM 22.1.2
 emits 35, four and zero for the same source. Both objects run the same odd-sized
 input. The separate vector leaf has zero memory traffic. These budgets track
 generated code on x86 while native runs measure execution time.
+
+### Writing a fixture
+
+Use PA37's backend fixture layout. The main source is `NAME.t`, additional
+translation units sit beside it as `NAME.t.1`, `NAME.t.2`, and the target
+sidecar is `NAME.arm-expect`. Like PA37's `.wasm-expect`, it names the units
+to compile, any compiler flags, and the observable result of running the program.
+For example, the Apple calling-convention control uses the following fields.
+
+```json
+{
+  "source": true,
+  "target": "arm64-apple-macos11",
+  "units": ["400-apple-calling-convention.t.1"],
+  "llvm_interop": true,
+  "commands": [{"exit": 39, "stdout": ""}]
+}
+```
+
+`llvm_interop` exchanges independently compiled objects with Clang in both
+directions. Each command may also specify `args`. Use PA37’s `reference_assembly` for an independent assembly unit,
+`archive_units` for archive linking, and `reject_link` for an expected link failure.
+The `quality.levels` and `quality.functions` fields publish the bounds for each
+named function. Keep expected output and exit status in the sidecar. Run one fixture with
+`make check TEST=tests/abi/400-apple-calling-convention.t` in `pa39/`.

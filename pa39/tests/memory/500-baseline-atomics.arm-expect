@@ -1,1 +1,10 @@
-{"macos":true,"exit":17}
+{
+  "source": true,
+  "llvm_interop": true,
+  "commands": [
+    {
+      "exit": 17,
+      "stdout": ""
+    }
+  ]
+}
