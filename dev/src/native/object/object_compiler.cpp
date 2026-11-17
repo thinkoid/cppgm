@@ -503,7 +503,7 @@ void ObjectCompiler::record_unwind(uint32_t range, bool encoded, const UnwindFac
 		const UnwindFacts& facts = emitter_.unwind();
 		entry.code_bytes = facts.size;
 		const size_t before = lsda_pool_.size();
-		lsda = encode_lsda(facts, mir_, lsda_pool_, type_fields_, lsda_scratch_);
+		lsda = encode_lsda(facts.calls, facts.pads, mir_.eh, lsda_pool_, type_fields_, lsda_scratch_);
 		encode_frame_instructions(facts, lsda, cfi_pool_);
 		entry.lsda_count = static_cast<uint32_t>(lsda_pool_.size() - before);
 		stats_.landings += mir_.eh.landings.size();

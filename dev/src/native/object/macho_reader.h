@@ -47,7 +47,7 @@ private:
 	bool symbols();
 	bool atoms();
 	bool relocations();
-	bool relocation(uint32_t section, uint32_t& index);
+	bool relocation(uint32_t section, uint32_t& index, int64_t extra = 0);
 	uint32_t atom(uint32_t section, uint64_t offset) const;
 	uint32_t section_symbol(uint32_t section, uint64_t address, int64_t& addend);
 	const std::vector<uint8_t>& bytes_;

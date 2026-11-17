@@ -3,6 +3,7 @@
 #include <map>
 #include <set>
 #include "native/object/elf_object.h"
+#include "native/object/macho_object.h"
 #include "support/archive.h"
 
 namespace aarch64 {
@@ -24,16 +25,17 @@ void collect(const obj::ObjectFile& file, std::set<std::string>& defined, std::v
 }
 }
 
-bool read_input(const std::string& path, std::vector<obj::ObjectFile>& objects, std::string& error)
+bool read_input(const std::string& path, std::vector<obj::ObjectFile>& objects, std::string& error, bool darwin)
 {
 	std::vector<uint8_t> bytes;
 	if (!obj::read_object_bytes(path, bytes, error))
 		return false;
-	if (obj::is_elf_image(bytes))
+	const auto decode = darwin ? obj::decode_macho_object : obj::decode_elf_object;
+	if (bytes.size() < 8 || std::memcmp(bytes.data(), "!<arch>\n", 8))
 	{
 		objects.emplace_back();
 		objects.back().path = path;
-		return obj::decode_elf_object(bytes, objects.back(), error);
+		return decode(bytes, objects.back(), error);
 	}
 	std::vector<archive::Member> members;
 	if (!archive::members(bytes, members, error))
@@ -49,7 +51,7 @@ bool read_input(const std::string& path, std::vector<obj::ObjectFile>& objects, 
 		auto& file = candidates[i];
 		file.path = path + "(" + member.name + ")";
 		const auto first = bytes.begin() + member.offset;
-		if (!obj::decode_elf_object(std::vector<uint8_t>(first, first + member.size), file, error))
+		if (!decode(std::vector<uint8_t>(first, first + member.size), file, error))
 			return false;
 		for (unsigned s = 1; s < file.symbols.size(); ++s)
 			if (file.symbols[s].binding != obj::Binding::Local && file.symbols[s].section != obj::kUndefinedSection)

@@ -66,7 +66,8 @@ A source file may begin with a versioned target profile:
 target wasm32 1
 ```
 
-Version 1 names `linux` (x86-64 Linux), `macos` (x86-64 Darwin), `wasm32`
+Version 1 names `linux` (x86-64 Linux), `macos` (x86-64 Darwin),
+`aarch64` (little-endian Armv8-A Linux), `arm64_macos` (Apple Silicon macOS 11), `wasm32`
 (freestanding wasm32), `wasi` (wasm32 WASI Preview 1), or `emscripten`
 (the wasm32 Emscripten SDK ABI). The Emscripten profile aligns binary128
 `long double` storage to eight bytes; `wasm32` and `wasi` align it to sixteen.
@@ -82,17 +83,17 @@ scalar/pointer bits, `exception` reads them, and catch-all clauses select the
 handler. C++ producers state `cxx` and use the reserved runtime hooks instead
 of `throw`; `exception ptr` then reads the runtime unwind pointer, and typed
 catch/filter clauses use the supplied C++ personality. Preserve this typed
-fact during serialization. Reject unknown protocols, non-Wasm `cxx` headers
+fact during serialization. The AArch64 profiles also accept `exception_abi=cxx` and use the target platform’s
+Itanium C++ runtime. Reject unknown protocols, x86-64 `cxx` headers
 and input units with conflicting protocols. Link separately compiled objects
 when combining protocols; payloads of one protocol must not be reinterpreted
 as the other's.
 
 
 The selected profile determines pointer storage, alignment and index scaling:
-eight bytes on x86-64 and four on wasm32. Integer and floating LowIR types
+eight bytes on AArch64 and x86-64, and four on wasm32. Integer and floating LowIR types
 retain their stated widths. In particular, `f80` means x87 format; source
-`long double` on wasm32 is binary128 and requires appropriate lowering rather
-than reinterpreting `f80`. `v128` describes sixteen bytes of vector lanes.
+`long double` on Linux AArch64 and wasm32 uses binary128 lowering. On Apple Silicon it uses `f64`. `v128` describes sixteen bytes of vector lanes.
 
 Keep target/layout facts in the typed program and carry pointer width with
 typed values or their explicit context. Do not derive target semantics from

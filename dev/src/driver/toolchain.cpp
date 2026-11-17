@@ -279,7 +279,7 @@ void configure_target_runtime(Invocation& invocation, bool nostdinc)
 	configure_target_environment(invocation.preprocessor, invocation.target);
 	invocation.optimizer.has_gnu_sincos = target_model::has_gnu_sincos(invocation.target);
 	// Darwin objects are position independent even without an explicit -fPIC.
-	if (invocation.target == native::Target::MacOS)
+	if (target_model::is_darwin(invocation.target))
 		invocation.position_independent = true;
 	if (target_model::is_wasm(invocation.target))
 	{
@@ -290,7 +290,7 @@ void configure_target_runtime(Invocation& invocation, bool nostdinc)
 		if (!invocation.sysroot.empty())
 			invocation.library_paths.push_back(invocation.sysroot + "/lib/wasm32-wasip1");
 	}
-	else if (invocation.target == native::Target::AArch64Linux && !invocation.wasm_link.requested() &&
+	else if (target_model::is_aarch64(invocation.target) && !invocation.wasm_link.requested() &&
 		invocation.wasm_stack_size == 0 && !invocation.wasm_atomics_explicit)
 	{
 		if (!nostdinc)
@@ -353,7 +353,7 @@ void configure_mode_macros(Invocation& invocation, bool optimize_size, unsigned 
 		mode_macros += "#define __NO_INLINE__ 1\n";
 	if (optimize_size)
 		mode_macros += "#define __OPTIMIZE_SIZE__ 1\n";
-	if (invocation.target == native::Target::MacOS && pic_level == 0)
+	if (target_model::is_darwin(invocation.target) && pic_level == 0)
 		pic_level = 2;
 	if (pic_level != 0)
 		mode_macros += "#define __PIC__ " + std::to_string(pic_level) + "\n#define __pic__ " +
@@ -691,7 +691,7 @@ void optimize_unit(lowir::Program& program, const Invocation& invocation, native
 	options.inline_thunk_targets = eh_model == native::EhModel::Course;
 	opt::optimize_program(program, options, nullptr);
 	program.jump_thunks.clear();
-	if (invocation.target != native::Target::AArch64Linux)
+	if (!target_model::is_aarch64(invocation.target))
 		native::recover_jump_thunks(program, eh_model);
 }
 
@@ -773,7 +773,7 @@ bool compile_native_sources(SourceInputs sources, const Invocation& invocation, 
 	native::ObjectStats stats;
 	stats.clocks = invocation.stats;
 	stats.census = invocation.function_census;
-	const bool arm = invocation.target == native::Target::AArch64Linux;
+	const bool arm = target_model::is_aarch64(invocation.target);
 	std::unique_ptr<native::ObjectBuilder> builder;
 	if (!arm)
 		builder.reset(new native::ObjectBuilder(program, stats, eh_model, invocation.optimizer.level,
@@ -790,7 +790,7 @@ bool compile_native_sources(SourceInputs sources, const Invocation& invocation, 
 	lowering.set_debug_locations(invocation.debug_info);
 	lowering.set_debug_types(invocation.debug_types);
 	lowering.set_host_objects(eh_model == native::EhModel::Host);
-	lowering.set_macho_objects(invocation.target == native::Target::MacOS);
+	lowering.set_macho_objects(target_model::is_darwin(invocation.target));
 	lowering.set_optimizing(true);
 	lowering.set_strict_aliasing(invocation.strict_aliasing);
 	lowering.set_popcnt(invocation.preprocessor.popcnt);
@@ -874,7 +874,7 @@ bool compile_lowir_unit(const std::string& path, const Invocation& invocation, n
 	if (program.explicit_target && program.target != invocation.target)
 		throw InvocationError("input and output target profiles differ");
 	program.target = invocation.target;
-	if (invocation.target != native::Target::AArch64Linux)
+	if (!target_model::is_aarch64(invocation.target))
 		native::recover_jump_thunks(program, eh_model);
 	optimize_unit(program, invocation, eh_model);
 	if (lowir_output != nullptr)
@@ -883,7 +883,7 @@ bool compile_lowir_unit(const std::string& path, const Invocation& invocation, n
 	stats.clocks = invocation.stats;
 	stats.census = invocation.function_census;
 	object.path = path;
-	if (invocation.target == native::Target::AArch64Linux)
+	if (target_model::is_aarch64(invocation.target))
 	{
 		try
 		{
@@ -1011,7 +1011,7 @@ int compile_mode(const Invocation& invocation)
 			return EXIT_FAILURE;
 		std::string error;
 		check_output(invocation, output);
-		if (!(invocation.target == native::Target::MacOS ? native::object::write_macho_object(object, output, error)
+		if (!(target_model::is_darwin(invocation.target) ? native::object::write_macho_object(object, output, error)
 														 : native::object::write_elf_object(object, output, error)))
 		{
 			std::cerr << "ERROR: " << error << std::endl;
@@ -1030,7 +1030,7 @@ std::string find_library(const Invocation& invocation, const std::string& name)
 		for (const char* suffix : { ".o", ".obj", ".a" })
 		{
 			if ((std::string(suffix) != ".a" || target_model::is_wasm(invocation.target) ||
-					invocation.target == native::Target::AArch64Linux) &&
+					target_model::is_aarch64(invocation.target)) &&
 				regular_file(base + suffix))
 				return base + suffix;
 		}
@@ -1061,19 +1061,21 @@ int link_mode(const Invocation& invocation)
 			input.kind == Input::Kind::Assembly)
 		{
 			objects.emplace_back();
-			if (!compile_input(input, invocation, native::EhModel::Course, objects.back()))
+			if (!compile_input(input, invocation,
+					invocation.target == native::Target::AArch64MacOS ? native::EhModel::Host : native::EhModel::Course,
+					objects.back()))
 				return EXIT_FAILURE;
 			continue;
 		}
 		const std::string path = input.kind == Input::Kind::Library ? find_library(invocation, input.name) : input.name;
 		std::string error;
 		bool loaded;
-		if (invocation.target == native::Target::AArch64Linux)
-			loaded = aarch64::read_input(path, objects, error);
+		if (target_model::is_aarch64(invocation.target))
+			loaded = aarch64::read_input(path, objects, error, target_model::is_darwin(invocation.target));
 		else
 		{
 			objects.emplace_back();
-			loaded = invocation.target == native::Target::MacOS
+			loaded = target_model::is_darwin(invocation.target)
 				? native::object::read_macho_object(path, objects.back(), error)
 				: native::object::read_elf_object(path, objects.back(), error);
 		}
@@ -1085,8 +1087,7 @@ int link_mode(const Invocation& invocation)
 	}
 	native::LinkStats stats;
 	std::string error;
-	if (!native::link_executable(objects, output, error, &stats, invocation.target,
-			!invocation.no_standard_libraries && !invocation.no_startfiles))
+	if (!native::link_executable(objects, output, error, &stats, invocation.target, !invocation.no_startfiles))
 	{
 		// No stale executable is left behind (as the host linker removes it).
 		std::remove(output.c_str());

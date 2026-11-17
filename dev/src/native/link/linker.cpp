@@ -145,11 +145,12 @@ private:
 	bool relocate();
 	bool apply(uint32_t object, const Relocation& relocation, uint8_t* field, uint64_t place, uint64_t room);
 	bool target_address(uint32_t object, uint32_t symbol, uint64_t& address);
+	bool slides(uint32_t object, uint32_t symbol) const;
 	uint64_t segment_address(uint8_t segment) const;
 	std::vector<uint8_t>* segment_buffer(uint8_t segment);
 	bool got_relocation(uint32_t type) const
 	{
-		if (target_ == Target::AArch64Linux)
+		if (target_model::is_aarch64(target_))
 			return type == aarch64::GotPage || type == aarch64::GotLo12;
 		return type == object::R_X86_64_GOTPCREL || type == object::R_X86_64_GOTPCRELX ||
 			type == object::R_X86_64_REX_GOTPCRELX;
@@ -198,6 +199,10 @@ bool Linker::add_object(uint32_t index)
 	ObjectFile& file = objects_[index];
 	if (file.architecture != target_model::describe(target_).architecture)
 		return fail(file.path + ": object architecture differs from link target");
+	if (target_model::is_aarch64(target_))
+		for (const auto& symbol : file.symbols)
+			if (symbol.type == object::SymbolType::Tls)
+				return fail(file.path + ": AArch64 thread-local storage requires a hosted linker and runtime");
 	location_[index].assign(file.sections.size(), Location{ kNoSegment, 0 });
 	std::vector<uint8_t>& kept = kept_[index];
 	kept.assign(file.sections.size(), 0);
@@ -310,11 +315,11 @@ bool Linker::add_runtime()
 			wanted.push_back(name);
 	}
 	const uint32_t first = static_cast<uint32_t>(objects_.size());
-	if (target_ == Target::AArch64Linux)
+	if (target_model::is_aarch64(target_))
 	{
 		const auto entry = names_.find(key_of(kEntrySymbol));
 		if (startup_ && (entry == nullptr || globals_[*entry].state == State::Undefined))
-			aarch64::add_startup(objects_);
+			aarch64::add_startup(objects_, target_ == Target::AArch64MacOS);
 	}
 	else if (!build_runtime(wanted, objects_, error_, target_))
 		return false;
@@ -653,6 +658,23 @@ void Linker::assign_addresses()
 	}
 }
 
+bool Linker::slides(uint32_t object, uint32_t symbol) const
+{
+	if (!symbol)
+		return false;
+	const auto g = global_of_[object][symbol];
+	if (g != kNone)
+	{
+		const auto& global = globals_[g];
+		if (global.state == State::Undefined)
+			return false;
+		if (global.state == State::Common || global.state == State::Linker)
+			return true;
+		return objects_[global.object].symbols[global.symbol].section != object::kAbsoluteSection;
+	}
+	return objects_[object].symbols[symbol].section != object::kAbsoluteSection;
+}
+
 bool Linker::apply(uint32_t object, const Relocation& relocation, uint8_t* field, uint64_t place, uint64_t room)
 {
 	uint64_t symbol = 0;
@@ -670,11 +692,19 @@ bool Linker::apply(uint32_t object, const Relocation& relocation, uint8_t* field
 			for (unsigned k = 0; k < 8; ++k)
 				data_[slot + k] = static_cast<uint8_t>(symbol >> (8 * k));
 		}
+		if (target_ == Target::AArch64MacOS && slides(object, relocation.symbol))
+			layout_.rebases.push_back(layout_.data_address + slot);
 		symbol = layout_.data_address + slot;
+	}
+	if (target_ == Target::AArch64MacOS && relocation.type == aarch64::Abs64 && slides(object, relocation.symbol))
+	{
+		if (place < layout_.rodata_address)
+			return fail("Mach-O pointer rebase in executable text");
+		layout_.rebases.push_back(place);
 	}
 	// The GOT-based forms (psABI 4.4.1): GOTOFF64 is S + A - GOT, GOTPC*
 	// GOT + A - P.
-	if (target_ == Target::AArch64Linux)
+	if (target_model::is_aarch64(target_))
 		return aarch64::apply_relocation(relocation.type, field, room, symbol + relocation.addend, place, error_);
 	const uint64_t got = layout_.data_address + got_base_;
 	if (relocation.type == object::R_X86_64_GOTOFF64)
@@ -800,6 +830,8 @@ bool Linker::link(const std::string& output)
 	if (!relocate())
 		return false;
 	uint32_t* entry = names_.find(key_of(kEntrySymbol));
+	if (!entry && target_ == Target::AArch64MacOS && !startup_)
+		entry = names_.find(key_of("main"));
 	if (entry == nullptr || globals_[*entry].state == State::Undefined)
 		return fail("no process entry");
 	stats_.objects = objects_.size();

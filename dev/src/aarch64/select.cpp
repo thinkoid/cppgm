@@ -73,8 +73,16 @@ void Selector::edge(BlockId from, BlockId to)
 		if (memory_value(phi.type))
 		{
 			frame_address(11, offset);
-			frame_address(10, homes_[phi.result]);
-			copy_bytes(10, 11, storage_bytes(phi.type));
+			if (phi.type.kind() == TypeKind::V128)
+			{
+				out_.emit(Op::LdrQ, 16, 11);
+				save_vector(16, phi.result);
+			}
+			else
+			{
+				frame_address(10, homes_[phi.result]);
+				copy_bytes(10, 11, storage_bytes(phi.type));
+			}
 		}
 		else
 		{
@@ -82,6 +90,11 @@ void Selector::edge(BlockId from, BlockId to)
 			save(left, phi.result);
 		}
 		offset += (storage_bytes(phi.type) + 7) & ~uint64_t(7);
+	}
+	if (out_.exceptions && out_.exceptions->entry_selectors[to] != 0)
+	{
+		constant(9, out_.exceptions->entry_selectors[to]);
+		access(true, 9, 31, exception_slot_ + 8, 8);
 	}
 	out_.reference(Op::B, Fixup::Block, to);
 }
@@ -103,6 +116,11 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		return;
 	case Opcode::Const:
 	case Opcode::Copy:
+		if (inst.type.kind() == TypeKind::V128)
+		{
+			save_vector(vector_value(inst.ops[0], 16), inst.result);
+			return;
+		}
 		if (memory_value(inst.type))
 		{
 			frame_address(10, homes_[inst.result]);
@@ -124,6 +142,13 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		copy_bytes(10, 31, inst.immediate);
 		return;
 	case Opcode::Load:
+		if (inst.type.kind() == TypeKind::V128)
+		{
+			address(10, inst.ops[0]);
+			out_.emit(Op::LdrQ, 16, 10);
+			save_vector(16, inst.result);
+			return;
+		}
 		if (memory_value(inst.type))
 		{
 			frame_address(10, homes_[inst.result]);
@@ -156,6 +181,9 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		out_.emit(Op::Add, result_reg, left, result_reg);
 		break;
 	}
+	case Opcode::Vector:
+		vector_instruction(inst);
+		return;
 	case Opcode::Binary:
 		if (level_ && simple_binary(inst))
 			return;
@@ -196,8 +224,25 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		out_.emit(Op::Subs, 31, result_reg, 31);
 		out_.emit(Op::Csel, result_reg, left, right, 1u << 12);
 		break;
+	case Opcode::EhTry:
+	case Opcode::EhCleanup:
+	case Opcode::EhCatch:
+	case Opcode::EhFilter:
+	case Opcode::EhEnd:
+	case Opcode::EhCatchAll:
+		return;
+	case Opcode::Exception:
+	case Opcode::ExceptionSelector:
+		exception_value(inst);
+		return;
+	case Opcode::Resume:
+		resume(site(inst));
+		return;
 	case Opcode::Jump:
-		edge(block, inst.ops[0].index);
+		if (site(inst))
+			resume(site(inst));
+		else
+			edge(block, inst.ops[0].index);
 		return;
 	case Opcode::Branch:
 	{
@@ -235,15 +280,28 @@ void Selector::run()
 {
 	plan();
 	stack_adjust(true);
+	if (tls_vectors_ != kNoId)
+	{
+		frame_address(16, tls_vectors_);
+		for (unsigned v = 0; v < 32; ++v)
+			out_.emit(Op::StrD, v, 16, 0, v << 10);
+	}
 	for (const auto& reg : preserved_)
 	{
 		access(true, reg.first, 31, reg.second, 8);
 		out_.frame_rule(FrameRule::Save, reg.first, frame_ - reg.second);
 	}
+	if (frame_pointer_ != kNoId)
+	{
+		access(true, 29, 31, frame_pointer_, 8);
+		out_.frame_rule(FrameRule::Save, 29, frame_ - frame_pointer_);
+	}
 	if (link_ != kNoId)
 	{
 		access(true, 30, 31, link_, 8);
 		out_.frame_rule(FrameRule::Save, 30, frame_ - link_);
+		if (frame_pointer_ != kNoId)
+			frame_address(29, frame_pointer_);
 	}
 	if (result_.indirect)
 		access(true, 8, 31, result_pointer_, 8);
@@ -257,6 +315,13 @@ void Selector::run()
 	}
 	for (BlockId block : body_.layout)
 	{
+		if (out_.exceptions)
+		{
+			const auto& plan = *out_.exceptions;
+			if (!plan.analysis.blocks_[plan.layout_of[block]].reachable)
+				continue;
+			landing(block);
+		}
 		out_.bind(block);
 		for (InstId i = body_.blocks[block].first; i != kNoId; i = body_.instructions[i].next)
 			select(body_.instructions[i], block);

@@ -499,3 +499,13 @@ python3 scripts/wasm_selfbuild_benchmarks.py --tools obj/wasm-tools \
 The interactive compiler and OpenLara presentation at https://incpption.com is
 maintained separately from the compiler and this optional verification lane.
 The lane here keeps the full W1/W2/W3, native/WASI x86 and embedding checks.
+
+## Download native programs from the browser
+
+The optional PA39 cross test compiles two source files with `cppgm.wasm` in Chromium, links the resulting objects with the LLD module packaged by incpption, and saves four actual browser downloads. The arguments select `ld.lld` for x86-64 and AArch64 Linux ELF, and `ld64.lld` for Intel and Apple Silicon Mach-O. Linux uses a small target entry object. The macOS test supplies a minimal libSystem link interface. Applications using hosted libraries need their target headers and runtime link inputs.
+
+```sh
+node scripts/experimental/browser_native_downloads.cjs   /path/to/prepared-package-with-w1 /path/to/incpption /path/to/new-downloads
+```
+
+The incpption checkout supplies its `dist/clang-seed` package, browser glue and installed Playwright. The test verifies the packaged LLD hash and the executable type and architecture of each download. The example returns 39. Run the Linux images directly or under QEMU and the Mach-O images on the corresponding Macs. This experiment lives in the compiler checkout and requires no changes to the deployed site.

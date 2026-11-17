@@ -10,7 +10,7 @@ void Analyzer::object_alias_attribute(Entity* entity, const syntax::Attribute& s
 	if ((entity->kind != EntityKind::Function && entity->kind != EntityKind::Variable) || entity->owner == nullptr ||
 		entity->owner->kind != ScopeKind::Namespace)
 		error(attribute->location, "an alias attribute requires a namespace-scope function or variable");
-	if (graph_.types.target() == target_model::Target::MacOS)
+	if (target_model::is_darwin(graph_.types.target()))
 		error(attribute->location, "GNU object aliases are not supported by the Mach-O profile");
 	StringLiteralFacts facts;
 	std::vector<uint64_t> units;

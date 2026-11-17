@@ -53,13 +53,7 @@ struct UnwindFacts
 		Reg reg;
 		int32_t offset; // [rbp + offset]
 	};
-	struct CallSite
-	{
-		uint32_t begin;
-		uint32_t end;
-		uint32_t landing;
-		uint32_t args;
-	};
+	using CallSite = machine::ExceptionCallSite;
 	uint32_t push_end = 0;  // after `push rbp`
 	uint32_t frame_end = 0; // after `mov rbp, rsp`
 	// Function::omit_frame_pointer: the CFA stays RSP-based; the saves'

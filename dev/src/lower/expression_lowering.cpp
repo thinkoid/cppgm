@@ -2932,7 +2932,8 @@ void FunctionLowering::push_converted(
 		// An i128 (a member function pointer, an __int128) passed to `...`
 		// crosses as an object of its bytes, as such a parameter does (a
 		// literal argument there being an i64; object mode).
-		if (parameter == nullptr && value.type.kind() == lowir::TypeKind::I128 && lowering_.object_mode())
+		if (parameter == nullptr && value.type.kind() == lowir::TypeKind::I128 && lowering_.object_mode() &&
+			!target_model::is_aarch64(program_.target))
 			value.value = variadic_wide_object(value, WithoutParentheses(&argument)->facts->type);
 		arguments_.push_back(value.value);
 	}

@@ -66,8 +66,11 @@ SectionKind kind(const std::string& segment, const std::string& name, uint32_t f
 
 bool Reader::commands()
 {
-	if (!room(0, 32) || get(0, 4) != 0xfeedfacf || get(4, 4) != 0x01000007 || get(12, 4) != 1)
-		return fail("not an x86-64 relocatable object");
+	if (!room(0, 32) || get(0, 4) != 0xfeedfacf || (get(4, 4) != 0x01000007 && get(4, 4) != 0x0100000c) ||
+		get(12, 4) != 1)
+		return fail("not a supported 64-bit Mach-O relocatable object");
+	object_.architecture = get(4, 4) == 0x0100000c ? target_model::Architecture::AArch64
+												   : target_model::Architecture::X86_64;
 	const uint64_t end = 32 + get(20, 4);
 	if (!room(32, end - 32))
 		return fail("truncated load commands");
@@ -248,6 +251,12 @@ bool Reader::read()
 
 } // namespace macho
 
+bool decode_macho_object(const std::vector<uint8_t>& bytes, ObjectFile& object, std::string& error)
+{
+	macho::Reader reader(bytes, object, error);
+	return reader.read();
+}
+
 bool read_macho_object(const std::string& path, ObjectFile& object, std::string& error)
 {
 	std::ifstream file(path, std::ios::binary);
@@ -258,8 +267,7 @@ bool read_macho_object(const std::string& path, ObjectFile& object, std::string&
 	}
 	const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 	object.path = path;
-	macho::Reader reader(bytes, object, error);
-	return reader.read();
+	return decode_macho_object(bytes, object, error);
 }
 
 } // namespace object

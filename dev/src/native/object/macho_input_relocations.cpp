@@ -1,4 +1,5 @@
 #include "native/object/macho_reader.h"
+#include "aarch64/link.h"
 
 namespace native {
 namespace object {
@@ -23,7 +24,39 @@ uint32_t Reader::section_symbol(uint32_t section, uint64_t address, int64_t& add
 	return section_symbols_[output];
 }
 
-bool Reader::relocation(uint32_t s, uint32_t& index)
+namespace {
+bool arm_instruction(uint32_t type, uint32_t word, bool relative, Relocation& r)
+{
+	using namespace aarch64;
+	r.addend = 0;
+	switch (type)
+	{
+	case 2:
+		r.type = (word >> 31) ? Call26 : Jump26;
+		r.addend = static_cast<int32_t>(word << 6) / 16;
+		return relative;
+	case 3:
+	case 5:
+		r.type = type == 3 ? AdrPrelPage21 : GotPage;
+		return relative && (word & 0x60ffffe0u) == 0;
+	case 4:
+	case 6:
+	{
+		const unsigned scale = (word & 0x3b000000u) == 0x39000000u
+			? ((word & 0x04800000u) == 0x04800000u ? 4 : word >> 30)
+			: 0;
+		const uint32_t kinds[] = { AddLo12, Ldst16Lo12, Ldst32Lo12, Ldst64Lo12, Ldst128Lo12 };
+		r.type = type == 6 ? GotLo12 : kinds[scale];
+		r.addend = int64_t((word >> 10) & 4095) << scale;
+		return !relative;
+	}
+	default:
+		return false;
+	}
+}
+}
+
+bool Reader::relocation(uint32_t s, uint32_t& index, int64_t extra)
 {
 	const InputSection& source = sections_[s];
 	const uint64_t at = source.relocations + static_cast<uint64_t>(index) * 8;
@@ -37,6 +70,14 @@ bool Reader::relocation(uint32_t s, uint32_t& index)
 	if (offset > 0x7fffffffu || offset > source.size || width > source.size - offset ||
 		!room(static_cast<uint64_t>(source.offset) + offset, width))
 		return fail("relocation outside section");
+	const bool arm = object_.architecture == target_model::Architecture::AArch64;
+	if (arm && type == 10)
+	{
+		if (external || relative || width != 4 || ++index >= source.count || get(at + 8, 4) != offset ||
+			((get(at + 12, 4) >> 28) != 3 && (get(at + 12, 4) >> 28) != 4))
+			return fail("invalid arm64 addend pair");
+		return relocation(s, index, static_cast<int32_t>(target << 8) / 256);
+	}
 	const uint32_t part = atom(s, offset);
 	Section& section = object_.sections[source.atoms[part]];
 	if (width > section.size - (offset - source.boundaries[part]))
@@ -62,7 +103,7 @@ bool Reader::relocation(uint32_t s, uint32_t& index)
 		if (r.symbol == 0)
 			return fail("local relocation outside its target section");
 	}
-	if (type == 5)
+	if (type == (arm ? 1u : 5u))
 	{
 		if (relative || !external || ++index >= source.count)
 			return fail("invalid subtractor relocation pair");
@@ -75,7 +116,17 @@ bool Reader::relocation(uint32_t s, uint32_t& index)
 			return fail("unsupported subtractor expression");
 		r.symbol = symbols_[next_symbol].output;
 		r.addend += static_cast<int64_t>(source.address + offset - base.value);
-		r.type = width == 8 ? R_X86_64_PC64 : R_X86_64_PC32;
+		if (arm && width != 4)
+			return fail("unsupported 64-bit arm64 subtractor expression");
+		r.type = arm ? static_cast<uint32_t>(aarch64::Prel32) : (width == 8 ? R_X86_64_PC64 : R_X86_64_PC32);
+	}
+	else if (arm && type == 0 && !relative && (width == 4 || width == 8))
+		r.type = width == 8 ? aarch64::Abs64 : aarch64::Abs32;
+	else if (arm)
+	{
+		if (!external || width != 4 || !arm_instruction(type, value, relative, r))
+			return fail("unsupported arm64 relocation in course link");
+		r.addend += extra;
 	}
 	else if (type == 0 && !relative)
 		r.type = width == 8 ? R_X86_64_64 : width == 4 ? R_X86_64_32 : width == 2 ? R_X86_64_16 : R_X86_64_8;

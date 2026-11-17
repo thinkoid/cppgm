@@ -1,6 +1,18 @@
-## PA39 — AArch64 Linux backend (experimental)
+## PA39 — AArch64 Linux and Apple Silicon backends (experimental)
 
-Implement the little-endian Armv8-A Linux target in the existing compiler after PA34 and PA37. The target has LP64 pointers and integers, unsigned plain char and 32-bit unsigned wchar_t, binary128 long double, and 16-byte stack alignment. Use the Linux AAPCS64 calling convention and AAELF64 relocatable objects. Use a distinct target profile (`aarch64` in version-one LowIR) selected before parsing. Keep architecture-specific instructions and their encoder under `dev/src/aarch64/`. The frontend and optimizer pass typed data directly to the selector. [AAPCS64](https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst) · [AAELF64](https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst)
+Implement the little-endian Armv8-A targets in the existing compiler after PA34 and PA37. The Linux profile has 64-bit pointers and long, 32-bit int, unsigned plain char and 32-bit unsigned wchar_t, binary128 long double, and 16-byte stack alignment. Use the Linux AAPCS64 calling convention and AAELF64 relocatable objects. Use a distinct target profile (`aarch64` in version-one LowIR) selected before parsing. Keep architecture-specific instructions and their encoder under `dev/src/aarch64/`. The frontend and optimizer pass typed data directly to the selector. [AAPCS64](https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst) · [AAELF64](https://github.com/ARM-software/abi-aa/blob/main/aaelf64/aaelf64.rst)
+
+### Required linking milestone
+
+PA25 introduced `cppgm -c`, multiple translation units, symbol resolution, relocations and executable link mode. PA26 introduced objects a host linker can consume. PA39 extends both contracts to Arm. Use the same symbol-resolution and section-layout machinery across native targets. Implement the Arm instruction fixups, entry conventions and file formats in the target backend. [PA25 assignment boundary](../pa25/README.md#assignment-boundary) · [PA26 object contract](../pa26/README.md#output-format)
+
+| Deliverable | How the assignment checks it |
+| --- | --- |
+| Resolve source, object and archive inputs. Select needed archive members, resolve cross-unit calls and data, and report undefined, duplicate and incompatible inputs. | Link mixed-producer objects in both directions, include an archive with an unused member, and exercise each diagnostic. |
+| Write a Linux ELF executable and an Apple Silicon Mach-O executable in process. Honor each format's address, page, relocation and entry-point rules. Build macOS load commands, rebasing information and the ad-hoc code signature. | Inspect both images independently, run Linux images on Arm, verify every Mach-O code-signing page hash on x86 and run the signed image under dyld on Apple Silicon. |
+| Produce objects that the platform toolchain can link against its system libraries. | Use LLD or Apple's linker as an independent consumer and exercise hosted exceptions and thread-local storage. |
+
+The Apple SDK link for hosted programs belongs to the platform interoperability test. A full system-library linker, including arbitrary dylib imports and symbol binding, would need its own assignment contract.
 
 ### Compile and run
 
@@ -12,6 +24,28 @@ cppgm --target=aarch64-linux-gnu -S -emit-lowir -O2 main.cpp -o main.lowir
 lowir2native --target=aarch64-linux-gnu main.lowir -o main
 ```
 
+### Build for Apple Silicon
+
+Use `--target=arm64-apple-macos11` for the macOS 11 deployment profile. Its LowIR spelling is `arm64_macos`. The compiler selects the Apple calling convention and emits 64-bit arm64 Mach-O objects directly. Darwin has signed plain char and wchar_t, 8-byte long double, packed fixed stack arguments and a pointer va_list. The caller extends narrow register arguments to 32 bits. The x18 register is reserved, and non-leaf functions maintain a frame record in x29. The target supports GOT-relative PIC and Darwin thread-local variable descriptors. [Apple ARM64 ABI](https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms)
+
+```sh
+cppgm --target=arm64-apple-macos11 -O2 -c sum.cpp -o sum.o
+cppgm --target=arm64-apple-macos11 main.cpp sum.o -o program
+# Hosted libraries on a Mac, using the SDK toolchain
+xcrun clang++ -arch arm64 -mmacosx-version-min=11.0 main.o sum.o -o hosted-program
+```
+
+The course link accepts self-contained source and object inputs. Compile hosted translation units with `-c`, then use Apple’s SDK linker for libc++, exceptions and pthreads. On Linux, LLVM’s Mach-O LLD can independently link the self-contained fixtures. The selected output runs natively on Apple Silicon. The compiler currently builds on an x86 host with x87 long double.
+
+```sh
+# On x86 Linux, build and hash the macOS interoperability objects.
+python3 scripts/replay_arm64_macos.py build obj/pa39-macho
+# On an Apple Silicon Mac with the same directory and the Xcode tools.
+python3 scripts/replay_arm64_macos.py replay obj/pa39-macho
+```
+
+The cross test executes SDK-free fixtures at their linked Mach-O addresses under a small Linux entry stub. Native replay links the exact objects against Apple's SDK, checks the signatures and runs the executables under dyld, including pthread and C++ exception fixtures.
+
 ### Test from x86 Linux
 
 Use Clang, LLD and llvm-readobj with the AArch64 target enabled and the `qemu-aarch64` Linux user emulator. The first verified configuration uses LLVM 22.1.2 and QEMU 10.2.1. Static tests need no target sysroot. The runner accepts the paths in `CPPGM_AARCH64_CLANG`, `CPPGM_AARCH64_LLD`, `CPPGM_AARCH64_READOBJ` and `CPPGM_AARCH64_QEMU`. Run `make test-pa39` from the root or `make check TEST=tests/control/300-mixed-loop.t` here. This assignment is opt-in.
@@ -20,7 +54,7 @@ Each fixture declares its expected exit status. The checker compiles at O0 throu
 
 ### Implementation coverage
 
-The initial fixtures cover scalar integer and pointer calls, loops, comparisons, conditional control, loads and stores, separate ELF objects, and static process startup. Additional ABI, runtime, and optimized machine operations join the corresponding fixture lanes as they are qualified.
+The fixtures cover integer, floating-point and NEON code, switch lowering, independent callers and callees, baseline atomics, archive linking, typed exceptions, cleanup, and hosted thread-local storage. Linux thread-local accesses use the local-exec model for direct objects and initial-exec GOT offsets for PIC. TLS programs require a hosted linker and runtime.
 
 ### Cross-tool setup and native replay
 

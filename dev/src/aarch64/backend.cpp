@@ -1,4 +1,5 @@
 #include "aarch64/backend.h"
+#include <map>
 
 #include "aarch64/selector.h"
 #include "machine/global_data.h"
@@ -17,22 +18,23 @@ void define_global(const Program& program, SymbolId id, const std::vector<uint32
 {
 	const auto& source = program.symbols[id];
 	const Global& global = program.globals[source.detail];
-	if (source.metadata.storage == ir_model::GSM_THREAD_LOCAL)
-		throw AArch64Error("AArch64 TLS object is unsupported");
+	const bool tls = source.metadata.storage == ir_model::GSM_THREAD_LOCAL;
 	uint32_t align;
 	const uint64_t size = machine::global_size(program, global, align);
 	const bool readonly = source.metadata.storage == ir_model::GSM_READONLY;
 	const bool bss = !readonly && machine::global_is_zero(program, global);
 	const char* name = source.metadata.section ? program.spelling(source.metadata.section)
+		: tls                                  ? (bss ? ".tbss" : ".tdata")
 		: readonly                             ? ".rodata"
 		: bss                                  ? ".bss"
 											   : ".data";
 	auto& symbol = out.symbols[symbols[id]];
 	uint32_t priority = 0;
-	const auto kind = initializer_section(name, priority) ? obj::SectionKind::InitArray
-		: readonly                                        ? obj::SectionKind::Rodata
-		: bss                                             ? obj::SectionKind::Bss
-														  : obj::SectionKind::Data;
+	const auto kind = tls                     ? (bss ? obj::SectionKind::TlsBss : obj::SectionKind::TlsData)
+		: initializer_section(name, priority) ? obj::SectionKind::InitArray
+		: readonly                            ? obj::SectionKind::Rodata
+		: bss                                 ? obj::SectionKind::Bss
+											  : obj::SectionKind::Data;
 	symbol.section = out.add_section(name, kind, align);
 	auto& section = out.sections[symbol.section];
 	section.size = symbol.size = size;
@@ -60,22 +62,62 @@ void create_symbols(const Program& program, const std::vector<SymbolId>& canonic
 		sym.binding = src.metadata.binding == ir_model::SBM_INTERNAL ? obj::Binding::Local
 			: src.metadata.binding == ir_model::SBM_WEAK             ? obj::Binding::Weak
 																	 : obj::Binding::Global;
-		sym.type = is_function_kind(src.kind) ? obj::SymbolType::Function : obj::SymbolType::Object;
+		sym.type = src.metadata.storage == ir_model::GSM_THREAD_LOCAL ? obj::SymbolType::Tls
+			: is_function_kind(src.kind)                              ? obj::SymbolType::Function
+																	  : obj::SymbolType::Object;
 		symbols[id] = object.add_symbol(sym);
 	}
 	for (SymbolId id : program.order)
 		if (canonical[id] != kNoId)
 			symbols[id] = symbols[canonical[id]];
 }
+void aliases(const Program& program, const std::vector<uint32_t>& symbols, obj::ObjectFile& object)
+{
+	std::vector<lowir::ObjectAlias> pending = program.aliases;
+	for (SymbolId id : program.order)
+	{
+		const auto& src = program.symbols[id];
+		if ((src.metadata.flags & lowir::SF_KEEP_ALIAS) && src.metadata.object && src.name != src.metadata.object &&
+			symbols[id] != kNoId && object.symbols[symbols[id]].section != obj::kUndefinedSection)
+			pending.push_back({ src.name, id });
+	}
+	if (pending.empty())
+		return;
+	std::map<std::string, uint32_t> names;
+	for (uint32_t i = 1; i < object.symbols.size(); ++i)
+		names.emplace(object.symbol_name(i), i);
+	for (const auto& item : pending)
+	{
+		const uint32_t target = symbols.at(item.target);
+		if (target == kNoId || object.symbols[target].section == obj::kUndefinedSection)
+			throw AArch64Error("undefined AArch64 object alias target");
+		const char* name = program.spelling(item.object);
+		obj::Symbol alias = object.symbols[target];
+		const auto found = names.find(name);
+		if (found == names.end())
+		{
+			alias.name = object.add_string(name, program.names.length(item.object));
+			names.emplace(name, object.add_symbol(alias));
+		}
+		else if (object.symbols[found->second].section == obj::kUndefinedSection)
+		{
+			auto& existing = object.symbols[found->second];
+			alias.name = existing.name;
+			alias.binding = existing.binding;
+			existing = alias;
+		}
+	}
+}
+
 }
 
 void compile_object(
 	Program& program, obj::ObjectFile& object, int level, bool pic, std::string* dump, bool function_sections)
 {
-	if (program.explicit_target && program.target != target_model::Target::AArch64Linux)
+	if (program.explicit_target && !target_model::is_aarch64(program.target))
 		throw AArch64Error("input and output target profiles differ");
-	if (program.assembly || !program.aliases.empty())
-		throw AArch64Error("unsupported AArch64 assembly or object alias");
+	if (program.assembly)
+		throw AArch64Error("unsupported AArch64 inline assembly");
 	object.architecture = target_model::Architecture::AArch64;
 	if (!machine::legalize_wide_helpers(program))
 		throw AArch64Error("conflicting AArch64 arithmetic helper identity");
@@ -97,7 +139,8 @@ void compile_object(
 		if (src.kind != SymbolKind::FunctionDefinition)
 			continue;
 		Function function;
-		Selector(program, program.functions[src.detail], function, level, pic).run();
+		Selector(program, id, function, level, pic).run();
+		const uint32_t resume = function.needs_resume ? external_symbol(object, "_Unwind_Resume") : kNoId;
 		auto& sym = object.symbols[symbols[id]];
 		const char* name = object.symbol_name(symbols[id]);
 		if (dump)
@@ -107,9 +150,9 @@ void compile_object(
 			: code;
 		auto& section = object.sections[sym.section];
 		sym.value = section.bytes.size();
-		encode(function, symbols, section);
+		encode(function, symbols, section, resume);
 		sym.size = section.bytes.size() - sym.value;
-		emit_unwind(function, symbols[id], object.sections[eh]);
+		emit_unwind(function, symbols[id], eh, symbols, object, target_model::is_darwin(program.target));
 		if (src.metadata.role == ir_model::SR_INIT || src.metadata.role == ir_model::SR_FINI)
 		{
 			const bool init = src.metadata.role == ir_model::SR_INIT;
@@ -122,11 +165,12 @@ void compile_object(
 		}
 		if (src.metadata.role == ir_model::SR_ENTRY && std::strcmp(object.symbol_name(symbols[id]), "main") != 0)
 		{
-			obj::Symbol entry = sym;
+			obj::Symbol entry = object.symbols[symbols[id]];
 			entry.name = object.add_string("main", 4);
 			object.add_symbol(entry);
 		}
 	}
+	aliases(program, symbols, object);
 }
 
 } // namespace aarch64

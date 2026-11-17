@@ -35,6 +35,9 @@ sub read_file {
 my ($compiler, $test) = @ARGV;
 my $directory = tempdir('cppgm-aarch64-XXXXXX', TMPDIR => 1, CLEANUP => 1);
 my $expect = decode_json(read_file(sidecar($test)));
+if (($expect->{platform} // '') eq 'macos') {
+    exec 'python3', "$FindBin::Bin/check_arm64_macos.py", $compiler, $test or die "start Mach-O checker: $!";
+}
 my $suffix = $compiler =~ /(-ref|-self)$/ ? $1 : '';
 my $bin = dirname($compiler);
 my $opt = "$bin/lowiropt$suffix";
@@ -132,11 +135,15 @@ for my $level (0..3) {
         copy("$directory/roundtrip.lowir", "$directory/raw.lowir") or die "$!" unless $optimized;
         die "$test: O$level LowIR object differs (optimized=$optimized)\n" if compare($object, "$directory/roundtrip.o");
     }
-    if ($expect->{unwind_peer}) {
-        run(0, @reference, '-c', "$support/$expect->{unwind_peer}", '-o', "$directory/clang-peer.o");
+    if ($expect->{hosted_peer}) {
+        my $peer = "$support/$expect->{hosted_peer}";
+        run(0, @reference, '-c', $peer, '-o', "$directory/clang-peer.o");
+        run(0, $compiler, @flags, '-c', $peer, '-o', "$directory/cppgm-peer.o");
         link_hosted($other, "$directory/clang-peer.o");
         $producers = 'cppgm+clang';
         link_hosted($object, "$directory/clang-peer.o");
+        $producers = 'clang+cppgm';
+        link_hosted($other, "$directory/cppgm-peer.o");
     } elsif ($expect->{peer}) {
         my $peer = "$support/$expect->{peer}";
         run(0, @reference, '-c', $peer, '-o', "$directory/clang-peer.o");

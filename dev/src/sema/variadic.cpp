@@ -9,7 +9,7 @@ namespace sema {
 bool IsVaList(const Type* type)
 {
 	type = type->unqualified;
-	if (target_model::is_wasm(type->target))
+	if (target_model::pointer_va_list(type->target))
 		return type->kind == TypeKind::Pointer && type->element->kind == TypeKind::Fundamental &&
 			type->element->fundamental == FundamentalType::Char && type->element->cv == 0;
 	if (type->target == target_model::Target::AArch64Linux)

@@ -452,13 +452,14 @@ void encode_fde(const FdeDescription& description, const uint8_t* instructions, 
 	finish_entry(out, start);
 }
 
-bool encode_lsda(const UnwindFacts& facts, const Function& function, std::vector<uint8_t>& out,
-	std::vector<LsdaTypeField>& types, LsdaScratch& scratch)
+bool encode_lsda(const std::vector<machine::ExceptionCallSite>& calls, const std::vector<uint32_t>& pads,
+	const machine::ExceptionTables& eh, std::vector<uint8_t>& out, std::vector<LsdaTypeField>& types,
+	LsdaScratch& scratch)
 {
 	std::vector<uint8_t>& used = scratch.used;
-	used.assign(function.eh.landings.size(), 0);
+	used.assign(eh.landings.size(), 0);
 	bool landed = false;
-	for (const UnwindFacts::CallSite& call : facts.calls)
+	for (const machine::ExceptionCallSite& call : calls)
 		if (call.landing != 0)
 		{
 			used[call.landing - 1] = 1;
@@ -471,20 +472,20 @@ bool encode_lsda(const UnwindFacts& facts, const Function& function, std::vector
 	typedef LsdaScratch::Record Record;
 	std::vector<Record>& records = scratch.records;
 	records.clear();
-	scratch.index.clear(function.eh.filters.size());
+	scratch.index.clear(eh.filters.size());
 	FlatMap<uint64_t, uint32_t, LsdaScratch::KeyHash>& index = scratch.index;
 	std::vector<uint32_t>& first = scratch.first;
-	first.assign(function.eh.landings.size(), 0);
+	first.assign(eh.landings.size(), 0);
 	bool typed = false;
-	for (size_t l = 0; l < function.eh.landings.size(); ++l)
+	for (size_t l = 0; l < eh.landings.size(); ++l)
 	{
-		const EhLanding& landing = function.eh.landings[l];
-		if (!used[l] || landing.count == 0 || (landing.count == 1 && function.eh.filters[landing.first] == 0))
+		const EhLanding& landing = eh.landings[l];
+		if (!used[l] || landing.count == 0 || (landing.count == 1 && eh.filters[landing.first] == 0))
 			continue;
 		uint32_t next = 0;
 		for (uint32_t c = landing.count; c-- > 0;)
 		{
-			const int32_t filter = function.eh.filters[landing.first + c];
+			const int32_t filter = eh.filters[landing.first + c];
 			typed = typed || filter != 0;
 			const uint64_t key = (static_cast<uint64_t>(static_cast<uint32_t>(filter)) << 32) | next;
 			if (const uint32_t* known = index.find(key))
@@ -535,18 +536,18 @@ bool encode_lsda(const UnwindFacts& facts, const Function& function, std::vector
 	std::vector<uint8_t>& sites = scratch.sites;
 	rest.clear();
 	sites.clear();
-	const UnwindFacts::CallSite* open = nullptr;
+	const machine::ExceptionCallSite* open = nullptr;
 	uint32_t open_end = 0;
 	auto flush = [&]() {
 		if (open == nullptr)
 			return;
 		put_uleb(sites, open->begin);
 		put_uleb(sites, open_end - open->begin);
-		put_uleb(sites, open->landing == 0 ? 0 : facts.pads[open->landing - 1]);
+		put_uleb(sites, open->landing == 0 ? 0 : pads[open->landing - 1]);
 		const uint32_t record = open->landing == 0 ? 0 : first[open->landing - 1];
 		put_uleb(sites, record == 0 ? 0 : position[record - 1] + 1);
 	};
-	for (const UnwindFacts::CallSite& call : facts.calls)
+	for (const machine::ExceptionCallSite& call : calls)
 	{
 		// Landings with the same pad have the same chain.
 		if (open != nullptr && open->landing == call.landing)
@@ -567,10 +568,10 @@ bool encode_lsda(const UnwindFacts& facts, const Function& function, std::vector
 		put_sleb(rest, records[r].filter);
 		put_sleb(rest, displacement(r), size[r] - sleb_size(records[r].filter));
 	}
-	const uint32_t entries = typed ? static_cast<uint32_t>(function.eh.types.size()) : 0;
+	const uint32_t entries = typed ? static_cast<uint32_t>(eh.types.size()) : 0;
 	const size_t start = out.size();
 	out.push_back(kOmit);
-	if (entries == 0 && (!typed || function.eh.specs.empty()))
+	if (entries == 0 && (!typed || eh.specs.empty()))
 	{
 		out.push_back(kOmit);
 		out.insert(out.end(), rest.begin(), rest.end());
@@ -597,11 +598,11 @@ bool encode_lsda(const UnwindFacts& facts, const Function& function, std::vector
 	const size_t table = out.size();
 	out.insert(out.end(), 4ull * entries, 0);
 	// The exception specifications' lists after TTBase.
-	out.insert(out.end(), function.eh.specs.begin(), function.eh.specs.end());
+	out.insert(out.end(), eh.specs.begin(), eh.specs.end());
 	// Entry k (from 1) is the k-th 4-byte field below TTBase.
 	for (uint32_t k = 1; k <= entries; ++k)
 	{
-		const uint32_t type = function.eh.types[k - 1];
+		const uint32_t type = eh.types[k - 1];
 		if (type != lowir::kNoId)
 			types.push_back(LsdaTypeField{ static_cast<uint32_t>(table + 4ull * (entries - k) - start), type });
 	}

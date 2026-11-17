@@ -38,9 +38,9 @@ void program_header(std::vector<uint8_t>& out, uint32_t type, uint32_t flags, ui
 ExecutableLayout layout_executable(uint64_t text_bytes, uint64_t rodata_bytes, uint64_t data_bytes, uint64_t bss_bytes,
 	uint64_t text_align, uint64_t rodata_align, uint64_t data_align, uint64_t bss_align, Target target)
 {
-	if (target == Target::MacOS)
+	if (target_model::is_darwin(target))
 		return layout_macho_executable(
-			text_bytes, rodata_bytes, data_bytes, bss_bytes, text_align, rodata_align, data_align, bss_align);
+			text_bytes, rodata_bytes, data_bytes, bss_bytes, text_align, rodata_align, data_align, bss_align, target);
 	// Addresses equal kBase plus file offsets (kBase is aligned beyond any
 	// section alignment the linker accepts), so aligning an offset aligns
 	// its address.
@@ -67,6 +67,8 @@ bool write_executable_file(const std::string& path, const ExecutableLayout& layo
 	const std::vector<uint8_t>& rodata, const std::vector<uint8_t>& data, uint64_t bss_bytes, uint64_t entry,
 	std::string& error)
 {
+	if (layout.target == Target::AArch64MacOS)
+		return write_arm64_macho(path, layout, text, rodata, data, bss_bytes, entry, error);
 	if (layout.target == Target::MacOS)
 		return write_macho_executable(path, layout, text, rodata, data, bss_bytes, entry, error);
 	const uint64_t kPage = page_size(layout.target);

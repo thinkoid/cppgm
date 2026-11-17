@@ -7,6 +7,8 @@ on:
       - pa39/**
       - scripts/check_aarch64.pl
       - scripts/replay_aarch64.pl
+      - scripts/check_arm64_macos.py
+      - scripts/replay_arm64_macos.py
       - .github/workflows/aarch64.yml
   schedule:
     - cron: '17 4 * * 1'
@@ -36,6 +38,11 @@ jobs:
             libstdc++-14-dev-arm64-cross=14.3.0-14ubuntu1cross1 libc6-dev-arm64-cross=2.43-2ubuntu2cross1
       - uses: actions/checkout@v6
       - run: make test-pa39
+      - run: python3 scripts/replay_arm64_macos.py build obj/pa39-macho
+      - uses: actions/upload-artifact@v6
+        with:
+          name: pa39-macho
+          path: obj/pa39-macho
       - uses: actions/upload-artifact@v6
         with:
           name: pa39-guests
@@ -52,3 +59,15 @@ jobs:
           name: pa39-guests
           path: guests
       - run: perl scripts/replay_aarch64.pl guests
+
+  native-macos:
+    needs: cross
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
+        with:
+          name: pa39-macho
+          path: macho
+      - run: python3 scripts/replay_arm64_macos.py replay macho

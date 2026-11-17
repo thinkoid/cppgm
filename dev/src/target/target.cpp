@@ -4,6 +4,14 @@ namespace target {
 
 bool parse(const std::string& text, Target& result)
 {
+	// The initial Apple Silicon profile has a macOS 11 deployment floor.
+	for (const char* arch : { "arm64-apple-", "aarch64-apple-" })
+		for (const char* os : { "macos", "macos11", "macos11.0", "macos11.0.0", "darwin", "darwin20" })
+			if (text == std::string(arch) + os)
+			{
+				result = Target::AArch64MacOS;
+				return true;
+			}
 	if (text == spelling(Target::AArch64Linux) || text == "aarch64-unknown-linux-gnu")
 	{
 		result = Target::AArch64Linux;

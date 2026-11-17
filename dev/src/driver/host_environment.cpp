@@ -78,7 +78,7 @@ void prune_include_paths(PreprocessorOptions& options)
 void configure_target_environment(PreprocessorOptions& options, native::Target target)
 {
 	options.target = target;
-	if (target == native::Target::AArch64Linux)
+	if (target_model::is_aarch64(target))
 	{
 		configure_aarch64_environment(options);
 		return;

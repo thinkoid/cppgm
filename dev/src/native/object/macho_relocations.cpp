@@ -1,6 +1,7 @@
 #include "native/object/macho_encoder.h"
 
 #include <algorithm>
+#include "aarch64/link.h"
 
 namespace native {
 namespace object {
@@ -44,6 +45,85 @@ uint32_t Encoder::base_symbol(uint32_t section, uint64_t offset)
 		"Lcppgm_pcrel_" + std::to_string(symbols_.size()), 0x0e, static_cast<uint8_t>(section + 1), 0, offset);
 }
 
+bool Encoder::difference_fixup(Placement p, uint64_t at, const Relocation& r, unsigned width, unsigned subtractor)
+{
+	Section& section = sections_[p.section];
+	// A data PC-relative value is target - field, expressed with the
+	// x86-64 SUBTRACTOR/UNSIGNED pair, never an instruction relocation.
+	const uint32_t base = base_symbol(p.section, at);
+	const Symbol target = symbols_[symbol_index_[r.symbol]];
+	if (target.section == 0)
+		return fail("data PC-relative relocation against an undefined symbol");
+	const uint64_t address = target.value + r.addend;
+	const auto found = address_symbols_.find(std::make_pair(target.section - 1, address));
+	const uint32_t named = found != address_symbols_.end()
+		? found->second
+		: symbol("Lcppgm_address_" + std::to_string(symbols_.size()), 0x0e, target.section, 0, address);
+	patch(section.bytes, at, symbols_[base].value - at, width);
+	fixup(p.section, static_cast<uint32_t>(at), base, subtractor, width, false);
+	fixup(p.section, static_cast<uint32_t>(at), named, 0, width, false);
+	auto& fixups = sections_[p.section].fixups;
+	fixups[fixups.size() - 2].push_back(fixups.back()[0]);
+	fixups.pop_back();
+	return true;
+}
+
+bool Encoder::arm_relocation(Placement p, uint64_t at, const Relocation& r)
+{
+	Section& section = sections_[p.section];
+	const unsigned width = r.type == aarch64::Abs64 ? 8 : 4;
+	if (at > section.bytes.size() || width > section.bytes.size() - at)
+		return fail("arm64 relocation outside section bytes");
+	uint32_t type;
+	bool relative = false;
+	switch (r.type)
+	{
+	case aarch64::Abs64:
+	case aarch64::Abs32:
+		patch(section.bytes, at, r.addend, width);
+		type = 0; // ARM64_RELOC_UNSIGNED
+		break;
+	case aarch64::Prel32:
+		return difference_fixup(p, at, r, width, 1); // ARM64_RELOC_SUBTRACTOR
+	case aarch64::Call26:
+	case aarch64::Jump26:
+		type = 2;
+		relative = true;
+		break;
+	case aarch64::AdrPrelPage21:
+		type = 3;
+		relative = true;
+		break;
+	case aarch64::AddLo12:
+		type = 4;
+		break;
+	case aarch64::GotPage:
+		type = 5;
+		relative = true;
+		break;
+	case aarch64::DarwinPointerToGot:
+		type = 7;
+		relative = true;
+		break;
+	case aarch64::DarwinTlvPage:
+		type = 8;
+		relative = true;
+		break;
+	case aarch64::DarwinTlvLo12:
+		type = 9;
+		break;
+	case aarch64::GotLo12:
+		type = 6;
+		break;
+	default:
+		return fail("unsupported arm64 relocation " + std::to_string(r.type));
+	}
+	if (type && r.addend)
+		return fail("unsupported arm64 instruction relocation addend");
+	fixup(p.section, at, symbol_index_[r.symbol], type, width, relative);
+	return true;
+}
+
 bool Encoder::relocation(uint32_t source, const Relocation& r)
 {
 	const Placement p = placements_[source];
@@ -51,6 +131,8 @@ bool Encoder::relocation(uint32_t source, const Relocation& r)
 	const uint64_t at = p.base + r.offset;
 	if (r.symbol >= symbol_index_.size() || at > 0x7fffffffu)
 		return fail("relocation index or offset out of range");
+	if (input_.architecture == target_model::Architecture::AArch64)
+		return arm_relocation(p, at, r);
 	unsigned width = 4;
 	uint32_t type = 0;
 	bool relative = false;
@@ -127,23 +209,7 @@ bool Encoder::relocation(uint32_t source, const Relocation& r)
 	}
 	if (difference)
 	{
-		// A data PC-relative value is target - field, expressed with the
-		// x86-64 SUBTRACTOR/UNSIGNED pair, never an instruction relocation.
-		const uint32_t base = base_symbol(p.section, at);
-		const Symbol target = symbols_[symbol_index_[r.symbol]];
-		if (target.section == 0)
-			return fail("data PC-relative relocation against an undefined symbol");
-		const uint64_t address = target.value + r.addend;
-		const auto found = address_symbols_.find(std::make_pair(target.section - 1, address));
-		const uint32_t named = found != address_symbols_.end()
-			? found->second
-			: symbol("Lcppgm_address_" + std::to_string(symbols_.size()), 0x0e, target.section, 0, address);
-		patch(section.bytes, at, symbols_[base].value - at, width);
-		fixup(p.section, static_cast<uint32_t>(at), base, 5, width, false);
-		fixup(p.section, static_cast<uint32_t>(at), named, 0, width, false);
-		auto& fixups = sections_[p.section].fixups;
-		fixups[fixups.size() - 2].push_back(fixups.back()[0]);
-		fixups.pop_back();
+		return difference_fixup(p, at, r, width, 5);
 	}
 	else
 		fixup(p.section, static_cast<uint32_t>(at), symbol_index_[r.symbol], type, width, relative);

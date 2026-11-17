@@ -63,6 +63,8 @@ private:
 	bool sections();
 	bool symbols();
 	bool relocations();
+	bool difference_fixup(Placement p, uint64_t at, const Relocation& r, unsigned width, unsigned subtractor);
+	bool arm_relocation(Placement p, uint64_t at, const Relocation& r);
 	bool relocation(uint32_t section, const Relocation& relocation);
 	void write(std::vector<uint8_t>& bytes);
 	uint32_t section(const char* segment, const std::string& name, uint32_t flags);

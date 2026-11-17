@@ -60,6 +60,7 @@ void configure_wasm_environment(PreprocessorOptions& options)
 					   "#define __PTRDIFF_MAX__ 2147483647L\n"
 					   "#define __ORDER_LITTLE_ENDIAN__ 1234\n#define __ORDER_BIG_ENDIAN__ 4321\n"
 					   "#define __BYTE_ORDER__ __ORDER_LITTLE_ENDIAN__\n";
+	text += kFloatingNumericPredefines;
 	text += kBinary128NumericPredefines;
 	if (options.target == target_model::Target::Wasi)
 		text += "#define __wasi__ 1\n";

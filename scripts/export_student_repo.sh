@@ -411,7 +411,9 @@ shared_scripts=(
   scripts/check_macho.py
   scripts/check_optimization_quality.py
   scripts/check_object_expectations.pl
+  scripts/check_arm64_macos.py
   scripts/check_aarch64.pl
+  scripts/replay_arm64_macos.py
   scripts/replay_aarch64.pl
   scripts/check_wasm.pl
   scripts/CppgmWasmModule.pm

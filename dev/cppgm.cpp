@@ -496,7 +496,7 @@ SourceOutputInvocation parse_source_output_invocation(const vector<string>& args
 		invocation.command_line.insert(0, "#define __NO_INLINE__ 1\n");
 	if (invocation.optimize_size)
 		invocation.command_line.insert(0, "#define __OPTIMIZE_SIZE__ 1\n");
-	if (invocation.target == native::Target::MacOS && invocation.pic_level == 0)
+	if (target_model::is_darwin(invocation.target) && invocation.pic_level == 0)
 		invocation.pic_level = 2;
 	if (invocation.pic_level != 0)
 		invocation.command_line.insert(0,
@@ -795,7 +795,7 @@ PreprocessorOptions source_preprocessor_options(const SourceOutputInvocation& in
 		if (!invocation.nostdinc)
 			driver::add_wasm_headers(options, invocation.sysroot, invocation.resource_directory);
 	}
-	else if (invocation.target == native::Target::AArch64Linux)
+	else if (target_model::is_aarch64(invocation.target))
 	{
 		if (!invocation.nostdinc)
 			driver::add_aarch64_headers(options, invocation.sysroot, invocation.resource_directory);
@@ -1173,7 +1173,7 @@ int run_emit_lowir_mode(vector<string> args)
 	const bool optimizing = invocation.optimizer.level > 0;
 	if (!validate && !optimizing)
 		lowering.set_definition_stream(&definitions);
-	lowering.set_macho_objects(invocation.target == native::Target::MacOS);
+	lowering.set_macho_objects(target_model::is_darwin(invocation.target));
 	lowering.set_optimizing(invocation.optimizer.level >= 2);
 	lowering.set_strict_aliasing(invocation.strict_aliasing);
 	lowering.set_popcnt(options.popcnt);

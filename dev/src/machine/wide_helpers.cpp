@@ -111,7 +111,7 @@ bool legalize_wide_helpers(lowir::Program& program)
 			for (InstId id = body->blocks[block].first; id != kNoId; id = body->instructions[id].next)
 			{
 				auto& inst = body->instructions[id];
-				const Helper helper = helper_for(inst, program.target == target_model::Target::AArch64Linux);
+				const Helper helper = helper_for(inst, target_model::is_aarch64(program.target));
 				if (helper.name == nullptr)
 					continue;
 				auto found = helpers.find(helper.name);

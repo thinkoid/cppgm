@@ -1,0 +1,18 @@
+using Int4 = int __attribute__((vector_size(16)));
+using Float4 = float __attribute__((vector_size(16)));
+extern "C" Int4 mix(Int4, Int4);
+extern "C" Float4 scale(Float4, Float4);
+extern "C" void transform(int*, const int*, int);
+int main() {
+    Int4 a = {1,2,-3,4}, b = {3,4,2,1};
+    Float4 p = {1,3,5,7}, q = {2,4,8,16};
+    Int4 c = mix(a, b);
+    Float4 r = scale(p, q);
+    if (c[0]!=12 || c[1]!=24 || c[2]!=-2 || c[3]!=5) return 1;
+    if (r[0]!=4 || r[1]!=16 || r[2]!=48 || r[3]!=128) return 2;
+    int in[11], out[11];
+    for (int i = 0; i != 11; ++i) in[i] = i-3;
+    transform(out, in, 11);
+    for (int i = 0; i != 11; ++i) if (out[i] != 3*(i-3)+1) return 3;
+    return 61;
+}

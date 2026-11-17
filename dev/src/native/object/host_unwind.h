@@ -102,7 +102,8 @@ void encode_fde(uint32_t cie, uint32_t code_bytes, bool lsda, const uint8_t* ins
 
 // Appends the LSDA when some call reaches a landing (else nothing, and
 // returns false); its type-table fields are appended to `types`.
-bool encode_lsda(const UnwindFacts& facts, const Function& function, std::vector<uint8_t>& out,
-	std::vector<LsdaTypeField>& types, LsdaScratch& scratch);
+bool encode_lsda(const std::vector<machine::ExceptionCallSite>& calls, const std::vector<uint32_t>& pads,
+	const machine::ExceptionTables& eh, std::vector<uint8_t>& out, std::vector<LsdaTypeField>& types,
+	LsdaScratch& scratch);
 
 } // namespace native

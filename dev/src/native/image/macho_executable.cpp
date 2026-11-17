@@ -1,4 +1,4 @@
-#include "native/image/executable_file.h"
+#include "native/image/macho_image.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -8,10 +8,9 @@
 // initialized data and zero-filled storage. No system assembler or linker
 // is needed for a standalone course executable.
 namespace native {
-namespace {
+namespace macho_image {
 
 const uint64_t kBase = 0x100000000ull;
-const uint64_t kPage = 4096;
 
 uint64_t align_up(uint64_t value, uint64_t align)
 {
@@ -35,7 +34,7 @@ void name(std::vector<uint8_t>& out, const char* text)
 }
 
 void segment(std::vector<uint8_t>& out, const char* name_text, uint64_t address, uint64_t memory, uint64_t offset,
-	uint64_t bytes, uint32_t protection, uint32_t sections)
+	uint64_t bytes, uint32_t protection, uint32_t sections, uint32_t flags)
 {
 	put(out, 0x19, 4);
 	put(out, 72 + sections * 80, 4);
@@ -47,7 +46,7 @@ void segment(std::vector<uint8_t>& out, const char* name_text, uint64_t address,
 	put(out, protection, 4);
 	put(out, protection, 4);
 	put(out, sections, 4);
-	put(out, 0, 4);
+	put(out, flags, 4);
 }
 
 void section(std::vector<uint8_t>& out, const char* name_text, const char* segment_text, uint64_t address,
@@ -67,13 +66,17 @@ void section(std::vector<uint8_t>& out, const char* name_text, const char* segme
 	put(out, 0, 4);
 }
 
-} // namespace
+} // namespace macho_image
+
+using namespace macho_image;
 
 ExecutableLayout layout_macho_executable(uint64_t text_bytes, uint64_t rodata_bytes, uint64_t data_bytes,
-	uint64_t bss_bytes, uint64_t text_align, uint64_t rodata_align, uint64_t data_align, uint64_t bss_align)
+	uint64_t bss_bytes, uint64_t text_align, uint64_t rodata_align, uint64_t data_align, uint64_t bss_align,
+	Target target)
 {
 	ExecutableLayout layout;
-	layout.target = Target::MacOS;
+	layout.target = target;
+	const uint64_t kPage = target == Target::AArch64MacOS ? 16384 : 4096;
 	layout.has_rodata = rodata_bytes != 0;
 	layout.has_data = data_bytes != 0 || bss_bytes != 0;
 	layout.text_offset = align_up(kPage, std::max<uint64_t>(text_align, 16));
@@ -92,6 +95,7 @@ bool write_macho_executable(const std::string& path, const ExecutableLayout& lay
 	const std::vector<uint8_t>& rodata, const std::vector<uint8_t>& data, uint64_t bss_bytes, uint64_t entry,
 	std::string& error)
 {
+	const uint64_t kPage = 4096;
 	std::vector<uint8_t> out;
 	const uint32_t commands = 72 + 152 + (layout.has_rodata ? 152 : 0) + (layout.has_data ? 232 : 0) + 184 + 24;
 	put(out, 0xfeedfacf, 4);

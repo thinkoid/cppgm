@@ -7,6 +7,30 @@ namespace aarch64 {
 
 using namespace lowir;
 
+// Darwin TLV thunks accept a descriptor in x0. x0, IP0, IP1 and LR may
+// change. Preserve operands already prepared by the enclosing instruction.
+void Selector::darwin_tls_address(unsigned reg, SymbolId symbol)
+{
+	out_.emit(Op::SubI, 31, 31, 0, 48 << 10);
+	out_.frame_rule(FrameRule::Offset, 31, frame_ + 48);
+	access(true, 0, 31, 0, 8);
+	access(true, 16, 31, 8, 8);
+	access(true, 17, 31, 16, 8);
+	access(true, 30, 31, 24, 8);
+	out_.reference(Op::Adrp, Fixup::TlvPage, symbol, 0);
+	out_.reference(Op::LdrX, Fixup::TlvLoad, symbol, 0, 0);
+	access(false, 16, 0, 0, 8);
+	out_.emit(Op::Blr, 0, 16);
+	access(true, 0, 31, 32, 8);
+	access(false, 0, 31, 0, 8);
+	access(false, 16, 31, 8, 8);
+	access(false, 17, 31, 16, 8);
+	access(false, 30, 31, 24, 8);
+	access(false, reg, 31, 32, 8);
+	out_.emit(Op::AddI, 31, 31, 0, 48 << 10);
+	out_.frame_rule(FrameRule::Offset, 31, frame_);
+}
+
 void Selector::frame_address(unsigned reg, uint32_t offset)
 {
 	if (offset <= 4095)
@@ -60,6 +84,11 @@ void Selector::copy_bytes(unsigned dst, unsigned src, uint64_t size)
 
 void Selector::copy_value(unsigned dst, Value src, Type type)
 {
+	if (type.kind() == TypeKind::V128)
+	{
+		out_.emit(Op::StrQ, vector_value(src, 16), dst);
+		return;
+	}
 	if (type.kind() == TypeKind::I128 && src.is(ValueKind::Integer))
 	{
 		pair(src, 16, 17);
@@ -100,9 +129,20 @@ void Selector::transfer(bool load, const Argument& arg, unsigned base, Type)
 
 void Selector::parameter(TempId id, const Argument& arg)
 {
+	if (!arg.pieces)
+		return;
 	const Type type = body_.temps[id].type;
 	const unsigned offset = frame_ + arg.first;
-	if (memory_value(type))
+	if (type.kind() == TypeKind::V128)
+	{
+		if (arg.bank == Bank::Stack)
+		{
+			frame_address(10, offset);
+			out_.emit(Op::LdrQ, 16, 10);
+		}
+		save_vector(arg.bank == Bank::Stack ? 16 : arg.first, id);
+	}
+	else if (memory_value(type))
 	{
 		frame_address(10, homes_[id]);
 		if (arg.indirect || arg.bank == Bank::Stack)
@@ -140,13 +180,13 @@ Selector::CallLayout Selector::call_layout(const lowir::Instruction& inst) const
 	const auto params = program_.parameters_of(*signature);
 	CallLayout plan;
 	machine::call_argument_types(body_, inst, *signature, params, plan.types);
-	Arguments layout;
+	Arguments layout(named_.darwin);
 	for (uint32_t i = 0; i < plan.types.size(); ++i)
 	{
 		const auto shape = i < signature->parameter_count ? params[i].shape : machine::argument_shape(body_, inst, i);
 		plan.args.push_back(i < signature->parameter_count && params[i].pass == ir_model::PPM_INDIRECT_RESULT
 				? Argument{ Bank::General, 8, 1, 8, false }
-				: layout.next(plan.types[i], shape));
+				: layout.next(plan.types[i], shape, i >= signature->parameter_count));
 	}
 	uint64_t bytes = layout.stack;
 	plan.copies.resize(plan.args.size(), 0);
@@ -165,6 +205,8 @@ Selector::CallLayout Selector::call_layout(const lowir::Instruction& inst) const
 
 void Selector::pass(const Argument& arg, Value src, Type type, unsigned copy_offset)
 {
+	if (!arg.pieces)
+		return;
 	if (arg.indirect)
 	{
 		frame_address(10, copy_offset);
@@ -174,6 +216,8 @@ void Selector::pass(const Argument& arg, Value src, Type type, unsigned copy_off
 		else
 			move(arg.first, 10);
 	}
+	else if (type.kind() == TypeKind::V128 && arg.bank == Bank::Simd)
+		vector_move(arg.first, vector_value(src, 16));
 	else if (type.kind() == TypeKind::I128 && arg.bank == Bank::General)
 		pair(src, arg.first, arg.first + 1);
 	else if (memory_value(type))
@@ -197,7 +241,11 @@ void Selector::pass(const Argument& arg, Value src, Type type, unsigned copy_off
 		else if (arg.bank == Bank::Simd)
 			fp_move(true, arg.first, 10, type);
 		else
+		{
+			if (named_.darwin && type.is_integer() && integer_bits(type.kind()) < 32)
+				extend(10, integer_bits(type.kind()), !is_unsigned(type.kind()) && type.kind() != TypeKind::I1);
 			move(arg.first, 10);
+		}
 	}
 }
 
@@ -216,9 +264,12 @@ void Selector::call(const lowir::Instruction& inst)
 		value(10, inst.ops[0], program_.pointer_type());
 		out_.emit(Op::Blr, 0, 10);
 	}
+	record_call(inst);
 	if (inst.result == kNoId || ret.indirect)
 		return;
-	if (memory_value(inst.type))
+	if (inst.type.kind() == TypeKind::V128)
+		save_vector(0, inst.result);
+	else if (memory_value(inst.type))
 	{
 		frame_address(10, homes_[inst.result]);
 		transfer(false, ret, 10, inst.type);
@@ -234,7 +285,9 @@ void Selector::call(const lowir::Instruction& inst)
 void Selector::epilogue(const lowir::Instruction& inst)
 {
 	const Type type = signature_.result;
-	if (type.kind() == TypeKind::I128)
+	if (type.kind() == TypeKind::V128)
+		vector_move(0, vector_value(inst.ops[0], 16));
+	else if (type.kind() == TypeKind::I128)
 		pair(inst.ops[0], 0, 1);
 	else if (memory_value(type))
 	{
@@ -254,9 +307,16 @@ void Selector::epilogue(const lowir::Instruction& inst)
 		value(0, inst.ops[0], type);
 		if (type.is_float())
 			fp_move(true, 0, 0, type);
+		else if (named_.darwin && type.is_integer() && integer_bits(type.kind()) < 32)
+			extend(0, integer_bits(type.kind()), !is_unsigned(type.kind()) && type.kind() != TypeKind::I1);
 	}
 	if (frame_)
 		out_.frame_rule(FrameRule::RememberState);
+	if (frame_pointer_ != kNoId)
+	{
+		access(false, 29, 31, frame_pointer_, 8);
+		out_.frame_rule(FrameRule::Restore, 29);
+	}
 	if (link_ != kNoId)
 	{
 		access(false, 30, 31, link_, 8);
@@ -266,6 +326,12 @@ void Selector::epilogue(const lowir::Instruction& inst)
 	{
 		access(false, reg.first, 31, reg.second, 8);
 		out_.frame_rule(FrameRule::Restore, reg.first);
+	}
+	if (tls_vectors_ != kNoId)
+	{
+		frame_address(16, tls_vectors_);
+		for (unsigned v = 0; v < 32; ++v)
+			out_.emit(Op::LdrD, v, 16, 0, v << 10);
 	}
 	stack_adjust(false);
 	out_.emit(Op::Ret, 0, 30);

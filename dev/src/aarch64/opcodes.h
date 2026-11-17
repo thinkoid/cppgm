@@ -89,4 +89,34 @@
 	M(Adds, 0xab000000) \
 	M(Adc, 0x9a000000) \
 	M(Sbc, 0xda000000) \
-	M(Umulh, 0x9bc07c00)
+	M(Umulh, 0x9bc07c00) \
+	M(VAdd, 0x4e208400) \
+	M(VSub, 0x6e208400) \
+	M(VMul, 0x4e209c00) \
+	M(VAnd, 0x4e201c00) \
+	M(VOrr, 0x4ea01c00) \
+	M(VEor, 0x6e201c00) \
+	M(VBic, 0x4e601c00) \
+	M(VCmeq, 0x6e208c00) \
+	M(VCmgt, 0x4e203400) \
+	M(VFadd, 0x4e20d400) \
+	M(VFsub, 0x4ea0d400) \
+	M(VFmul, 0x6e20dc00) \
+	M(VFdiv, 0x6e20fc00) \
+	M(VFsqrt, 0x6ea1f800) \
+	M(VSmax, 0x4e206400) \
+	M(VUmax, 0x6e206400) \
+	M(VSmin, 0x4e206c00) \
+	M(VUmin, 0x6e206c00) \
+	M(VSqadd, 0x4e200c00) \
+	M(VUqadd, 0x6e200c00) \
+	M(VSqsub, 0x4e202c00) \
+	M(VUqsub, 0x6e202c00) \
+	M(VUrhadd, 0x6e201400) \
+	M(VDupS, 0x4e040400) \
+	M(VInsS, 0x6e040400) \
+	M(VInsHi, 0x4e181c00) \
+	M(VZip1, 0x4e003800) \
+	M(VZip2, 0x4e007800) \
+	M(ReadThreadPointer, 0xd53bd040) \
+	M(AddPageI, 0x91400000)

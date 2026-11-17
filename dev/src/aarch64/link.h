@@ -20,11 +20,20 @@ enum Relocation : uint32_t
 	Ldst64Lo12 = 286,
 	Ldst128Lo12 = 299,
 	GotPage = 311,
-	GotLo12 = 312
+	GotLo12 = 312,
+	TlsGotPage = 541,
+	TlsGotLo12 = 542,
+	TlsAddHi12 = 549,
+	TlsAddLo12 = 551,
+	// Backend-only Mach-O fixups. Never written to an ELF object.
+	DarwinTlvPage = 1024,
+	DarwinTlvLo12,
+	DarwinPointerToGot
 };
 
 bool apply_relocation(uint32_t type, uint8_t* field, uint64_t room, uint64_t value, uint64_t place, std::string& error);
-bool read_input(const std::string& path, std::vector<native::object::ObjectFile>& objects, std::string& error);
-void add_startup(std::vector<native::object::ObjectFile>& objects);
+bool read_input(
+	const std::string& path, std::vector<native::object::ObjectFile>& objects, std::string& error, bool darwin = false);
+void add_startup(std::vector<native::object::ObjectFile>& objects, bool darwin);
 
 } // namespace aarch64

@@ -24,6 +24,7 @@ struct ExecutableLayout
 	unsigned headers = 0;
 	bool has_rodata = false;
 	bool has_data = false;
+	std::vector<uint64_t> rebases; // Preferred addresses of pointers adjusted by dyld.
 };
 
 // The file offsets and addresses of segments of these sizes, each aligned
@@ -41,7 +42,12 @@ bool write_executable_file(const std::string& path, const ExecutableLayout& layo
 
 // The Mach-O implementation uses the same final segment layout and buffers.
 ExecutableLayout layout_macho_executable(uint64_t text_bytes, uint64_t rodata_bytes, uint64_t data_bytes,
-	uint64_t bss_bytes, uint64_t text_align, uint64_t rodata_align, uint64_t data_align, uint64_t bss_align);
+	uint64_t bss_bytes, uint64_t text_align, uint64_t rodata_align, uint64_t data_align, uint64_t bss_align,
+	Target target);
+bool write_arm64_macho(const std::string& path, const ExecutableLayout& layout, const std::vector<uint8_t>& text,
+	const std::vector<uint8_t>& rodata, const std::vector<uint8_t>& data, uint64_t bss_bytes, uint64_t entry,
+	std::string& error);
+
 bool write_macho_executable(const std::string& path, const ExecutableLayout& layout, const std::vector<uint8_t>& text,
 	const std::vector<uint8_t>& rodata, const std::vector<uint8_t>& data, uint64_t bss_bytes, uint64_t entry,
 	std::string& error);

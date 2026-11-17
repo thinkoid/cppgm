@@ -125,12 +125,17 @@ unsigned FundamentalTypeSize(FundamentalType type, target_model::Target target)
 		return layout.long_bytes;
 	if (type == FundamentalType::NullptrT)
 		return layout.pointer_bytes;
+	if (type == FundamentalType::LongDouble || type == FundamentalType::Float64x)
+		return layout.long_double_bytes;
 	return FundamentalTypeSize(type);
 }
 
 FundamentalType FloatingRepresentation(FundamentalType type, target_model::Target target)
 {
 	const FundamentalType representation = FloatingRepresentation(type);
+	if (representation == FundamentalType::LongDouble &&
+		target_model::data_layout(target).long_double_format == target_model::ExtendedFloat::Binary64)
+		return FundamentalType::Double;
 	if (representation == FundamentalType::LongDouble &&
 		target_model::data_layout(target).long_double_format == target_model::ExtendedFloat::Binary128)
 		return FundamentalType::Float128;

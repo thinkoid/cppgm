@@ -10,6 +10,7 @@ namespace object {
 
 bool encode_macho_object(const ObjectFile& object, std::vector<uint8_t>& out, std::string& error);
 bool write_macho_object(const ObjectFile& object, const std::string& path, std::string& error);
+bool decode_macho_object(const std::vector<uint8_t>& bytes, ObjectFile& object, std::string& error);
 bool read_macho_object(const std::string& path, ObjectFile& object, std::string& error);
 
 } // namespace object

@@ -20,7 +20,8 @@ void Function::bind(uint32_t label)
 	labels.at(label) = code.size();
 }
 
-void encode(const Function& function, const std::vector<uint32_t>& symbols, native::object::Section& text)
+void encode(
+	const Function& function, const std::vector<uint32_t>& symbols, native::object::Section& text, uint32_t resume)
 {
 	for (size_t i = 0; i < function.code.size(); ++i)
 	{
@@ -35,15 +36,13 @@ void encode(const Function& function, const std::vector<uint32_t>& symbols, nati
 				throw AArch64Error("AArch64 branch displacement out of range");
 			word |= (uint32_t(displacement) & ((1u << bits) - 1)) << (ins.op == Op::B ? 0 : 5);
 		}
+		else if (ins.fixup == Fixup::Resume)
+			text.relocations.push_back(native::object::Relocation{ text.bytes.size(), Call26, resume, 0 });
 		else if (ins.fixup != Fixup::None)
 		{
 			if (ins.target >= symbols.size() || symbols[ins.target] == lowir::kNoId)
 				throw AArch64Error("unresolved AArch64 relocation symbol");
-			const uint32_t type = ins.fixup == Fixup::GotPage ? GotPage
-				: ins.fixup == Fixup::GotLoad                 ? GotLo12
-				: ins.fixup == Fixup::Call                    ? Call26
-				: ins.fixup == Fixup::Page                    ? AdrPrelPage21
-															  : AddLo12;
+			const uint32_t type = static_cast<uint32_t>(ins.fixup);
 			text.relocations.push_back(
 				native::object::Relocation{ text.bytes.size(), type, symbols.at(ins.target), 0 });
 		}

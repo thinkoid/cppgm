@@ -11,7 +11,7 @@ struct Range
 {
 	TempId id;
 	uint32_t first = kNoId, last = 0, block = kNoId;
-	bool crosses_blocks = false;
+	bool crosses_blocks = false, vector_address = false;
 	void touch(uint32_t at, BlockId in)
 	{
 		first = std::min(first, at);
@@ -27,6 +27,7 @@ void Selector::allocate()
 {
 	const size_t count = body_.temps.size();
 	registers_.assign(count, kNoId);
+	vectors_.assign(count, kNoId);
 	homes_.assign(count, kNoId);
 	auto home = [&](TempId id) {
 		const auto type = body_.temps[id].type;
@@ -62,6 +63,8 @@ void Selector::allocate()
 				{
 					ranges[v.index].touch(at, block);
 					ranges[v.index].crosses_blocks |= inst.op == Opcode::Phi;
+					ranges[v.index].vector_address |= inst.op != Opcode::Vector && inst.op != Opcode::Call &&
+						inst.op != Opcode::Return && inst.op != Opcode::Store && inst.op != Opcode::Copy;
 				}
 			};
 			for (const Value v : inst.ops)
@@ -82,7 +85,7 @@ void Selector::allocate()
 	std::vector<unsigned> incoming(body_.parameter_count, kNoId);
 	if (calls.empty())
 	{
-		Arguments args;
+		Arguments args(named_.darwin);
 		for (TempId id = 0; id < body_.parameter_count; ++id)
 		{
 			const auto& param = program_.parameters_of(signature_)[id];
@@ -94,20 +97,32 @@ void Selector::allocate()
 		}
 	}
 	const unsigned bank[] = { 0, 1, 2, 3, 4, 5, 6, 7, 12, 13, 14, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28 };
-	uint32_t available[32] = {};
+	uint32_t available[32] = {}, vector_available[32] = {};
 	using Spill = std::pair<uint32_t, uint32_t>;
 	std::priority_queue<Spill, std::vector<Spill>, std::greater<Spill>> spills;
 	for (const auto& range : ranges)
 	{
 		if (range.first == kNoId)
 			continue;
-		if (memory_value(body_.temps[range.id].type))
-		{
-			homes_[range.id] = home(range.id);
-			continue;
-		}
 		const auto call = std::lower_bound(calls.begin(), calls.end(), range.first);
 		const bool across_call = call != calls.end() && *call < range.last;
+		const auto type = body_.temps[range.id].type;
+		if (memory_value(type))
+		{
+			// v18-v31 are full caller-clobbered V registers. A quadword
+			// that crosses a call must be spilled, including its high half.
+			if (type.kind() == TypeKind::V128 && !range.vector_address && !across_call)
+				for (unsigned reg = 18; reg <= 31; ++reg)
+					if (vector_available[reg] <= range.first)
+					{
+						vector_available[reg] = range.last + 1;
+						vectors_[range.id] = reg;
+						break;
+					}
+			if (vectors_[range.id] == kNoId)
+				homes_[range.id] = home(range.id);
+			continue;
+		}
 		for (unsigned reg : bank)
 		{
 			if (reg < 8 &&

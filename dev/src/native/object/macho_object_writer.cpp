@@ -46,11 +46,11 @@ bool zerofill(const Section& section)
 	return (section.flags & 0xff) == 1 || (section.flags & 0xff) == 0x12;
 }
 
-void header(std::vector<uint8_t>& out, uint32_t commands, uint32_t flags)
+void header(std::vector<uint8_t>& out, uint32_t commands, uint32_t flags, bool arm)
 {
 	put(out, 0xfeedfacf, 4);
-	put(out, 0x01000007, 4); // CPU_TYPE_X86_64
-	put(out, 3, 4);
+	put(out, arm ? 0x0100000c : 0x01000007, 4);
+	put(out, arm ? 0 : 3, 4);
 	put(out, 1, 4); // MH_OBJECT
 	put(out, 4, 4);
 	put(out, commands, 4);
@@ -118,8 +118,9 @@ void Encoder::write(std::vector<uint8_t>& out)
 	const uint32_t strtab = symtab + static_cast<uint32_t>(symbols_.size()) * 16;
 	out.clear();
 	out.reserve(strtab + strings.size());
-	header(out, commands, 0x2000 | (has_tlv_ ? 0x800000 : 0)); // SUBSECTIONS_VIA_SYMBOLS, HAS_TLV_DESCRIPTORS
-	put(out, 0x19, 4);                                         // LC_SEGMENT_64
+	const bool arm = input_.architecture == target_model::Architecture::AArch64;
+	header(out, commands, 0x2000 | (has_tlv_ ? 0x800000 : 0), arm); // SUBSECTIONS_VIA_SYMBOLS, HAS_TLV_DESCRIPTORS
+	put(out, 0x19, 4);                                              // LC_SEGMENT_64
 	put(out, segment_bytes, 4);
 	name(out, "");
 	put(out, 0, 8);
@@ -168,7 +169,7 @@ void Encoder::write(std::vector<uint8_t>& out)
 	put(out, 0x32, 4); // LC_BUILD_VERSION: macOS 10.15, no SDK dependency in an object
 	put(out, 24, 4);
 	put(out, 1, 4);
-	put(out, 0x000a0f00, 4);
+	put(out, arm ? 0x000b0000 : 0x000a0f00, 4);
 	put(out, 0, 4);
 	put(out, 0, 4);
 	for (const Section& section : sections_)

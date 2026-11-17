@@ -1418,6 +1418,8 @@ lowir::Type ProgramLowering::storage_type(const sema::Type* type)
 			return Type::scalar(TypeKind::F64);
 		case FundamentalType::LongDouble:
 		case FundamentalType::Float64x:
+			if (target_model::data_layout(type->target).long_double_format == target_model::ExtendedFloat::Binary64)
+				return Type::scalar(TypeKind::F64);
 			return target_model::data_layout(type->target).long_double_format == target_model::ExtendedFloat::Binary128
 				? Type::object(16, target_model::data_layout(type->target).long_double_alignment == 8 ? 3 : 4)
 				: Type::scalar(TypeKind::F80);

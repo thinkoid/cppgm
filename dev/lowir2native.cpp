@@ -295,8 +295,7 @@ int run_lowir2native_mode(const vector<string>& args)
 	string stats_line;
 	if (!backend::compile_program(program, options, error, invocation.stats ? &stats_line : nullptr))
 	{
-		if (options.target == target_model::Target::AArch64Linux || !undefined ||
-			!link_with_runtime(program, invocation, error))
+		if (target_model::is_aarch64(options.target) || !undefined || !link_with_runtime(program, invocation, error))
 		{
 			cerr << "ERROR: " << error << endl;
 			return EXIT_FAILURE;

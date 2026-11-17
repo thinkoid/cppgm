@@ -9,6 +9,11 @@ namespace machine {
 // identities; first/count identify action filters and map_first/map_count
 // identify (filter, LowIR selector) pairs. No register or frame location is
 // part of this shared representation.
+struct ExceptionCallSite
+{
+	uint32_t begin, end, landing, args;
+};
+
 struct ExceptionLanding
 {
 	uint32_t pad;

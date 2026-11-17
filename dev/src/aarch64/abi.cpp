@@ -38,27 +38,31 @@ Argument classify(Type type, ir_model::AggregateShape shape)
 	return Argument{ Bank::General, 0, static_cast<unsigned>((bytes + 7) / 8), 8, false };
 }
 
-Argument Arguments::next(Type type, ir_model::AggregateShape shape)
+Argument Arguments::next(Type type, ir_model::AggregateShape shape, bool unnamed)
 {
 	Argument arg = classify(type, shape);
+	if (darwin && shape.element == ir_model::AggregateElement::Empty)
+		return Argument{ Bank::General, 0, 0, 0, false };
 	unsigned& used = arg.bank == Bank::Simd ? simd : general;
 	const unsigned alignment = arg.indirect ? 8 : data_alignment(type);
 	if (alignment > 16)
 		throw AArch64Error("over-aligned AArch64 call argument");
-	if (arg.bank == Bank::General && alignment == 16)
+	if (!darwin && arg.bank == Bank::General && alignment == 16)
 		used = (used + 1) & ~1u;
-	if (used + arg.pieces <= 8)
+	if (!(darwin && unnamed) && used + arg.pieces <= 8)
 	{
 		arg.first = used;
 		used += arg.pieces;
 		return arg;
 	}
 	used = 8;
-	const unsigned align = std::max(8u, alignment);
+	const bool packed = darwin && !unnamed;
+	const unsigned align = packed ? alignment : std::max(8u, alignment);
 	stack = (stack + align - 1) & ~(align - 1);
 	arg.bank = Bank::Stack;
 	arg.first = stack;
-	stack += arg.indirect ? 8 : (storage_bytes(type) + 7) & ~uint64_t(7);
+	const unsigned size = arg.indirect ? 8 : storage_bytes(type);
+	stack += packed ? size : (size + 7) & ~7u;
 	return arg;
 }
 

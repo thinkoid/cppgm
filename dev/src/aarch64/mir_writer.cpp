@@ -28,6 +28,8 @@ void dump_function(const Function& function, const lowir::Program& program, cons
 			" rn=" + std::to_string(inst.rn) + " rm=" + std::to_string(inst.rm) + " bits=" + std::to_string(inst.field);
 		if (inst.fixup == Fixup::Block)
 			dump += " target=" + std::to_string(function.labels[inst.target]);
+		else if (inst.fixup == Fixup::Resume)
+			dump += " @_Unwind_Resume";
 		else if (inst.fixup != Fixup::None)
 		{
 			const auto& symbol = program.symbols[inst.target];

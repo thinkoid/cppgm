@@ -9,9 +9,10 @@ namespace aarch64 {
 
 using namespace lowir;
 
-Selector::Selector(const Program& program, const lowir::Function& function, Function& out, int level, bool pic)
-	: program_(program), body_(*function.body), signature_(program.signatures[function.signature]), out_(out),
-	  level_(level), pic_(pic)
+Selector::Selector(const Program& program, SymbolId symbol, Function& out, int level, bool pic)
+	: program_(program), symbol_(symbol), body_(*program.functions[program.symbols[symbol].detail].body),
+	  signature_(program.signatures[program.functions[program.symbols[symbol].detail].signature]), out_(out),
+	  level_(level), pic_(pic), named_(target_model::is_darwin(program.target))
 {}
 
 uint32_t Selector::reserve(uint64_t size, uint32_t alignment)
@@ -27,16 +28,28 @@ uint32_t Selector::reserve(uint64_t size, uint32_t alignment)
 
 void Selector::plan()
 {
+	out_.labels.resize(body_.blocks.size(), kNoId);
 	uint32_t outgoing = 0, max_phis = 0;
 	result_ = classify(signature_.result, signature_.boundary.result_shape);
-	bool calls = false, starts_variadic = false;
+	const auto tls_access = [&](Value v) {
+		return named_.darwin && v.is(ValueKind::Symbol) &&
+			program_.symbols[v.index].metadata.storage == ir_model::GSM_THREAD_LOCAL;
+	};
+	bool calls = named_.darwin && std::any_of(body_.operands.begin(), body_.operands.end(), tls_access),
+		 starts_variadic = false, eh = false;
 	for (BlockId block : body_.layout)
 	{
 		uint32_t count = 0;
 		for (InstId i = body_.blocks[block].first; i != kNoId; i = body_.instructions[i].next)
 		{
 			const auto& inst = body_.instructions[i];
+			if (named_.darwin && !calls)
+				for (const auto operand : inst.ops)
+					calls |= tls_access(operand);
 			starts_variadic |= inst.op == Opcode::VaStart;
+			eh |= (inst.op >= Opcode::EhTry && inst.op <= Opcode::Resume) || inst.op == Opcode::Exception ||
+				inst.op == Opcode::ExceptionSelector;
+			calls |= inst.op == Opcode::Resume;
 			if (inst.op == Opcode::Phi)
 				count += (storage_bytes(inst.type) + 7) / 8;
 			if (inst.op == Opcode::Call)
@@ -52,12 +65,18 @@ void Selector::plan()
 		max_phis = std::max(max_phis, count);
 	}
 	reserve(outgoing, 16);
-	if (starts_variadic)
+	if (eh)
+		prepare_exceptions();
+	if (starts_variadic && !named_.darwin)
 		variadic_area_ = reserve(64 + 128, 16);
 	if (result_.indirect)
 		result_pointer_ = reserve(8, 8);
 	if (calls)
+	{
+		if (named_.darwin)
+			frame_pointer_ = reserve(8, 16);
 		link_ = reserve(8, 8);
+	}
 	const auto owners = level_ ? machine::sequential_copy_slots(program_, body_) : std::vector<uint32_t>();
 	for (uint32_t i = 0; i < body_.slots.size(); ++i)
 	{
@@ -68,9 +87,16 @@ void Selector::plan()
 			slots_.push_back(reserve((storage_bytes(type) + 7) & ~uint64_t(7), data_alignment(type)));
 	}
 	allocate();
+	if (named_.darwin && program_.symbols[symbol_].metadata.tls_for != kNoId)
+	{
+		// Darwin C++ TLS accessors may call initializers. Their callers
+		// retain these GP registers and every scalar SIMD lane across the call.
+		for (unsigned reg : { 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 10u, 11u, 12u, 13u, 14u })
+			preserved_.push_back({ reg, reserve(8, 8) });
+		tls_vectors_ = reserve(32 * 8, 16);
+	}
 	phi_area_ = reserve(uint64_t(max_phis) * 8, 8);
 	reserve(0, 16);
-	out_.labels.resize(body_.blocks.size(), kNoId);
 	phis_.reset(body_.instructions.size());
 }
 
@@ -163,6 +189,26 @@ void Selector::address(unsigned reg, Value operand)
 		frame_address(reg, homes_[operand.index]);
 	else if (operand.kind == ValueKind::Symbol)
 	{
+		if (program_.symbols[operand.index].metadata.storage == ir_model::GSM_THREAD_LOCAL)
+		{
+			if (named_.darwin)
+				darwin_tls_address(reg, operand.index);
+			else if (pic_)
+			{
+				const unsigned tp = reg == 16 ? 17 : 16;
+				out_.reference(Op::Adrp, Fixup::TlsPage, operand.index, reg);
+				out_.reference(Op::LdrX, Fixup::TlsGotLoad, operand.index, reg, reg);
+				out_.emit(Op::ReadThreadPointer, tp);
+				out_.emit(Op::Add, reg, tp, reg);
+			}
+			else
+			{
+				out_.emit(Op::ReadThreadPointer, reg);
+				out_.reference(Op::AddPageI, Fixup::TlsHi, operand.index, reg, reg);
+				out_.reference(Op::AddI, Fixup::TlsLo, operand.index, reg, reg);
+			}
+			return;
+		}
 		const bool got = pic_ && program_.symbols[operand.index].metadata.binding != ir_model::SBM_INTERNAL;
 		out_.reference(Op::Adrp, got ? Fixup::GotPage : Fixup::Page, operand.index, reg);
 		out_.reference(got ? Op::LdrX : Op::AddI, got ? Fixup::GotLoad : Fixup::PageOffset, operand.index, reg, reg);

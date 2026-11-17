@@ -20,8 +20,10 @@ struct Argument
 
 struct Arguments
 {
+	explicit Arguments(bool apple) : darwin(apple) {}
+	bool darwin;
 	unsigned general = 0, simd = 0, stack = 0;
-	Argument next(lowir::Type type, ir_model::AggregateShape shape);
+	Argument next(lowir::Type type, ir_model::AggregateShape shape, bool unnamed = false);
 };
 
 bool memory_value(lowir::Type type);

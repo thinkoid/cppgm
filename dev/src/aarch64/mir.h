@@ -1,7 +1,9 @@
 #pragma once
 
 #include "aarch64/opcodes.h"
+#include "aarch64/link.h"
 #include "lowir/program.h"
+#include "machine/exception_layout.h"
 #include "native/object/object_file.h"
 
 namespace aarch64 {
@@ -15,15 +17,22 @@ enum class Op : uint32_t
 #undef A64_OPCODE
 };
 
-enum class Fixup : uint8_t
+enum class Fixup : uint16_t
 {
 	None,
 	Block,
-	Call,
-	Page,
-	PageOffset,
-	GotPage,
-	GotLoad
+	Resume,
+	Call = Call26,
+	Page = AdrPrelPage21,
+	PageOffset = AddLo12,
+	GotPage = aarch64::GotPage,
+	GotLoad = GotLo12,
+	TlsPage = TlsGotPage,
+	TlsGotLoad = TlsGotLo12,
+	TlsHi = TlsAddHi12,
+	TlsLo = TlsAddLo12,
+	TlvPage = DarwinTlvPage,
+	TlvLoad = DarwinTlvLo12
 };
 
 struct Instruction
@@ -53,6 +62,10 @@ struct FrameEvent
 struct Function
 {
 	std::vector<FrameEvent> frame_events;
+	std::unique_ptr<machine::ExceptionLayout> exceptions;
+	std::vector<machine::ExceptionCallSite> sites;
+	std::vector<uint32_t> pads;
+	bool needs_resume = false;
 	void frame_rule(FrameRule rule, unsigned reg = 0, unsigned offset = 0);
 	std::vector<Instruction> code;
 	std::vector<uint32_t> labels;
@@ -61,9 +74,12 @@ struct Function
 	void bind(uint32_t label);
 };
 
-void emit_unwind(const Function& function, uint32_t symbol, native::object::Section& section);
+void emit_unwind(const Function& function, uint32_t symbol, uint32_t shared_section,
+	const std::vector<uint32_t>& symbols, native::object::ObjectFile& object, bool darwin);
+uint32_t external_symbol(native::object::ObjectFile& object, const char* name);
 void dump_function(const Function& function, const lowir::Program& program, const char* name, std::string& dump);
 
-void encode(const Function& function, const std::vector<uint32_t>& symbols, native::object::Section& text);
+void encode(const Function& function, const std::vector<uint32_t>& symbols, native::object::Section& text,
+	uint32_t resume = lowir::kNoId);
 
 } // namespace aarch64

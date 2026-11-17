@@ -33,11 +33,11 @@ void run_array(Function& f, uint32_t label, uint32_t first, uint32_t last, bool 
 }
 }
 
-void add_startup(std::vector<obj::ObjectFile>& objects)
+void add_startup(std::vector<obj::ObjectFile>& objects, bool darwin)
 {
 	objects.emplace_back();
 	auto& object = objects.back();
-	object.path = "AArch64 Linux startup";
+	object.path = darwin ? "arm64 macOS startup" : "AArch64 Linux startup";
 	object.architecture = target_model::Architecture::AArch64;
 	const auto sec = object.add_section(".text", obj::SectionKind::Text, 4);
 	std::vector<uint32_t> symbols;
@@ -51,17 +51,46 @@ void add_startup(std::vector<obj::ObjectFile>& objects)
 	}
 	Function f;
 	f.labels.resize(4);
+	if (darwin)
+	{
+		f.emit(Op::SubI, 31, 31, 0, 96 << 10);
+		for (unsigned r = 19; r <= 23; ++r)
+			f.emit(Op::StrX, r, 31, 0, (r - 19) << 10);
+		f.emit(Op::StrX, 29, 31, 0, 10 << 10);
+		f.emit(Op::StrX, 30, 31, 0, 11 << 10);
+		f.emit(Op::AddI, 29, 31, 0, 80 << 10);
+		for (unsigned r = 0; r < 4; ++r)
+			f.emit(Op::StrX, r, 31, 0, (5 + r) << 10);
+	}
 	run_array(f, 0, 1, 2, false);
-	f.emit(Op::LdrX, 0, 31);             // argc
-	f.emit(Op::AddI, 1, 31, 0, 8 << 10); // argv
-	f.emit(Op::Add, 2, 1, 0, 3 << 10);   // argv + argc
-	f.emit(Op::AddI, 2, 2, 0, 8 << 10);  // envp
+	if (darwin)
+		for (unsigned r = 0; r < 4; ++r)
+			f.emit(Op::LdrX, r, 31, 0, (5 + r) << 10);
+	else
+	{
+		f.emit(Op::LdrX, 0, 31);             // argc
+		f.emit(Op::AddI, 1, 31, 0, 8 << 10); // argv
+		f.emit(Op::Add, 2, 1, 0, 3 << 10);   // argv + argc
+		f.emit(Op::AddI, 2, 2, 0, 8 << 10);  // envp
+	}
 	f.reference(Op::Bl, Fixup::Call, 0);
 	f.emit(Op::Orr, 21, 31, 0);
 	run_array(f, 2, 3, 4, true);
 	f.emit(Op::Orr, 0, 31, 21);
-	f.emit(Op::MovZ, 8, 0, 0, 94 << 5); // Linux exit_group
-	f.emit(Op::Svc);
+	if (darwin)
+	{
+		for (unsigned r = 19; r <= 23; ++r)
+			f.emit(Op::LdrX, r, 31, 0, (r - 19) << 10);
+		f.emit(Op::LdrX, 29, 31, 0, 10 << 10);
+		f.emit(Op::LdrX, 30, 31, 0, 11 << 10);
+		f.emit(Op::AddI, 31, 31, 0, 96 << 10);
+		f.emit(Op::Ret, 0, 30);
+	}
+	else
+	{
+		f.emit(Op::MovZ, 8, 0, 0, 94 << 5); // Linux exit_group
+		f.emit(Op::Svc);
+	}
 	encode(f, symbols, object.sections[sec]);
 	obj::Symbol s;
 	s.name = object.add_string(native::kEntrySymbol);

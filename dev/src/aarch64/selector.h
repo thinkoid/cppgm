@@ -9,12 +9,23 @@ namespace aarch64 {
 class Selector
 {
 public:
-	Selector(const lowir::Program& program, const lowir::Function& function, Function& out, int level, bool pic);
+	Selector(const lowir::Program& program, lowir::SymbolId symbol, Function& out, int level, bool pic);
 	void run();
 
 private:
 	void plan();
+	void prepare_exceptions();
+	void landing(lowir::BlockId block);
+	void resume(uint32_t site);
+	void record_call(const lowir::Instruction& inst);
+	void exception_value(const lowir::Instruction& inst);
+	uint32_t site(const lowir::Instruction& inst) const;
 	void allocate();
+	unsigned vector_value(lowir::Value value, unsigned scratch);
+	void save_vector(unsigned reg, lowir::TempId result);
+	void vector_instruction(const lowir::Instruction& inst);
+	void vector_shuffle(const lowir::Instruction& inst, unsigned source);
+	void vector_move(unsigned to, unsigned from);
 	void pair(lowir::Value src, unsigned lo, unsigned hi);
 	void save_pair(lowir::TempId dest, unsigned lo, unsigned hi);
 	void wide_binary(const lowir::Instruction& inst);
@@ -22,6 +33,7 @@ private:
 	bool wide(const lowir::Instruction& inst);
 	void save_variadic_registers();
 	void va_start(const lowir::Instruction& inst);
+	void stack_va_arg(const lowir::Instruction& inst, const Argument& arg, bool aligned);
 	void va_arg(const lowir::Instruction& inst);
 	void read_variadic_value(const lowir::Instruction& inst, const Argument& arg, bool stacked);
 	void frame_address(unsigned reg, uint32_t offset);
@@ -47,6 +59,7 @@ private:
 	void move(unsigned to, unsigned from);
 	void extend(unsigned reg, unsigned bits, bool sign);
 	void access(bool store, unsigned reg, unsigned base, uint32_t offset, unsigned bytes);
+	void darwin_tls_address(unsigned reg, lowir::SymbolId symbol);
 	void address(unsigned reg, lowir::Value value);
 	void value(unsigned reg, lowir::Value value, lowir::Type type);
 	void save(unsigned reg, lowir::TempId temp, bool normalized = false);
@@ -64,18 +77,23 @@ private:
 	void epilogue(const lowir::Instruction& inst);
 
 	const lowir::Program& program_;
+	lowir::SymbolId symbol_;
+	std::vector<uint32_t> selectors_;
+	uint32_t exception_slot_ = lowir::kNoId;
 	const lowir::FunctionBody& body_;
 	const lowir::Signature& signature_;
 	Function& out_;
 	int level_;
 	bool pic_;
-	std::vector<uint32_t> slots_, homes_, registers_;
+	std::vector<uint32_t> slots_, homes_, registers_, vectors_;
 	std::vector<std::pair<unsigned, uint32_t>> preserved_;
 	machine::PhiInputs phis_;
 	std::vector<CallLayout> calls_;
 	std::vector<uint32_t> call_indices_;
 	Argument result_ = {};
 	Arguments named_;
+	uint32_t tls_vectors_ = lowir::kNoId;
+	uint32_t frame_pointer_ = lowir::kNoId;
 	uint32_t variadic_area_ = lowir::kNoId;
 	uint32_t result_pointer_ = lowir::kNoId;
 	uint32_t frame_ = 0, phi_area_ = 0, link_ = lowir::kNoId;
