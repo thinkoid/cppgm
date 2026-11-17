@@ -509,7 +509,7 @@ node scripts/experimental/browser_native_downloads.cjs \
   /path/to/prepared-package-with-w1 /path/to/incpption /path/to/new-downloads
 ```
 
-The incpption checkout supplies its `dist/clang-seed` package, browser glue and installed Playwright. The test verifies the packaged LLD hash and the executable type and architecture of each download. The example returns 39. Run the Linux images directly or under QEMU and the Mach-O images on the corresponding Macs. This experiment lives in the compiler checkout and requires no changes to the deployed site.
+The incpption checkout supplies its `dist/clang-seed` package, browser glue and installed Playwright. The test verifies the packaged LLD hash and the executable type and architecture of each download. The checker also runs the matching native download and, on Linux, the other Linux target under QEMU. It requires exit status 39. Verify both Mach-O downloads under dyld on their corresponding Macs. This experiment lives in the compiler checkout and requires no changes to the deployed site.
 
 To exercise hosted C++ on Linux, pass a fourth argument naming a JSON file
 with the runtime directories for either or both Linux targets. For example:

@@ -5,7 +5,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const {createHash} = require('node:crypto');
-const {execFileSync} = require('node:child_process');
+const {execFileSync, spawnSync} = require('node:child_process');
 const {gunzipSync} = require('node:zlib');
 
 const [pkg, site, dest, runtimes] = process.argv.slice(2).map(arg => path.resolve(arg));
@@ -84,6 +84,22 @@ function checkExecutable(name, bytes) {
   if (!matches) throw Error('Wrong executable format for ' + name);
 }
 
+function executeDownload(name, file) {
+  const system = process.platform === 'darwin' ? 'macos' : process.platform;
+  const nativeName = system + '-' + (process.arch === 'x64' ? 'x86_64' : process.arch);
+  let command;
+  if (name === nativeName) command = [file];
+  else if (process.platform === 'linux' && name.startsWith('linux-')) {
+    const arm = name.endsWith('arm64');
+    command = arm ? [process.env.CPPGM_AARCH64_QEMU || 'qemu-aarch64', '-cpu', 'cortex-a53', file]
+                  : [process.env.CPPGM_X86_64_QEMU || 'qemu-x86_64', file];
+  } else return;
+  const result = spawnSync(command[0], command.slice(1), {timeout: 30000, encoding: 'utf8'});
+  if (result.error) throw result.error;
+  if (result.status !== 39) throw Error(name + ' returned ' + (result.signal || result.status) + ': ' + result.stderr);
+  console.log(name, 'exit', result.status);
+}
+
 async function test() {
   prepare();
   fs.mkdirSync(dest);
@@ -107,6 +123,7 @@ async function test() {
       const bytes = fs.readFileSync(file);
       checkExecutable(name, bytes);
       console.log(name, bytes.length, hash(bytes));
+      executeDownload(name, file);
     }
   } finally {
     if (browser) await browser.close();
