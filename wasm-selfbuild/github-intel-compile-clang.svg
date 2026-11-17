@@ -1,5 +1,5 @@
-<svg data-original-label="WASI cppgm build vs Clang; Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz" data-original-message="6.23×" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="WASI cppgm build vs Clang; Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz; measured 33a92f123a1965a6a3ed154f1e785aef2f56b4a7; 20 commits behind main: 6.23×*">
-  <title>WASI cppgm build vs Clang; Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz; measured 33a92f123a1965a6a3ed154f1e785aef2f56b4a7; 20 commits behind main: 6.23×*</title>
+<svg data-original-label="WASI cppgm build vs Clang; Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz" data-original-message="6.23×" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="WASI cppgm build vs Clang; Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz; measured 33a92f123a1965a6a3ed154f1e785aef2f56b4a7; 21 commits behind main: 6.23×*">
+  <title>WASI cppgm build vs Clang; Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz; measured 33a92f123a1965a6a3ed154f1e785aef2f56b4a7; 21 commits behind main: 6.23×*</title>
   <defs><clipPath id="badge"><rect width="120" height="24" rx="4"/></clipPath></defs>
   <g clip-path="url(#badge)">
     <rect width="64" height="24" fill="#555"/>
