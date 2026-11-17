@@ -349,7 +349,8 @@ provenance records and SHA256SUMS:
 | `cppgm-<tag>-linux-x86_64.tar.gz` | The nine tools, `libcppgm_lowir` (static and shared) and its headers, compiled by `cppgm`; the host toolchain is GCC on Ubuntu 24.04 |
 | `cppgm-<tag>-macos-x86_64.tar.gz` | The same files; the host toolchain is Homebrew LLVM 21 on Intel macOS |
 | `cppgm-<tag>-wasm32-wasip1.tar.gz` | The nine tools as WASI modules, with the frozen header and SDK filesystem |
-| `cppgm-<tag>-source.tar.gz` | The tagged source |
+| `cppgm-<tag>-source.tar.gz` | Compiler, stage tools and LowIR library source, Makefiles, build instructions and licenses |
+| `cppgm-<tag>-source-with-tests.tar.gz` | The complete tagged tree, including the same buildable source, assignment fixtures, expected outputs, test runners, benchmarks and documentation |
 
 `cppgm` compiles the tools and the library of a native package.
 `scripts/build_release_tools.sh` builds them in three stages under
@@ -381,10 +382,12 @@ publishes a prerelease. A pull request that changes the release files builds
 and checks the native packages without publishing. This workflow does not push
 the student repository or modify the rolling `reference-binaries` release.
 
-Source tarballs are made only for release tags, using `git archive` at the
-tagged commit and deterministic gzip metadata. They include tracked licenses
-and notices and exclude untracked files and local build products. The tagged
-commit must be checked out. For a local export and package:
+Both source archives extract to `cppgm-<tag>/` and can be used independently.
+The Linux release job builds the nine tools from the smaller archive, then
+extracts the larger archive over that build to run PA1 and reuse the tools for
+self-compilation. Each download has its own provenance record and SHA-256
+checksum. The exporter uses `git archive` at the checked-out tag and deterministic
+gzip metadata. For a local export and package:
 
 ```sh
 python3 scripts/export_release_source.py --tag v0.9.0 --output /tmp/cppgm-v0.9.0-release

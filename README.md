@@ -219,7 +219,9 @@ select the C++ host compiler. Use one host toolchain for a whole build.
 
 Each [release](https://github.com/vishvananda/cppgm/releases) has packages of
 the tools and the LowIR library for Linux x86-64 and Intel macOS, the tools as
-WASI modules, and a source archive. See
+WASI modules, and two source downloads. Choose `cppgm-<tag>-source.tar.gz`
+to build the tools and library, or `cppgm-<tag>-source-with-tests.tar.gz`
+to build them and run the assignment suites. See
 [reference and version exports](TESTING_AND_REFERENCES.md#reference-and-version-exports).
 
 [The macOS guide](docs/intel-macos.md) describes Intel macOS support and its

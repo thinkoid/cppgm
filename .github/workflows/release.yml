@@ -15,6 +15,8 @@ on:
       - 'dev/lowir_library.mk'
       - 'pa35/Makefile'
       - 'scripts/export_release_source.py'
+      - 'scripts/tests/test_release_source.py'
+      - 'BUILDING.md'
       - 'scripts/select_macos_llvm.sh'
 
 permissions:
@@ -37,7 +39,7 @@ jobs:
       bundle: cppgm-${{ github.ref_name }}-wasm32-wasip1.tar.gz
 
   linux:
-    name: Linux x86-64 tools, library and source
+    name: Linux x86-64 tools, library and source packages
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -49,9 +51,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends binutils build-essential git gzip perl tar
-      - name: Build the tools and the LowIR library with cppgm
-        run: bash scripts/build_release_tools.sh g++
-      - name: Package and check the release files
+      - name: Export both source packages
         run: |
           set -euo pipefail
           # A pull request has no release tag: its trial tag names the checked-out commit.
@@ -59,6 +59,24 @@ jobs:
           python3 scripts/tests/test_release_source.py
           python3 scripts/tests/test_package_release.py
           python3 scripts/export_release_source.py --tag "$VERSION_TAG" --output "$RUNNER_TEMP/upload"
+      - name: Build from the source-only download
+        run: |
+          set -euo pipefail
+          tar -xzf "$RUNNER_TEMP/upload/cppgm-${VERSION_TAG}-source.tar.gz" -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP/cppgm-$VERSION_TAG"
+          make CXX=g++ CPPGM_HOST_CXX=g++
+          dev/cppgm --version
+          make -n -C dev lowir-library >/dev/null
+      - name: Run the packaged PA1 suite and build the self-compiled release
+        run: |
+          set -euo pipefail
+          # Both archives use the same source paths and timestamps. Reuse the stage-one build.
+          tar -xzf "$RUNNER_TEMP/upload/cppgm-${VERSION_TAG}-source-with-tests.tar.gz" -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP/cppgm-$VERSION_TAG"
+          make -C pa1 test
+          bash scripts/build_release_tools.sh g++
+          # The package records the revision of the checkout that supplied the archives.
+          export GIT_DIR="$GITHUB_WORKSPACE/.git"
           python3 scripts/package_release.py --tag "$VERSION_TAG" --platform linux-x86_64 \
             --host "$(g++ --version | sed -n 1p)" --output "$RUNNER_TEMP/upload"
           python3 scripts/check_release_package.py \
@@ -142,7 +160,9 @@ jobs:
           fi
           sha256sum *.tar.gz *.json > SHA256SUMS
           cat > release-notes.md <<'NOTES'
-          Packages of the `cppgm` compiler, its eight stage tools and the LowIR library for Linux x86-64 and Intel macOS, the same nine tools as WASI modules, and the source archive.
+          This release includes the native tools and LowIR library for Linux x86-64 and Intel macOS, all nine tools as WASI modules, and two source downloads.
+
+          Choose `cppgm-<tag>-source.tar.gz` to build the compiler, tools and library. Choose `cppgm-<tag>-source-with-tests.tar.gz` for the same code with the complete assignment suites, reference outputs, runners and course documentation. Each download can be used on its own.
 
           The native packages hold `bin/`, `lib/libcppgm_lowir` (static and shared) and `include/`. cppgm compiled these tools and the library: they are its second-stage build, and the third-stage build has the same bytes. Hosted compilation uses the host compiler and standard library that the package's README names; build from the source archive for another host.
 
