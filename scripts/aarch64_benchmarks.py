@@ -33,7 +33,7 @@ def build(args):
     target = "--target=aarch64-linux-gnu"
     common = ["-march=armv8-a", "-fno-stack-protector", "-ffp-contract=off"]
     gcc_flags, clang_flags = [gcc, *common], [clang, target, *common]
-    kernels = ["pa36/kernels/lookup.cpp", "pa36/kernels/accessor.cpp", "pa39/tests/quality/710-neon-arithmetic.t"]
+    kernels = ["pa36/kernels/lookup.cpp", "pa36/kernels/accessor.cpp", "pa39/tests/quality/700-neon-arithmetic.t"]
     sources = ["pa39/support/start.S", "benchmarks/aarch64/report.S", "benchmarks/aarch64/workload.cpp"]
     manifest = dict(inputs={s: sha(ROOT / s) for s in kernels + sources}, guests={}, checksums={}, commands=[])
     def record(command):
