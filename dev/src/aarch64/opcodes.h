@@ -12,6 +12,7 @@
 	M(UDiv, 0x9ac00800) \
 	M(SDivW, 0x1ac00c00) \
 	M(UDivW, 0x1ac00800) \
+	M(Madd, 0x9b000000) \
 	M(Msub, 0x9b008000) \
 	M(MsubW, 0x1b008000) \
 	M(LslW, 0x1ac02000) \

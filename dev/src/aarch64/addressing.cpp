@@ -141,9 +141,22 @@ InstId Selector::address_sequence(InstId id)
 		Value factor = first.ops[0];
 		if (!factor.is(ValueKind::Integer))
 			std::swap(factor, offset);
-		if (!factor.is(ValueKind::Integer) || !offset.is(ValueKind::Temp))
+		if (!offset.is(ValueKind::Temp))
 			return kNoId;
-		scale = body_.literals[factor.index].low;
+		scale = factor.is(ValueKind::Integer) ? body_.literals[factor.index].low : 0;
+		if (!power_of_two(scale) && (factor.is(ValueKind::Temp) || factor.is(ValueKind::Integer)) &&
+			index.ops[0].is(ValueKind::Temp) && registers_[index.ops[0].index] != kNoId)
+		{
+			// A byte index of a product is base + element * stride, even when
+			// the stride cannot be encoded in a shifted address.
+			const auto base = registers_[index.ops[0].index];
+			const auto element = operand_register(offset, first.type, 10);
+			const auto stride = operand_register(factor, first.type, 11);
+			const auto dest = registers_[index.result] == kNoId ? 9 : registers_[index.result];
+			out_.emit(Op::Madd, dest, element, stride, base << 10);
+			save(dest, index.result, true);
+			return first.next;
+		}
 		index_id = first.next;
 	}
 	if (!power_of_two(scale) || !(offset.is(ValueKind::Integer) || offset.is(ValueKind::Temp)))
