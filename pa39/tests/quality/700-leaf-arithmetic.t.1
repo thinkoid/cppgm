@@ -10,7 +10,15 @@ extern "C" unsigned byte_offset(const unsigned*, signed char, unsigned char);
 extern "C" bool signed_order(short, short);
 extern "C" unsigned adjacent(const unsigned*, long);
 extern "C" unsigned observed(const volatile unsigned*, unsigned*);
+extern "C" unsigned long widen_across_call(const unsigned*, unsigned char, bool);
+extern "C" unsigned long inspect_widened(unsigned long choice, unsigned long byte, unsigned word, unsigned long wide) {
+    if (wide != 0xf1234567UL || word != 0xf1234567u || byte != 0xfeUL) return 91;
+    return choice == wide ? 13 : choice == byte ? 17 : 99;
+}
 int main() {
+    unsigned word = 0xf1234567u;
+    if (widen_across_call(&word, 0xfe, true) != 13 + 2 * 0xf1234567UL) return 14;
+    if (widen_across_call(&word, 0xfe, false) != 17 + 0xfe + 0xf1234567UL) return 15;
     unsigned pair[] = {0xf0000003u, 0x90000001u};
     if (adjacent(pair + 1, -1) != 0x60000002u) return 12;
     if (observed(pair, pair + 1) != 11 || pair[1] != 0xf0000008u) return 13;

@@ -35,3 +35,12 @@ extern "C" unsigned observed(const volatile unsigned* p, unsigned* target) {
     *target = first + 5;
     return first ^ p[1];
 }
+
+extern "C" unsigned long inspect_widened(unsigned long, unsigned long, unsigned, unsigned long);
+extern "C" unsigned long widen_across_call(const unsigned* in, unsigned char byte, bool take_word) {
+    unsigned word = *in;
+    unsigned long wide = word;
+    unsigned long choice = take_word ? wide : (unsigned long)byte;
+    unsigned long check = inspect_widened(choice, byte, word, wide);
+    return check + choice + wide;
+}
