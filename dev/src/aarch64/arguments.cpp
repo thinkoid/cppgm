@@ -273,7 +273,20 @@ void Selector::call(const lowir::Instruction& inst)
 	else if (ret.bank == Bank::Simd)
 		save_fp(0, inst.result);
 	else
-		save(0, inst.result);
+	{
+		// A locally defined callee returns its canonical scalar in x0.
+		// Darwin extends signed subwords for its external calling convention.
+		const auto kind = inst.type.kind();
+		bool normalized = false;
+		if (level_ && inst.ops[0].is(ValueKind::Symbol) && inst.type.is_integer() && integer_bits(kind) <= 32 &&
+			(!named_.darwin || is_unsigned(kind) || integer_bits(kind) == 32))
+		{
+			const auto& callee = program_.symbols[inst.ops[0].index];
+			if (callee.kind == SymbolKind::FunctionDefinition && callee.metadata.binding == ir_model::SBM_INTERNAL)
+				normalized = program_.signatures[program_.functions[callee.detail].signature].result == inst.type;
+		}
+		save(0, inst.result, normalized);
+	}
 }
 
 void Selector::epilogue(const lowir::Instruction& inst)
