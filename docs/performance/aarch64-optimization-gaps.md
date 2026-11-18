@@ -56,6 +56,10 @@ compiler a control for the extra work of changing the compiler algorithm itself.
 | Fold shifted multiplies, transfer ABI pieces directly, schedule backedge moves and copy through allocated addresses, a247c587b | 708 | 3,341 | 1,271 |
 | Keep loop-invariant masks in a register and coalesce zero extensions, 3ff5a4cb2 | 700 | 3,286 | 1,252 |
 | Clang-built cppgm control at 3ff5a4cb2 | 568 | 2,585 | 1,002 |
+| Pair adjacent typed fields and weight all uses of coalesced names, before the rebase | 654 | 3,115 | 1,182 |
+| Fold a reused power-of-two subscript into each Arm address | 653 | 3,059 | 1,170 |
+| Place single-use field addresses beside their accesses, then rebase onto 90ebfa8f4 and build 0.9.7, c33a4bad2 | 648 | 3,036 | 1,161 |
+| Clang-built cppgm control at c33a4bad2 | 568 | 2,585 | 1,004 |
 
 The largest allocation gain on the compiler inputs came from exceptional
 control flow. Arm previously reserved every cross-block value for the whole
@@ -122,6 +126,12 @@ Clang-built cppgm and **285.9 s** with self-built cppgm. The two paired
 wall-time ratios were 1.143× and 1.115×, with an overall 1.129× elapsed
 slowdown, 1.152× in aggregate CPU and 1.050× A/A wall calibration. All
 497 objects and the linked compiler matched for each run.
+
+The instruction-count replay of this same revision used **456,655,057,014**
+guest instructions with Clang-built cppgm and **580,397,148,082** with
+self-built cppgm. All 994 individual executions reproduced the corresponding
+object from the timed run. The instruction ratio fell from 1.302× to 1.271×.
+The 1.129× wall-time ratio above measures the separately timed full builds.
 
 ## From hot blocks to candidate changes
 
@@ -467,6 +477,37 @@ four kernels. Puzzle was 0.821×, while FloatMM was 1.053×. The call-heavy
 kernel was 0.851× on elapsed guest-process CPU despite the two producers'
 instruction counts differing by only one. QEMU wall and CPU time also
 depend on how the emulator translates and chains the guest blocks.
+
+### Reused indices, spill priorities and public workloads
+
+Weighting each coalesced register or spill slot by all its SSA uses saved
+0.69 million instructions on the loop-vectorizer compile. Pairing adjacent
+field accesses saved 11.2 million. In the disassembly of `opt::count_uses`,
+two distinct base pointers used the same element number. The compiler kept
+a separately shifted copy live for both. Expressing the power-of-two stride
+on each typed LowIR index let Arm select `add xD, xBase, xIndex, lsl #6`.
+This saved another 55.1 million instructions on the loop-vectorizer compile
+and 12.5 million on the driver compile.
+
+After the core rebase, the matched compiler-input ratios were **1.141×,
+1.175× and 1.156×** in table order. Every output object matched. The
+rebased source also ran the upstream quote-only include fixture as an Arm
+ELF and emitted its arm64 Mach-O object. One local-return check combined
+unsigned and signed internal callees with an external assembly function
+that left its upper return bits set. Its Linux executable returned the
+expected value. Both object formats encoded all 1,021 one-byte SIMD
+broadcast immediates, including zero. A Linux execution checked 12,300
+individual SIMD lane values against calculations compiled by the Arm
+cross-compiler.
+
+The six-block application timing before the rebase used four executions
+per position and two A/A calibration blocks. The five public applications
+had a geometric mean of **0.965× Clang throughput**. Puzzle was slower in
+every block at 0.822× overall (0.778–0.908×). FloatMM was faster in every
+block at 1.046× (1.033–1.066×). The four kernels averaged 1.069×, but
+the memory kernel's A/A ratio was 1.291× and the lookup kernel's was
+0.882×. The instruction counts and paired ranges give a firmer basis for
+iteration on those two workloads than their elapsed averages.
 
 ## Which decisions the targets share
 
