@@ -119,6 +119,13 @@ bool LoopMotion::worth_moving(const Instruction& inst, bool calls) const
 	switch (inst.op)
 	{
 	case Opcode::Addr:
+		// An A64 symbol address uses a page relocation and a second
+		// instruction. A base needed for a variable index cannot fold into
+		// the load, and may stay in a call-preserved register across trips.
+		if (calls && target_model::is_aarch64(c_.program.target) && inst.ops[0].is(ValueKind::Symbol) &&
+			c_.program.symbols[inst.ops[0].index].metadata.storage != ir_model::GSM_THREAD_LOCAL &&
+			!in_register_.empty() && in_register_[inst.result])
+			return true;
 		return !calls && (!c_.costs.scaled_memory_operands || in_register_[inst.result] != 0);
 	case Opcode::Index:
 		return !calls && (!c_.costs.scaled_memory_operands || !literal_index(inst) || in_register_[inst.result] != 0);
