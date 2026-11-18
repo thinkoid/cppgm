@@ -34,7 +34,8 @@ uint32_t Selector::reserve(uint64_t size, uint32_t alignment)
 void Selector::plan()
 {
 	out_.labels.resize(body_.blocks.size(), kNoId);
-	uint32_t outgoing = 0, max_phis = 0;
+	uint32_t outgoing = 0;
+	bool has_phi = false;
 	result_ = classify(signature_.result, signature_.boundary.result_shape);
 	const auto tls_access = [&](Value v) {
 		return named_.darwin && v.is(ValueKind::Symbol) &&
@@ -44,7 +45,6 @@ void Selector::plan()
 		 starts_variadic = false, eh = false;
 	for (BlockId block : body_.layout)
 	{
-		uint32_t count = 0;
 		for (InstId i = body_.blocks[block].first; i != kNoId; i = body_.instructions[i].next)
 		{
 			const auto& inst = body_.instructions[i];
@@ -59,8 +59,7 @@ void Selector::plan()
 			eh |= (inst.op >= Opcode::EhTry && inst.op <= Opcode::Resume) || inst.op == Opcode::Exception ||
 				inst.op == Opcode::ExceptionSelector;
 			calls |= inst.op == Opcode::Resume;
-			if (inst.op == Opcode::Phi)
-				count += (storage_bytes(inst.type) + 7) / 8;
+			has_phi |= inst.op == Opcode::Phi;
 			if (inst.op == Opcode::Call)
 			{
 				calls = true;
@@ -71,7 +70,6 @@ void Selector::plan()
 				outgoing = std::max(outgoing, calls_.back().size);
 			}
 		}
-		max_phis = std::max(max_phis, count);
 	}
 	outgoing_ = (outgoing + 15) & ~15u;
 	reserve(outgoing_, 16);
@@ -110,11 +108,12 @@ void Selector::plan()
 			preserved_.push_back({ reg, reserve(8, 8) });
 		tls_vectors_ = reserve(32 * 8, 16);
 	}
-	phi_area_ = reserve(uint64_t(max_phis) * 8, 8);
+	phis_.reset(body_.instructions.size());
+	if (has_phi)
+		phi_area_ = reserve(plan_phis(), 8);
 	reserve(0, 16);
 	stack_pair_ = level_ && frame_ <= 504 && preserved_.size() >= 2 && preserved_[0].second == 0 &&
 		preserved_[1].second == 8;
-	phis_.reset(body_.instructions.size());
 }
 
 void Selector::move(unsigned to, unsigned from)

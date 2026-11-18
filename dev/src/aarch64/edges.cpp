@@ -1,5 +1,6 @@
 #include "aarch64/selector.h"
 
+#include <algorithm>
 namespace aarch64 {
 using namespace lowir;
 
@@ -51,42 +52,103 @@ void Selector::copy_edge(BlockId from, BlockId to)
 	}
 }
 
-bool Selector::register_edge(BlockId from, BlockId to)
+bool Selector::same_home(TempId dest, Value source) const
 {
-	// Commit in order only when an earlier write cannot destroy a later source.
+	if (!source.is(ValueKind::Temp))
+		return false;
+	return registers_[dest] != kNoId ? registers_[source.index] == registers_[dest]
+		: vectors_[dest] != kNoId    ? vectors_[source.index] == vectors_[dest]
+									 : homes_[dest] != kNoId && homes_[dest] == homes_[source.index];
+}
+
+bool Selector::needs_snapshot(BlockId from, BlockId to)
+{
+	// An acyclic ordered transfer may include scalar frame homes. A later
+	// source must see the value from before every destination write.
 	uint32_t written[2] = {};
-	const auto first = body_.blocks[to].first;
-	for (auto i = first; i != kNoId && body_.instructions[i].op == Opcode::Phi; i = body_.instructions[i].next)
+	uint32_t offsets[16], count = 0;
+	for (auto i = body_.blocks[to].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
+		i = body_.instructions[i].next)
 	{
 		const auto& phi = body_.instructions[i];
 		const auto source = phis_.incoming(body_, i, from);
-		const bool simd = vectors_[phi.result] != kNoId;
-		const auto dest = simd ? vectors_[phi.result] : registers_[phi.result];
-		if (dest == kNoId ||
-			!(source.is(ValueKind::Integer) || source.is(ValueKind::Temp) || source.is(ValueKind::Float)))
-			return false;
+		if (same_home(phi.result, source))
+			continue;
+		if ((memory_value(phi.type) && phi.type.kind() != TypeKind::V128) ||
+			!(source.is(ValueKind::Temp) || source.is(ValueKind::Integer) || source.is(ValueKind::Float)))
+			return true;
 		if (source.is(ValueKind::Temp))
 		{
-			const bool vector_source = vectors_[source.index] != kNoId;
-			const auto reg = vector_source ? vectors_[source.index] : registers_[source.index];
-			if (reg != kNoId && (written[vector_source] & (1u << reg)))
-				return false;
-			if (simd == vector_source && reg == dest)
-				continue;
+			const bool simd = vectors_[source.index] != kNoId;
+			const auto reg = simd ? vectors_[source.index] : registers_[source.index];
+			if (reg != kNoId ? (written[simd] & (1u << reg)) != 0
+							 : std::find(offsets, offsets + count, homes_[source.index]) != offsets + count)
+				return true;
 		}
-		written[simd] |= 1u << dest;
+		const bool simd = vectors_[phi.result] != kNoId;
+		const auto reg = simd ? vectors_[phi.result] : registers_[phi.result];
+		if (reg != kNoId)
+			written[simd] |= 1u << reg;
+		else if (count < 16)
+			offsets[count++] = homes_[phi.result];
+		else
+			return true;
 	}
-	for (auto i = first; i != kNoId && body_.instructions[i].op == Opcode::Phi; i = body_.instructions[i].next)
+	return false;
+}
+
+uint64_t Selector::plan_phis()
+{
+	uint64_t maximum = 0;
+	for (auto block : body_.layout)
+	{
+		const auto entry = body_.blocks[block].first;
+		if (entry == kNoId || body_.instructions[entry].op != Opcode::Phi)
+			continue;
+		const auto& first = body_.instructions[entry];
+		bool snapshot = !level_;
+		if (level_)
+			for (uint32_t k = 0; k < first.extra_count; k += 2)
+			{
+				const auto from = body_.operands[first.extra_first + k].index;
+				if (needs_snapshot(from, block))
+				{
+					snapshot_edges_.emplace_back(block, from);
+					snapshot = true;
+				}
+			}
+		if (!snapshot)
+			continue;
+		uint64_t bytes = 0;
+		for (auto i = entry; i != kNoId && body_.instructions[i].op == Opcode::Phi; i = body_.instructions[i].next)
+			bytes += (storage_bytes(body_.instructions[i].type) + 7) & ~uint64_t(7);
+		maximum = std::max(maximum, bytes);
+	}
+	std::sort(snapshot_edges_.begin(), snapshot_edges_.end());
+	return maximum;
+}
+
+void Selector::register_edge(BlockId from, BlockId to)
+{
+	for (auto i = body_.blocks[to].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
+		i = body_.instructions[i].next)
 	{
 		const auto& phi = body_.instructions[i];
 		const auto source = phis_.incoming(body_, i, from);
-		if (vectors_[phi.result] != kNoId)
-			vector_move(vectors_[phi.result],
-				phi.type.kind() == TypeKind::V128 ? vector_value(source, 16) : fp_operand(source, phi.type, 16));
-		else
+		if (same_home(phi.result, source))
+			continue;
+		if (phi.type.kind() == TypeKind::V128)
+			save_vector(vector_value(source, 16), phi.result);
+		else if (vectors_[phi.result] != kNoId)
+			vector_move(vectors_[phi.result], fp_operand(source, phi.type, 16));
+		else if (registers_[phi.result] != kNoId)
 			value(registers_[phi.result], source, phi.type);
+		else
+		{
+			const auto reg = operand_register(source, phi.type, 9);
+			access(true, reg, frame_base(), homes_[phi.result], 8);
+		}
 	}
-	return true;
 }
 
 void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch, Op test, unsigned operand)
@@ -100,9 +162,7 @@ void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch
 		{
 			const auto& phi = body_.instructions[i];
 			const auto source = phis_.incoming(body_, i, block);
-			if (!level_ || !source.is(ValueKind::Temp) ||
-				!((registers_[phi.result] != kNoId && registers_[phi.result] == registers_[source.index]) ||
-					(vectors_[phi.result] != kNoId && vectors_[phi.result] == vectors_[source.index])))
+			if (!level_ || !same_home(phi.result, source))
 				return false;
 		}
 		return true;
@@ -134,8 +194,10 @@ void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch
 
 void Selector::edge(BlockId from, BlockId to, bool last)
 {
-	if (!level_ || !register_edge(from, to))
+	if (!level_ || std::binary_search(snapshot_edges_.begin(), snapshot_edges_.end(), std::make_pair(to, from)))
 		copy_edge(from, to);
+	else
+		register_edge(from, to);
 	if (out_.exceptions && out_.exceptions->entry_selectors[to] != 0)
 	{
 		constant(9, out_.exceptions->entry_selectors[to]);

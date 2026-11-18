@@ -76,7 +76,10 @@ private:
 	void value(unsigned reg, lowir::Value value, lowir::Type type);
 	void save(unsigned reg, lowir::TempId temp, bool normalized = false);
 	lowir::Type type_of(lowir::Value v, lowir::Type fallback) const;
-	bool register_edge(lowir::BlockId from, lowir::BlockId to);
+	bool same_home(lowir::TempId dest, lowir::Value source) const;
+	bool needs_snapshot(lowir::BlockId from, lowir::BlockId to);
+	uint64_t plan_phis();
+	void register_edge(lowir::BlockId from, lowir::BlockId to);
 	void copy_edge(lowir::BlockId from, lowir::BlockId to);
 	void edge(lowir::BlockId from, lowir::BlockId to, bool last = false);
 	void select(const lowir::Instruction& inst, lowir::BlockId block);
@@ -113,6 +116,7 @@ private:
 	std::vector<uint32_t> slots_, homes_, registers_, vectors_, uses_;
 	std::vector<std::pair<unsigned, uint32_t>> preserved_;
 	machine::PhiInputs phis_;
+	std::vector<std::pair<lowir::BlockId, lowir::BlockId>> snapshot_edges_;
 	std::vector<CallLayout> calls_;
 	std::vector<uint32_t> call_indices_;
 	Argument result_ = {};
