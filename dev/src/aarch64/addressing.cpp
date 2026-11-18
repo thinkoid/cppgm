@@ -55,11 +55,13 @@ InstId Selector::address_sequence(InstId id)
 	const auto& index = body_.instructions[index_id];
 	const Type type = type_of(offset, Type::scalar(TypeKind::I64));
 	const unsigned bits = integer_bits(type.kind());
-	if (bits != 32 && bits != 64)
+	if (!bits || bits > 64)
 		return kNoId;
 	const bool literal = offset.is(ValueKind::Integer);
 	const uint64_t displacement = literal ? body_.literals[offset.index].low * scale : 0;
-	const unsigned extension = bits == 64 ? 3 : is_unsigned(type.kind()) ? 2 : 6; // LSL, UXTW, SXTW
+	const bool sign = !is_unsigned(type.kind()) && type.kind() != TypeKind::I1;
+	const unsigned part = bits == 64 ? 3 : bits == 32 ? 2 : bits == 16 ? 1 : 0;
+	const unsigned extension = part | ((bits < 64 && sign) ? 4 : 0);
 	if (index.next != kNoId && uses_[index.result] == 1)
 	{
 		const auto& memory = body_.instructions[index.next];
@@ -82,9 +84,15 @@ InstId Selector::address_sequence(InstId id)
 					access(store, reg, base, displacement, bytes);
 				else
 				{
-					const unsigned subscript = operand_register(offset, type, 11);
-					out_.emit(
-						indexed_access(store, bytes), reg, base, subscript, (extension << 13) | ((scale != 1) << 12));
+					unsigned subscript = operand_register(offset, type, 11);
+					if (bits < 32 && sign)
+					{
+						out_.emit(Op::Sbfm, 11, subscript, 0, (bits - 1) << 10);
+						subscript = 11;
+					}
+					const unsigned index_extension = bits == 64 ? 3 : sign ? 6 : 2;
+					out_.emit(indexed_access(store, bytes), reg, base, subscript,
+						(index_extension << 13) | ((scale != 1) << 12));
 				}
 				if (!store)
 					save(reg, memory.result, memory.type.kind() != TypeKind::I1);
@@ -94,7 +102,7 @@ InstId Selector::address_sequence(InstId id)
 	}
 	const uint64_t magnitude = static_cast<int64_t>(displacement) < 0 ? 0 - displacement : displacement;
 	const unsigned imm_shift = (magnitude & 4095) == 0 ? 12 : 0;
-	if ((literal && (magnitude >> imm_shift) > 4095) || (!literal && bits == 32 && scale > 16))
+	if ((literal && (magnitude >> imm_shift) > 4095) || (!literal && bits < 64 && scale > 16))
 		return kNoId;
 	const unsigned base = address_register(index.ops[0], 10);
 	const unsigned dest = registers_[index.result] == kNoId ? 9 : registers_[index.result];
@@ -107,7 +115,7 @@ InstId Selector::address_sequence(InstId id)
 		while ((uint64_t(1) << shift) != scale)
 			++shift;
 		const unsigned subscript = operand_register(offset, type, 11);
-		out_.emit(Op::Add, dest, base, subscript, (shift << 10) | (bits == 32 ? (1u << 21) | (extension << 13) : 0));
+		out_.emit(Op::Add, dest, base, subscript, (shift << 10) | (bits < 64 ? (1u << 21) | (extension << 13) : 0));
 	}
 	save(dest, index.result, true);
 	return index_id;

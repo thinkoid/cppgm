@@ -6,7 +6,13 @@ extern "C" void replace_half(unsigned short*, long, unsigned short);
 extern "C" unsigned long mix_bits(unsigned long, unsigned, unsigned long);
 extern "C" int signed_remainder(int, int);
 extern "C" unsigned long widen_choice(bool, unsigned);
+extern "C" unsigned byte_offset(const unsigned*, signed char, unsigned char);
+extern "C" bool signed_order(short, short);
 int main() {
+    unsigned table[270];
+    table[0]=7; table[260]=19;
+    if (byte_offset(table+8, -8, 252) != 26 || byte_offset(table+8, -1, 252) != 0) return 10;
+    if (!signed_order(-32768, 32767) || signed_order(-1, -1) || signed_order(1,-32768)) return 11;
     if (mix_bits(0xab09876543215678UL, 27, 139) != 39) return 7;
     if (signed_remainder(-123456789, 97) != -39) return 8;
     if (widen_choice(false, 0) != 0xffffffffUL || widen_choice(true, 0x80000001u) != 0x80000001UL) return 9;

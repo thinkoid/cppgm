@@ -20,3 +20,8 @@ extern "C" unsigned long mix_bits(unsigned long x, unsigned shift, unsigned long
 }
 extern "C" int signed_remainder(int x, int divisor) { return x % divisor; }
 extern "C" unsigned long widen_choice(bool a, unsigned x) { return a ? x : 0xffffffffu; }
+
+extern "C" unsigned byte_offset(const unsigned* data, signed char i, unsigned char j) {
+    return i < -4 && j >= 250 ? data[i] + data[j] : 0;
+}
+extern "C" bool signed_order(short left, short right) { return left < right; }

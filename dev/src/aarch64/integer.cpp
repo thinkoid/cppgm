@@ -27,7 +27,7 @@ unsigned Selector::condition_register(Value operand, unsigned scratch)
 bool Selector::simple_binary(const lowir::Instruction& inst)
 {
 	const auto op = static_cast<BinaryOp>(inst.sub);
-	const unsigned bits = integer_bits(inst.type.kind());
+	const unsigned bits = inst.type.is_pointer() ? 64 : integer_bits(inst.type.kind());
 	if (bits != 32 && bits != 64)
 		return false;
 	Value lhs = inst.ops[0], rhs = inst.ops[1];
@@ -56,11 +56,12 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 	if (rhs.is(ValueKind::Integer))
 	{
 		const uint64_t raw = body_.literals[rhs.index].low;
-		if (op == BinaryOp::Shl || op == BinaryOp::Shr || op == BinaryOp::UShr)
+		const bool scale = op == BinaryOp::Mul && raw && !(raw & (raw - 1));
+		if (scale || op == BinaryOp::Shl || op == BinaryOp::Shr || op == BinaryOp::UShr)
 		{
-			const unsigned shift = raw & (bits - 1);
-			const unsigned r = op == BinaryOp::Shl ? (-shift & (bits - 1)) : shift;
-			const unsigned end = op == BinaryOp::Shl ? bits - 1 - shift : bits - 1;
+			const unsigned shift = scale ? __builtin_ctzll(raw) : raw & (bits - 1);
+			const unsigned r = (scale || op == BinaryOp::Shl) ? (-shift & (bits - 1)) : shift;
+			const unsigned end = (scale || op == BinaryOp::Shl) ? bits - 1 - shift : bits - 1;
 			out_.emit(op == BinaryOp::Shr ? (w ? Op::SbfmW : Op::Sbfm) : (w ? Op::UbfmW : Op::Ubfm), dest, left, 0,
 				(r << 16) | (end << 10));
 			save(dest, inst.result, true);
@@ -97,13 +98,27 @@ const unsigned conditions[] = { 0, 1, 11, 13, 12, 10, 3, 9, 8, 2 };
 void Selector::compare_flags(const lowir::Instruction& inst)
 {
 	const unsigned bits = integer_bits(inst.type.kind());
-	if (level_ && (bits == 32 || bits == 64 || inst.type.is_pointer()))
+	if (level_ && (bits == 8 || bits == 16 || bits == 32 || bits == 64 || inst.type.is_pointer()))
 	{
-		const bool w = bits == 32;
-		const unsigned lhs = operand_register(inst.ops[0], inst.type, 10);
+		const bool w = bits && bits <= 32;
+		const auto pred = static_cast<ComparePredicate>(inst.sub);
+		const bool sign = w && bits > 1 && bits < 32 && pred >= ComparePredicate::Lt && pred <= ComparePredicate::Ge;
+		unsigned lhs = operand_register(inst.ops[0], inst.type, 10);
+		if (sign)
+		{
+			out_.emit(Op::SbfmW, 10, lhs, 0, (bits - 1) << 10);
+			lhs = 10;
+		}
 		if (inst.ops[1].is(ValueKind::Integer))
 		{
-			const uint64_t raw = body_.literals[inst.ops[1].index].low;
+			uint64_t raw = body_.literals[inst.ops[1].index].low;
+			if (w && bits < 32)
+			{
+				const uint64_t top = uint64_t(1) << (bits - 1);
+				raw &= 2 * top - 1;
+				if (sign)
+					raw = (raw ^ top) - top;
+			}
 			const int64_t value = w ? static_cast<int32_t>(raw) : static_cast<int64_t>(raw);
 			const uint64_t magnitude = value < 0 ? 0 - uint64_t(value) : uint64_t(value);
 			const unsigned shift = (magnitude & 4095) == 0 ? 12 : 0;
@@ -115,7 +130,10 @@ void Selector::compare_flags(const lowir::Instruction& inst)
 			}
 		}
 		const unsigned rhs = operand_register(inst.ops[1], inst.type, 11);
-		out_.emit(w ? Op::SubsW : Op::Subs, 31, lhs, rhs);
+		if (sign)
+			out_.emit(Op::SubsW, 31, lhs, rhs, (1u << 21) | ((bits == 16 ? 5u : 4u) << 13));
+		else
+			out_.emit(w ? Op::SubsW : Op::Subs, 31, lhs, rhs);
 		return;
 	}
 	const auto pred = static_cast<ComparePredicate>(inst.sub);
