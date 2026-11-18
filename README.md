@@ -209,9 +209,11 @@ For native self-builds, the compile columns time building cppgm. The runtime
 columns time the resulting compilers rebuilding the same sources. WASI compares
 cppgm with Clang targeting WASI and runs the resulting compilers in Wasmtime.
 The Wasm SIMD128 and scalar workloads time warmed exports in one engine.
-Arm64 kernel timings include integer and floating-point NEON. QEMU checks
-outputs on x86. Linux Arm64 hardware supplies the Arm timings.
-[Native self-build reports](https://github.com/vishvananda/cppgm/blob/benchmark-badges/self-build-hosts.md) · [simdjson](benchmarks/simdjson/README.md) · [PA37 workloads](pa37/benchmarks/README.md) · [WASI self-build](scripts/experimental/README.md#full-compiler-benchmark) · [Arm kernels](docs/aarch64-backend-plan.md) · [Dedicated Intel measurements](docs/performance/intel-benchmarks.md)
+Arm64 kernel timings include integer and floating-point NEON. Linux Arm64
+hardware supplies the timings in this table. On x86, QEMU can check the same
+executables, time a compiler rebuild and count guest instructions.
+
+[Native self-build reports](https://github.com/vishvananda/cppgm/blob/benchmark-badges/self-build-hosts.md) · [simdjson](benchmarks/simdjson/README.md) · [PA37 workloads](pa37/benchmarks/README.md) · [WASI self-build](scripts/experimental/README.md#full-compiler-benchmark) · [Arm kernels](docs/aarch64-backend-plan.md) · [Local Arm benchmark instructions](benchmarks/aarch64/README.md) · [Dedicated Intel measurements](docs/performance/intel-benchmarks.md)
 
 ## Caveats
 
