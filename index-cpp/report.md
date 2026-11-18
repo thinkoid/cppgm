@@ -4,6 +4,6 @@ Each host retains its last measurement. Compare the CPU model and measured commi
 
 | Host | CPU | Measured compiler | Report |
 |---|---|---|---|
-| EPYC (CI) | AMD EPYC 7763 64-Core Processor | `50b6ccfce` | [Results](epyc/report.md) |
+| EPYC (CI) | AMD EPYC 9V45 96-Core Processor | `1763cb9b6` | [Results](epyc/report.md) |
 | Intel (CI) | Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz | `c49e45b16` | [Results](github-intel/report.md) |
 | Intel (dedicated) | INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz | `50b6ccfce` | [Results](intel/report.md) |
