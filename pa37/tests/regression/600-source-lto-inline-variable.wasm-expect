@@ -1,0 +1,9 @@
+{
+  "source": true,
+  "units": ["600-source-lto-inline-variable.t.1"],
+  "levels": [3],
+  "flags": ["-std=c++17"],
+  "source_link_flags": ["-flto=full"],
+  "link_flags": ["-Oz"],
+  "calls": [{"export": "check", "result": "26"}]
+}

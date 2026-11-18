@@ -426,6 +426,8 @@ public:
 	// Declares what was referenced but never defined and ends the
 	// initialization function; the program is complete afterwards.
 	void finish();
+	// Whole-source LTO keeps one definition of an inline variable.
+	void merge_inline_variables() { merge_inline_variables_ = true; }
 
 	const LoweringCounters& counters() const { return counters_; }
 
@@ -2057,6 +2059,7 @@ private:
 	const SourcePositions* positions_ = nullptr;
 	std::string debug_file_;
 	lowir::NameId debug_file_name_ = 0;
+	bool merge_inline_variables_ = false;
 	bool object_mode_ = false;
 	bool host_objects_ = false;
 	bool macho_objects_ = false;

@@ -1317,7 +1317,8 @@ int run_cppgm(const vector<string>& raw_args)
 				"                      (default output: <input>.lowir)\n"
 				"  -fno-lowir-passes   compile without the LowIR optimizer; the back end runs at the -O level\n"
 				"  -Oz                optimize for smaller code\n"
-				"  -flto              fold identical function bodies when linking Wasm objects\n";
+				"  -flto              fold identical function bodies when linking Wasm objects\n"
+				"  -flto=full         optimize consecutive Wasm source inputs together in one link command\n";
 		return EXIT_SUCCESS;
 	}
 

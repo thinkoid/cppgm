@@ -748,7 +748,12 @@ void ProgramLowering::define_variable(
 {
 	const lowir::SymbolId symbol = variable_symbol(variable);
 	if (program_.symbols[symbol].kind != lowir::SymbolKind::Unresolved)
+	{
+		if (merge_inline_variables_ && variable->is_inline &&
+			program_.symbols[symbol].metadata.binding == ir_model::SBM_WEAK)
+			return;
 		throw LoweringError(location, "redefinition of a variable across translation units");
+	}
 	define_global(symbol, variable, initializer, location);
 	++counters_.globals;
 }

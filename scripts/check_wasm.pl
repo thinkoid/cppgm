@@ -316,7 +316,8 @@ for my $level (@{$expect->{levels} // [0, 1, 2, 3]}) {
     my $tool = $expect->{source} ? $source_compiler : $compiler;
     ($status, $stdout, $stderr) = command("compile-$level", $tool, "-O$level",
         '--target', ($expect->{target} // 'wasm32-unknown-unknown'),
-        @target_flags, ($expect->{assembly} ? ('-x', 'assembler-with-cpp') : ()), @{$expect->{flags} // []}, @{$expect->{link_flags} // []}, @exports, '-o', $module, $test, @units, @supplied_inputs);
+        @target_flags, ($expect->{assembly} ? ('-x', 'assembler-with-cpp') : ()), @{$expect->{flags} // []},
+        @{$expect->{source_link_flags} // []}, @{$expect->{link_flags} // []}, @exports, '-o', $module, $test, @units, @supplied_inputs);
     if ($expect->{reject} || $expect->{reject_link}) {
         die "$test: invalid input accepted at O$level\n" if $status == 0;
         die "$test: rejection was not a compiler diagnostic: $stdout$stderr\n"

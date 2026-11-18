@@ -155,6 +155,7 @@ struct Invocation
 	bool wasm_atomics = true;
 	bool wasm_atomics_explicit = false;
 	backend::WasmLinkOptions wasm_link;
+	bool whole_source_lto = false;
 	std::vector<Input> inputs;
 	std::vector<std::string> library_paths;
 	std::vector<std::string> exports;
@@ -465,8 +466,11 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 			invocation.optimizer.minimize_size = arg == "-Oz";
 			invocation.debug_optimization = arg == "-Og";
 		}
-		else if (arg == "-flto" || arg == "-fno-lto")
-			invocation.wasm_link.fold_functions = arg == "-flto";
+		else if (arg == "-flto" || arg == "-flto=full" || arg == "-fno-lto")
+		{
+			invocation.wasm_link.fold_functions = arg != "-fno-lto";
+			invocation.whole_source_lto = arg == "-flto=full";
+		}
 		else if (arg == "-fno-inline" || arg == "-finline")
 			invocation.optimizer.optional_inlining = arg == "-finline";
 		else if (arg == "--inline-limit")
@@ -1029,6 +1033,45 @@ bool wasm_assembly(const Input& input, const Invocation& invocation, wasm::LinkI
 	return false;
 }
 
+void configure_wasm_lowering(lower::ProgramLowering& lowering, const Invocation& invocation)
+{
+	// An object's LowIR before optimization is the same at every level.
+	lowering.set_optimizing(true);
+	lowering.set_exceptions(invocation.preprocessor.modes.exceptions);
+	lowering.set_strict_aliasing(invocation.strict_aliasing);
+}
+
+bool lower_wasm_source(
+	const Input& input, const Invocation& invocation, lower::ProgramLowering& lowering, bool final_source)
+{
+	UnitWork work;
+	double front_ms = 0;
+	const auto start = std::chrono::steady_clock::now();
+	if (!lower_source(input.name, invocation, lowering, work, front_ms, start))
+		return false;
+	if (final_source)
+		lowering.finish();
+#if CPPGM_TELEMETRY_ENABLED
+	if (invocation.stats)
+		std::cerr << "cppgm wasm frontend stats " << input.name << ": front_ms=" << front_ms
+				  << " lower_ms=" << milliseconds_since(start) - front_ms << " specializations=" << work.specializations
+				  << " instantiated_functions=" << work.instantiated_functions << " resolutions=" << work.resolutions
+				  << " candidates=" << work.candidates << std::endl;
+#endif
+	return true;
+}
+
+bool add_wasm_object(
+	lowir::Program& program, const backend::Options& options, wasm::LinkInputs& inputs, std::string& error)
+{
+	std::string dump = "machine_ir wasm32 1\n";
+	wasm::Object object;
+	if (!wasm::compile_object(program, options, object, dump, error))
+		return false;
+	inputs.objects.push_back(std::move(object));
+	return true;
+}
+
 // One translation unit's posttoken records (`sof`, the PA2 tokens, `eof`);
 // false after an error.
 // With `lowir_output`, -S -emit-lowir: the program is written there as text
@@ -1065,25 +1108,9 @@ bool wasm_input(const Input& input, const Invocation& invocation, const backend:
 		program.target = invocation.target;
 		program.explicit_target = true;
 		lower::ProgramLowering lowering(program);
-		// An object's LowIR is the same at every level, so the LowIR that
-		// --emit-lowir writes for it compiles to this object at any level.
-		lowering.set_optimizing(true);
-		lowering.set_exceptions(invocation.preprocessor.modes.exceptions);
-		lowering.set_strict_aliasing(invocation.strict_aliasing);
-		UnitWork work;
-		double front_ms = 0;
-		const auto start = std::chrono::steady_clock::now();
-		if (!lower_source(input.name, invocation, lowering, work, front_ms, start))
+		configure_wasm_lowering(lowering, invocation);
+		if (!lower_wasm_source(input, invocation, lowering, true))
 			return false;
-		lowering.finish();
-#if CPPGM_TELEMETRY_ENABLED
-		if (invocation.stats)
-			std::cerr << "cppgm wasm frontend stats " << input.name << ": front_ms=" << front_ms
-					  << " lower_ms=" << milliseconds_since(start) - front_ms
-					  << " specializations=" << work.specializations
-					  << " instantiated_functions=" << work.instantiated_functions
-					  << " resolutions=" << work.resolutions << " candidates=" << work.candidates << std::endl;
-#endif
 	}
 	if (lowir_output != nullptr)
 	{
@@ -1093,12 +1120,24 @@ bool wasm_input(const Input& input, const Invocation& invocation, const backend:
 		error = "cannot write " + *lowir_output;
 		return false;
 	}
-	std::string dump = "machine_ir wasm32 1\n";
-	wasm::Object object;
-	if (!wasm::compile_object(program, options, object, dump, error))
-		return false;
-	inputs.objects.push_back(std::move(object));
-	return true;
+	return add_wasm_object(program, options, inputs, error);
+}
+
+using InputIterator = std::vector<Input>::const_iterator;
+
+bool compile_wasm_sources(InputIterator begin, InputIterator end, const Invocation& invocation,
+	const backend::Options& options, wasm::LinkInputs& inputs, std::string& error)
+{
+	lowir::Program program;
+	program.target = invocation.target;
+	program.explicit_target = true;
+	lower::ProgramLowering lowering(program);
+	configure_wasm_lowering(lowering, invocation);
+	lowering.merge_inline_variables();
+	for (auto input = begin; input != end; ++input)
+		if (!lower_wasm_source(*input, invocation, lowering, input + 1 == end))
+			return false;
+	return add_wasm_object(program, options, inputs, error);
 }
 
 int wasm_mode(const Invocation& invocation)
@@ -1126,8 +1165,30 @@ int wasm_mode(const Invocation& invocation)
 	options.lowir_passes = invocation.lowir_passes;
 	std::string error;
 	wasm::LinkInputs objects;
-	for (const Input& input : invocation.inputs)
+	const auto is_source = [](const Input& input) { return input.kind == Input::Kind::Source; };
+	auto sources = invocation.inputs.end(), after_sources = sources;
+	if (invocation.whole_source_lto)
 	{
+		sources = std::find_if(invocation.inputs.begin(), invocation.inputs.end(), is_source);
+		after_sources = std::find_if_not(sources, invocation.inputs.end(), is_source);
+		if (sources == after_sources ||
+			std::find_if(after_sources, invocation.inputs.end(), is_source) != invocation.inputs.end())
+			throw InvocationError("-flto=full needs consecutive source inputs in one Wasm link command");
+	}
+	for (auto next = invocation.inputs.begin(); next != invocation.inputs.end();)
+	{
+		if (next == sources)
+		{
+			if (!compile_wasm_sources(sources, after_sources, invocation, options, objects, error))
+			{
+				if (!error.empty())
+					std::cerr << "ERROR: " << error << std::endl;
+				return EXIT_FAILURE;
+			}
+			next = after_sources;
+			continue;
+		}
+		const Input& input = *next++;
 		const std::string lowir_output = invocation.emit_lowir ? default_output_name(invocation, input) : "";
 		if (invocation.emit_lowir)
 			check_output(invocation, lowir_output);
@@ -1260,6 +1321,9 @@ int debug_type_request(const std::string& arg)
 int run_toolchain(const std::vector<std::string>& args, const PreprocessorOptions& base)
 {
 	const Invocation invocation = parse(args, base);
+	if (invocation.whole_source_lto &&
+		(invocation.compile_only || invocation.preprocess_only || invocation.syntax_only))
+		throw InvocationError("-flto=full requires a Wasm link command");
 	for (const Input& input : invocation.inputs)
 		if (input.kind == Input::Kind::Assembly &&
 			(invocation.preprocess_only || invocation.syntax_only || invocation.emit_lowir))
