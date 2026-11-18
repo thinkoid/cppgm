@@ -226,7 +226,7 @@ void Selector::allocate()
 	std::vector<uint32_t> order;
 	if (exceeds_capacity(body_, ranges, segments, calls, slots, dynamic_stack_ ? 9 : 10))
 	{
-		const auto weight = spill_weights(program_, body_, cfg);
+		const auto weight = spill_weights(program_, body_, cfg, aliases_);
 		order.resize(ranges.size());
 		for (uint32_t i = 0; i < order.size(); ++i)
 			order[i] = i;

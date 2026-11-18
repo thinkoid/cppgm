@@ -157,7 +157,8 @@ struct FunctionLiveness
 };
 } // namespace
 
-std::vector<uint64_t> spill_weights(const Program& program, const FunctionBody& body, opt::Cfg& cfg)
+std::vector<uint64_t> spill_weights(
+	const Program& program, const FunctionBody& body, opt::Cfg& cfg, const std::vector<uint32_t>& aliases)
 {
 	std::vector<uint64_t> cost(body.temps.size(), 0);
 	opt::complete_cfg(cfg);
@@ -189,6 +190,8 @@ std::vector<uint64_t> spill_weights(const Program& program, const FunctionBody& 
 		for (InstId i = body.blocks[b].first; i != kNoId; i = body.instructions[i].next)
 		{
 			const auto& inst = body.instructions[i];
+			if (inst.result != kNoId && representative(aliases, inst.result) != inst.result)
+				continue;
 			if (inst.result != kNoId)
 				cost[inst.result] += weights[b];
 			if (inst.op == Opcode::Phi)
@@ -197,13 +200,13 @@ std::vector<uint64_t> spill_weights(const Program& program, const FunctionBody& 
 				{
 					const auto v = body.operands[inst.extra_first + k + 1];
 					if (v.is(ValueKind::Temp))
-						cost[v.index] += weights[body.operands[inst.extra_first + k].index];
+						cost[representative(aliases, v.index)] += weights[body.operands[inst.extra_first + k].index];
 				}
 			}
 			else
 				opt::for_each_operand(body, inst, [&](Value v) {
 					if (v.is(ValueKind::Temp))
-						cost[v.index] += weights[b];
+						cost[representative(aliases, v.index)] += weights[b];
 				});
 		}
 	return cost;
