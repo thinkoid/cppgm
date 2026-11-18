@@ -25,6 +25,7 @@ template<int N> bool boundary(unsigned char* end, void (*copy)(Bytes<N>*, const 
     return end[-N-1] == 81;
 }
 
+extern "C" void mark_words(const int*, int*, int);
 int main(int argc, char** argv) {
     unsigned long page = getpagesize();
 #ifdef __APPLE__
@@ -34,6 +35,16 @@ int main(int argc, char** argv) {
 #endif
     auto base = static_cast<unsigned char*>(mmap(nullptr, 2*page, 3, 2|anonymous, -1, 0));
     if (base == reinterpret_cast<unsigned char*>(-1L) || mprotect(base+page,page,0)) return 1;
+    for (int count = 0; count <= 18; ++count) {
+        int* mask = reinterpret_cast<int*>(base + page) - count;
+        int output[19];
+        for (int i = 0; i < count; ++i) { mask[i] = i == 8 || i == 16; output[i] = -1; }
+        output[count] = 37;
+        mark_words(mask, output, count - 1);
+        for (int i = 0; i < count; ++i)
+            if (output[i] != (mask[i] ? 9 : -1)) return 7;
+        if (output[count] != 37) return 8;
+    }
     auto v = reinterpret_cast<Triple*>(base+page-sizeof(Triple));
     v->bytes[0]=17; v->bytes[1]=22; v->bytes[2]=39;
     Triple a = from_boundary(v);

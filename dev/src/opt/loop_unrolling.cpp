@@ -74,6 +74,8 @@ private:
 	Value literal_limit(Type type, ComparePredicate& stays, Value init, Value bound, uint64_t step) const;
 	bool tested(uint32_t loop, Shape& s) const;
 	bool sized(Shape& s) const;
+	InstId guard_load(const Shape& s) const;
+	Value nonzero_words(BlockId block, InstId& after, Value base, unsigned words);
 	void rewrite(const Shape& s);
 	void join_exit(const Shape& s, BlockId left);
 	Value emit(BlockId block, InstId& after, Instruction inst, Type result, bool placed = false);
@@ -436,6 +438,77 @@ Value ShortLoopUnrolling::emit(BlockId block, InstId& after, Instruction inst, T
 	return result.is_void() ? Value::none() : Value::temp(body_.instructions[id].result);
 }
 
+// A full group always reads each of these adjacent words. If all words are
+// zero, no conditional store executes. Otherwise the original tests are
+// repeated in order, so an overlapping store can change a later predicate.
+InstId ShortLoopUnrolling::guard_load(const Shape& s) const
+{
+	const auto kind = body_.temps[s.iv].type.kind();
+	const auto bits = integer_bits(kind);
+	const bool ordered = (s.stays == ComparePredicate::Lt && !is_unsigned(kind)) ||
+		(s.stays == ComparePredicate::Ult && is_unsigned(kind));
+	if (s.conditional == kNoId || s.chain.size() != 3 || s.passes < 4 || (s.passes & 1) || s.step != 1 ||
+		(bits != 64 && !(bits == 32 && ordered && !s.narrowed)))
+		return kNoId;
+	auto id = body_.blocks[s.header].first;
+	if (id == kNoId || body_.instructions[id].op != Opcode::Phi || body_.instructions[id].result != s.iv)
+		return kNoId;
+	id = body_.instructions[id].next;
+	if (id == kNoId)
+		return kNoId;
+	const auto& ix = body_.instructions[id];
+	if (ix.op != Opcode::Index || storage_bytes(ix.type) != 4 || !(ix.ops[1] == Value::temp(s.iv)) || ix.next == kNoId)
+		return kNoId;
+	const auto& test = body_.instructions[body_.blocks[s.header].last];
+	const auto& load = body_.instructions[ix.next];
+	if (load.op != Opcode::Load || (load.flags & IF_VOLATILE) || !load.type.is_integer() ||
+		storage_bytes(load.type) != 4 || !(load.ops[0] == Value::temp(ix.result)) ||
+		load.next != body_.blocks[s.header].last || !(test.ops[0] == Value::temp(load.result)) ||
+		test.ops[1].index != s.conditional)
+		return kNoId;
+	for (auto j = body_.blocks[s.latch].first; j != body_.blocks[s.latch].last; j = body_.instructions[j].next)
+	{
+		const auto& op = body_.instructions[j];
+		if (op.result == kNoId ||
+			!(op.result == s.next.index || j == s.compare ||
+				(op.op == Opcode::Convert && op.sub == static_cast<unsigned>(ConvertOp::Trunc))))
+			return kNoId;
+	}
+	return ix.next;
+}
+
+Value ShortLoopUnrolling::nonzero_words(BlockId block, InstId& after, Value base, unsigned words)
+{
+	const auto pointer_type = body_.pointer_type();
+	const auto i64 = Type::scalar(TypeKind::I64);
+	Value any;
+	for (unsigned at = 0; at < words; at += 2)
+	{
+		Value pointer = base;
+		if (at)
+		{
+			Instruction ix = make_instruction(Opcode::Index, i64);
+			ix.ops[0] = base;
+			ix.ops[1] = integer_value(body_, integer_literal(at / 2));
+			pointer = emit(block, after, ix, pointer_type);
+		}
+		Instruction wide = make_instruction(Opcode::Load, i64);
+		wide.ops[0] = pointer;
+		const Value word_pair = emit(block, after, wide, i64);
+		if (!at)
+			any = word_pair;
+		else
+		{
+			Instruction join = make_instruction(Opcode::Binary, i64);
+			join.sub = static_cast<uint8_t>(BinaryOp::Or);
+			join.ops[0] = any;
+			join.ops[1] = word_pair;
+			any = emit(block, after, join, i64);
+		}
+	}
+	return any;
+}
+
 void ShortLoopUnrolling::rewrite(const Shape& s)
 {
 	const Type none = Type::scalar(TypeKind::Void), i64 = Type::scalar(TypeKind::I64);
@@ -622,6 +695,9 @@ void ShortLoopUnrolling::rewrite(const Shape& s)
 	};
 	std::vector<Value> stepped(phis.size()), address(body_.temps.size());
 	std::vector<BlockId> guarded_blocks;
+	const auto test_load = guard_load(s);
+	BlockId finish = kNoId;
+	Value group_end;
 	BlockId current = group;
 	for (unsigned pass = 0; pass < s.passes; ++pass)
 	{
@@ -637,6 +713,21 @@ void ShortLoopUnrolling::rewrite(const Shape& s)
 				Instruction inst = body_.instructions[i];
 				if (inst.op == Opcode::Phi || i == s.compare || i == body_.blocks[b].last)
 					continue;
+				if (!pass && i == test_load)
+				{
+					const auto any = nonzero_words(current, g, mapped(inst.ops[0]), s.passes);
+					Instruction step = make_instruction(Opcode::Binary, type);
+					step.sub = static_cast<uint8_t>(BinaryOp::Add);
+					step.ops[0] = first[0];
+					step.ops[1] = integer_value(body_, integer_literal(s.passes));
+					group_end = emit(current, g, step, type);
+					const auto fallback = append_block(body_, BlockKind::UnrolledGroup);
+					finish = append_block(body_, BlockKind::UnrolledGroup);
+					guarded_blocks.push_back(fallback);
+					emit(current, g, branch(any, fallback, finish), none);
+					current = fallback;
+					g = kNoId;
+				}
 				size_t k = 0;
 				int64_t by = 0;
 				while (k < phis.size() && step_of[k] != i)
@@ -689,6 +780,14 @@ void ShortLoopUnrolling::rewrite(const Shape& s)
 		}
 		for (size_t k = 0; k < phis.size(); ++k)
 			stepped[k] = mapped(phi_incoming(body_, body_.instructions[phis[k]], s.latch));
+	}
+	if (finish != kNoId)
+	{
+		emit(current, g, jump(finish), none);
+		guarded_blocks.push_back(finish);
+		current = finish;
+		g = kNoId;
+		stepped[0] = map_[s.next.index] = group_end;
 	}
 	const Value reached = as_word(current, g, mapped(s.next));
 	const Value more = emit(current, g, compare(ComparePredicate::Ne, reached, stop), i64);
