@@ -137,8 +137,15 @@ for my $level (0..3) {
     if ($quality && grep { $_ == $level } @{$quality->{levels} // [1, 2, 3]}) {
         for my $symbol (sort keys %{$quality->{functions}}) {
             for my $unit ($other, $object) {
-                my $assembly = run(0, $objdump, '-d', '--no-show-raw-insn', "--disassemble-symbols=$symbol", $unit);
-                my @ins = $assembly =~ /^\s*[0-9a-f]+:\s+(\S+[^\n]*)$/mg;
+                my $assembly = run(0, $objdump, '-t', '-d', '--no-show-raw-insn', "--disassemble-symbols=$symbol", $unit);
+                my ($start, $size) = $assembly =~ /^([0-9a-f]+)\s+[^\n]*?\bF\s+\S+\s+([0-9a-f]+)\s+\Q$symbol\E$/m;
+                defined $size or die "$test: no function size for $symbol\n";
+                my $end = hex($start) + hex($size);
+                my @ins;
+                # llvm-objdump can print the next function's alignment padding.
+                while ($assembly =~ /^\s*([0-9a-f]+):\s+(\S+[^\n]*)$/mg) {
+                    push @ins, $2 if hex($1) >= hex($start) && hex($1) < $end;
+                }
                 @ins or die "$test: no instructions for $symbol\n";
                 my @memory = grep { /^(?:ld|st)/ } @ins;
                 my %counts = (instructions => scalar(@ins), code_bytes => 4 * @ins, memory_ops => scalar(@memory),
