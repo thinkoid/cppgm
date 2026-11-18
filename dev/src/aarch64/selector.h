@@ -89,6 +89,8 @@ private:
 	void binary(const lowir::Instruction& inst);
 	void compare(const lowir::Instruction& inst);
 	void compare_flags(const lowir::Instruction& inst);
+	lowir::InstId truncated_operand(const lowir::Instruction& trunc, lowir::BlockId block);
+	lowir::InstId shifted_operand(const lowir::Instruction& shift);
 	lowir::InstId address_sequence(lowir::InstId id);
 	void choose(const lowir::Instruction& inst, unsigned condition);
 	bool compare_consumer(const lowir::Instruction& inst, lowir::BlockId block);
@@ -105,7 +107,7 @@ private:
 	Function& out_;
 	int level_;
 	bool pic_;
-	bool dynamic_stack_ = false;
+	bool dynamic_stack_ = false, stack_pair_ = false;
 	lowir::BlockId fallthrough_ = lowir::kNoId;
 	uint32_t outgoing_ = 0;
 	std::vector<uint32_t> slots_, homes_, registers_, vectors_, uses_;
@@ -119,7 +121,7 @@ private:
 	uint32_t frame_pointer_ = lowir::kNoId;
 	uint32_t variadic_area_ = lowir::kNoId;
 	uint32_t result_pointer_ = lowir::kNoId;
-	uint32_t frame_ = 0, phi_area_ = 0, link_ = lowir::kNoId;
+	uint32_t frame_ = 0, phi_area_ = 0;
 };
 
 } // namespace aarch64

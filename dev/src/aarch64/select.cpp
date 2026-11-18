@@ -89,9 +89,10 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 	case Opcode::Load:
 		if (inst.type.kind() == TypeKind::V128)
 		{
-			address(10, inst.ops[0]);
-			out_.emit(Op::LdrQ, 16, 10);
-			save_vector(16, inst.result);
+			const unsigned base = address_register(inst.ops[0], 10);
+			const unsigned dest = vectors_[inst.result] == kNoId ? 16 : vectors_[inst.result];
+			out_.emit(Op::LdrQ, dest, base);
+			save_vector(dest, inst.result);
 			return;
 		}
 		if (memory_value(inst.type))
@@ -118,6 +119,12 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		access(false, result_reg, left, 0, storage_bytes(inst.type));
 		break;
 	case Opcode::Store:
+		if (inst.type.kind() == TypeKind::V128)
+		{
+			const unsigned base = address_register(inst.ops[1], 10);
+			out_.emit(Op::StrQ, vector_value(inst.ops[0], 16), base);
+			return;
+		}
 		if (memory_value(inst.type))
 		{
 			address(10, inst.ops[1]);
@@ -296,17 +303,7 @@ void Selector::run()
 	}
 	saved_registers(true);
 	if (frame_pointer_ != kNoId)
-	{
-		access(true, 29, 31, frame_pointer_, 8);
-		out_.frame_rule(FrameRule::Save, 29, frame_ - frame_pointer_);
-	}
-	if (link_ != kNoId)
-	{
-		access(true, 30, 31, link_, 8);
-		out_.frame_rule(FrameRule::Save, 30, frame_ - link_);
-		if (frame_pointer_ != kNoId)
-			base_address(29, 31, frame_pointer_);
-	}
+		base_address(29, 31, frame_pointer_);
 	if (dynamic_stack_)
 	{
 		out_.emit(Op::AddI, 28, 31);
@@ -342,9 +339,11 @@ void Selector::run()
 		for (InstId i = body_.blocks[block].first; i != kNoId; i = body_.instructions[i].next)
 		{
 			const auto& inst = body_.instructions[i];
-			if (level_ && (inst.op == Opcode::Index || inst.op == Opcode::Binary))
+			if (level_ && (inst.op == Opcode::Index || inst.op == Opcode::Binary || inst.op == Opcode::Convert))
 			{
-				const InstId last = address_sequence(i);
+				InstId last = inst.op == Opcode::Convert ? truncated_operand(inst, block) : address_sequence(i);
+				if (last == kNoId && inst.op == Opcode::Binary)
+					last = shifted_operand(inst);
 				if (last != kNoId)
 				{
 					i = last;

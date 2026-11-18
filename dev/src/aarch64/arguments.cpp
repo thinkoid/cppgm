@@ -237,8 +237,7 @@ void Selector::call(const lowir::Instruction& inst)
 		out_.reference(Op::Bl, Fixup::Call, inst.ops[0].index);
 	else
 	{
-		value(10, inst.ops[0], program_.pointer_type());
-		out_.emit(Op::Blr, 0, 10);
+		out_.emit(Op::Blr, 0, operand_register(inst.ops[0], program_.pointer_type(), 10));
 	}
 	record_call(inst);
 	if (inst.result == kNoId || ret.indirect)
@@ -290,16 +289,6 @@ void Selector::epilogue(const lowir::Instruction& inst)
 	{
 		out_.emit(Op::AddI, 31, 28);
 		out_.frame_rule(FrameRule::Register, 31);
-	}
-	if (frame_pointer_ != kNoId)
-	{
-		access(false, 29, 31, frame_pointer_, 8);
-		out_.frame_rule(FrameRule::Restore, 29);
-	}
-	if (link_ != kNoId)
-	{
-		access(false, 30, 31, link_, 8);
-		out_.frame_rule(FrameRule::Restore, 30);
 	}
 	saved_registers(false);
 	if (tls_vectors_ != kNoId)

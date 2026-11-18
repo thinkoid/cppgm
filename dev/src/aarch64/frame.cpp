@@ -84,8 +84,11 @@ void Selector::plan()
 	if (calls || dynamic_stack_ || frame_pointer_ != kNoId)
 	{
 		if (named_.darwin || frame_pointer_ != kNoId)
+		{
 			frame_pointer_ = reserve(8, 16);
-		link_ = reserve(8, 8);
+			preserved_.push_back({ 29, frame_pointer_ });
+		}
+		preserved_.push_back({ 30, reserve(8, 8) });
 	}
 	const auto owners = level_ ? machine::sequential_copy_slots(program_, body_) : std::vector<uint32_t>();
 	for (uint32_t i = 0; i < body_.slots.size(); ++i)
@@ -109,6 +112,8 @@ void Selector::plan()
 	}
 	phi_area_ = reserve(uint64_t(max_phis) * 8, 8);
 	reserve(0, 16);
+	stack_pair_ = level_ && frame_ <= 504 && preserved_.size() >= 2 && preserved_[0].second == 0 &&
+		preserved_[1].second == 8;
 	phis_.reset(body_.instructions.size());
 }
 
@@ -183,7 +188,7 @@ void Selector::constant(unsigned reg, uint64_t bits)
 
 void Selector::saved_registers(bool store)
 {
-	for (size_t i = 0; i < preserved_.size(); ++i)
+	for (size_t i = stack_pair_ ? 2 : 0; i < preserved_.size(); ++i)
 	{
 		const auto current = preserved_[i];
 		const bool pair = level_ && i + 1 < preserved_.size() && current.second <= 504 &&
@@ -204,6 +209,17 @@ void Selector::saved_registers(bool store)
 
 void Selector::stack_adjust(bool subtract)
 {
+	if (stack_pair_)
+	{
+		const auto first = preserved_[0].first, second = preserved_[1].first;
+		const unsigned words = (subtract ? 0u - frame_ / 8 : frame_ / 8) & 127;
+		out_.emit(subtract ? Op::StpXPre : Op::LdpXPost, first, 31, 0, (words << 15) | (second << 10));
+		out_.frame_rule(FrameRule::Offset, 31, subtract ? frame_ : 0);
+		const auto rule = subtract ? FrameRule::Save : FrameRule::Restore;
+		out_.frame_rule(rule, first, frame_);
+		out_.frame_rule(rule, second, frame_ - 8);
+		return;
+	}
 	const Op op = subtract ? Op::SubI : Op::AddI;
 	uint32_t amount = frame_;
 	while (amount >= 4096)

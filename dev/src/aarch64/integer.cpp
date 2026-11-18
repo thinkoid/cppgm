@@ -56,7 +56,7 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 	if (rhs.is(ValueKind::Integer))
 	{
 		const uint64_t raw = body_.literals[rhs.index].low;
-		const bool scale = op == BinaryOp::Mul && raw && !(raw & (raw - 1));
+		const bool scale = op == BinaryOp::Mul && raw && !(raw & (raw - 1)) && (!w || raw <= UINT32_MAX);
 		if (scale || op == BinaryOp::Shl || op == BinaryOp::Shr || op == BinaryOp::UShr)
 		{
 			const unsigned shift = scale ? __builtin_ctzll(raw) : raw & (bits - 1);

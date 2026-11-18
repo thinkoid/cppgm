@@ -90,6 +90,8 @@
 	M(LdrW, 0xb9400000) \
 	M(StrW, 0xb9000000) \
 	M(LdrX, 0xf9400000) \
+	M(StpXPre, 0xa9800000) \
+	M(LdpXPost, 0xa8c00000) \
 	M(LdpX, 0xa9400000) \
 	M(StpX, 0xa9000000) \
 	M(StrX, 0xf9000000) \

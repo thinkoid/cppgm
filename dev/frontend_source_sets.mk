@@ -76,7 +76,7 @@ FRONTEND_OBJ_BASENAMES_cppgm += $(FRONTEND_PHASE_BASENAMES_native) $(FRONTEND_PH
 FRONTEND_OBJ_BASENAMES_cppgm += lowir/text_lexer lowir/text_parser lowir/text_parser_debug lowir/text_parser_debug_scopes lowir/text_parser_body lowir/text_parser_assembly lowir/text_reader $(FRONTEND_PHASE_BASENAMES_opt)
 FRONTEND_OBJ_BASENAMES_cppgm += asm/registers
 
-FRONTEND_PHASE_BASENAMES_aarch64 := support/archive machine/exception_layout aarch64/exception aarch64/inputs aarch64/allocation aarch64/lifetimes aarch64/addressing aarch64/unwind aarch64/vector aarch64/wide aarch64/abi aarch64/mir_writer aarch64/integer aarch64/atomic aarch64/variadic aarch64/arguments aarch64/object_copy aarch64/floating aarch64/backend aarch64/link aarch64/runtime aarch64/encoder aarch64/edges aarch64/frame aarch64/select
+FRONTEND_PHASE_BASENAMES_aarch64 := support/archive machine/exception_layout aarch64/exception aarch64/inputs aarch64/allocation aarch64/lifetimes aarch64/addressing aarch64/combines aarch64/unwind aarch64/vector aarch64/wide aarch64/abi aarch64/mir_writer aarch64/integer aarch64/atomic aarch64/variadic aarch64/arguments aarch64/object_copy aarch64/floating aarch64/backend aarch64/link aarch64/runtime aarch64/encoder aarch64/edges aarch64/frame aarch64/select
 FRONTEND_OBJ_BASENAMES_cppgm += $(FRONTEND_PHASE_BASENAMES_aarch64)
 FRONTEND_OBJ_BASENAMES_lowir2native += $(FRONTEND_PHASE_BASENAMES_aarch64)
 
