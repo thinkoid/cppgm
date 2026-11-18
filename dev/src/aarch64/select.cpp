@@ -8,7 +8,6 @@ using namespace lowir;
 namespace {
 const unsigned result_reg = 9, left = 10, right = 11;
 const Type word = Type::scalar(TypeKind::I64);
-const unsigned conditions[] = { 0, 1, 11, 13, 12, 10, 3, 9, 8, 2 };
 }
 
 void Selector::binary(const lowir::Instruction& inst)
@@ -31,18 +30,6 @@ void Selector::binary(const lowir::Instruction& inst)
 		out_.emit(Op::Mul, result_reg, result_reg, right);
 		out_.emit(Op::Sub, result_reg, left, result_reg);
 	}
-}
-
-void Selector::compare(const lowir::Instruction& inst)
-{
-	const auto pred = static_cast<ComparePredicate>(inst.sub);
-	const bool sign = pred >= ComparePredicate::Lt && pred <= ComparePredicate::Ge;
-	value(left, inst.ops[0], inst.type);
-	value(right, inst.ops[1], inst.type);
-	extend(left, integer_bits(inst.type.kind()), sign);
-	extend(right, integer_bits(inst.type.kind()), sign);
-	out_.emit(Op::Subs, 31, left, right);
-	out_.emit(Op::Csinc, result_reg, 31, 31, (conditions[inst.sub] ^ 1) << 12);
 }
 
 void Selector::select(const lowir::Instruction& inst, BlockId block)
@@ -102,6 +89,14 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 			copy_bytes(10, 11, storage_bytes(inst.type));
 			return;
 		}
+		if (level_)
+		{
+			const unsigned base = address_register(inst.ops[0], left);
+			const unsigned dest = registers_[inst.result] == kNoId ? result_reg : registers_[inst.result];
+			access(false, dest, base, 0, storage_bytes(inst.type));
+			save(dest, inst.result, inst.type.kind() != TypeKind::I1);
+			return;
+		}
 		address(left, inst.ops[0]);
 		access(false, result_reg, left, 0, storage_bytes(inst.type));
 		break;
@@ -110,6 +105,13 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		{
 			address(10, inst.ops[1]);
 			copy_value(10, inst.ops[0], inst.type);
+			return;
+		}
+		if (level_)
+		{
+			const unsigned base = address_register(inst.ops[1], left);
+			const unsigned source = operand_register(inst.ops[0], inst.type, right);
+			access(true, source, base, 0, storage_bytes(inst.type));
 			return;
 		}
 		address(left, inst.ops[1]);
@@ -146,13 +148,27 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		break;
 	case Opcode::Compare:
 		compare(inst);
-		break;
+		return;
 	case Opcode::Convert:
 	{
 		const auto op = static_cast<ConvertOp>(inst.sub);
 		const Type from = convert_source_type(inst);
 		if (op != ConvertOp::SExt && op != ConvertOp::ZExt && op != ConvertOp::Trunc)
 			throw AArch64Error("unsupported AArch64 conversion");
+		if (level_ && (op != ConvertOp::SExt || integer_bits(inst.type.kind()) == 64))
+		{
+			const unsigned src = operand_register(inst.ops[0], from, left);
+			const unsigned dest = registers_[inst.result] == kNoId ? result_reg : registers_[inst.result];
+			const unsigned bits = integer_bits(op == ConvertOp::Trunc ? inst.type.kind() : from.kind());
+			if (bits == 32 && op != ConvertOp::SExt)
+				out_.emit(Op::OrrW, dest, 31, src);
+			else if (bits && bits < 64)
+				out_.emit(op == ConvertOp::SExt ? Op::Sbfm : Op::Ubfm, dest, src, 0, (bits - 1) << 10);
+			else
+				move(dest, src);
+			save(dest, inst.result, true);
+			return;
+		}
 		value(result_reg, inst.ops[0], from);
 		extend(result_reg, integer_bits(from.kind()), op == ConvertOp::SExt);
 		break;
@@ -197,28 +213,11 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		if (site(inst))
 			resume(site(inst));
 		else
-			edge(block, inst.ops[0].index);
+			edge(block, inst.ops[0].index, true);
 		return;
 	case Opcode::Branch:
-	{
-		const unsigned condition = condition_register(inst.ops[0], left);
-		const auto false_block = inst.ops[2].index;
-		const auto first = body_.blocks[false_block].first;
-		if (level_ && (first == kNoId || body_.instructions[first].op != Opcode::Phi) &&
-			(!out_.exceptions || !out_.exceptions->entry_selectors[false_block]))
-		{
-			out_.reference(Op::Cbz, Fixup::Block, false_block, condition);
-			edge(block, inst.ops[1].index);
-			return;
-		}
-		const uint32_t other = out_.labels.size();
-		out_.labels.push_back(kNoId);
-		out_.reference(Op::Cbz, Fixup::Block, other, condition);
-		edge(block, inst.ops[1].index);
-		out_.bind(other);
-		edge(block, inst.ops[2].index);
+		conditional_edges(block, inst, Op::Cbz, condition_register(inst.ops[0], left));
 		return;
-	}
 	case Opcode::StackAlloc:
 		stack_alloc(inst);
 		return;
@@ -291,8 +290,11 @@ void Selector::run()
 			param.pass == ir_model::PPM_INDIRECT_RESULT ? Argument{ Bank::General, 8, 1, 8, false }
 														: named_.next(param.type, param.shape));
 	}
-	for (BlockId block : body_.layout)
+	for (size_t index = 0; index < body_.layout.size(); ++index)
 	{
+		const BlockId block = body_.layout[index];
+		// A landing prologue can precede its LowIR block label.
+		fallthrough_ = level_ && !out_.exceptions && index + 1 < body_.layout.size() ? body_.layout[index + 1] : kNoId;
 		if (out_.exceptions)
 		{
 			const auto& plan = *out_.exceptions;
@@ -302,7 +304,22 @@ void Selector::run()
 		}
 		out_.bind(block);
 		for (InstId i = body_.blocks[block].first; i != kNoId; i = body_.instructions[i].next)
-			select(body_.instructions[i], block);
+		{
+			const auto& inst = body_.instructions[i];
+			if (level_ && (inst.op == Opcode::Index || inst.op == Opcode::Binary))
+			{
+				const InstId last = address_sequence(i);
+				if (last != kNoId)
+				{
+					i = last;
+					continue;
+				}
+			}
+			if (level_ && inst.op == Opcode::Compare && compare_branch(inst, block))
+				i = inst.next;
+			else
+				select(inst, block);
+		}
 	}
 }
 

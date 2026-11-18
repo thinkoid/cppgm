@@ -1,6 +1,8 @@
 #include "native/select/function_selector.h"
 #include "native/select/for_each_inst.h"
 
+#include "machine/ssa_liveness.h"
+
 #include <algorithm>
 #include <iterator>
 #include <map>
@@ -248,10 +250,6 @@ const int32_t kXmmCapacity = 14;
 // The loop discovery's work budget per block, plus a fixed allowance.
 const uint64_t kLoopStepsPerBlock = 16;
 const uint64_t kLoopSlack = 4096;
-// The liveness walks' budget: global_allocation.cpp's (uses and edges per
-// instruction and block, plus a fixed allowance).
-const uint64_t kLivenessStepsPerItem = 64;
-const uint64_t kLivenessSlack = 4096;
 const Reg kGlobalCallerOrder[] = { RAX, RCX, RDX, RSI, RDI, R8, R9 };
 // (R13 and R12 after the others, as in allocation.cpp's compact orders.)
 const Reg kGlobalCalleeOrder[] = { RBX, R14, R15, R13, R12, RBP }; // RBP: rbp_free_ only
@@ -945,15 +943,15 @@ void FunctionSelector::live_ranges()
 {
 	const lowir::FunctionBody& body = *body_;
 	const uint32_t n = static_cast<uint32_t>(blocks_.size());
-	std::vector<uint32_t> seen(n, 0), in(n, 0), out(n, 0), transfer(n, 0);
+	std::vector<uint32_t> seen(n, 0), out(n, 0), transfer(n, 0);
 	std::vector<int32_t> last(n, -1);
-	std::vector<uint32_t> present, work;
+	std::vector<uint32_t> present;
 	uint64_t items = 0;
 	for (uint32_t b = 0; b < n; ++b)
 		if (blocks_[b].reachable)
 			items += blocks_[b].count + 1;
-	const uint64_t budget = kLivenessStepsPerItem * items + kLivenessSlack;
-	uint64_t steps = 0;
+	machine::SsaLiveness walk(preds_first_, preds_, items);
+	walk.exception_edges(ra_exc_first_, ra_exc_preds_);
 	ra_range_first_.assign(1, 0);
 	ra_ranges_.clear();
 	ra_range_block_.clear();
@@ -976,17 +974,9 @@ void FunctionSelector::live_ranges()
 				present.push_back(b);
 			}
 		};
-		auto live_in = [&](uint32_t b) {
-			touch(b);
-			if (in[b] != epoch)
-			{
-				in[b] = epoch;
-				work.push_back(b);
-			}
-		};
 		uint64_t freq = def_block == kNoId ? kWeightScale : loop_splitter_.weights[def_block];
 		bool looped = def_block != kNoId && ra_depth_[def_block] != 0;
-		steps += ra_use_first_[c + 1] - ra_use_first_[c];
+		walk.begin(ra_use_first_[c + 1] - ra_use_first_[c]);
 		for (uint32_t u = ra_use_first_[c]; u < ra_use_first_[c + 1]; ++u)
 		{
 			const uint32_t b = ra_uses_[u].first;
@@ -995,14 +985,14 @@ void FunctionSelector::live_ranges()
 			freq += loop_splitter_.weights[b];
 			looped = looped || ra_depth_[b] != 0;
 			if (b != def_block)
-				live_in(b);
+				walk.enter(b);
 		}
 		if (phi)
 		{
 			// Live into its block (not through it to the predecessors), and
 			// written by each predecessor's transfer.
 			touch(def_block);
-			in[def_block] = epoch;
+			walk.mark_entry(def_block);
 			for (uint32_t k = preds_first_[def_block]; k < preds_first_[def_block + 1]; ++k)
 			{
 				touch(preds_[k]);
@@ -1011,28 +1001,11 @@ void FunctionSelector::live_ranges()
 		}
 		if (def_block != kNoId)
 			touch(def_block);
-		while (!work.empty() && steps <= budget)
+		if (!walk.propagate(def_block, [&](uint32_t q) {
+				touch(q);
+				out[q] = epoch;
+			}))
 		{
-			const uint32_t x = work.back();
-			work.pop_back();
-			const uint32_t lists[2][2] = { { preds_first_[x], preds_first_[x + 1] },
-				{ ra_exc_first_[x], ra_exc_first_[x + 1] } };
-			for (unsigned l = 0; l < 2; ++l)
-			{
-				steps += lists[l][1] - lists[l][0];
-				for (uint32_t k = lists[l][0]; k < lists[l][1]; ++k)
-				{
-					const uint32_t q = l == 0 ? preds_[k] : ra_exc_preds_[k];
-					touch(q);
-					out[q] = epoch;
-					if (q != def_block)
-						live_in(q);
-				}
-			}
-		}
-		if (steps > budget)
-		{
-			work.clear();
 			stats_.hull_fallbacks += ra_candidates_.size() - c;
 			ra_candidates_.resize(c);
 			break;
@@ -1052,7 +1025,7 @@ void FunctionSelector::live_ranges()
 			const bool edge_write = phi && transfer[b] == epoch && succ_first_[b + 1] - succ_first_[b] > 1;
 			if (edge_write && !live_out)
 			{
-				if (in[b] == epoch)
+				if (walk.live_in(b))
 				{
 					ra_ranges_.push_back(std::make_pair(base, std::max(base, last[b])));
 					ra_range_block_.push_back(b);
@@ -1062,7 +1035,7 @@ void FunctionSelector::live_ranges()
 			// A phi live into a predecessor that writes it by its transfer
 			// and leaves it otherwise dead: dead between its last use and
 			// the transfer (the next value can take its register).
-			if (transfer[b] == epoch && !live_out && in[b] == epoch)
+			if (transfer[b] == epoch && !live_out && walk.live_in(b))
 			{
 				ra_ranges_.push_back(std::make_pair(base, std::max(base, last[b])));
 				ra_range_block_.push_back(b);
@@ -1071,7 +1044,7 @@ void FunctionSelector::live_ranges()
 				continue;
 			}
 			int32_t start = base;
-			if (in[b] != epoch)
+			if (!walk.live_in(b))
 				start = b == def_block && !phi ? write_slot(base, t.def) : written;
 			int32_t end = live_out || transfer[b] == epoch ? written : last[b];
 			if (end < start)
@@ -1083,7 +1056,7 @@ void FunctionSelector::live_ranges()
 		ra_freq_[c] = freq;
 		ra_looped_[c] = looped ? 1 : 0;
 	}
-	stats_.liveness_steps += steps;
+	stats_.liveness_steps += walk.steps();
 }
 
 // The registers assignment: candidates by weight; see the file comment.

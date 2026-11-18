@@ -77,7 +77,36 @@ bool Selector::register_edge(BlockId from, BlockId to)
 	return true;
 }
 
-void Selector::edge(BlockId from, BlockId to)
+void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch, Op test, unsigned operand)
+{
+	const BlockId yes = branch.ops[1].index, no = branch.ops[2].index;
+	const auto direct = [&](BlockId to) {
+		const auto first = body_.blocks[to].first;
+		return (first == kNoId || body_.instructions[first].op != Opcode::Phi) &&
+			(!out_.exceptions || !out_.exceptions->entry_selectors[to]);
+	};
+	if (no == fallthrough_ && direct(yes))
+	{
+		out_.reference(
+			test == Op::Cbz ? Op::Cbnz : Op::BCond, Fixup::Block, yes, test == Op::Cbz ? operand : operand ^ 1);
+		edge(block, no, true);
+		return;
+	}
+	if (level_ && direct(no))
+	{
+		out_.reference(test, Fixup::Block, no, operand);
+		edge(block, yes, true);
+		return;
+	}
+	const uint32_t other = out_.labels.size();
+	out_.labels.push_back(kNoId);
+	out_.reference(test, Fixup::Block, other, operand);
+	edge(block, yes);
+	out_.bind(other);
+	edge(block, no, true);
+}
+
+void Selector::edge(BlockId from, BlockId to, bool last)
 {
 	if (!level_ || !register_edge(from, to))
 		copy_edge(from, to);
@@ -86,7 +115,8 @@ void Selector::edge(BlockId from, BlockId to)
 		constant(9, out_.exceptions->entry_selectors[to]);
 		access(true, 9, frame_base(), exception_slot_ + 8, 8);
 	}
-	out_.reference(Op::B, Fixup::Block, to);
+	if (!last || to != fallthrough_)
+		out_.reference(Op::B, Fixup::Block, to);
 }
 
 } // namespace aarch64

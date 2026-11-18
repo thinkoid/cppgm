@@ -13,8 +13,16 @@ bool word_object(Type t)
 {
 	return t.is_object() && (storage_bytes(t) >= 1 && storage_bytes(t) <= 16) && t.align_log2 <= 3;
 }
-bool word_boundary(Type t, uint8_t classes)
+bool word_boundary(target_model::Target target, Type t, uint8_t classes, ir_model::AggregateShape shape)
 {
+	if (target_model::is_aarch64(target))
+	{
+		// One naturally aligned integer or pointer member uses exactly the
+		// scalar register and stack convention on both Arm ABIs.
+		using ir_model::AggregateElement;
+		return t.is_object() && storage_bytes(t) == 8 && t.align_log2 == 3 && shape.count == 1 &&
+			(shape.element == AggregateElement::I64 || shape.element == AggregateElement::Pointer);
+	}
 	return word_object(t) &&
 		(classes == 0 || classes == (OC_STATED | EB_INTEGER | (storage_bytes(t) > 8 ? (EB_INTEGER << 2) : 0)));
 }
@@ -26,14 +34,14 @@ Type word_type(Type t)
 
 void scalarize_aggregate_boundaries(Program& program)
 {
-	if (!target_model::aggregate_integer_carriers(program.target))
+	if (!target_model::aggregate_integer_carriers(program.target) && !target_model::is_aarch64(program.target))
 		return;
 	const std::vector<Signature> old_signatures = program.signatures;
 	const std::vector<Parameter> old_parameters = program.parameters;
 	bool changed = false;
 	for (Signature& sig : program.signatures)
 	{
-		if (word_boundary(sig.result, sig.boundary.result_classes))
+		if (word_boundary(program.target, sig.result, sig.boundary.result_classes, sig.boundary.result_shape))
 		{
 			sig.result = word_type(sig.result);
 			sig.boundary.result_shape = ir_model::AggregateShape();
@@ -45,7 +53,8 @@ void scalarize_aggregate_boundaries(Program& program)
 		for (uint32_t p = 0; p < sig.parameter_count; ++p)
 		{
 			Parameter& param = program.parameters[sig.first_parameter + p];
-			if (param.pass == ir_model::PPM_DIRECT && word_boundary(param.type, param.classes))
+			if (param.pass == ir_model::PPM_DIRECT &&
+				word_boundary(program.target, param.type, param.classes, param.shape))
 			{
 				param.type = word_type(param.type);
 				param.shape = ir_model::AggregateShape();
@@ -227,7 +236,7 @@ void scalarize_aggregate_boundaries(Program& program)
 							}
 					}
 				}
-				else if (inst.op == Opcode::Return && word_boundary(sig.result, sig.boundary.result_classes))
+				else if (inst.op == Opcode::Return && sig.result != program.signatures[function.signature].result)
 				{
 					inst.type = word_type(sig.result);
 					wide = wide || inst.type.kind() == TypeKind::I128;

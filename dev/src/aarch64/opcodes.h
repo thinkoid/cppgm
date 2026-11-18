@@ -21,6 +21,11 @@
 	M(Lsl, 0x9ac02000) \
 	M(Lsr, 0x9ac02400) \
 	M(Asr, 0x9ac02800) \
+	M(SubsW, 0x6b000000) \
+	M(SubsIW, 0x71000000) \
+	M(SubsIX, 0xf1000000) \
+	M(AddsIW, 0x31000000) \
+	M(AddsIX, 0xb1000000) \
 	M(Subs, 0xeb000000) \
 	M(Csel, 0x9a800000) \
 	M(Csinc, 0x9a800400) \
@@ -32,6 +37,14 @@
 	M(SubIW, 0x51000000) \
 	M(MovZ, 0xd2800000) \
 	M(MovK, 0xf2800000) \
+	M(LdrBReg, 0x38600800) \
+	M(StrBReg, 0x38200800) \
+	M(LdrHReg, 0x78600800) \
+	M(StrHReg, 0x78200800) \
+	M(LdrWReg, 0xb8600800) \
+	M(StrWReg, 0xb8200800) \
+	M(LdrXReg, 0xf8600800) \
+	M(StrXReg, 0xf8200800) \
 	M(LdrB, 0x39400000) \
 	M(StrB, 0x39000000) \
 	M(LdrH, 0x79400000) \

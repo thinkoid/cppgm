@@ -23,3 +23,10 @@ extern "C" long varied(int bias, ...) {
     __builtin_va_end(ap);
     return bias + twice + once + long(fp.x + fp.y + fp.z) + long(wide >> 64) + last;
 }
+
+struct Word { long value; };
+struct SingleFloat { double value; };
+extern "C" Word packed_word(long, long, long, long, long, long, long, long, char bias,
+                            Word w, char tail, SingleFloat d) {
+    return Word{w.value + bias + tail + long(d.value)};
+}

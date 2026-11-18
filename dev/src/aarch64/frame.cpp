@@ -259,6 +259,14 @@ Type Selector::type_of(Value v, Type fallback) const
 	return fallback;
 }
 
+unsigned Selector::address_register(Value operand, unsigned scratch)
+{
+	if (operand.is(ValueKind::Temp) && registers_[operand.index] != kNoId)
+		return registers_[operand.index];
+	address(scratch, operand);
+	return scratch;
+}
+
 void Selector::address(unsigned reg, Value operand)
 {
 	if (operand.kind == ValueKind::Slot)

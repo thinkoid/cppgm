@@ -20,12 +20,18 @@
       "mix": {
         "memory_ops": 0,
         "calls": 0,
-        "sp_uses": 0
+        "sp_uses": 0,
+        "instructions": 4
       },
       "transform": {
         "instructions": 160,
         "memory_ops": 12,
         "stack_ops": 8
+      },
+      "scale": {
+        "instructions": 4,
+        "memory_ops": 0,
+        "calls": 0
       }
     }
   }

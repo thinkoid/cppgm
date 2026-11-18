@@ -9,3 +9,9 @@ extern "C" int exchange(Four f, Large l) {
     Large m = peer_large(l);
     return int(g.lane[0] + g.lane[1] + g.lane[2] + g.lane[3]) + int(m.a + m.b + m.c);
 }
+
+struct Word { long value; };
+struct Box { long* value; };
+extern "C" Word word_after_eight(long, long, long, long, long, long, long, long bias, Word w, Box b) {
+    return Word{bias + w.value + *b.value};
+}

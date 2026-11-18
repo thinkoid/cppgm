@@ -1,6 +1,8 @@
 #include "native/select/function_selector.h"
 #include "native/select/for_each_inst.h"
 
+#include "machine/ssa_liveness.h"
+
 #include <algorithm>
 
 #include "native/select/operand_roles.h"
@@ -37,13 +39,6 @@ const Reg kCallerOrder[] = { R8, R9, RDI, RSI, RDX, RCX, RAX };
 // the allocatable set to block-local values.
 const unsigned kMaxGlobalGprs = 7;
 const unsigned kMaxDisplacedParameters = 4;
-// The liveness walks' work budget (uses and predecessor edges visited)
-// per instruction and block of the function, plus a fixed allowance. The
-// PA10-PA23 fixtures and the executable benchmarks need at most 2.4 per
-// item; values live across most of a long chain of blocks need one walk
-// step per value and block.
-const uint64_t kLivenessStepsPerItem = 64;
-const uint64_t kLivenessSlack = 4096;
 // Linear positions per chunk of the clobber range structure.
 const uint32_t kClobberChunk = 32;
 
@@ -149,31 +144,24 @@ void FunctionSelector::global_hulls(std::vector<uint32_t>& candidates)
 		sorted[fill[owner[u]]++] = uses[u];
 	// Liveness walk per candidate, within the work budget: the candidates
 	// from the one that exhausts it on keep their frame homes.
-	std::vector<uint32_t> mark(blocks_.size(), 0);
-	std::vector<uint32_t> work;
 	uint64_t items = 0;
 	for (uint32_t b = 0; b < blocks_.size(); ++b)
 		if (blocks_[b].reachable)
 			items += blocks_[b].count + 1;
-	const uint64_t budget = kLivenessStepsPerItem * items + kLivenessSlack;
-	uint64_t steps = 0;
+	machine::SsaLiveness walk(preds_first_, preds_, items);
 	for (size_t c = 0; c < candidates.size(); ++c)
 	{
 		const uint32_t temp = candidates[c];
 		const TempInfo& t = temps_[temp];
 		const uint32_t def_block = t.block;
-		const uint32_t epoch = static_cast<uint32_t>(c + 1);
+		walk.begin(count[c + 1] - count[c]);
 		int32_t start = block_base_[def_block] + 1 + t.def;
 		int32_t end = start;
 		auto live_in = [&](uint32_t b) {
-			if (mark[b] == epoch)
-				return;
-			mark[b] = epoch;
 			start = std::min(start, block_base_[b]);
 			end = std::max(end, block_base_[b] + static_cast<int32_t>(blocks_[b].count) + 1);
-			work.push_back(b);
+			walk.enter(b);
 		};
-		steps += count[c + 1] - count[c];
 		for (uint32_t u = count[c]; u < count[c + 1]; ++u)
 		{
 			const uint32_t b = sorted[u].first;
@@ -197,22 +185,12 @@ void FunctionSelector::global_hulls(std::vector<uint32_t>& candidates)
 				end = std::max(end, pred_end);
 			}
 		}
-		while (!work.empty() && steps <= budget)
-		{
-			const uint32_t x = work.back();
-			work.pop_back();
-			steps += preds_first_[x + 1] - preds_first_[x];
-			for (uint32_t k = preds_first_[x]; k < preds_first_[x + 1]; ++k)
-			{
-				const uint32_t q = preds_[k];
+		if (!walk.propagate(def_block, [&](uint32_t q) {
 				end = std::max(end, block_base_[q] + static_cast<int32_t>(blocks_[q].count) + 1);
 				if (q != def_block)
-					live_in(q);
-			}
-		}
-		if (steps > budget)
+					start = std::min(start, block_base_[q]);
+			}))
 		{
-			work.clear();
 			stats_.hull_fallbacks += candidates.size() - c;
 			candidates.resize(c);
 			break;
@@ -220,7 +198,7 @@ void FunctionSelector::global_hulls(std::vector<uint32_t>& candidates)
 		hull_start_[temp] = start;
 		hull_end_[temp] = end;
 	}
-	stats_.liveness_steps += steps;
+	stats_.liveness_steps += walk.steps();
 }
 
 void FunctionSelector::allocate_globals()

@@ -65,6 +65,64 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 	return true;
 }
 
+namespace {
+const unsigned conditions[] = { 0, 1, 11, 13, 12, 10, 3, 9, 8, 2 };
+}
+
+void Selector::compare_flags(const lowir::Instruction& inst)
+{
+	const unsigned bits = integer_bits(inst.type.kind());
+	if (level_ && (bits == 32 || bits == 64 || inst.type.is_pointer()))
+	{
+		const bool w = bits == 32;
+		const unsigned lhs = operand_register(inst.ops[0], inst.type, 10);
+		if (inst.ops[1].is(ValueKind::Integer))
+		{
+			const uint64_t raw = body_.literals[inst.ops[1].index].low;
+			const int64_t value = w ? static_cast<int32_t>(raw) : static_cast<int64_t>(raw);
+			const uint64_t magnitude = value < 0 ? 0 - uint64_t(value) : uint64_t(value);
+			const unsigned shift = (magnitude & 4095) == 0 ? 12 : 0;
+			if ((magnitude >> shift) <= 4095)
+			{
+				out_.emit(value < 0 ? (w ? Op::AddsIW : Op::AddsIX) : (w ? Op::SubsIW : Op::SubsIX), 31, lhs, 0,
+					(shift ? 1u << 22 : 0) | uint32_t(magnitude >> shift) << 10);
+				return;
+			}
+		}
+		const unsigned rhs = operand_register(inst.ops[1], inst.type, 11);
+		out_.emit(w ? Op::SubsW : Op::Subs, 31, lhs, rhs);
+		return;
+	}
+	const auto pred = static_cast<ComparePredicate>(inst.sub);
+	const bool sign = pred >= ComparePredicate::Lt && pred <= ComparePredicate::Ge;
+	value(10, inst.ops[0], inst.type);
+	value(11, inst.ops[1], inst.type);
+	extend(10, bits, sign);
+	extend(11, bits, sign);
+	out_.emit(Op::Subs, 31, 10, 11);
+}
+
+void Selector::compare(const lowir::Instruction& inst)
+{
+	compare_flags(inst);
+	const unsigned dest = registers_[inst.result] == kNoId ? 9 : registers_[inst.result];
+	out_.emit(Op::Csinc, dest, 31, 31, (conditions[inst.sub] ^ 1) << 12);
+	save(dest, inst.result, true);
+}
+
+bool Selector::compare_branch(const lowir::Instruction& inst, BlockId block)
+{
+	if (inst.next == kNoId || uses_[inst.result] != 1 ||
+		!(inst.type.is_pointer() || (inst.type.is_integer() && integer_bits(inst.type.kind()) <= 64)))
+		return false;
+	const auto& next = body_.instructions[inst.next];
+	if (next.op != Opcode::Branch || !(next.ops[0] == Value::temp(inst.result)))
+		return false;
+	compare_flags(inst);
+	conditional_edges(block, next, Op::BCond, conditions[inst.sub] ^ 1);
+	return true;
+}
+
 void Selector::integer_unary(const lowir::Instruction& inst)
 {
 	const unsigned bits = integer_bits(inst.type.kind());
@@ -135,7 +193,7 @@ void Selector::switch_edges(const lowir::Instruction& inst, BlockId from)
 		edge(from, c.target);
 		out_.bind(next);
 	}
-	edge(from, inst.ops[1].index);
+	edge(from, inst.ops[1].index, true);
 }
 
 } // namespace aarch64

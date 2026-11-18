@@ -9,7 +9,12 @@ extern "C" Large peer_large(Large l) {
     l.a -= 1;
     return l;
 }
+struct Word { long value; };
+struct Box { long* value; };
+extern "C" Word word_after_eight(long, long, long, long, long, long, long, long, Word, Box);
 int main() {
+    long delta = -4;
+    if (word_after_eight(1,2,3,4,5,6,7,8, Word{30}, Box{&delta}).value != 34) return 1;
     Four f = {{1, 2, 3, 4}};
     Large l = {7, 10, 14};
     return exchange(f, l);

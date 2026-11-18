@@ -1,7 +1,7 @@
 #include "wasm/local_lifetimes.h"
 
 #include <algorithm>
-#include <queue>
+#include "machine/interval_slots.h"
 #include <utility>
 
 namespace wasm {
@@ -230,10 +230,8 @@ void place(Function& function, std::vector<Life>& lives)
 {
 	std::sort(lives.begin(), lives.end(),
 		[](const Life& a, const Life& b) { return a.first < b.first || (a.first == b.first && a.local < b.local); });
-	using End = std::pair<uint32_t, uint32_t>;
-	std::priority_queue<End, std::vector<End>, std::greater<End>> active;
+	machine::IntervalSlots slots[8];
 	std::vector<uint32_t> mapping(function.locals.size());
-	std::vector<std::vector<uint32_t>> free(8);
 	std::vector<ValueType> placed(function.locals.begin(), function.locals.begin() + function.parameter_count);
 	for (uint32_t i = 0; i < function.parameter_count; ++i)
 		mapping[i] = i;
@@ -245,26 +243,12 @@ void place(Function& function, std::vector<Life>& lives)
 	};
 	for (const Life& life : lives)
 	{
-		while (!active.empty() && active.top().first < life.first)
-		{
-			const uint32_t id = active.top().second;
-			active.pop();
-			free[group(placed[id])].push_back(id);
-		}
-		auto& available = free[group(function.locals[life.local])];
-		uint32_t id;
-		if (available.empty())
-		{
-			id = static_cast<uint32_t>(placed.size());
-			placed.push_back(function.locals[life.local]);
-		}
-		else
-		{
-			id = available.back();
-			available.pop_back();
-		}
-		mapping[life.local] = id;
-		active.push(End{ life.last, id });
+		const ValueType type = function.locals[life.local];
+		mapping[life.local] = slots[group(type)].assign(life.first, life.last, [&]() {
+			const uint32_t id = static_cast<uint32_t>(placed.size());
+			placed.push_back(type);
+			return id;
+		});
 	}
 	for (const Instruction& inst : function.instructions)
 		if (local_op(inst.op))

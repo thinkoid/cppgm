@@ -67,12 +67,13 @@ private:
 	void access(bool store, unsigned reg, unsigned base, uint32_t offset, unsigned bytes);
 	void darwin_tls_address(unsigned reg, lowir::SymbolId symbol);
 	void address(unsigned reg, lowir::Value value);
+	unsigned address_register(lowir::Value operand, unsigned scratch);
 	void value(unsigned reg, lowir::Value value, lowir::Type type);
 	void save(unsigned reg, lowir::TempId temp, bool normalized = false);
 	lowir::Type type_of(lowir::Value v, lowir::Type fallback) const;
 	bool register_edge(lowir::BlockId from, lowir::BlockId to);
 	void copy_edge(lowir::BlockId from, lowir::BlockId to);
-	void edge(lowir::BlockId from, lowir::BlockId to);
+	void edge(lowir::BlockId from, lowir::BlockId to, bool last = false);
 	void select(const lowir::Instruction& inst, lowir::BlockId block);
 	void atomic(const lowir::Instruction& inst);
 	void switch_edges(const lowir::Instruction& inst, lowir::BlockId block);
@@ -82,6 +83,10 @@ private:
 	void integer_unary(const lowir::Instruction& inst);
 	void binary(const lowir::Instruction& inst);
 	void compare(const lowir::Instruction& inst);
+	void compare_flags(const lowir::Instruction& inst);
+	lowir::InstId address_sequence(lowir::InstId id);
+	bool compare_branch(const lowir::Instruction& inst, lowir::BlockId block);
+	void conditional_edges(lowir::BlockId block, const lowir::Instruction& branch, Op test, unsigned operand);
 	void call(const lowir::Instruction& inst);
 	void epilogue(const lowir::Instruction& inst);
 
@@ -95,8 +100,9 @@ private:
 	int level_;
 	bool pic_;
 	bool dynamic_stack_ = false;
+	lowir::BlockId fallthrough_ = lowir::kNoId;
 	uint32_t outgoing_ = 0;
-	std::vector<uint32_t> slots_, homes_, registers_, vectors_;
+	std::vector<uint32_t> slots_, homes_, registers_, vectors_, uses_;
 	std::vector<std::pair<unsigned, uint32_t>> preserved_;
 	machine::PhiInputs phis_;
 	std::vector<CallLayout> calls_;

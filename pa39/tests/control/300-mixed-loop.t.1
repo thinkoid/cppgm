@@ -1,4 +1,12 @@
 extern "C" int series(const int*, int);
 extern "C" int twice(int x) { return 2 * x; }
 int values[] = {2, -7, 21, -1};
-int main() { return series(values, 4); }
+extern "C" int pressure(volatile int*, unsigned);
+extern "C" void overwrite(volatile int* p) {
+    for (int i = 0; i < 12; ++i) p[i] += i + 1;
+}
+int a[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+int main() {
+    if (pressure(a, 0) != 67 || pressure(a, 7) != 14089 || a[11] != 96) return 1;
+    return series(values, 4);
+}
