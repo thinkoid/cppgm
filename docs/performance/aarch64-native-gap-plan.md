@@ -1,12 +1,61 @@
 # Closing the native Arm compiler rebuild gap
 
-The release comparison times two Arm executables of cppgm building the same 498 translation units at O3 on a 16-core Ampere Altra VM. Clang 22 builds the reference executable. cppgm builds the candidate. Every timed rebuild must reproduce all 498 object hashes and the linked compiler. The release target is a self-built / Clang-built wall-time ratio of 1.05 or less. Child CPU time measures compiler work across all workers. The release target applies to the committed Linux compiler. Apple Silicon has a separate ABI and execution lane.
+The release comparison times two Arm executables of cppgm building the same compiler sources at O3 on a 16-core Ampere Altra VM. Clang 22 builds the reference compiler. cppgm builds the other. Each timed rebuild must reproduce every object and the linked compiler byte for byte. The release target is a self-built / Clang-built wall-time ratio of 1.05 or less. Child CPU time sums compiler work across all workers. Apple Silicon has a separate ABI and execution lane.
 
-## How much remains
+## After rebasing on the size and LTO changes
+
+The first measurement on main’s experimental LTO and size-optimization changes covered 499 compiler translation units. Moving Arm block placement into its own translation unit brought the final count to 500. The A/A control compiles with the same Clang-built compiler in both positions. The following two blocks use ABBA and BAAB order. Each row uses identical source, flags and parallelism for its two compilers.
+
+| Compiler source | Objects | Clang-built cppgm | Self-built cppgm | Paired wall gap | Individual wall gaps | Child CPU gap |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Rebased with Arm LTO and `-Oz`, 1ad192f5f | 499 | 12.03 s | 13.21 s | +9.79% | +10.58%, +8.99% | +11.62% |
+| Arm placement, register transfers and inlining, 37e024a3f | 500 | 12.02 s | 12.49 s | +3.90% | +4.43%, +3.37% | +4.27% |
+| Release compiler, 60808f9c1 | 500 | 11.98 s | 12.50 s | **+4.29%** | +4.69%, +3.89% | +4.60% |
+| Release compiler, independently rebuilt and measured in reverse order | 500 | 12.11 s | 12.56 s | **+3.71%** | +3.87%, +3.56% | +4.09% |
+
+The independent run starts with BAAB. A/A wall ratios were 0.996 and 0.988. All 500 object hashes matched the bootstrap on each rebuild. Both release runs reproduced the linked compiler with SHA-256 `a0cac3bbb027e99e359a0ed3238a42ce73b2810a71863ddfdba8478e7faf0b32`. The last change adds the standard header needed to compile the Arm selector with WASI libc++. The Linux Arm Clang-built and self-built binaries each matched their counterpart at 37e024a3f byte for byte.
+
+The placement pass ranks possible fallthroughs by estimated execution frequency, preserves the entry and resolves exception landing blocks using their original analysis indices. Small fast paths can return before allocating a frame. ELF section groups let the linker discard redundant weak definitions together with their unwind records. The size profile skips loop-alignment padding and duplicated entry guards. [Arm block placement](../../dev/src/aarch64/block_placement.cpp) · [Arm encoder](../../dev/src/aarch64/encoder.cpp) · [Shared inliner](../../dev/src/opt/inliner.cpp)
+
+On the six frozen inputs, we measured the same binaries on Google Axion. The table gives self-built / Clang-built event counts. The earlier and later compiler pairs each produced matching outputs on every timed invocation. Frontend stalls remain the largest relative excess among these events. Hardware events can overlap.
+
+| Hardware event | Before, 6ceb479e8 | After, 37e024a3f |
+| --- | ---: | ---: |
+| Cycles | 1.136 | 1.070 |
+| Instructions retired | 1.081 | 1.050 |
+| Frontend stall cycles | 1.310 | 1.205 |
+| Backend stall cycles | 1.010 | 1.016 |
+| L1 instruction-cache misses | 1.211 | 1.024 |
+| L1 data-cache refills | 1.001 | 0.992 |
+
+We also ran the application binaries on Axion, with four paired timing blocks and a checksum on every run. Speedup here is Clang O3 time divided by cppgm O3 time. It measures the generated application itself. The SIMD kernel was at parity to two decimal places. Bubblesort and the call kernel have the largest remaining losses. [Kernel benchmark](../../scripts/aarch64_benchmarks.py) · [Public benchmark inputs and checksums](../../benchmarks/public/manifest.json)
+
+| Kernel | Speedup vs Clang | Public program | Speedup vs Clang |
+| --- | ---: | --- | ---: |
+| NEON vectors | 1.00× | Prolangs-C++ primes | 1.02× |
+| Memory | 0.98× | Stanford Bubblesort | 0.59× |
+| Lookup | 0.87× | Stanford FloatMM | 1.85× |
+| Calls | 0.86× | Stanford Puzzle | 1.53× |
+| | | Stanford Treesort | 0.95× |
+
+### Baseline x86 compile performance
+
+The standard x86 comparison used main at c49e45b16, the same GCC host toolchain and a frozen `semantic_overload.cpp`. Across O0 through O3, all 144 outputs matched. The branch changed retired instructions by −0.002%, +0.054%, +0.054% and +0.059%, respectively. Peak RSS changed by at most 0.24%. The initial single-core run recorded elapsed-time changes from −5.2% to +15.6%, with individual paired blocks ranging from 0.93× to 1.87× at O1.
+
+A second run started both compilers together on separate physical cores of the same socket and exchanged core assignments in ABBA and BAAB order. It checked all 256 output hashes. The table gives the paired percentage changes. O1 and O2 are slightly slower in this run. Their A/A controls show variation of comparable size. [Standard compile comparison](../../scripts/run_ab_compile_benchmark.py)
+
+| x86 optimization level | Feature / main elapsed change | Feature / main cycles change | A/A elapsed change |
+| --- | ---: | ---: | ---: |
+| O0 | +0.35% | −1.19% | +1.57% |
+| O1 | +0.80% | +0.84% | −1.38% |
+| O2 | +1.23% | +1.17% | +3.77% |
+| O3 | −0.28% | −0.24% | −0.14% |
+
+## Earlier 498-unit rebuilds
 
 | Compiler source and generator | Clang-built cppgm | Self-built cppgm | Wall gap | Two wall blocks | Child CPU gap |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Current branch, 6ceb479e8 | 11.93 s | 13.00 s | **+8.99%** | +9.06%, +8.93% | +10.72% |
+| Before the LTO rebase, 6ceb479e8 | 11.93 s | 13.00 s | **+8.99%** | +9.06%, +8.93% | +10.72% |
 | Development R167, variable bit test and earlier experiments | 12.19 s | 12.99 s | +6.50% | +6.06%, +6.95% | +7.65% |
 | Development R175, partial inlining and earlier experiments | 12.22 s | 12.93 s | **+5.84%** | +7.02%, +4.66% | +8.62% |
 | Development R176, adds final virtual-call lowering to R175 | 12.25 s | 13.14 s | +7.29% | +8.01%, +6.57% | +8.06% |
