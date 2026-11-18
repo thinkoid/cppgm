@@ -430,6 +430,57 @@ bool fold_index_scales(FunctionContext& context)
 	return changed;
 }
 
+// Move a single-use field address beside the load or store that can encode
+// its displacement. Stay within a short straight-line window and retain
+// the order of every memory access. No register has to survive a call.
+bool place_field_addresses(FunctionContext& context)
+{
+	auto& body = context.body;
+	const auto& uses = context.entry_uses(sink_addresses);
+	bool changed = false;
+	for (auto b : body.layout)
+	{
+		InstId prev = kNoId;
+		for (InstId i = body.blocks[b].first; i != kNoId;)
+		{
+			const auto& field = body.instructions[i];
+			const auto next = field.next;
+			bool moved = false;
+			if (next != kNoId && field.op == Opcode::Index && field.ops[0].is(ValueKind::Temp) &&
+				field.ops[1].is(ValueKind::Integer) && uses[field.result] == 1)
+			{
+				const auto offset = body.literals[field.ops[1].index].low * storage_bytes(field.type);
+				InstId prior = i, scan = next;
+				for (unsigned n = 0; scan != kNoId && n < 8; ++n)
+				{
+					const auto& use = body.instructions[scan];
+					if (use.op == Opcode::Call)
+						break;
+					const bool store = use.op == Opcode::Store;
+					if ((store || use.op == Opcode::Load) && use.ops[store ? 1 : 0] == Value::temp(field.result))
+					{
+						const auto bytes = storage_bytes(use.type);
+						if (prior != i && bytes && (bytes <= 8 || use.type.kind() == TypeKind::V128) &&
+							!use.type.is_object() && offset % bytes == 0 && offset / bytes < 4096)
+						{
+							unlink_after(body, b, prev, i);
+							insert_after(body, b, prior, i);
+							moved = changed = true;
+						}
+						break;
+					}
+					prior = scan;
+					scan = use.next;
+				}
+			}
+			if (!moved)
+				prev = i;
+			i = next;
+		}
+	}
+	return changed;
+}
+
 } // namespace
 
 bool sink_addresses(FunctionContext& context)
@@ -440,7 +491,10 @@ bool sink_addresses(FunctionContext& context)
 	const bool changed = AddressSinking(context).run();
 	if (changed)
 		AddressSinking(context).run();
-	return (target_model::is_aarch64(context.program.target) && fold_index_scales(context)) || changed;
+	if (!target_model::is_aarch64(context.program.target))
+		return changed;
+	const bool scaled = fold_index_scales(context);
+	return place_field_addresses(context) || scaled || changed;
 }
 
 } // namespace opt
