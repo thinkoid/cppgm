@@ -71,6 +71,8 @@
 	M(SturX, 0xf8000000) \
 	M(LdurQ, 0x3cc00000) \
 	M(SturQ, 0x3c800000) \
+	M(LdpQ, 0xad400000) \
+	M(StpQ, 0xad000000) \
 	M(LdpQPost, 0xacc00000) \
 	M(StpQPost, 0xac800000) \
 	M(LdpQPre, 0xadc00000) \

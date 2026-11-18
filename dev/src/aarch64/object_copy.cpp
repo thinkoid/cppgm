@@ -9,6 +9,14 @@ void Selector::copy_piece(unsigned dst, unsigned src, unsigned offset, unsigned 
 {
 	if (!bytes)
 		return;
+	if (level_ && bytes == 32 && offset % 16 == 0)
+	{
+		const auto pair = (offset / 16) << 15;
+		if (src != 31)
+			out_.emit(Op::LdpQ, 16, src, 0, pair | (17u << 10));
+		out_.emit(Op::StpQ, 16, dst, 0, pair | ((src == 31 ? 16u : 17u) << 10));
+		return;
+	}
 	const unsigned index = std::min(4, 31 - __builtin_clz(bytes));
 	const unsigned step = 1u << index;
 	const Op loads[] = { Op::LdurB, Op::LdurH, Op::LdurW, Op::LdurX, Op::LdurQ };
@@ -70,6 +78,15 @@ void Selector::copy_bytes(unsigned dst, unsigned src, uint64_t size)
 {
 	if (!size || dst == src)
 		return;
+	if (level_ && src == 31 && (size == 16 || size == 24 || size == 32))
+	{
+		out_.emit(Op::StpX, 31, dst, 0, 31u << 10);
+		if (size == 24)
+			out_.emit(Op::StrX, 31, dst, 0, 2u << 10);
+		else if (size == 32)
+			out_.emit(Op::StpX, 31, dst, 0, (2u << 15) | (31u << 10));
+		return;
+	}
 	if (src == 31 && size >= 16)
 		out_.emit(Op::VEor, 16, 16, 16);
 	if (size <= 32)
