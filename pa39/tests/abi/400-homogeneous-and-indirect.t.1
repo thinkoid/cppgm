@@ -14,7 +14,16 @@ struct Box { long* value; };
 extern "C" Word word_after_eight(long, long, long, long, long, long, long, long, Word, Box);
 extern "C" double sum_samples(const float*, const double*, int);
 extern "C" double fp_peer(double x, float y) { return x * 2.0 + y; }
+struct Fields { unsigned long tag : 8, length : 8, payload : 48; };
+struct Pair { unsigned long a, b; };
+struct alignas(16) EvenPair { unsigned long a, b; };
+struct TwoFloats { float a, b; };
+extern "C" Pair records(long, Pair, Fields, EvenPair, Pair, TwoFloats);
 int main() {
+    Pair r = records(3, Pair{0x8000000000000001UL, 7}, Fields{0x91, 0xa2, 0x123456789abcUL},
+                     EvenPair{11, 0x4000000000000002UL}, Pair{0x1000000000000004UL, 13},
+                     TwoFloats{1.5f, 2.5f});
+    if (r.a != 0xd000123456789abbUL || r.b != 345) return 3;
     const float a[] = {-2.0f, 0.5f, 8.0f};
     const double b[] = {3.0, -4.0, 0.25};
     if (sum_samples(a, b, 3) != -7.5 || sum_samples(a, b, 0) != -1.5) return 2;

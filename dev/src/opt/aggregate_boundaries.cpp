@@ -17,11 +17,12 @@ bool word_boundary(target_model::Target target, Type t, uint8_t classes, ir_mode
 {
 	if (target_model::is_aarch64(target))
 	{
-		// One naturally aligned integer or pointer member uses exactly the
-		// scalar register and stack convention on both Arm ABIs.
+		// A naturally aligned eight-byte general-register aggregate has the
+		// same register and stack layout as an i64, including packed bitfields.
 		using ir_model::AggregateElement;
-		return t.is_object() && storage_bytes(t) == 8 && t.align_log2 == 3 && shape.count == 1 &&
-			(shape.element == AggregateElement::I64 || shape.element == AggregateElement::Pointer);
+		const bool general = shape.element == AggregateElement::Mixed || shape.element == AggregateElement::Pointer ||
+			(shape.element >= AggregateElement::I1 && shape.element <= AggregateElement::I128);
+		return t.is_object() && storage_bytes(t) == 8 && t.align_log2 == 3 && general;
 	}
 	return word_object(t) &&
 		(classes == 0 || classes == (OC_STATED | EB_INTEGER | (storage_bytes(t) > 8 ? (EB_INTEGER << 2) : 0)));

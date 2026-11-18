@@ -22,3 +22,12 @@ extern "C" double sum_samples(const float* a, const double* b, int n) {
     for (int i = 0; i < n; ++i) sum += a[i] * b[i];
     return fp_peer(sum, a[0]) - sum;
 }
+
+struct Fields { unsigned long tag : 8, length : 8, payload : 48; };
+struct Pair { unsigned long a, b; };
+struct alignas(16) EvenPair { unsigned long a, b; };
+struct TwoFloats { float a, b; };
+extern "C" Pair records(long bias, Pair odd, Fields bits, EvenPair even, Pair last, TwoFloats f) {
+    return Pair{odd.a ^ bits.payload ^ even.b ^ last.a,
+                odd.b + bits.tag + bits.length + even.a + last.b + bias + long(f.a + f.b)};
+}
