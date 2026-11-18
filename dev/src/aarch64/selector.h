@@ -72,7 +72,6 @@ private:
 	uint32_t reserve(uint64_t size, uint32_t alignment);
 	void stack_adjust(bool subtract);
 	void saved_registers(bool store);
-	bool logical_immediate(uint64_t bits, unsigned width, uint32_t& field);
 	void constant(unsigned reg, uint64_t bits);
 	void move(unsigned to, unsigned from);
 	void extend(unsigned reg, unsigned bits, bool sign);

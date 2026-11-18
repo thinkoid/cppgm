@@ -1,3 +1,4 @@
+#include "aarch64/logical_immediate.h"
 #include "lowir/builder.h"
 #include "opt/loops.h"
 #include "opt/passes.h"
@@ -46,14 +47,25 @@ private:
 	Cfg& cfg_;
 	LoopForest forest_;
 	std::vector<Held> held_;
+	bool across_call_ = false;
 };
 
 bool LoopLiterals::held_literal(const Instruction& inst, Value v) const
 {
 	if (v.is(ValueKind::Float))
-		return (v.float_kind == TypeKind::F32 || v.float_kind == TypeKind::F64) && body_.literals[v.index].low != 0;
-	if (!v.is(ValueKind::Integer) || !target_model::is_aarch64(c_.program.target) || inst.op != Opcode::Binary ||
-		inst.sub != static_cast<unsigned>(BinaryOp::Mul) || integer_bits(inst.type.kind()) != 64)
+		return !across_call_ && (v.float_kind == TypeKind::F32 || v.float_kind == TypeKind::F64) &&
+			body_.literals[v.index].low != 0;
+	if (!v.is(ValueKind::Integer) || !target_model::is_aarch64(c_.program.target) || inst.op != Opcode::Binary)
+		return false;
+	const auto op = static_cast<BinaryOp>(inst.sub);
+	const auto width = integer_bits(inst.type.kind());
+	const uint64_t raw = body_.literals[v.index].low;
+	if ((width == 32 || width == 64) && (op == BinaryOp::Xor || op == BinaryOp::Or || op == BinaryOp::And))
+	{
+		uint32_t field = 0;
+		return raw && !aarch64::logical_immediate(raw, width, field);
+	}
+	if (across_call_ || op != BinaryOp::Mul || width != 64)
 		return false;
 	// A multiply-add address needs a register stride, even if a single
 	// move constructs the literal. A power of two already folds as a shift.
@@ -217,9 +229,12 @@ bool LoopLiterals::run()
 			held[loop] = 1;
 			continue;
 		}
-		if (has_call(forest_.loops[loop]))
+		across_call_ = has_call(forest_.loops[loop]);
+		if (across_call_ && !target_model::is_aarch64(c_.program.target))
 			continue;
-		held[loop] = 1;
+		// A retained integer mask can reside in a saved GPR. Floating
+		// literals and nested call-free loops retain their own placement.
+		held[loop] = !across_call_;
 		const auto& l = forest_.loops[loop];
 		// On Arm even a guarded loop can materialize an expensive immediate
 		// once in its dominating test. A literal copy has no memory effects.

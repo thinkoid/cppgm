@@ -1,4 +1,5 @@
 #include "aarch64/selector.h"
+#include "aarch64/logical_immediate.h"
 
 #include "machine/switch_plan.h"
 #include <algorithm>
