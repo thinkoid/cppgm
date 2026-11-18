@@ -5,6 +5,8 @@
 #include "machine/parallel_register_moves.h"
 #include "opt/function_ir.h"
 
+#include <algorithm>
+
 namespace aarch64 {
 
 using namespace lowir;
