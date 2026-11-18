@@ -107,12 +107,12 @@ private:
 // A scalar dying at a call may already occupy its outgoing register. The
 // argument layout never reuses a register between parameters; intersect the
 // permitted registers over every occurrence, including indirect call targets.
-std::vector<uint8_t> Selector::call_registers() const
+std::vector<Selector::CallRegisters> Selector::call_registers() const
 {
-	std::vector<uint8_t> masks;
+	std::vector<CallRegisters> masks;
 	if (calls_.empty())
 		return masks;
-	masks.assign(body_.temps.size(), 0xff);
+	masks.resize(body_.temps.size());
 	for (InstId i = 0; i < call_indices_.size(); ++i)
 	{
 		if (call_indices_[i] == kNoId)
@@ -120,7 +120,7 @@ std::vector<uint8_t> Selector::call_registers() const
 		const auto& inst = body_.instructions[i];
 		const auto& layout = calls_[call_indices_[i]];
 		if (inst.ops[0].is(ValueKind::Temp))
-			masks[representative(aliases_, inst.ops[0].index)] = 0;
+			masks[representative(aliases_, inst.ops[0].index)].allowed = 0;
 		for (uint32_t n = 0; n < layout.args.size(); ++n)
 		{
 			const auto src = body_.operands[inst.extra_first + n];
@@ -132,7 +132,11 @@ std::vector<uint8_t> Selector::call_registers() const
 			const bool matches = !arg.indirect && arg.pieces == 1 && arg.first < 8 &&
 				arg.bank == (simd ? Bank::Simd : Bank::General) &&
 				(!memory_value(type) || type.kind() == TypeKind::V128);
-			masks[representative(aliases_, src.index)] &= matches ? 1u << arg.first : 0;
+			auto& choice = masks[representative(aliases_, src.index)];
+			if (!layout.parallel)
+				choice.allowed &= matches ? 1u << arg.first : 0;
+			if (matches && choice.preferred == 8)
+				choice.preferred = arg.first;
 		}
 	}
 	return masks;
@@ -274,7 +278,9 @@ void Selector::allocate()
 				across_call |= call != calls.end() && *call < b;
 			});
 		const auto type = body_.temps[range.id].type;
-		uint32_t arguments = at_call ? (!across_call && outgoing[range.id] != 0xff ? outgoing[range.id] : 0) : 0xff;
+		uint32_t arguments = at_call
+			? (!across_call && outgoing[range.id].preferred < 8 ? outgoing[range.id].allowed : 0)
+			: 0xff;
 		if (range.first == 0)
 			arguments &= range.id < incoming.size() && incoming[range.id] != kNoId ? 1u << incoming[range.id] : 0;
 		if (type.is_float() && !memory_value(type))
@@ -304,7 +310,9 @@ void Selector::allocate()
 		}
 		const uint32_t caller = across_call ? 0 : arguments | (7u << 12);
 		const uint32_t preserved = (dynamic_stack_ ? 0x1ffu : 0x3ffu) << 19;
-		const unsigned preferred = range.affinity == kNoId ? kNoId : registers_[range.affinity];
+		unsigned preferred = range.affinity == kNoId ? kNoId : registers_[range.affinity];
+		if (preferred == kNoId && at_call && !across_call && outgoing[range.id].preferred < 8)
+			preferred = outgoing[range.id].preferred;
 		const auto root = range.affinity == kNoId ? kNoId : webs.root(range.id);
 		const auto reg = general.assign(range, caller | preserved, preferred, root == kNoId ? kNoId : web_regs[root]);
 		registers_[range.id] = reg;

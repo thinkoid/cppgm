@@ -14,3 +14,8 @@ extern "C" U fp_kernel(U seed) {
     U salt=sample(seed);
     return U(a+b+c+d+e+f+g+h) ^ salt;
 }
+
+extern "C" U fold_args(U, U, U, U, U, U, U, U);
+extern "C" U shuffle_args(U a, U b, U c, U d, U e, U f, U g, U h) {
+    return fold_args(h,g,f,e,d,c,b,a) ^ fold_args(b,a,d,c,3,g,h,f);
+}

@@ -14,9 +14,15 @@ extern "C" __attribute__((noinline)) U forward(U a, U b, double c, double d, Com
 }
 extern "C" U fp_kernel(U);
 extern "C" double sample_fp(U x) { return double(x & 255) + 0.25; }
+extern "C" U shuffle_args(U,U,U,U,U,U,U,U);
+extern "C" U fold_args(U a,U b,U c,U d,U e,U f,U g,U h) {
+    return a + 3*b + 5*c + 7*d + 11*e + 13*f + 17*g + 19*h;
+}
 int main() {
     U seed = 0x243f6a8885a308d3ul;
     for (int n = 0; n < 64; ++n) {
+        const U a=seed+5, b=seed^213, c=seed*3, d=seed-18, e=seed^91, f=seed/5, g=seed+119, h=seed>>5;
+        if (shuffle_args(a,b,c,d,e,f,g,h) != (fold_args(h,g,f,e,d,c,b,a) ^ fold_args(b,a,d,c,3,g,h,f))) return 4;
         U expected = 0;
         for (U i = 0; i < 12; i += 2) expected ^= sample(seed+i) + sample(seed+i+1);
         if (forward(seed, n, 3.0, 5.0, combine) != 5 * seed + 3 * n + 38) return 2;

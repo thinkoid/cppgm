@@ -2,6 +2,7 @@
 
 #include "aarch64/error.h"
 #include "machine/call_arguments.h"
+#include "machine/parallel_register_moves.h"
 
 namespace aarch64 {
 
@@ -198,6 +199,16 @@ Selector::CallLayout Selector::call_layout(const lowir::Instruction& inst) const
 				throw AArch64Error("AArch64 call frame too large");
 		}
 	plan.size = bytes;
+	plan.parallel = level_ && inst.ops[0].is(ValueKind::Symbol) && !bytes && !plan.args.empty() &&
+		plan.args.size() <= machine::kSmallTransfers;
+	for (size_t i = 0; plan.parallel && i < plan.args.size(); ++i)
+	{
+		const auto& arg = plan.args[i];
+		const Value src = body_.operands[inst.extra_first + i];
+		plan.parallel = arg.bank == Bank::General && arg.pieces == 1 && !arg.indirect &&
+			(plan.types[i].is_integer() || plan.types[i].is_pointer()) && !memory_value(plan.types[i]) &&
+			(src.is(ValueKind::Integer) || (src.is(ValueKind::Temp) && !memory_value(body_.temps[src.index].type)));
+	}
 	return plan;
 }
 
@@ -249,11 +260,46 @@ void Selector::pass(const Argument& arg, Value src, Type type, unsigned copy_off
 	}
 }
 
+// Register arguments are a parallel assignment. An argument can use any
+// dying GPR when the shared resolver schedules the moves, including swaps
+// and repeated sources. Apply Darwin's extension after every source is read.
+void Selector::pass_parallel(const lowir::Instruction& inst, const CallLayout& layout)
+{
+	machine::ScalarTransfer moves[machine::kSmallTransfers];
+	const unsigned count = layout.args.size();
+	for (unsigned i = 0; i < count; ++i)
+	{
+		const Value src = body_.operands[inst.extra_first + i];
+		const unsigned reg = src.is(ValueKind::Temp) ? registers_[src.index] : kNoId;
+		moves[i] = { layout.args[i].first, reg == kNoId ? machine::kTransferLiteral : reg };
+	}
+	machine::parallel_scalar_transfers(
+		moves, count, [&](unsigned i) { move(15, moves[i].destination); },
+		[&](unsigned i, unsigned reg) {
+			const unsigned dst = moves[i].destination;
+			if (reg == machine::kTransferLiteral)
+				value(dst, body_.operands[inst.extra_first + i], layout.types[i]);
+			else
+				move(dst, reg == machine::kTransferSaved ? 15 : reg);
+		});
+	if (named_.darwin)
+		for (unsigned i = 0; i < count; ++i)
+		{
+			const Type type = layout.types[i];
+			if (type.is_integer() && integer_bits(type.kind()) < 32)
+				extend(layout.args[i].first, integer_bits(type.kind()),
+					!is_unsigned(type.kind()) && type.kind() != TypeKind::I1);
+		}
+}
+
 void Selector::call(const lowir::Instruction& inst)
 {
 	const auto& layout = calls_[call_indices_[&inst - body_.instructions.data()]];
-	for (uint32_t i = 0; i < layout.args.size(); ++i)
-		pass(layout.args[i], body_.operands[inst.extra_first + i], layout.types[i], layout.copies[i]);
+	if (layout.parallel)
+		pass_parallel(inst, layout);
+	else
+		for (uint32_t i = 0; i < layout.args.size(); ++i)
+			pass(layout.args[i], body_.operands[inst.extra_first + i], layout.types[i], layout.copies[i]);
 	const Argument ret = classify(inst.type, program_.call_boundary(inst)->boundary.result_shape);
 	if (ret.indirect)
 		home_address(8, inst.result);

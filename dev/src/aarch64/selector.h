@@ -26,7 +26,12 @@ private:
 	void record_call(const lowir::Instruction& inst);
 	void exception_value(const lowir::Instruction& inst);
 	uint32_t site(const lowir::Instruction& inst) const;
-	std::vector<uint8_t> call_registers() const;
+	struct CallRegisters
+	{
+		uint8_t allowed = 0xff;
+		unsigned char preferred = 8;
+	};
+	std::vector<CallRegisters> call_registers() const;
 	void allocate();
 	void call_result_homes();
 	void parameter_homes(opt::Cfg& cfg);
@@ -64,7 +69,9 @@ private:
 		std::vector<lowir::Type> types;
 		std::vector<unsigned> copies;
 		unsigned size;
+		bool parallel = false;
 	};
+	void pass_parallel(const lowir::Instruction& inst, const CallLayout& layout);
 	CallLayout call_layout(const lowir::Instruction& inst) const;
 	void parameter(lowir::TempId id, const Argument& arg);
 	void pass(const Argument& arg, lowir::Value src, lowir::Type type, unsigned copy_offset);
