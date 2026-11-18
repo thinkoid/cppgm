@@ -30,7 +30,8 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 {
 	const auto op = static_cast<BinaryOp>(inst.sub);
 	const unsigned bits = inst.type.is_pointer() ? 64 : integer_bits(inst.type.kind());
-	if (bits != 32 && bits != 64)
+	const bool logical = op == BinaryOp::And || op == BinaryOp::Or || op == BinaryOp::Xor;
+	if (bits != 32 && bits != 64 && !((bits == 1 || bits == 8 || bits == 16) && logical))
 		return false;
 	Value lhs = inst.ops[0], rhs = inst.ops[1];
 	if ((op == BinaryOp::Add || op == BinaryOp::Mul || op == BinaryOp::And || op == BinaryOp::Or ||
@@ -39,7 +40,12 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 		std::swap(lhs, rhs);
 	const unsigned left = operand_register(lhs, inst.type, 10);
 	const unsigned dest = registers_[inst.result] == kNoId ? 9 : registers_[inst.result];
-	const bool w = bits == 32;
+	const bool w = bits <= 32;
+	// For AND, OR and XOR, canonical inputs guarantee canonical high bits.
+	const auto canonical = [&](Value v) {
+		return v.is(ValueKind::Integer) || (v.is(ValueKind::Temp) && body_.temps[v.index].type == inst.type);
+	};
+	const bool normalized = bits >= 32 || (canonical(lhs) && canonical(rhs));
 	if ((op == BinaryOp::Add || op == BinaryOp::Sub) && rhs.is(ValueKind::Integer))
 	{
 		const uint64_t raw = body_.literals[rhs.index].low;
@@ -78,13 +84,14 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 			return true;
 		}
 		uint32_t field = 0;
-		if ((op == BinaryOp::And || op == BinaryOp::Or || op == BinaryOp::Xor) && logical_immediate(raw, bits, field))
+		const uint64_t mask = bits < 32 ? raw & ((1u << bits) - 1) : raw;
+		if (logical && logical_immediate(mask, w ? 32 : 64, field))
 		{
 			const Op selected = op == BinaryOp::And ? (w ? Op::AndImmW : Op::AndImm)
 				: op == BinaryOp::Or                ? (w ? Op::OrrImmW : Op::OrrImm)
 													: (w ? Op::EorImmW : Op::EorImm);
 			out_.emit(selected, dest, left, 0, field);
-			save(dest, inst.result, true);
+			save(dest, inst.result, normalized);
 			return true;
 		}
 	}
@@ -97,7 +104,7 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 	out_.emit(w ? narrow[inst.sub] : wide[inst.sub], remainder ? 9 : dest, left, right);
 	if (remainder)
 		out_.emit(w ? Op::MsubW : Op::Msub, dest, 9, right, left << 10);
-	save(dest, inst.result, true);
+	save(dest, inst.result, normalized);
 	return true;
 }
 
