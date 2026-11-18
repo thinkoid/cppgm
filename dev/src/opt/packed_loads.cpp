@@ -6,6 +6,7 @@ namespace opt {
 
 using namespace lowir;
 
+namespace {
 // Reassemble two adjacent unsigned halves with one little-endian load.
 // The combined read covers exactly the bytes of the original two reads.
 bool combine_adjacent_loads(FunctionBody& body, const std::vector<uint32_t>& uses, const std::vector<BlockId>& block_of,
@@ -73,9 +74,13 @@ bool combine_adjacent_loads(FunctionBody& body, const std::vector<uint32_t>& use
 	return true;
 }
 
+} // namespace
+
 bool simplify_packed_load(FunctionBody& body, const std::vector<uint32_t>& uses, const std::vector<BlockId>& block_of,
 	BlockId block, InstId& previous, InstId id)
 {
+	if (body.instructions[id].op == Opcode::Binary)
+		return combine_adjacent_loads(body, uses, block_of, block, id);
 	const Instruction original = body.instructions[id];
 	const Type result = original.type;
 	const bool floating = original.op == Opcode::Copy &&

@@ -3055,10 +3055,7 @@ void Simplifier::process_block(BlockId block)
 			continue;
 		}
 		substitute(inst);
-		if ((inst.op == Opcode::Copy && inst.type.is_float() &&
-				simplify_packed_load(body_, uses_, c_.block_of, block, prev, id)) ||
-			(inst.op == Opcode::Binary && inst.sub == static_cast<unsigned>(BinaryOp::Or) &&
-				combine_adjacent_loads(body_, uses_, c_.block_of, block, id)))
+		if (packed_load_candidate(inst) && simplify_packed_load(body_, uses_, c_.block_of, block, prev, id))
 		{
 			grow_facts();
 			changed_ = true;
