@@ -82,13 +82,14 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		return;
 	}
 	case Opcode::CopyObject:
-		address(10, inst.ops[1]);
-		address(11, inst.ops[0]);
-		copy_bytes(10, 11, inst.immediate);
+	{
+		const unsigned dst = address_register(inst.ops[1], 10);
+		const unsigned src = address_register(inst.ops[0], 11);
+		copy_bytes(dst, src, inst.immediate);
 		return;
+	}
 	case Opcode::ZeroInit:
-		address(10, inst.ops[0]);
-		copy_bytes(10, 31, inst.immediate);
+		copy_bytes(address_register(inst.ops[0], 10), 31, inst.immediate);
 		return;
 	case Opcode::Load:
 		if (inst.type.kind() == TypeKind::V128)
@@ -102,8 +103,7 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		if (memory_value(inst.type))
 		{
 			home_address(10, inst.result);
-			address(11, inst.ops[0]);
-			copy_bytes(10, 11, storage_bytes(inst.type));
+			copy_bytes(10, address_register(inst.ops[0], 11), storage_bytes(inst.type));
 			return;
 		}
 		if (level_)
@@ -123,8 +123,7 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		}
 		if (memory_value(inst.type))
 		{
-			address(10, inst.ops[1]);
-			copy_value(10, inst.ops[0], inst.type);
+			copy_value(address_register(inst.ops[1], 10), inst.ops[0], inst.type);
 			return;
 		}
 		if (level_)

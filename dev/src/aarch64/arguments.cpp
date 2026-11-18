@@ -47,8 +47,7 @@ void Selector::copy_value(unsigned dst, Value src, Type type)
 		access(true, 17, dst, 8, 8);
 		return;
 	}
-	address(11, src);
-	copy_bytes(dst, 11, storage_bytes(type));
+	copy_bytes(dst, address_register(src, 11), storage_bytes(type));
 }
 
 void Selector::fp_move(bool to_fp, unsigned fp, unsigned gp, Type type)
