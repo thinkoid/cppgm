@@ -218,12 +218,13 @@ InstId Selector::address_sequence(InstId id)
 	const unsigned extension = part | ((bits < 64 && sign) ? 4 : 0);
 	if (index.next != kNoId && uses_[index.result] == 1)
 	{
-		// The optimizer can attach nonnull to a pointer copy. A coalesced
-		// copy emits no code and leaves the address operands in place.
+		// A coalesced copy or zero extension emits no instruction and
+		// leaves the base and index registers available to the memory access.
 		InstId next = index.next;
-		const auto& copy = body_.instructions[next];
-		if (copy.op == Opcode::Copy && copy.next != kNoId && !aliases_.empty() && aliases_[copy.result] == index.result)
-			next = copy.next;
+		const auto& candidate = body_.instructions[next];
+		if (candidate.result != kNoId && candidate.next != kNoId && !aliases_.empty() &&
+			aliases_[candidate.result] != candidate.result)
+			next = candidate.next;
 		const auto& memory = body_.instructions[next];
 		const bool store = memory.op == Opcode::Store;
 		const Value pointer = memory.ops[store ? 1 : 0];
