@@ -214,7 +214,7 @@ hardware supplies the timings in this table. On x86, QEMU can check the same
 executables, time a compiler rebuild and count guest instructions.
 [Arm optimization results and instruction profiles](docs/performance/aarch64-optimization-gaps.md) · [Earlier QEMU measurements](docs/performance/aarch64-codegen-20261118.md)
 
-[Native self-build reports](https://github.com/vishvananda/cppgm/blob/benchmark-badges/self-build-hosts.md) · [simdjson](benchmarks/simdjson/README.md) · [PA37 workloads](pa37/benchmarks/README.md) · [WASI self-build](scripts/experimental/README.md#full-compiler-benchmark) · [Arm kernels](docs/aarch64-backend-plan.md) · [Local Arm benchmark instructions](benchmarks/aarch64/README.md) · [Dedicated Intel measurements](docs/performance/intel-benchmarks.md)
+[Native self-build reports](https://github.com/vishvananda/cppgm/blob/benchmark-badges/self-build-hosts.md) · [simdjson](benchmarks/simdjson/README.md) · [PA37 workloads](pa37/benchmarks/README.md) · [WASI self-build](scripts/experimental/README.md#full-compiler-benchmark) · [Arm kernels](docs/aarch64-backend-plan.md) · [Local Arm benchmark instructions](benchmarks/aarch64/README.md) · [Native Arm measurements against Clang](docs/performance/aarch64-optimization-gaps.md#native-linux-arm-rebuild-and-generated-programs) · [Dedicated Intel measurements](docs/performance/intel-benchmarks.md)
 
 ## Caveats
 

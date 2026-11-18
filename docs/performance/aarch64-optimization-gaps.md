@@ -542,6 +542,58 @@ and Darwin now use the same eight-byte carrier for these records. Tests
 exercise one- and two-word stack records with partial tails in both caller
 directions. The Linux-hosted launcher ran the Mach-O program bytes.
 
+### Native Linux Arm rebuild and generated programs
+
+On a 16-vCPU Google Cloud T2A (Ampere Altra), two Arm executables of cppgm
+compiled the same 498 translation units with 16 jobs. Clang 22 built the
+first compiler at O3. That compiler built the second at O3. Each timed
+build produced the same 498 object hashes and the same linked executable
+as its bootstrap. Each comparison started with four Clang-built control
+runs, then alternated ABBA and BAAB blocks. Times are seconds per build.
+The ratio is the median of the paired block ratios.
+
+| Compiler source | Clang-built | Self-built | Wall ratio | CPU ratio | A/A wall ratio |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 29d97cc96, Apple stack ABI fix | 11.75 | 13.36 | 1.140× | 1.167× | 0.998× |
+| 62ded8d0b, sparse switch and narrow sign extension | 11.89 | 13.39 | 1.126× | 1.148× | 0.989× |
+| cf5c7a3c4, paired copies and direct aggregate returns | 11.75 | 13.38 | 1.139× | 1.161× | 0.953× |
+| 62a178aa6, calls write directly to eligible result slots | 11.85 | 13.18 | 1.113× | 1.133× | 1.003× |
+
+The baseline's three comparison blocks ranged from 1.137× to 1.141×.
+At 62a178aa6 the two blocks were 1.110× and 1.115×. The emulated
+full-build comparison had measured 1.022× at c33a4bad2 and 1.217× at
+cb4ae379e. Their A/A ratios were 1.003× and 1.017×. Native hardware
+provides the release measurement.
+
+At 29d97cc96 each application ran on one pinned Arm core, with eight
+executions per position, two control blocks and six comparison blocks.
+Throughput uses Clang CPU time divided by cppgm CPU time.
+
+| Workload | Throughput vs Clang | Workload | Throughput vs Clang |
+| --- | ---: | --- | ---: |
+| Calls | 0.987× | Primes | 1.036× |
+| Lookup | 0.855× | Bubblesort | 0.961× |
+| Memory | 1.011× | FloatMM | 2.118× |
+| Explicit NEON vectors | 1.000× | Puzzle | 0.692× |
+| | | Treesort | 0.968× |
+
+The geometric means were 0.961× for the four kernels and 1.072× for the
+five public programs. Puzzle's conditional loop and the lookup workload
+remain slower individually. These Linux measurements cover the portable
+five-program subset and give no timing estimate for Apple Silicon.
+
+Sampling complete native rebuilds at 599 Hz attributed 88,811 samples to
+the self-built compiler and 73,680 to the Clang-built compiler. Of those,
+8,923 and 6,889 respectively landed on stack accesses, and 23,146 and
+18,072 on other data accesses. Instruction-pointer samples can include
+time waiting for a preceding load. In a concrete example, disassembly of
+the empty result of `NameLookup::own_declarations` showed cppgm clearing
+a 24-byte local, then copying it to the output. Clang cleared the caller's
+buffer in place. The Arm selector now shares two checks with Wasm to use
+the final storage for a returned object and for a call result with one
+whole-object consumer. The Arm ABI and address-escape checks determine
+which calls can use them.
+
 ### Native x86 compile performance against main
 
 The release comparison used `origin/main` at 90ebfa8f4 and the feature at
@@ -569,7 +621,7 @@ Linux `perf stat` counters. The wall-time samples came from a shared host.
 | --- | --- |
 | LowIR simplification, inlining, loop transforms, address sinking and vectorization | x86, Arm and Wasm consume the shared typed optimizer. Profitability and instruction legalization depend on the target. |
 | Dense switch range, density and default holes | All three targets share the same planner. x86 and Arm encode local branches and Wasm emits structured `br_table` dispatch. |
-| Sequential storage for eligible addressable frame slots | All three call the same frame-lifetime analysis. Wasm and Arm also share the check for a whole incoming object copied into one named slot. |
+| Sequential storage for eligible addressable frame slots | All three call the same frame-lifetime analysis. Wasm and Arm also share the checks for whole incoming object copies, returned object slots and single-use call results. |
 | Bounded SSA predecessor walk, per-block live segments, loop-backedge phi writes, exception predecessors and the interference tree | Arm and x86 use the same implementation. The x86 selector supplies early and late reads for two-address instructions. Arm supplies separate read and write slots, reserved scratches, both register banks and the AAPCS64/Darwin call rules. |
 | Reusing a storage location after its last use | Arm spills and Wasm locals use the same interval-slot pool, partitioned by compatible storage. The Wasm engine assigns physical host registers. |
 | Spill priority and edge transfers | x86 estimates execution frequency, can split a range around loops and schedules parallel register and memory moves. Both native targets weight uses at their blocks, including a phi input at its predecessor. Arm retains start order when the live segments fit the register set and uses the shared phi webs to prefer a register already assigned to related transfers. It transfers registers and scalar spill slots directly when independent. Small scalar cycles can use the shared resolver and one scratch register. Complex edges retain the memory snapshot. Arm still budgets snapshot space conservatively. |
