@@ -37,6 +37,60 @@ InstId Selector::truncated_operand(const lowir::Instruction& trunc, BlockId bloc
 	return trunc.next;
 }
 
+// Complementary shifts of a single value occupy disjoint bits. ADD, OR and XOR
+// therefore all produce the same rotate. A following logical operation can
+// consume its rotated register directly.
+InstId Selector::rotated_operand(const lowir::Instruction& first)
+{
+	const unsigned bits = integer_bits(first.type.kind());
+	const auto& second = body_.instructions[first.next];
+	const auto left = static_cast<unsigned>(BinaryOp::Shl), right = static_cast<unsigned>(BinaryOp::UShr);
+	if (!first.ops[0].is(ValueKind::Temp) || second.op != Opcode::Binary || second.type != first.type ||
+		!(first.ops[0] == second.ops[0]) || !second.ops[1].is(ValueKind::Integer) || uses_[second.result] != 1 ||
+		second.next == kNoId ||
+		!((first.sub == left && second.sub == right) || (first.sub == right && second.sub == left)))
+		return kNoId;
+	const auto a = body_.literals[first.ops[1].index], b = body_.literals[second.ops[1].index];
+	if (a.high || b.high || !a.low || a.low >= bits || b.low != bits - a.low)
+		return kNoId;
+	const auto& join = body_.instructions[second.next];
+	const auto op = static_cast<BinaryOp>(join.sub);
+	if (join.op != Opcode::Binary || join.type != first.type ||
+		(op != BinaryOp::Or && op != BinaryOp::Xor && op != BinaryOp::Add) ||
+		!((join.ops[0] == Value::temp(first.result) && join.ops[1] == Value::temp(second.result)) ||
+			(join.ops[1] == Value::temp(first.result) && join.ops[0] == Value::temp(second.result))))
+		return kNoId;
+	const unsigned count = first.sub == right ? a.low : b.low;
+	const bool w = bits == 32;
+	const auto source = operand_register(first.ops[0], first.type, 10);
+	if (join.next != kNoId && uses_[join.result] == 1)
+	{
+		const auto& consumer = body_.instructions[join.next];
+		const auto logic = static_cast<BinaryOp>(consumer.sub);
+		if (consumer.op == Opcode::Binary && consumer.type == join.type && !consumer.ops[0].is(ValueKind::Symbol) &&
+			!consumer.ops[1].is(ValueKind::Symbol) &&
+			(logic == BinaryOp::Xor || logic == BinaryOp::And || logic == BinaryOp::Or) &&
+			(consumer.ops[0] == Value::temp(join.result) || consumer.ops[1] == Value::temp(join.result)))
+		{
+			const auto other = consumer.ops[consumer.ops[0] == Value::temp(join.result) ? 1 : 0];
+			const unsigned reg = operand_register(other, join.type, 11);
+			Op selected = w ? Op::OrrW : Op::Orr;
+			if (logic == BinaryOp::Xor)
+				selected = w ? Op::EorW : Op::Eor;
+			else if (logic == BinaryOp::And)
+				selected = w ? Op::AndW : Op::And;
+			const unsigned dest = registers_[consumer.result] == kNoId ? 9 : registers_[consumer.result];
+			out_.emit(selected, dest, reg, source, (3u << 22) | (count << 10));
+			save(dest, consumer.result, true);
+			return join.next;
+		}
+	}
+	const unsigned dest = registers_[join.result] == kNoId ? 9 : registers_[join.result];
+	out_.emit(w ? Op::ExtrW : Op::Extr, dest, source, source, count << 10);
+	save(dest, join.result, true);
+	return second.next;
+}
+
 // ADD, SUB and the logical instructions have a shifted second operand.
 // The producer is adjacent and single-use, so both input locations still
 // hold the values the combined instruction needs.
@@ -47,6 +101,9 @@ InstId Selector::shifted_operand(const lowir::Instruction& shift)
 	if ((bits != 32 && bits != 64) || shift.next == kNoId || uses_[shift.result] != 1 ||
 		(op != BinaryOp::Shl && op != BinaryOp::Shr && op != BinaryOp::UShr) || !shift.ops[1].is(ValueKind::Integer))
 		return kNoId;
+	const auto rotated = rotated_operand(shift);
+	if (rotated != kNoId)
+		return rotated;
 	const auto& next = body_.instructions[shift.next];
 	if (next.op != Opcode::Binary || next.type != shift.type)
 		return kNoId;

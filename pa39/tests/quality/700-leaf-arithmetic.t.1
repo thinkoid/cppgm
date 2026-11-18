@@ -24,7 +24,13 @@ extern "C" void update_at(float* p, float v) { *p = v; }
 extern "C" float before_cursor(float*, bool);
 extern "C" unsigned field_across_branch(Arms*, unsigned, bool);
 static int plus_five(int x) { return x + 5; }
+extern "C" unsigned rotate_word(unsigned);
+extern "C" unsigned long rotate_mix(unsigned long, unsigned long);
+extern "C" unsigned different_shifts(unsigned);
 int main() {
+    if (rotate_word(0xacde1234u) != 0xc246959bu ||
+        rotate_mix(0x8123456789abcdefUL, 0x34caffff2222f0f0UL) != 0xf45b5d4ce6f71607UL ||
+        different_shifts(0xacde1234u) != 0xc246ab37u) return 22;
     float cursor[] = {3.0f, 1.0f};
     if (before_cursor(cursor + 1, false) != 6.0f || before_cursor(cursor + 1, true) != 10.0f ||
         cursor[0] != 7.0f || cursor[1] != 1.0f) return 20;

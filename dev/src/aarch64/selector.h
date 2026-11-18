@@ -107,6 +107,7 @@ private:
 	void compare(const lowir::Instruction& inst);
 	void compare_flags(const lowir::Instruction& inst);
 	lowir::InstId truncated_operand(const lowir::Instruction& trunc, lowir::BlockId block);
+	lowir::InstId rotated_operand(const lowir::Instruction& first);
 	lowir::InstId shifted_operand(const lowir::Instruction& shift);
 	bool emit_scalar_pair(
 		const lowir::Instruction& low, const lowir::Instruction& high, lowir::Value base, uint64_t offset);

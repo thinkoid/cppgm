@@ -85,3 +85,13 @@ extern "C" unsigned field_across_branch(Arms* a, unsigned i, bool write) {
     if (write) a[i].right = old + 3;
     return a[i].right + old;
 }
+
+extern "C" unsigned rotate_word(unsigned value) {
+    return (value >> 19) + (value << 13);
+}
+extern "C" unsigned long rotate_mix(unsigned long value, unsigned long key) {
+    return key ^ ((value << 63) | (value >> 1));
+}
+extern "C" unsigned different_shifts(unsigned value) {
+    return (value << 13) ^ (value >> 18);
+}
