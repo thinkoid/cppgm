@@ -26,12 +26,42 @@ unsigned Selector::condition_register(Value operand, unsigned scratch)
 	return scratch;
 }
 
+// Insert the surviving low bits into their shifted position and clear the rest
+// of the result. A W bitfield operation also clears the top half of the X home.
+void Selector::narrow_left(Value src, Type type, TempId result, unsigned width, unsigned count)
+{
+	if (count >= width)
+	{
+		save(31, result, true);
+		return;
+	}
+	const unsigned dest = registers_[result] == kNoId ? 9 : registers_[result];
+	out_.emit(Op::UbfmW, dest, operand_register(src, type, 10), 0, ((-count & 31) << 16) | ((width - count - 1) << 10));
+	save(dest, result, true);
+}
+
 bool Selector::simple_binary(const lowir::Instruction& inst)
 {
 	const auto op = static_cast<BinaryOp>(inst.sub);
 	const unsigned bits = inst.type.is_pointer() ? 64 : integer_bits(inst.type.kind());
 	const bool logical = op == BinaryOp::And || op == BinaryOp::Or || op == BinaryOp::Xor;
 	const bool small = bits == 1 || bits == 8 || bits == 16;
+	if (small && (op == BinaryOp::Shl || op == BinaryOp::UShr) && inst.ops[1].is(ValueKind::Integer))
+	{
+		const auto count = body_.literals[inst.ops[1].index].low;
+		if (count >= bits)
+			return false;
+		if (op == BinaryOp::Shl)
+			narrow_left(inst.ops[0], inst.type, inst.result, bits, count);
+		else
+		{
+			const unsigned dest = registers_[inst.result] == kNoId ? 9 : registers_[inst.result];
+			out_.emit(
+				Op::UbfmW, dest, operand_register(inst.ops[0], inst.type, 10), 0, (count << 16) | ((bits - 1) << 10));
+			save(dest, inst.result, true);
+		}
+		return true;
+	}
 	if (bits != 32 && bits != 64 && !(small && (logical || op == BinaryOp::Add || op == BinaryOp::Sub)))
 		return false;
 	Value lhs = inst.ops[0], rhs = inst.ops[1];

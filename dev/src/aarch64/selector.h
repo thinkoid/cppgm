@@ -109,6 +109,7 @@ private:
 	void switch_edges(const lowir::Instruction& inst, lowir::BlockId block);
 	unsigned condition_register(lowir::Value operand, unsigned scratch);
 	unsigned operand_register(lowir::Value operand, lowir::Type type, unsigned scratch);
+	void narrow_left(lowir::Value src, lowir::Type type, lowir::TempId result, unsigned width, unsigned count);
 	bool simple_binary(const lowir::Instruction& inst);
 	void integer_unary(const lowir::Instruction& inst);
 	void binary(const lowir::Instruction& inst);

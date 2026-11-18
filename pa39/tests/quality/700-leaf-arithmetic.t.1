@@ -33,7 +33,10 @@ extern "C" int shift_cmp(long, long);
 extern "C" bool shift_eq(unsigned, unsigned);
 extern "C" bool conditions_and(long, long, unsigned);
 extern "C" bool conditions_or(unsigned, unsigned, long);
+extern "C" unsigned short place_nibbles(unsigned long, unsigned long);
+extern "C" unsigned clear_low_word(unsigned long);
 int main() {
+    if (place_nibbles(0xfedcba9876543215UL, ~2UL) != 0x50d0 || clear_low_word(~0UL) != 0) return 31;
     for (int mask = 0; mask < 4; ++mask) {
         long a = mask & 1 ? -5 : 9;
         unsigned k = mask & 2 ? 0x80000000u : 18;

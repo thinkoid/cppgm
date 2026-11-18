@@ -116,3 +116,8 @@ extern "C" bool shift_eq(unsigned a, unsigned b) { return a == (b << 29); }
 
 extern "C" bool conditions_and(long a, long b, unsigned k) { return (a < b) & (k >= 19); }
 extern "C" bool conditions_or(unsigned c, unsigned d, long x) { return (x != -37) | (c <= d); }
+
+extern "C" unsigned short place_nibbles(unsigned long a, unsigned long b) {
+    return static_cast<unsigned short>(a << 12) | static_cast<unsigned char>(b << 4);
+}
+extern "C" unsigned clear_low_word(unsigned long x) { return static_cast<unsigned>(x << 39); }

@@ -120,12 +120,18 @@ InstId Selector::shifted_operand(const lowir::Instruction& shift, BlockId block)
 		compare(next, true);
 		return shift.next;
 	}
-	// All selected bits must come from the input, even for an arithmetic shift.
-	if (op != BinaryOp::Shl && next.op == Opcode::Convert && next.sub == static_cast<unsigned>(ConvertOp::Trunc) &&
+	// A left shift inserts zeros below the field. For a right shift every
+	// selected bit must come from the input, even for an arithmetic shift.
+	if (next.op == Opcode::Convert && next.sub == static_cast<unsigned>(ConvertOp::Trunc) &&
 		next.ops[0] == Value::temp(shift.result) && convert_source_type(next) == shift.type)
 	{
 		const unsigned width = integer_bits(next.type.kind());
-		if (width && width < bits && count + width <= bits)
+		if (op == BinaryOp::Shl && width && width < bits && width <= 32)
+		{
+			narrow_left(shift.ops[0], shift.type, next.result, width, count);
+			return shift.next;
+		}
+		if (op != BinaryOp::Shl && width && width < bits && count + width <= bits)
 		{
 			const unsigned src = operand_register(shift.ops[0], shift.type, 11);
 			const unsigned dest = registers_[next.result] == kNoId ? 9 : registers_[next.result];
