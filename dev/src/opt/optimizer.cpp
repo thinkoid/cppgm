@@ -9,6 +9,7 @@
 #include "lowir/text_writer.h"
 #include "lowir/validator.h"
 
+#include "opt/call_graph.h"
 #include "opt/inliner.h"
 #include "opt/bit_recurrences.h"
 #include "opt/interprocedural.h"
@@ -944,6 +945,36 @@ bool parse_inline_limit(const std::string& text, InlineLimits& limits)
 	return true;
 }
 
+// Keep the late proof in the call's typed signature so lowering and the
+// LowIR text round trip can use it. A callee-first walk propagates facts
+// through direct acyclic edges without iterating over the whole program.
+static void finish_exception_effects(Program& program, OptimizerStats& stats, const OptimizerOptions& options)
+{
+	CallGraph graph;
+	build_call_graph(program, graph);
+	std::vector<uint8_t> nounwind(program.symbols.size(), 0);
+	for (uint32_t f : graph.bottom_up)
+	{
+		const SymbolId id = graph.functions[f];
+		const Symbol& symbol = program.symbols[id];
+		if (symbol.metadata.binding == ir_model::SBM_WEAK ||
+			!program.functions[symbol.detail].body->code_labels.empty())
+			continue;
+		FunctionContext context(program, id, stats, options.level);
+		const PooledContext pooled(context, context_pool());
+		context.nounwind = &nounwind;
+		enable_verify(context, options);
+		if (RUN_PASS(strip_dead_regions))
+		{
+			RUN_PASS(cleanup_cfg);
+			RUN_PASS(remove_dead_code);
+			compact_body(program, context.body);
+		}
+		nounwind[id] = proves_nounwind(context, true);
+	}
+	record_nounwind_calls(program, graph.functions, nounwind);
+}
+
 void optimize_program(Program& program, const OptimizerOptions& options, OptimizerStats* stats_out)
 {
 	for (const FunctionBinding& binding : program.function_bindings)
@@ -1014,7 +1045,7 @@ void optimize_program(Program& program, const OptimizerOptions& options, Optimiz
 		if (level >= 2)
 			forward_calls(program, stats);
 		prune_unreachable(program, stats);
-		if (level >= 2 && !options.minimize_size && specialize_arguments(program, stats, simplify))
+		if (level >= 2 && specialize_arguments(program, stats, simplify))
 			prune_unreachable(program, stats);
 		if (level >= 2)
 			infer_function_memory(program);
@@ -1030,6 +1061,10 @@ void optimize_program(Program& program, const OptimizerOptions& options, Optimiz
 				program.functions[program.symbols[s].detail].body != nullptr)
 				finish_function(
 					program, s, stats, options, nounwind, unwritten, sealed, moved_late ? &moved : nullptr, bit_tables);
+		// Strong Wasm definitions in this link cannot be interposed. Keep
+		// the late pass in the size profile since it scans every live body.
+		if (options.minimize_size && target_model::is_wasm(program.target))
+			finish_exception_effects(program, stats, options);
 	}
 
 	if (options.level == 1)

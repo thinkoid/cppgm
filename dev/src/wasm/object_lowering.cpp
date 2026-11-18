@@ -1,6 +1,7 @@
 #include "wasm/object.h"
 
 #include "machine/global_data.h"
+#include "opt/optimizer.h"
 #include "wasm/object_cursor.h"
 #include "wasm/exceptions.h"
 #include "wasm/selector.h"
@@ -323,6 +324,7 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 		object.tags.push_back(std::move(tag));
 	}
 	append_nonlocal_objects(module, object, symbols);
+	const bool minimize_size = options.optimizer != nullptr && options.optimizer->minimize_size;
 	bool uses_simd = false;
 	for (const Signature& type : module.signatures)
 	{
@@ -337,8 +339,8 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 		if (module.exception_regions)
 			prepare_exception_plan(program, id, object, symbols, groups[id], exceptions);
 		Function function;
-		Selector(program, module, id, function, &exceptions).run();
-		cleanup_locals(function, options.optimization_level != 0);
+		Selector(program, module, id, function, &exceptions, minimize_size).run();
+		cleanup_locals(function, options.optimization_level != 0, minimize_size);
 		for (ValueType local : function.locals)
 			uses_simd = uses_simd || local == ValueType::V128;
 		for (const auto& inst : function.instructions)

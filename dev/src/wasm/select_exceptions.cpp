@@ -88,11 +88,15 @@ void Selector::exception_match(uint32_t landing)
 	exception_snapshot(landing, false);
 }
 
-void Selector::exception_call(const lowir::Instruction& inst, const lowir::Signature* signature, uint32_t landing)
+void Selector::save_exception_stack()
 {
 	out_.emit(Op::GlobalGet, { 0 });
 	out_.relocate(RelocationKind::GlobalIndex, module_.stack_symbol);
 	out_.emit(Op::LocalSet, { exception_stack_ });
+}
+
+void Selector::begin_exception_call()
+{
 	out_.emit(Op::Block, { block_type(ValueType::Void) });
 	++nesting_;
 	out_.emit(Op::Block, { module_.exception_pair_type });
@@ -101,10 +105,10 @@ void Selector::exception_call(const lowir::Instruction& inst, const lowir::Signa
 	out_.emit(Op::TryTable, { block_type(ValueType::Void), 1, static_cast<uint64_t>(CatchKind::TagRef), 0, 0 });
 	out_.relocate(RelocationKind::TagIndex, module_.exception_tag_symbol, 3);
 	++nesting_;
-	if (signature != nullptr)
-		call_body(inst, *signature);
-	else
-		exception_throw(inst);
+}
+
+void Selector::end_exception_call(uint32_t landing)
+{
 	out_.emit(Op::End);
 	--nesting_;
 	out_.emit(Op::Br, { 1 });
@@ -121,6 +125,46 @@ void Selector::exception_call(const lowir::Instruction& inst, const lowir::Signa
 	edge(current_block_, exceptions_->landing_blocks[landing]);
 	out_.emit(Op::End);
 	--nesting_;
+}
+
+void Selector::exception_call(const lowir::Instruction& inst, const lowir::Signature* signature, uint32_t landing)
+{
+	save_exception_stack();
+	begin_exception_call();
+	if (signature != nullptr)
+		call_body(inst, *signature);
+	else
+		exception_throw(inst);
+	end_exception_call(landing);
+}
+
+// Consecutive calls in one LowIR block can use the same landing edge and
+// phi inputs. Snapshot the stack before each call so unwinding restores
+// the same state as it would with each call's individual wrapper.
+InstId Selector::grouped_exception_calls(InstId first)
+{
+	const auto& sites = exceptions_->analysis.eh_sites_;
+	const uint32_t site = sites[first];
+	const auto matches = [&](InstId i) {
+		return i != kNoId && sites[i] == site && body_.instructions[i].op == Opcode::Call;
+	};
+	if (site == 0 || !matches(body_.instructions[first].next))
+		return first;
+
+	out_.location = body_.instructions[first].location;
+	begin_exception_call();
+	InstId next = first;
+	do
+	{
+		current_inst_ = next;
+		const auto& inst = body_.instructions[next];
+		out_.location = inst.location;
+		save_exception_stack();
+		call(inst, true);
+		next = inst.next;
+	} while (matches(next));
+	end_exception_call(site - 1);
+	return next;
 }
 
 void Selector::exception_resume(uint32_t site)

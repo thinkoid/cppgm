@@ -457,7 +457,9 @@ bool can_unwind(const FunctionContext& context, const lowir::Instruction& inst);
 bool strip_dead_regions(FunctionContext& context);
 
 // Whether the body has no EH instruction and nothing that can unwind.
-bool proves_nounwind(const FunctionContext& context);
+bool proves_nounwind(const FunctionContext& context, bool exclude_assembly = false);
+void record_nounwind_calls(
+	lowir::Program& program, const std::vector<lowir::SymbolId>& functions, const std::vector<uint8_t>& nounwind);
 
 // Reorders blocks into reverse postorder when an ordinary use precedes its
 // definition in layout (after reuse across blocks); whether it did.

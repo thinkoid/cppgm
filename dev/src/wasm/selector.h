@@ -16,7 +16,7 @@ class Selector
 {
 public:
 	Selector(const lowir::Program& program, const Module& module, lowir::SymbolId symbol, Function& output,
-		const ExceptionPlan* exceptions = nullptr);
+		const ExceptionPlan* exceptions, bool minimize_size);
 	void run();
 
 private:
@@ -55,12 +55,16 @@ private:
 	void constant(lowir::Literal bits, lowir::Type type);
 	void instruction(const lowir::Instruction& inst);
 	void atomic_instruction(const lowir::Instruction& inst);
-	void call(const lowir::Instruction& inst);
+	void call(const lowir::Instruction& inst, bool protected_by_group = false);
 	void plan_nonlocal_jumps();
 	bool nonlocal_call(const lowir::Instruction& inst);
 	void nonlocal_dispatch();
 	void call_body(const lowir::Instruction& inst, const lowir::Signature& signature);
 	void exception_call(const lowir::Instruction& inst, const lowir::Signature* signature, uint32_t landing);
+	lowir::InstId grouped_exception_calls(lowir::InstId first);
+	void save_exception_stack();
+	void begin_exception_call();
+	void end_exception_call(uint32_t landing);
 	void exception_select(uint32_t landing);
 	void exception_throw(const lowir::Instruction& inst);
 	void exception_value(lowir::Type type);
@@ -154,6 +158,7 @@ private:
 	const Boundary& boundary_;
 	Function& out_;
 	const ExceptionPlan* exceptions_;
+	bool minimize_size_;
 	uint32_t exception_pointer_ = lowir::kNoId;
 	uint32_t exception_high_ = lowir::kNoId;
 	uint32_t exception_reference_ = lowir::kNoId;

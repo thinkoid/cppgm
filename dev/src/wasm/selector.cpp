@@ -8,12 +8,12 @@ namespace wasm {
 
 using namespace lowir;
 
-Selector::Selector(
-	const Program& program, const Module& module, SymbolId symbol, Function& output, const ExceptionPlan* exceptions)
+Selector::Selector(const Program& program, const Module& module, SymbolId symbol, Function& output,
+	const ExceptionPlan* exceptions, bool minimize_size)
 	: program_(program), module_(module), body_(*program.functions[program.symbols[symbol].detail].body),
 	  signature_(program.signatures[program.functions[program.symbols[symbol].detail].signature]),
 	  boundary_(module.boundaries[program.functions[program.symbols[symbol].detail].signature]), out_(output),
-	  exceptions_(exceptions)
+	  exceptions_(exceptions), minimize_size_(minimize_size)
 {}
 
 uint32_t Selector::add_local(ValueType type)
@@ -327,11 +327,22 @@ void Selector::dispatch()
 void Selector::block(BlockId id)
 {
 	current_block_ = id;
-	for (InstId i = body_.blocks[id].first; i != kNoId; i = body_.instructions[i].next)
+	const bool group_calls = minimize_size_ && exceptions_ != nullptr && exceptions_->active;
+	for (InstId i = body_.blocks[id].first; i != kNoId;)
 	{
+		if (group_calls && body_.instructions[i].op == Opcode::Call)
+		{
+			const InstId next = grouped_exception_calls(i);
+			if (next != i)
+			{
+				i = next;
+				continue;
+			}
+		}
 		current_inst_ = i;
 		out_.location = body_.instructions[i].location;
 		instruction(body_.instructions[i]);
+		i = body_.instructions[i].next;
 	}
 }
 

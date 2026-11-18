@@ -5,7 +5,7 @@ namespace wasm {
 
 using namespace lowir;
 
-void Selector::call(const lowir::Instruction& inst)
+void Selector::call(const lowir::Instruction& inst, bool protected_by_group)
 {
 	const lowir::Signature* signature = program_.call_boundary(inst);
 	if (signature == nullptr ||
@@ -16,7 +16,7 @@ void Selector::call(const lowir::Instruction& inst)
 		return;
 	const uint32_t site = exceptions_ != nullptr && exceptions_->active ? exceptions_->analysis.eh_sites_[current_inst_]
 																		: 0;
-	if (site != 0)
+	if (site != 0 && !protected_by_group)
 		exception_call(inst, signature, site - 1);
 	else
 		call_body(inst, *signature);

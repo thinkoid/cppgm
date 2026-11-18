@@ -69,6 +69,6 @@ struct Function
 
 ValueType value_type(lowir::Type type);
 std::uint16_t effects(Op op);
-void cleanup_locals(Function& function, bool optimize);
+void cleanup_locals(Function& function, bool optimize, bool minimize_size);
 
 } // namespace wasm

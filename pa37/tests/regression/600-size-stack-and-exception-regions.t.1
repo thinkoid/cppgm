@@ -1,0 +1,28 @@
+volatile int calls;
+
+int step_one(int fail)
+{
+    ++calls;
+    if (fail == 1) throw fail;
+    return 4;
+}
+
+int step_two(int x, int fail)
+{
+    ++calls;
+    if (fail == 2) throw fail;
+    return x + 1;
+}
+
+int step_three(int x, int fail)
+{
+    ++calls;
+    if (fail == 3) throw fail;
+    return x * 2;
+}
+
+int replaceable(int x)
+{
+    if (x < 0) throw x;
+    return x;
+}

@@ -1,0 +1,26 @@
+{
+  "source": true,
+  "units": ["600-size-stack-and-exception-regions.t.1"],
+  "levels": ["z"],
+  "wasi": true,
+  "target": "wasm32-wasip1",
+  "link_flags": ["-Oz", "-nostartfiles"],
+  "calls": [
+    {"export": "grouped", "args": ["0"], "result": "103"},
+    {"export": "grouped", "args": ["1"], "result": "-1"},
+    {"export": "grouped", "args": ["2"], "result": "-2"},
+    {"export": "grouped", "args": ["3"], "result": "-3"},
+    {"export": "inferred", "args": ["0"], "result": "42"},
+    {"export": "inferred", "args": ["2"], "result": "-1"},
+    {"export": "override_catch", "args": ["-1"], "result": "-42"},
+    {"export": "expression", "args": ["1", "8", "2", "4"], "result": "46"}
+  ],
+  "quality": {
+    "levels": ["z"],
+    "functions": {
+      "grouped": {"try_tables": 1},
+      "inferred": {"try_tables": 1},
+      "expression": {"local_ops": 4}
+    }
+  }
+}

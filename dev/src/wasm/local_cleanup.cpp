@@ -1,6 +1,8 @@
 #include "wasm/mir.h"
 #include "wasm/local_lifetimes.h"
 
+#include <algorithm>
+
 namespace wasm {
 
 namespace {
@@ -68,6 +70,88 @@ size_t unread_value(
 			relocated[inst.operands.first] = 2;
 	}
 	return at;
+}
+
+// Look for one straight-line store. A fixed window bounds the cost even
+// when the whole function has many temporaries.
+constexpr size_t kStackifyWindow = 24;
+
+size_t find_local_store(const Function& function, uint64_t local, size_t end, size_t limit)
+{
+	for (size_t i = end; i > limit;)
+	{
+		const Instruction& inst = function.instructions[--i];
+		if (inst.op == Op::LocalSet && function.operands[inst.operands.first] == local)
+			return i;
+		if (inst.op != Op::LocalSet && value_inputs(inst.op) < 0)
+			break;
+	}
+	return end;
+}
+
+bool overwritten(const Function& function, uint64_t local, size_t begin, size_t end)
+{
+	for (size_t i = begin; i < end; ++i)
+	{
+		const Instruction& inst = function.instructions[i];
+		if (inst.op == Op::LocalSet && function.operands[inst.operands.first] == local)
+			return true;
+	}
+	return false;
+}
+
+// The encoder visits relocated operands in emission order. Keep those
+// instructions in place, even when their values are safe to rematerialize.
+size_t stackifiable_value(
+	const Function& function, const std::vector<uint8_t>& relocated, size_t store, size_t end, size_t limit)
+{
+	size_t need = 1;
+	for (size_t start = store; start > limit;)
+	{
+		const Instruction& inst = function.instructions[--start];
+		const int inputs = value_inputs(inst.op);
+		if (inputs < 0 || (inst.operands.count != 0 && relocated[inst.operands.first]))
+			break;
+		if (inst.op == Op::LocalGet && overwritten(function, function.operands[inst.operands.first], store, end))
+			break;
+		need = need + static_cast<size_t>(inputs) - 1;
+		if (need == 0)
+			return start;
+	}
+	return store;
+}
+
+// A pure producer and its local.set leave the stack unchanged. Move the
+// producer to the single read of that local and drop the set and get.
+void stackify_pure_values(Function& function, const std::vector<uint32_t>& reads, const std::vector<uint8_t>& relocated)
+{
+	auto& instructions = function.instructions;
+	size_t kept = 0;
+	for (const Instruction inst : instructions)
+	{
+		if (inst.op == Op::LocalGet)
+		{
+			const uint64_t local = function.operands[inst.operands.first];
+			if (reads[local] == 1)
+			{
+				const size_t limit = kept > kStackifyWindow ? kept - kStackifyWindow : 0;
+				const size_t store = find_local_store(function, local, kept, limit);
+				if (store != kept)
+				{
+					const size_t start = stackifiable_value(function, relocated, store, kept, limit);
+					if (start != store)
+					{
+						std::rotate(instructions.begin() + start, instructions.begin() + store + 1,
+							instructions.begin() + kept);
+						--kept;
+						continue;
+					}
+				}
+			}
+		}
+		instructions[kept++] = inst;
+	}
+	instructions.resize(kept);
 }
 
 // The integer comparison that holds when `op` does not; Nop when `op` is not
@@ -153,12 +237,20 @@ void drop_branches_to_next(Function& function)
 
 } // namespace
 
-void cleanup_locals(Function& function, bool optimize)
+void cleanup_locals(Function& function, bool optimize, bool minimize_size)
 {
 	std::vector<uint32_t> uses;
 	if (optimize)
 	{
+		std::vector<uint8_t> relocated(function.operands.size() + 1, 0);
+		for (const Relocation& relocation : function.relocations)
+			relocated[relocation.offset] = 1;
 		count_reads(function, uses);
+		if (minimize_size)
+		{
+			stackify_pure_values(function, uses, relocated);
+			count_reads(function, uses);
+		}
 		size_t kept = 0;
 		for (size_t i = 0; i < function.instructions.size(); ++i)
 		{
@@ -183,9 +275,6 @@ void cleanup_locals(Function& function, bool optimize)
 		// A value that no instruction reads is not stored, and not computed
 		// when its operations have no effect: a step whose uses all went into
 		// memory offsets. Removing one may leave the values it read unread.
-		std::vector<uint8_t> relocated(function.operands.size() + 1, 0);
-		for (const Relocation& relocation : function.relocations)
-			relocated[relocation.offset] = 1;
 		count_reads(function, uses);
 		for (bool again = true; again;)
 		{

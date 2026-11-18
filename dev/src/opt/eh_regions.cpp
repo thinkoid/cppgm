@@ -218,7 +218,7 @@ bool strip_dead_regions(FunctionContext& context)
 	return changed;
 }
 
-bool proves_nounwind(const FunctionContext& context)
+bool proves_nounwind(const FunctionContext& context, bool exclude_assembly)
 {
 	const SymbolMetadata& m = context.program.symbols[context.symbol].metadata;
 	if ((m.flags & SF_REPLACEABLE) != 0)
@@ -228,10 +228,40 @@ bool proves_nounwind(const FunctionContext& context)
 		for (InstId i = body.blocks[b].first; i != kNoId; i = body.instructions[i].next)
 		{
 			const Instruction& inst = body.instructions[i];
-			if (is_eh_instruction(inst.op) || can_unwind(context, inst))
+			if (is_eh_instruction(inst.op) || (exclude_assembly && inst.op == Opcode::Asm) || can_unwind(context, inst))
 				return false;
 		}
 	return true;
+}
+
+void record_nounwind_calls(
+	Program& program, const std::vector<SymbolId>& functions, const std::vector<uint8_t>& nounwind)
+{
+	// Keep the ABI and all other facts of the existing boundary.
+	std::vector<SignatureId> clean(program.signatures.size(), kNoId);
+	for (SymbolId id : functions)
+	{
+		FunctionBody& body = *program.functions[program.symbols[id].detail].body;
+		for (BlockId block : body.layout)
+			for (InstId i = body.blocks[block].first; i != kNoId; i = body.instructions[i].next)
+			{
+				Instruction& call = body.instructions[i];
+				if (call.op != Opcode::Call || !call.ops[0].is(ValueKind::Symbol) || !nounwind[call.ops[0].index])
+					continue;
+				const Signature* boundary = program.call_boundary(call);
+				if (boundary == nullptr || boundary->boundary.unwind == ir_model::CUM_NO)
+					continue;
+				SignatureId& signature = clean[boundary - program.signatures.data()];
+				if (signature == kNoId)
+				{
+					Signature copy = *boundary;
+					copy.boundary.unwind = ir_model::CUM_NO;
+					signature = program.add_signature(copy);
+				}
+				call.flags |= IF_SIGNATURE;
+				call.immediate = signature;
+			}
+	}
 }
 
 } // namespace opt
