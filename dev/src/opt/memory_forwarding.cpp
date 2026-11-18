@@ -179,7 +179,8 @@ private:
 	}
 	bool known_zero(Value address, uint64_t bytes) const;
 	Value float_bits(const Instruction& load);
-	void note_zero(Value address, uint64_t bytes);
+	void note_zero(Value address, uint64_t bytes, uint32_t offset = 0);
+	void remember_extension(const Instruction& store);
 	Value packed_literal(const Instruction& load);
 	void remember(Value address, Type type, Value value, bool typed);
 	void remember_at(const AddressFacts& f, const Key& key, Type type, Value value, bool typed);
@@ -651,14 +652,14 @@ Value MemoryForwarding::float_bits(const Instruction& load)
 // The most zero ranges one point of the walk keeps (the oldest goes).
 const size_t kMaxZeroRanges = 16;
 
-void MemoryForwarding::note_zero(Value address, uint64_t bytes)
+void MemoryForwarding::note_zero(Value address, uint64_t bytes, uint32_t offset)
 {
 	AddressFacts f = facts_of(address);
 	if (f.base == ValueKind::None || bytes == 0 || bytes >= (static_cast<uint64_t>(1) << 32))
 		return;
 	if (zeros_.size() >= kMaxZeroRanges)
 		zeros_.erase(zeros_.begin());
-	const int64_t start = f.offset;
+	const int64_t start = f.offset + offset;
 	f.offset = 0;
 	zeros_.push_back(ZeroRange{ f, start, start + static_cast<int64_t>(bytes) });
 }
@@ -670,6 +671,30 @@ void MemoryForwarding::remember(Value address, Type type, Value value, bool type
 {
 	const AddressFacts f = facts_of(address);
 	remember_at(f, key_of(f, address, type), type, value, typed);
+}
+
+// The narrow scalar of a sign or zero extension occupies the first
+// bytes of a little-endian store. A zero extension also fixes its suffix.
+// Both are ordinary memory facts and die on an overlapping write.
+void MemoryForwarding::remember_extension(const Instruction& store)
+{
+	if (!store.type.is_integer() || !store.ops[0].is(ValueKind::Temp))
+		return;
+	const InstId def = body_.temps[store.ops[0].index].def;
+	if (def == kNoId)
+		return;
+	const Instruction& cv = body_.instructions[def];
+	if (cv.op != Opcode::Convert ||
+		(cv.sub != static_cast<uint8_t>(ConvertOp::ZExt) && cv.sub != static_cast<uint8_t>(ConvertOp::SExt)))
+		return;
+	const Type from = convert_source_type(cv);
+	const uint64_t bytes = storage_bytes(from), wide = storage_bytes(store.type);
+	if (!from.is_integer() || from.kind() == TypeKind::I1 || bytes >= wide || wide > 8 ||
+		!cv.ops[0].is(ValueKind::Temp) || body_.temps[cv.ops[0].index].type != from)
+		return;
+	remember(store.ops[1], from, cv.ops[0], false);
+	if (cv.sub == static_cast<uint8_t>(ConvertOp::ZExt))
+		note_zero(store.ops[1], wide - bytes, bytes);
 }
 
 void MemoryForwarding::remember_at(const AddressFacts& f, const Key& key, Type type, Value value, bool typed)
@@ -1105,7 +1130,11 @@ void MemoryForwarding::process(BlockId block)
 			const bool exact = v.is_literal() ? !inst.type.is_float() || v.is(ValueKind::Float)
 											  : v.is(ValueKind::Temp) && body_.temps[v.index].type == inst.type;
 			if (exact && !v.is(ValueKind::Slot) && (inst.flags & IF_VOLATILE) == 0)
+			{
 				remember(inst.ops[1], inst.type, v, (inst.flags & IF_TYPED) != 0);
+				if (target_model::is_aarch64(c_.program.target))
+					remember_extension(inst);
+			}
 			if (zero && (inst.flags & IF_VOLATILE) == 0)
 				note_zero(inst.ops[1], bytes);
 		}

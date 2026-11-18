@@ -95,3 +95,13 @@ extern "C" unsigned long rotate_mix(unsigned long value, unsigned long key) {
 extern "C" unsigned different_shifts(unsigned value) {
     return (value << 13) ^ (value >> 18);
 }
+
+extern "C" unsigned projected_bytes(unsigned long* word, unsigned char v, unsigned char* write, signed char s) {
+    unsigned char* b = reinterpret_cast<unsigned char*>(word);
+    *word = v;
+    unsigned before = b[0] + 257u * b[6];
+    *write = 91;
+    unsigned after = b[0] + 257u * b[6];
+    *word = static_cast<unsigned long>(s);
+    return before + 3 * after + 65536u * b[1];
+}

@@ -27,7 +27,15 @@ static int plus_five(int x) { return x + 5; }
 extern "C" unsigned rotate_word(unsigned);
 extern "C" unsigned long rotate_mix(unsigned long, unsigned long);
 extern "C" unsigned different_shifts(unsigned);
+extern "C" unsigned projected_bytes(unsigned long*, unsigned char, unsigned char*, signed char);
 int main() {
+    unsigned long carrier = ~0UL;
+    unsigned char other = 0;
+    unsigned char* bytes = reinterpret_cast<unsigned char*>(&carrier);
+    if (projected_bytes(&carrier, 255, bytes+6, -2) != 255 + 3 * (255 + 257 * 91) + 65536u * 255 ||
+        carrier != ~1UL) return 23;
+    if (projected_bytes(&carrier, 7, bytes, 23) != 7 + 3 * 91 || carrier != 23) return 24;
+    if (projected_bytes(&carrier, 4, &other, -1) != 16 + 65536u * 255 || other != 91) return 25;
     if (rotate_word(0xacde1234u) != 0xc246959bu ||
         rotate_mix(0x8123456789abcdefUL, 0x34caffff2222f0f0UL) != 0xf45b5d4ce6f71607UL ||
         different_shifts(0xacde1234u) != 0xc246ab37u) return 22;
