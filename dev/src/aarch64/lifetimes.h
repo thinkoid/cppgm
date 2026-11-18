@@ -20,7 +20,7 @@ struct LiveRange
 	bool vector_address = false;
 };
 
-std::vector<uint32_t> widening_aliases(const lowir::FunctionBody& body);
+std::vector<uint32_t> scalar_aliases(const lowir::FunctionBody& body);
 inline uint32_t representative(const std::vector<uint32_t>& aliases, uint32_t id)
 {
 	return aliases.empty() ? id : aliases[id];

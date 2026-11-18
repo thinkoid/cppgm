@@ -34,6 +34,8 @@ void Selector::binary(const lowir::Instruction& inst)
 
 void Selector::select(const lowir::Instruction& inst, BlockId block)
 {
+	if (inst.result != kNoId && !aliases_.empty() && aliases_[inst.result] != inst.result)
+		return;
 	if ((inst.type.kind() == TypeKind::I128 ||
 			(inst.op == Opcode::Convert && convert_source_type(inst).kind() == TypeKind::I128)) &&
 		wide(inst))
@@ -168,8 +170,6 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		return;
 	case Opcode::Convert:
 	{
-		if (!aliases_.empty() && aliases_[inst.result] != inst.result)
-			return;
 		const auto op = static_cast<ConvertOp>(inst.sub);
 		const Type from = convert_source_type(inst);
 		if (op != ConvertOp::SExt && op != ConvertOp::ZExt && op != ConvertOp::Trunc)

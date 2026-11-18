@@ -202,7 +202,7 @@ void Selector::allocate()
 	Segments segments;
 	opt::Cfg cfg;
 	machine::PhiWebs webs;
-	aliases_ = widening_aliases(body_);
+	aliases_ = scalar_aliases(body_);
 	auto ranges = live_ranges(
 		program_, body_, out_.exceptions.get(), uses_, calls, segments, cfg, webs, entry_regs_, aliases_);
 	std::vector<uint32_t> web_regs(webs.empty() ? 0 : count, kNoId);

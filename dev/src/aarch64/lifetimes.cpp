@@ -209,10 +209,10 @@ std::vector<uint64_t> spill_weights(const Program& program, const FunctionBody& 
 	return cost;
 }
 
-// Narrow integer temporaries already hold their zero-extended value in a
-// register or an eight-byte spill slot. Give the wider name the same value
-// throughout allocation, including all its later call and phi uses.
-std::vector<uint32_t> widening_aliases(const FunctionBody& body)
+// A same-type copy and a widening zero extension can share their source's
+// canonical register value or eight-byte spill. Account for every later use
+// before allocating registers, including outgoing arguments and phi edges.
+std::vector<uint32_t> scalar_aliases(const FunctionBody& body)
 {
 	std::vector<uint32_t> parent;
 	for (TempId id = body.parameter_count; id < body.temps.size(); ++id)
@@ -221,12 +221,21 @@ std::vector<uint32_t> widening_aliases(const FunctionBody& body)
 		if (def == kNoId)
 			continue;
 		const auto& inst = body.instructions[def];
-		if (inst.op != Opcode::Convert || inst.sub != static_cast<unsigned>(ConvertOp::ZExt) ||
-			!inst.ops[0].is(ValueKind::Temp) || inst.result != id || integer_bits(inst.type.kind()) > 64)
+		if (!inst.ops[0].is(ValueKind::Temp) || inst.result != id ||
+			(inst.op != Opcode::Copy && inst.op != Opcode::Convert))
 			continue;
 		const auto src = inst.ops[0].index;
-		const Type from = convert_source_type(inst);
-		if (body.temps[src].type != from || !from.is_integer() || !inst.type.is_integer() ||
+		const Type from = body.temps[src].type;
+		if (inst.op == Opcode::Copy)
+		{
+			// A same-width edge points to an earlier name. A widening edge
+			// points to a strictly narrower type, so the graph is acyclic.
+			if (src >= id || from != inst.type || !(from.is_integer() || from.is_pointer()) ||
+				integer_bits(from.kind()) > 64)
+				continue;
+		}
+		else if (inst.sub != static_cast<unsigned>(ConvertOp::ZExt) || from != convert_source_type(inst) ||
+			!from.is_integer() || !inst.type.is_integer() || integer_bits(inst.type.kind()) > 64 ||
 			integer_bits(from.kind()) >= integer_bits(inst.type.kind()))
 			continue;
 		if (parent.empty())
@@ -237,7 +246,6 @@ std::vector<uint32_t> widening_aliases(const FunctionBody& body)
 		}
 		parent[id] = src;
 	}
-	// Each link points to a strictly narrower integer type.
 	for (TempId id = 0; id < parent.size(); ++id)
 		while (parent[id] != parent[parent[id]])
 			parent[id] = parent[parent[id]];
