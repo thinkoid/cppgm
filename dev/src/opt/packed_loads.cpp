@@ -13,6 +13,17 @@ bool combine_adjacent_loads(FunctionBody& body, const std::vector<uint32_t>& use
 	BlockId block, InstId id)
 {
 	auto& combine = body.instructions[id];
+	// Keep the original narrow access types available to field projection
+	// through a phi. A local whole-word consumer justifies widening here.
+	if (combine.next == kNoId)
+		return false;
+	const auto& consumer = body.instructions[combine.next];
+	const auto joined = Value::temp(combine.result);
+	const bool reads_word = consumer.op == Opcode::Compare
+		? consumer.ops[0] == joined || consumer.ops[1] == joined
+		: (consumer.op == Opcode::Return || consumer.op == Opcode::Store) && consumer.ops[0] == joined;
+	if (!reads_word)
+		return false;
 	const unsigned width = integer_bits(combine.type.kind());
 	if (width != 16 && width != 32 && width != 64)
 		return false;
