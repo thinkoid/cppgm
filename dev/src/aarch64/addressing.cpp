@@ -98,20 +98,30 @@ InstId Selector::paired_fields(const lowir::Instruction& first)
 	if (!first.ops[0].is(ValueKind::Temp) || registers_[first.ops[0].index] == kNoId ||
 		!first.ops[1].is(ValueKind::Integer) || first.next == kNoId || uses_[first.result] != 1)
 		return kNoId;
-	const auto& a = body_.instructions[first.next];
-	const bool store = a.op == Opcode::Store;
-	if ((!store && a.op != Opcode::Load) || a.next == kNoId || !(a.ops[store ? 1 : 0] == Value::temp(first.result)))
+	const auto& next = body_.instructions[first.next];
+	if (next.next == kNoId)
 		return kNoId;
-	const unsigned bytes = storage_bytes(a.type);
-	if ((bytes != 4 && bytes != 8) || !(a.type.is_integer() || a.type.is_pointer()))
-		return kNoId;
-	const auto& second = body_.instructions[a.next];
+	const bool together = next.op == Opcode::Index;
+	const auto& second = together ? next : body_.instructions[next.next];
 	if (second.op != Opcode::Index || second.next == kNoId || !(second.ops[0] == first.ops[0]) ||
 		!second.ops[1].is(ValueKind::Integer) || uses_[second.result] != 1)
 		return kNoId;
-	const auto& b = body_.instructions[second.next];
-	if (b.op != a.op || b.type != a.type || !(b.ops[store ? 1 : 0] == Value::temp(second.result)) ||
-		((a.flags | b.flags) & IF_VOLATILE))
+	// Both addresses may precede both accesses. Follow the actual address
+	// operands to associate each loaded or stored register with its offset.
+	const auto& a = together ? body_.instructions[second.next] : next;
+	const bool store = a.op == Opcode::Store;
+	const auto last = together ? a.next : second.next;
+	if ((!store && a.op != Opcode::Load) || last == kNoId)
+		return kNoId;
+	const auto& b = body_.instructions[last];
+	const unsigned bytes = storage_bytes(a.type);
+	if (b.op != a.op || b.type != a.type || ((a.flags | b.flags) & IF_VOLATILE) || (bytes != 4 && bytes != 8) ||
+		!(a.type.is_integer() || a.type.is_pointer()))
+		return kNoId;
+	const auto a_ptr = a.ops[store ? 1 : 0], b_ptr = b.ops[store ? 1 : 0];
+	const bool reversed = together && a_ptr == Value::temp(second.result);
+	if (!(a_ptr == Value::temp(reversed ? second.result : first.result)) ||
+		!(b_ptr == Value::temp(reversed ? first.result : second.result)))
 		return kNoId;
 	const uint64_t left = body_.literals[first.ops[1].index].low * storage_bytes(first.type);
 	const uint64_t right = body_.literals[second.ops[1].index].low * storage_bytes(second.type);
@@ -126,12 +136,13 @@ InstId Selector::paired_fields(const lowir::Instruction& first)
 			: v.is(ValueKind::Integer) && !body_.literals[v.index].low ? 31u
 																	   : kNoId;
 	};
-	const auto lo = reg(left < right ? a : b), hi = reg(left < right ? b : a);
+	const bool first_low = (left < right) != reversed;
+	const auto lo = reg(first_low ? a : b), hi = reg(first_low ? b : a);
 	if (lo == kNoId || hi == kNoId || (!store && lo == hi))
 		return kNoId;
 	const auto op = bytes == 4 ? (store ? Op::StpW : Op::LdpW) : (store ? Op::StpX : Op::LdpX);
 	out_.emit(op, lo, registers_[first.ops[0].index], 0, (uint32_t(offset / bytes) << 15) | (hi << 10));
-	return second.next;
+	return last;
 }
 
 // STP writes exactly the two consecutive scalar accesses. Restrict the
