@@ -7,7 +7,12 @@ extern "C" void overwrite(volatile int* p) {
     for (int i = 0; i < 12; ++i) p[i] += i + 1;
 }
 int a[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+extern "C" unsigned long exit_pair(unsigned, unsigned, unsigned, unsigned);
 int main() {
+    if (exit_pair(0x80000001u, 0x12345678u, 0, 0) != 0x1234567880000001UL) return 4;
+    if (exit_pair(0x80000001u, 0x12345678u, 1, 0) != 0x8000000192345679UL) return 4;
+    if (exit_pair(0x80000001u, 0x12345678u, 13, 7) != 0xf418a4e92114cf31UL) return 4;
+    if (exit_pair(0x80000001u, 0x12345678u, 9, 17) != 0xcd5730c1d735f5cdUL) return 4;
     if (rotate(0, 0x80000005u, 17, 0xfffffff1u) != 0xd432ed95u ||
         rotate(1, 0x80000005u, 17, 0xfffffff1u) != 0x6dcb4609u ||
         rotate(5, 0x80000005u, 17, 0xfffffff1u) != 0xedcb4677u ||

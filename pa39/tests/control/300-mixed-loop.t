@@ -36,3 +36,13 @@ extern "C" unsigned rotate(unsigned rounds, unsigned a, unsigned b, unsigned c) 
     }
     return a ^ (3*b) ^ (7*c) ^ (unsigned(x) << 16) ^ y ^ sum;
 }
+
+extern "C" unsigned long exit_pair(unsigned a, unsigned b, unsigned limit, unsigned stop) {
+    for (unsigned i = 0; i < limit; ++i) {
+        unsigned old = a;
+        a = (a ^ b) + i;
+        if (i == stop) return (static_cast<unsigned long>(old) << 32) | a;
+        b += a;
+    }
+    return (static_cast<unsigned long>(b) << 32) | a;
+}

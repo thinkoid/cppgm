@@ -109,6 +109,7 @@ private:
 	lowir::InstId address_sequence(lowir::InstId id);
 	void choose(const lowir::Instruction& inst, unsigned condition);
 	bool compare_consumer(const lowir::Instruction& inst, lowir::BlockId block);
+	bool backedge_move(lowir::BlockId from, lowir::BlockId to, unsigned condition);
 	bool empty_edge(lowir::BlockId block, lowir::BlockId to);
 	void conditional_edges(lowir::BlockId block, const lowir::Instruction& branch, Op test, unsigned operand);
 	void call(const lowir::Instruction& inst);
@@ -129,6 +130,7 @@ private:
 	std::vector<uint32_t> slots_, homes_, registers_, vectors_, uses_;
 	std::vector<std::pair<unsigned, uint32_t>> preserved_;
 	machine::PhiInputs phis_;
+	std::vector<uint32_t> entry_regs_;
 	std::vector<lowir::InstId> entry_elided_;
 	std::vector<std::pair<lowir::BlockId, lowir::BlockId>> snapshot_edges_;
 	std::vector<CallLayout> calls_;

@@ -22,7 +22,8 @@ struct LiveRange
 
 std::vector<LiveRange> live_ranges(const lowir::Program& program, const lowir::FunctionBody& body,
 	const machine::ExceptionLayout* exceptions, std::vector<uint32_t>& uses, std::vector<uint32_t>& calls,
-	std::vector<std::pair<uint32_t, uint32_t>>& segments, opt::Cfg& cfg, machine::PhiWebs& webs);
+	std::vector<std::pair<uint32_t, uint32_t>>& segments, opt::Cfg& cfg, machine::PhiWebs& webs,
+	std::vector<uint32_t>& entries);
 
 std::vector<uint64_t> spill_weights(const lowir::Program& program, const lowir::FunctionBody& body, opt::Cfg& cfg);
 

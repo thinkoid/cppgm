@@ -211,7 +211,8 @@ std::vector<uint64_t> spill_weights(const Program& program, const FunctionBody& 
 
 std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& body,
 	const machine::ExceptionLayout* exceptions, std::vector<uint32_t>& uses, std::vector<uint32_t>& calls,
-	std::vector<std::pair<uint32_t, uint32_t>>& segments, opt::Cfg& cfg, machine::PhiWebs& webs)
+	std::vector<std::pair<uint32_t, uint32_t>>& segments, opt::Cfg& cfg, machine::PhiWebs& webs,
+	std::vector<uint32_t>& entries)
 {
 	FunctionLiveness plan(body);
 	uses.assign(body.temps.size(), 0);
@@ -284,6 +285,12 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 	for (TempId id = 0; id < body.parameter_count; ++id)
 		if (!uses[id])
 			plan.ranges[id].first = kNoId;
+	if (!webs.empty() && !segments.empty() && !exceptions && body.code_labels.empty())
+	{
+		entries.resize(body.blocks.size());
+		for (BlockId block : body.layout)
+			entries[block] = plan.spans[block].first;
+	}
 	return std::move(plan.ranges);
 }
 

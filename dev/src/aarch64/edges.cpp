@@ -278,6 +278,34 @@ bool Selector::empty_edge(BlockId block, BlockId to)
 	return true;
 }
 
+// Emit one ordinary GPR transfer before a backward branch if its written
+// register is dead on the fallthrough. The pressure tree includes any phi
+// result needed on that edge. MOV preserves the comparison flags.
+bool Selector::backedge_move(BlockId from, BlockId to, unsigned condition)
+{
+	if (entry_regs_.empty() || out_.labels[to] == kNoId || !empty_edge(from, fallthrough_))
+		return false;
+	unsigned dst = kNoId, src = kNoId;
+	for (InstId i = body_.blocks[to].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
+		i = body_.instructions[i].next)
+	{
+		const auto& phi = body_.instructions[i];
+		const Value incoming = phis_.incoming(body_, i, from);
+		if (same_home(phi.result, incoming))
+			continue;
+		if (dst != kNoId || !incoming.is(ValueKind::Temp))
+			return false;
+		dst = registers_[phi.result];
+		src = registers_[incoming.index];
+		if (dst == kNoId || src == kNoId || dst == condition || (entry_regs_[fallthrough_] & (1u << dst)))
+			return false;
+	}
+	if (dst == kNoId)
+		return false;
+	move(dst, src);
+	return true;
+}
+
 void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch, Op test, unsigned operand)
 {
 	const BlockId yes = branch.ops[1].index, no = branch.ops[2].index;
@@ -287,6 +315,16 @@ void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch
 		: test == Op::CbnzW              ? Op::CbzW
 										 : Op::BCond;
 	const auto inverse_operand = test == Op::BCond ? operand ^ 1 : operand;
+	if (level_ && (no == fallthrough_ || yes == fallthrough_))
+	{
+		const bool taken = no == fallthrough_;
+		const BlockId target = taken ? yes : no;
+		if (backedge_move(block, target, test == Op::BCond ? kNoId : operand))
+		{
+			out_.reference(taken ? inverse : test, Fixup::Block, target, taken ? inverse_operand : operand);
+			return;
+		}
+	}
 	if (no == fallthrough_ && empty_edge(block, yes))
 	{
 		out_.reference(inverse, Fixup::Block, yes, inverse_operand);

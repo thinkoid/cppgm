@@ -61,6 +61,7 @@ class RegisterBank
 {
 public:
 	RegisterBank(const Segments& segments, uint32_t slots) : segments_(segments), slots_(slots) {}
+	uint32_t live_at(uint32_t slot) const { return initialized_ ? tree_.regs(slot, slot) : 0; }
 	unsigned assign(const LiveRange& range, uint32_t allowed, unsigned preferred, unsigned alternate = kNoId)
 	{
 		if (!allowed)
@@ -198,7 +199,7 @@ void Selector::allocate()
 	Segments segments;
 	opt::Cfg cfg;
 	machine::PhiWebs webs;
-	auto ranges = live_ranges(program_, body_, out_.exceptions.get(), uses_, calls, segments, cfg, webs);
+	auto ranges = live_ranges(program_, body_, out_.exceptions.get(), uses_, calls, segments, cfg, webs, entry_regs_);
 	std::vector<uint32_t> web_regs(webs.empty() ? 0 : count, kNoId);
 	parameter_homes(cfg);
 	std::stable_sort(
@@ -273,6 +274,8 @@ void Selector::allocate()
 		if (root != kNoId && reg != kNoId && (web_regs[root] == kNoId || (reg >= 19 && web_regs[root] < 19)))
 			web_regs[root] = reg;
 	}
+	for (auto& entry : entry_regs_)
+		entry = general.live_at(entry);
 	uint32_t saved = 0;
 	machine::IntervalSlots scalar_spills, vector_spills;
 	for (const auto& range : ranges)
