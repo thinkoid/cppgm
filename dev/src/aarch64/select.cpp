@@ -353,9 +353,9 @@ void Selector::run()
 					continue;
 				}
 			}
-			if (level_ && (inst.op == Opcode::Load || inst.op == Opcode::Vector))
+			if (level_ && (inst.op == Opcode::Load || inst.op == Opcode::Store || inst.op == Opcode::Vector))
 			{
-				const auto last = inst.op == Opcode::Load ? paired_load(inst) : scalar_splat(inst);
+				const auto last = inst.op == Opcode::Vector ? scalar_splat(inst) : paired_access(inst);
 				if (last != kNoId)
 				{
 					i = last;

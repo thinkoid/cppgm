@@ -68,26 +68,49 @@ void Selector::scalar_access(const lowir::Instruction& inst)
 	}
 }
 
-// Load two adjacent words from the same base without constructing a second
-// address. The input reads are consecutive except for the pure index.
-InstId Selector::paired_load(const lowir::Instruction& low)
+// The offset and both data registers are already available. A store must
+// never read a spilled source after changing the first destination word.
+bool Selector::emit_scalar_pair(
+	const lowir::Instruction& low, const lowir::Instruction& high, Value base, uint64_t offset)
 {
+	const bool store = low.op == Opcode::Store;
 	const auto bytes = storage_bytes(low.type);
-	if (!low.type.is_integer() || (bytes != 4 && bytes != 8) || low.next == kNoId || !low.ops[0].is(ValueKind::Temp))
+	if (high.op != low.op || high.type != low.type || ((low.flags | high.flags) & IF_VOLATILE) ||
+		!(low.type.is_integer() || low.type.is_pointer()) || (bytes != 4 && bytes != 8) || offset % bytes ||
+		offset / bytes > 63 || !base.is(ValueKind::Temp) || registers_[base.index] == kNoId)
+		return false;
+	const auto reg = [&](const lowir::Instruction& inst) {
+		if (!store)
+			return registers_[inst.result];
+		const Value v = inst.ops[0];
+		return v.is(ValueKind::Temp)                                   ? registers_[v.index]
+			: v.is(ValueKind::Integer) && !body_.literals[v.index].low ? 31u
+																	   : kNoId;
+	};
+	const auto lo = reg(low), hi = reg(high);
+	if (lo == kNoId || hi == kNoId || (!store && lo == hi))
+		return false;
+	const auto op = bytes == 4 ? (store ? Op::StpW : Op::LdpW) : (store ? Op::StpX : Op::LdpX);
+	out_.emit(op, lo, registers_[base.index], 0, (uint32_t(offset / bytes) << 15) | (hi << 10));
+	return true;
+}
+
+// The first word is at the base and the second word at the following index.
+// The pure address calculation may stand between the accesses.
+InstId Selector::paired_access(const lowir::Instruction& low)
+{
+	const bool store = low.op == Opcode::Store;
+	const Value base = low.ops[store ? 1 : 0];
+	if (low.next == kNoId || !base.is(ValueKind::Temp))
 		return kNoId;
 	const auto& index = body_.instructions[low.next];
-	if (index.op != Opcode::Index || index.next == kNoId || !(index.ops[0] == low.ops[0]) ||
+	if (index.op != Opcode::Index || index.next == kNoId || !(index.ops[0] == base) ||
 		!index.ops[1].is(ValueKind::Integer) || body_.literals[index.ops[1].index].low != 1 ||
-		storage_bytes(index.type) != bytes || uses_[index.result] != 1)
+		storage_bytes(index.type) != storage_bytes(low.type) || uses_[index.result] != 1)
 		return kNoId;
 	const auto& high = body_.instructions[index.next];
-	if (high.op != Opcode::Load || high.type != low.type || !(high.ops[0] == Value::temp(index.result)) ||
-		((low.flags | high.flags) & IF_VOLATILE))
+	if (!(high.ops[store ? 1 : 0] == Value::temp(index.result)) || !emit_scalar_pair(low, high, base, 0))
 		return kNoId;
-	const auto a = registers_[low.result], b = registers_[high.result], base = registers_[low.ops[0].index];
-	if (a == kNoId || b == kNoId || base == kNoId || a == b)
-		return kNoId;
-	out_.emit(bytes == 4 ? Op::LdpW : Op::LdpX, a, base, 0, b << 10);
 	return index.next;
 }
 
@@ -115,8 +138,7 @@ InstId Selector::paired_fields(const lowir::Instruction& first)
 		return kNoId;
 	const auto& b = body_.instructions[last];
 	const unsigned bytes = storage_bytes(a.type);
-	if (b.op != a.op || b.type != a.type || ((a.flags | b.flags) & IF_VOLATILE) || (bytes != 4 && bytes != 8) ||
-		!(a.type.is_integer() || a.type.is_pointer()))
+	if (b.op != a.op)
 		return kNoId;
 	const auto a_ptr = a.ops[store ? 1 : 0], b_ptr = b.ops[store ? 1 : 0];
 	const bool reversed = together && a_ptr == Value::temp(second.result);
@@ -126,22 +148,10 @@ InstId Selector::paired_fields(const lowir::Instruction& first)
 	const uint64_t left = body_.literals[first.ops[1].index].low * storage_bytes(first.type);
 	const uint64_t right = body_.literals[second.ops[1].index].low * storage_bytes(second.type);
 	const uint64_t offset = std::min(left, right);
-	if (std::max(left, right) - offset != bytes || offset % bytes || offset / bytes > 63)
-		return kNoId;
-	const auto reg = [&](const lowir::Instruction& inst) {
-		if (!store)
-			return registers_[inst.result];
-		const Value v = inst.ops[0];
-		return v.is(ValueKind::Temp)                                   ? registers_[v.index]
-			: v.is(ValueKind::Integer) && !body_.literals[v.index].low ? 31u
-																	   : kNoId;
-	};
 	const bool first_low = (left < right) != reversed;
-	const auto lo = reg(first_low ? a : b), hi = reg(first_low ? b : a);
-	if (lo == kNoId || hi == kNoId || (!store && lo == hi))
+	if (std::max(left, right) - offset != bytes ||
+		!emit_scalar_pair(first_low ? a : b, first_low ? b : a, first.ops[0], offset))
 		return kNoId;
-	const auto op = bytes == 4 ? (store ? Op::StpW : Op::LdpW) : (store ? Op::StpX : Op::LdpX);
-	out_.emit(op, lo, registers_[first.ops[0].index], 0, (uint32_t(offset / bytes) << 15) | (hi << 10));
 	return last;
 }
 
@@ -156,16 +166,9 @@ InstId Selector::paired_store(const lowir::Instruction& index)
 	if (low.op != Opcode::Store || low.next == kNoId || !(low.ops[1] == index.ops[0]) || !low.type.is_integer())
 		return kNoId;
 	const auto& high = body_.instructions[low.next];
-	const auto bytes = storage_bytes(low.type);
-	if (high.op != Opcode::Store || high.type != low.type || (bytes != 4 && bytes != 8) ||
-		storage_bytes(index.type) != bytes || !(high.ops[1] == Value::temp(index.result)) ||
-		((low.flags | high.flags) & IF_VOLATILE) || !low.ops[0].is(ValueKind::Temp) || !high.ops[0].is(ValueKind::Temp))
+	if (storage_bytes(index.type) != storage_bytes(low.type) || !(high.ops[1] == Value::temp(index.result)) ||
+		!emit_scalar_pair(low, high, index.ops[0], 0))
 		return kNoId;
-	const auto a = registers_[low.ops[0].index], b = registers_[high.ops[0].index],
-			   base = registers_[index.ops[0].index];
-	if (a == kNoId || b == kNoId || base == kNoId)
-		return kNoId;
-	out_.emit(bytes == 4 ? Op::StpW : Op::StpX, a, base, 0, b << 10);
 	return low.next;
 }
 
