@@ -30,11 +30,13 @@ def public_arguments(folder):
 
 def load_inputs(kernels, public):
     cases = {}
+    sources = {}
     revisions = set()
     if kernels:
         data = json.loads((kernels / 'manifest.json').read_text())
         revisions.add(data['revision'])
         for name, expected in data['checksums'].items():
+            sources[name] = data['inputs']
             cases[name] = ([(kernels / key, data['guests'][key]['sha256']) for key in ('clang', 'candidate')],
                            [name], hashlib.sha256(bytes.fromhex(expected)).hexdigest())
     if public:
@@ -44,11 +46,12 @@ def load_inputs(kernels, public):
         revisions.add(data['revision'])
         for name, case in data['cases'].items():
             folder = public / name.replace('/', '-')
+            sources[name] = case['source_sha256']
             cases[name] = ([(folder / (key + '.elf'), case['builds'][key]['sha256']) for key in ('clang', 'cppgm')],
                            public_arguments(folder), case['stdout_sha256'])
     if not cases or len(revisions) != 1 or None in revisions:
         raise ValueError('supply benchmark bundles from one recorded revision')
-    return cases, revisions.pop()
+    return cases, revisions.pop(), sources
 
 
 def check_file(binary):
@@ -97,38 +100,51 @@ def time_guest(output, cwd, command, expected, **position):
 
 
 def profile(args):
-    cases, revision = load_inputs(args.kernels, args.public)
+    cases, revision, sources = load_inputs(args.kernels, args.public)
     selected = args.only or list(cases)
     unknown = set(selected) - cases.keys()
     if unknown:
         raise ValueError(f'unknown workload(s): {sorted(unknown)}')
     if args.hotblocks_plugin and not args.insn_plugin:
         raise ValueError('--hotblocks-plugin also requires --insn-plugin')
+    reference = 'clang'
+    reference_revision = revision
+    if args.baseline_kernels or args.baseline_public:
+        previous, reference_revision, previous_sources = load_inputs(args.baseline_kernels, args.baseline_public)
+        reference = 'baseline'
+        for name in selected:
+            if (name not in previous or sources[name] != previous_sources[name] or
+                    cases[name][1:] != previous[name][1:]):
+                raise ValueError(f'{name}: baseline sources, arguments or expected output differ')
+            (_, candidate), argv, expected = cases[name]
+            _, baseline = previous[name][0]
+            cases[name] = ([baseline, candidate], argv, expected)
     qemu, report = environment(args)
-    report.update(revision=revision, repeats=args.repeats, cases={})
+    report.update(revision=revision, reference=reference, reference_revision=reference_revision,
+                  repeats=args.repeats, cases={})
     for name in selected:
         binaries, argv, expected = cases[name]
         for binary in binaries:
             check_file(binary)
         summary = dict(inputs={str(p.resolve()): digest for p, digest in binaries}, stdout_sha256=expected)
         if args.insn_plugin:
-            for label, (path, _) in zip(('clang', 'cppgm'), binaries):
+            for label, (path, _) in zip((reference, 'cppgm'), binaries):
                 summary[label] = count_instructions(args, qemu, name, path, label, argv, expected)
             filename = 'qemu-instructions.json'
             print(f'{name}: {summary["cppgm"]["instructions"]:,} cppgm / '
-                  f'{summary["clang"]["instructions"]:,} Clang guest instructions', flush=True)
+                  f'{summary[reference]["instructions"]:,} {reference} guest instructions', flush=True)
         else:
             def run(label, phase, block, position):
-                path = binaries[0 if label == 'clang' else 1][0]
+                path = binaries[0 if label == reference else 1][0]
                 cmd = [qemu, '-cpu', args.cpu, str(path.resolve()), *argv]
                 times = [time_guest(args.output, path.parent, cmd, expected, case=name, label=label, phase=phase,
                                     block=block, position=position, repetition=i) for i in range(args.repeats)]
                 return dict(cpu=sum(times) / len(times))
 
-            for phase, candidate, blocks in [('AA', 'clang', args.aa_blocks), ('AB', 'cppgm', args.blocks)]:
-                summary[phase] = summarize(observations(run, 'clang', candidate, blocks, phase))
+            for phase, candidate, blocks in [('AA', reference, args.aa_blocks), ('AB', 'cppgm', args.blocks)]:
+                summary[phase] = summarize(observations(run, reference, candidate, blocks, phase))
             filename = 'qemu-results.json'
-            print(f'{name}: {1 / summary["AB"]["ratio"]:.3f}x vs Clang under QEMU', flush=True)
+            print(f'{name}: {1 / summary["AB"]["ratio"]:.3f}x vs {reference} under QEMU', flush=True)
         for binary in binaries:
             check_file(binary)
         report['cases'][name] = summary
@@ -210,6 +226,8 @@ def main():
         sub.add_argument('--aa-blocks', type=positive, default=2 if sub is guests else 1)
     guests.add_argument('--kernels', type=Path, help='directory from aarch64_benchmarks.py build')
     guests.add_argument('--public', type=Path, help='Arm directory from portable_public_benchmarks.py')
+    guests.add_argument('--baseline-kernels', type=Path, help='compare against cppgm from an earlier kernel bundle')
+    guests.add_argument('--baseline-public', type=Path, help='compare against cppgm from an earlier public bundle')
     guests.add_argument('--only', action='append', help='exact workload name, repeatable')
     guests.add_argument('--repeats', type=positive, default=1, help='runs per block position, averaged for short workloads')
     guests.add_argument('--insn-plugin', type=Path, help='count guest instructions in an untimed replay using QEMU libinsn.so')

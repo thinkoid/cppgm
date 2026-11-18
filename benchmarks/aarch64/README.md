@@ -30,6 +30,15 @@ original stdout checksum. It records host CPU seconds, elapsed seconds and the
 order of runs in `observations.jsonl`. The `AB.ratio` in `qemu-results.json`
 is cppgm time divided by Clang time. Its reciprocal is relative throughput.
 
+To compare two cppgm builds directly, pass the older bundle as
+`--baseline-public` or `--baseline-kernels`. The runner checks that both
+bundles used the same workload sources, arguments and expected output.
+
+```sh
+python3 scripts/aarch64_qemu_profile.py guests --public obj/arm-public \
+  --baseline-public obj/arm-public-before --output obj/arm-qemu-before-after
+```
+
 To count guest instructions, use a plugin-enabled build of the same QEMU
 version and its `tests/tcg/plugins/insn.c` plugin. The optional
 `contrib/plugins/hotblocks.c` plugin records block addresses, instruction
