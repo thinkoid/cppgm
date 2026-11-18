@@ -363,6 +363,8 @@ void Selector::run()
 				select(inst, block);
 		}
 	}
+	if (level_ && !out_.exceptions && !dynamic_stack_ && body_.code_labels.empty())
+		share_edge_moves(out_);
 }
 
 } // namespace aarch64

@@ -3,6 +3,8 @@
 
 #include "aarch64/error.h"
 
+#include <algorithm>
+
 namespace aarch64 {
 
 void Function::emit(Op op, unsigned rd, unsigned rn, unsigned rm, uint32_t field)
@@ -18,6 +20,49 @@ void Function::reference(Op op, Fixup fixup, uint32_t target, unsigned rd, unsig
 void Function::bind(uint32_t label)
 {
 	labels.at(label) = code.size();
+}
+
+// A phi edge may contain a single MOV followed by a branch to the loop
+// header. If the identical MOV already falls through to the header, branch
+// there directly. Keep ordinary labels (including address-taken labels),
+// instruction PCs and unwind records in place.
+void share_edge_moves(Function& f)
+{
+	const uint32_t labels = f.labels.size();
+	// Any replacement destination must fit the shortest local branch.
+	if (labels < 2 || f.code.size() > (1u << 18))
+		return;
+	std::vector<uint32_t> redirect;
+	for (uint32_t label = 0; label < labels; ++label)
+	{
+		const uint32_t pc = f.labels[label];
+		if (pc >= f.code.size() || pc + 1 >= f.code.size())
+			continue;
+		const auto& move = f.code[pc];
+		const auto& branch = f.code[pc + 1];
+		if (move.op != Op::Orr || move.rn != 31 || move.field || move.fixup != Fixup::None || branch.op != Op::B ||
+			branch.fixup != Fixup::Block)
+			continue;
+		const uint32_t dest = f.labels[branch.target];
+		if (!dest || dest >= f.code.size() || dest - 1 == pc)
+			continue;
+		const auto& previous = f.code[dest - 1];
+		if (previous.op != move.op || previous.rn != move.rn || previous.rd != move.rd || previous.rm != move.rm ||
+			previous.field || previous.fixup != Fixup::None)
+			continue;
+		const auto event = std::lower_bound(f.frame_events.begin(), f.frame_events.end(), 4 * dest,
+			[](const FrameEvent& e, uint32_t address) { return e.pc < address; });
+		if (event != f.frame_events.end() && event->pc == 4 * dest)
+			continue;
+		if (redirect.empty())
+			redirect.assign(labels, lowir::kNoId);
+		redirect[label] = f.labels.size();
+		f.labels.push_back(dest - 1);
+	}
+	if (!redirect.empty())
+		for (auto& ins : f.code)
+			if (ins.fixup == Fixup::Block && ins.op != Op::Adr && redirect[ins.target] != lowir::kNoId)
+				ins.target = redirect[ins.target];
 }
 
 void encode(
