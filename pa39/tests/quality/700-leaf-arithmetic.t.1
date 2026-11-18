@@ -8,7 +8,12 @@ extern "C" int signed_remainder(int, int);
 extern "C" unsigned long widen_choice(bool, unsigned);
 extern "C" unsigned byte_offset(const unsigned*, signed char, unsigned char);
 extern "C" bool signed_order(short, short);
+extern "C" unsigned adjacent(const unsigned*, long);
+extern "C" unsigned observed(const volatile unsigned*, unsigned*);
 int main() {
+    unsigned pair[] = {0xf0000003u, 0x90000001u};
+    if (adjacent(pair + 1, -1) != 0x60000002u) return 12;
+    if (observed(pair, pair + 1) != 11 || pair[1] != 0xf0000008u) return 13;
     unsigned table[270];
     table[0]=7; table[260]=19;
     if (byte_offset(table+8, -8, 252) != 26 || byte_offset(table+8, -1, 252) != 0) return 10;

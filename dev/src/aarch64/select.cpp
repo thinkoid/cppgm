@@ -347,6 +347,15 @@ void Selector::run()
 					continue;
 				}
 			}
+			if (level_ && inst.op == Opcode::Load)
+			{
+				const auto last = paired_load(inst);
+				if (last != kNoId)
+				{
+					i = last;
+					continue;
+				}
+			}
 			if (level_ && inst.op == Opcode::Compare && compare_consumer(inst, block))
 				i = inst.next;
 			else

@@ -69,6 +69,29 @@ void Selector::scalar_access(const lowir::Instruction& inst)
 	}
 }
 
+// Load two adjacent words from the same base without constructing a second
+// address. The input reads are consecutive except for the pure index.
+InstId Selector::paired_load(const lowir::Instruction& low)
+{
+	const auto bytes = storage_bytes(low.type);
+	if (!low.type.is_integer() || (bytes != 4 && bytes != 8) || low.next == kNoId || !low.ops[0].is(ValueKind::Temp))
+		return kNoId;
+	const auto& index = body_.instructions[low.next];
+	if (index.op != Opcode::Index || index.next == kNoId || !(index.ops[0] == low.ops[0]) ||
+		!index.ops[1].is(ValueKind::Integer) || body_.literals[index.ops[1].index].low != 1 ||
+		storage_bytes(index.type) != bytes || uses_[index.result] != 1)
+		return kNoId;
+	const auto& high = body_.instructions[index.next];
+	if (high.op != Opcode::Load || high.type != low.type || !(high.ops[0] == Value::temp(index.result)) ||
+		((low.flags | high.flags) & IF_VOLATILE))
+		return kNoId;
+	const auto a = registers_[low.result], b = registers_[high.result], base = registers_[low.ops[0].index];
+	if (a == kNoId || b == kNoId || base == kNoId || a == b)
+		return kNoId;
+	out_.emit(bytes == 4 ? Op::LdpW : Op::LdpX, a, base, 0, b << 10);
+	return index.next;
+}
+
 // STP writes exactly the two consecutive scalar accesses. Restrict the
 // combine to register sources so neither read can observe the first store.
 InstId Selector::paired_store(const lowir::Instruction& index)

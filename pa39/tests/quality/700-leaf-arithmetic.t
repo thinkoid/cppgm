@@ -25,3 +25,13 @@ extern "C" unsigned byte_offset(const unsigned* data, signed char i, unsigned ch
     return i < -4 && j >= 250 ? data[i] + data[j] : 0;
 }
 extern "C" bool signed_order(short left, short right) { return left < right; }
+
+extern "C" unsigned adjacent(const unsigned* a, long i) {
+    const unsigned* p = a + i;
+    return p[0] - p[1];
+}
+extern "C" unsigned observed(const volatile unsigned* p, unsigned* target) {
+    unsigned first = p[0];
+    *target = first + 5;
+    return first ^ p[1];
+}
