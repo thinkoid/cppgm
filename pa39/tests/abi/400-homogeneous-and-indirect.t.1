@@ -19,7 +19,13 @@ struct Pair { unsigned long a, b; };
 struct alignas(16) EvenPair { unsigned long a, b; };
 struct TwoFloats { float a, b; };
 extern "C" Pair records(long, Pair, Fields, EvenPair, Pair, TwoFloats);
+struct TwoWords { unsigned first, second; };
+struct EightBytes { unsigned char bytes[8]; };
+extern "C" TwoWords stacked_words(long, long, long, long, long, long, long, long, unsigned char, TwoWords, unsigned char, EightBytes);
 int main() {
+    TwoWords words = stacked_words(1,2,3,4,5,6,7,8, 0x3a, TwoWords{0x81234567u, 0xfedcba00u},
+                                   0x53, EightBytes{{0x11,2,3,4,5,6,7,0x98}});
+    if (words.first != 0xbb2345ffu || words.second != 0xfedd0d11u) return 4;
     Pair r = records(3, Pair{0x8000000000000001UL, 7}, Fields{0x91, 0xa2, 0x123456789abcUL},
                      EvenPair{11, 0x4000000000000002UL}, Pair{0x1000000000000004UL, 13},
                      TwoFloats{1.5f, 2.5f});

@@ -31,3 +31,11 @@ extern "C" Pair records(long bias, Pair odd, Fields bits, EvenPair even, Pair la
     return Pair{odd.a ^ bits.payload ^ even.b ^ last.a,
                 odd.b + bits.tag + bits.length + even.a + last.b + bias + long(f.a + f.b)};
 }
+
+struct TwoWords { unsigned first, second; };
+struct EightBytes { unsigned char bytes[8]; };
+extern "C" TwoWords stacked_words(long, long, long, long, long, long, long, long,
+                                  unsigned char lead, TwoWords words, unsigned char tail, EightBytes bytes) {
+    return TwoWords{words.first ^ (unsigned(lead) << 24) ^ bytes.bytes[7],
+                    words.second + (unsigned(tail) << 8) + bytes.bytes[0]};
+}
