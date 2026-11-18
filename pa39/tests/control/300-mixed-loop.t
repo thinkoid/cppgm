@@ -46,3 +46,8 @@ extern "C" unsigned long exit_pair(unsigned a, unsigned b, unsigned limit, unsig
     }
     return (static_cast<unsigned long>(b) << 32) | a;
 }
+
+extern "C" void mark_nonzero(const int* mask, int* output, int last) {
+    for (int i = 0; i <= last; ++i)
+        if (mask[i]) output[i] = 7;
+}

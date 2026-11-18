@@ -45,6 +45,7 @@ private:
 	struct Shape
 	{
 		BlockId pre = kNoId, header = kNoId, latch = kNoId, exit = kNoId;
+		BlockId conditional = kNoId;
 		bool bottom = false;   // tested by the latch
 		bool stepped = false;  // the test reads the stepped value (a latch may read either)
 		bool narrowed = false; // the test reads the value truncated, to `narrow`
@@ -136,6 +137,23 @@ bool ShortLoopUnrolling::chain(uint32_t loop, Shape& s) const
 	}
 	auto last = [&](BlockId b) -> const Instruction& { return body_.instructions[body_.blocks[b].last]; };
 	s.bottom = s.header == s.latch || last(s.header).op != Opcode::Branch;
+	// A guarded body executes only along one edge. Its other edge rejoins
+	// the latch directly, so each copy must keep its own branch.
+	if (!s.bottom && l.blocks.size() == 3 && target_model::is_aarch64(c_.program.target))
+	{
+		const auto& test = last(s.header);
+		for (unsigned side = 1; side <= 2; ++side)
+		{
+			const auto guarded = test.ops[side].index;
+			if (test.ops[3 - side].index == s.latch && guarded != s.header && guarded != s.latch &&
+				in_loop(forest_, loop, guarded) && last(guarded).op == Opcode::Jump &&
+				last(guarded).ops[0].index == s.latch && cfg_.pred_first[guarded + 1] - cfg_.pred_first[guarded] == 1)
+			{
+				s.conditional = guarded;
+				s.bottom = true;
+			}
+		}
+	}
 	const BlockId exiting = s.bottom ? s.latch : s.header;
 	const Instruction& branch = last(exiting);
 	if (branch.op != Opcode::Branch || !branch.ops[0].is(ValueKind::Temp))
@@ -157,13 +175,16 @@ bool ShortLoopUnrolling::chain(uint32_t loop, Shape& s) const
 		if (b == s.latch)
 			break;
 		BlockId next = stays;
-		if (b != exiting)
+		if (s.conditional != kNoId && b == s.header)
+			next = s.conditional;
+		else if (b != exiting)
 		{
 			if (last(b).op != Opcode::Jump)
 				return false;
 			next = last(b).ops[0].index;
 		}
-		if (next == s.header || cfg_.pred_first[next + 1] - cfg_.pred_first[next] != 1)
+		if (next == s.header ||
+			cfg_.pred_first[next + 1] - cfg_.pred_first[next] != (s.conditional != kNoId && next == s.latch ? 2u : 1u))
 			return false;
 		b = next;
 	}
@@ -288,6 +309,15 @@ bool ShortLoopUnrolling::tested(uint32_t loop, Shape& s) const
 		stays = side == 0 ? stays : swapped(stays);
 		const Value init = phi_incoming(body_, phi, s.pre);
 		const Value limit = by > 0 ? literal_limit(cmp.type, stays, init, bound, static_cast<uint64_t>(by)) : bound;
+		// With a variable inclusive bound, form complete groups before
+		// the bound and leave its final iteration to the original loop.
+		if (s.conditional != kNoId && by > 0 && stepped && s.bottom)
+		{
+			if (stays == ComparePredicate::Le)
+				stays = ComparePredicate::Lt;
+			if (stays == ComparePredicate::Ule)
+				stays = ComparePredicate::Ult;
+		}
 		const bool before = by > 0 ? stays == ComparePredicate::Lt || stays == ComparePredicate::Ult
 								   : stays == ComparePredicate::Gt || stays == ComparePredicate::Ugt;
 		if (stays != ComparePredicate::Ne && !(before && (stepped || !s.bottom)))
@@ -311,6 +341,27 @@ bool ShortLoopUnrolling::tested(uint32_t loop, Shape& s) const
 // preheader's value and the latch's.
 bool ShortLoopUnrolling::sized(Shape& s) const
 {
+	// Duplicate a conditional constant store only when its body has no
+	// dependent loads. Conditional swaps carry values between iterations
+	// and use more registers when their bodies are duplicated.
+	if (s.conditional != kNoId)
+	{
+		unsigned stores = 0;
+		for (InstId i = body_.blocks[s.conditional].first; i != body_.blocks[s.conditional].last;
+			i = body_.instructions[i].next)
+		{
+			const auto& inst = body_.instructions[i];
+			if (inst.op == Opcode::Index || inst.op == Opcode::Addr || inst.op == Opcode::Convert ||
+				inst.op == Opcode::Binary)
+				continue;
+			if (inst.op != Opcode::Store || !inst.ops[0].is(ValueKind::Integer) || (inst.flags & IF_VOLATILE))
+				return false;
+			++stores;
+		}
+		if (stores != 1)
+			return false;
+	}
+
 	unsigned size = 0, floating_stores = 0;
 	for (BlockId b : s.chain)
 		for (InstId i = body_.blocks[b].first; i != kNoId; i = body_.instructions[i].next)
@@ -366,7 +417,7 @@ bool ShortLoopUnrolling::sized(Shape& s) const
 	if (size == 0 || floating_stores > 1)
 		return false;
 	s.passes = kGroupPasses;
-	while (s.passes > 1 && size * s.passes + 2 > kGroupSize)
+	while (s.passes > 1 && size * s.passes + 2 > (s.conditional == kNoId ? kGroupSize : 2 * kGroupSize))
 		s.passes /= 2;
 	return s.passes > 1;
 }
@@ -570,12 +621,16 @@ void ShortLoopUnrolling::rewrite(const Shape& s)
 		return false;
 	};
 	std::vector<Value> stepped(phis.size()), address(body_.temps.size());
+	std::vector<BlockId> guarded_blocks;
+	BlockId current = group;
 	for (unsigned pass = 0; pass < s.passes; ++pass)
 	{
 		if (pass != 0)
 			for (size_t k = 0; k < phis.size(); ++k)
 				map_[body_.instructions[phis[k]].result] = stepped[k];
+		BlockId merge = kNoId;
 		for (BlockId b : s.chain)
+		{
 			for (InstId i = body_.blocks[b].first; i != kNoId; i = body_.instructions[i].next)
 			{
 				// (By value: a copy's instruction may move the instructions.)
@@ -597,7 +652,7 @@ void ShortLoopUnrolling::rewrite(const Shape& s)
 					if (held && inst.result == s.next.index)
 						inst.flags |= IF_NO_WRAP;
 				}
-				else if (pass != 0 && by_induction(inst, by))
+				else if (pass != 0 && b != s.conditional && by_induction(inst, by))
 				{
 					// (The first pass's address, displaced by the steps so far.)
 					inst.ops[0] = address[inst.result];
@@ -607,22 +662,41 @@ void ShortLoopUnrolling::rewrite(const Shape& s)
 					for (unsigned o = 0; o < 3; ++o)
 						inst.ops[o] = mapped(inst.ops[o]);
 				const TempId result = inst.result;
-				const Value copy = emit(group, g, inst, result == kNoId ? none : body_.temps[result].type, true);
+				const Value copy = emit(current, g, inst, result == kNoId ? none : body_.temps[result].type, true);
 				if (result != kNoId)
 					map_[result] = copy;
 				if (pass == 0 && inst.op == Opcode::Index)
 					address[result] = copy;
 			}
+			if (s.conditional != kNoId && b == s.header)
+			{
+				const auto test = body_.instructions[body_.blocks[b].last];
+				const bool on_true = test.ops[1].index == s.conditional;
+				const auto arm = append_block(body_, BlockKind::UnrolledGroup);
+				merge = append_block(body_, BlockKind::UnrolledGroup);
+				guarded_blocks.push_back(arm);
+				guarded_blocks.push_back(merge);
+				emit(current, g, branch(mapped(test.ops[0]), on_true ? arm : merge, on_true ? merge : arm), none);
+				current = arm;
+				g = kNoId;
+			}
+			else if (b == s.conditional)
+			{
+				emit(current, g, jump(merge), none);
+				current = merge;
+				g = kNoId;
+			}
+		}
 		for (size_t k = 0; k < phis.size(); ++k)
 			stepped[k] = mapped(phi_incoming(body_, body_.instructions[phis[k]], s.latch));
 	}
-	const Value reached = as_word(group, g, mapped(s.next));
-	const Value more = emit(group, g, compare(ComparePredicate::Ne, reached, stop), i64);
-	emit(group, g, branch(more, group, s.bottom ? left : tail), none);
+	const Value reached = as_word(current, g, mapped(s.next));
+	const Value more = emit(current, g, compare(ComparePredicate::Ne, reached, stop), i64);
+	emit(current, g, branch(more, group, s.bottom ? left : tail), none);
 	for (size_t k = 0; k < phis.size(); ++k)
 	{
 		const Value pairs[4] = { Value::block(enter), phi_incoming(body_, body_.instructions[phis[k]], s.pre),
-			Value::block(group), stepped[k] };
+			Value::block(current), stepped[k] };
 		body_.instructions[group_phis[k]].extra_first = append_operands(body_, pairs, 4);
 		body_.instructions[group_phis[k]].extra_count = 4;
 	}
@@ -660,6 +734,7 @@ void ShortLoopUnrolling::rewrite(const Shape& s)
 			layout.push_back(sized);
 		layout.push_back(enter);
 		layout.push_back(group);
+		layout.insert(layout.end(), guarded_blocks.begin(), guarded_blocks.end());
 		if (s.bottom)
 			layout.push_back(left);
 		layout.push_back(tail);
