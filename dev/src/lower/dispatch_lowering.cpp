@@ -129,7 +129,12 @@ lowir::Value FunctionLowering::member_callee(
 	// 5.2.2p1: a virtual function not named by a qualified-id is its final
 	// overrider, loaded from the object's table with the function's own
 	// boundary. Only table entries or direct calls demand a definition.
-	if (!dispatch)
+	// The selected member's declaring subobject is already the call object.
+	// A final member or declaring class fixes its overrider even when the
+	// definition lives in another translation unit.
+	if (!dispatch ||
+		(lowering_.optimizing() && !function->pure && !function->destructor &&
+			(function->is_final || sema::ClassOf(function->owner->entity->type)->is_final)))
 	{
 		signature = lowir::kNoId;
 		const sema::FunctionEntity* pattern = sema::PatternOf(function);

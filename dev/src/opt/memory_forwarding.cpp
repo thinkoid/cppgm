@@ -178,6 +178,7 @@ private:
 		zeros_.clear();
 	}
 	bool known_zero(Value address, uint64_t bytes) const;
+	Value previous_field(const Instruction& cut);
 	Value float_bits(const Instruction& load);
 	void note_zero(Value address, uint64_t bytes, uint32_t offset = 0);
 	void remember_extension(const Instruction& store);
@@ -1023,6 +1024,28 @@ void MemoryForwarding::note_call_write(Value destination, uint64_t bytes)
 	++call_epoch_;
 }
 
+// A previous narrower access may already have read the low bytes
+// of a packed word. Both facts must still describe this memory at the
+// cut. Reusing the narrow SSA value can also expose a repeated guard.
+Value MemoryForwarding::previous_field(const Instruction& cut)
+{
+	if (cut.sub != static_cast<unsigned>(ConvertOp::Trunc) || !cut.ops[0].is(ValueKind::Temp) ||
+		!cut.type.is_integer() || cut.type.kind() == TypeKind::I1)
+		return Value::none();
+	const auto def = body_.temps[cut.ops[0].index].def;
+	if (def == kNoId || body_.instructions[def].op != Opcode::Load || (body_.instructions[def].flags & IF_VOLATILE))
+		return Value::none();
+	const auto& load = body_.instructions[def];
+	Key key = key_of(load.ops[0], cut.type);
+	const auto* narrow = find(key);
+	if (narrow == nullptr || narrow->generation != generation_ || narrow->value.is(ValueKind::None))
+		return Value::none();
+	key.type = type_key(load.type);
+	const auto* wide = find(key);
+	return wide != nullptr && wide->generation == generation_ && wide->value == cut.ops[0] ? narrow->value
+																						   : Value::none();
+}
+
 void MemoryForwarding::process(BlockId block)
 {
 	unsigned stores = 0;
@@ -1039,6 +1062,18 @@ void MemoryForwarding::process(BlockId block)
 				while (v.is(ValueKind::Temp) && v.index < repl_.size() && !repl_[v.index].is(ValueKind::None))
 					v = repl_[v.index];
 			});
+		if (inst.op == Opcode::Convert && target_model::is_aarch64(c_.program.target))
+		{
+			const auto field = previous_field(inst);
+			if (!field.is(ValueKind::None))
+			{
+				repl_[inst.result] = field;
+				unlink_after(body_, block, prev, i);
+				changed_ = replaced_ = true;
+				i = next;
+				continue;
+			}
+		}
 		if (inst.op == Opcode::Call)
 		{
 			if (reuse_call(inst))

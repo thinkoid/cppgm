@@ -337,7 +337,8 @@ bool FieldAccess::field_load(InstId id)
 	if (const Instruction* shift = right_shift(word, conj.type, count, arithmetic))
 		word = shift->ops[0];
 	const Instruction* loaded = word_load(word, bits);
-	if (loaded == nullptr || count % 8 != 0 || count + width > bits || width >= bits)
+	if (loaded == nullptr || count % 8 != 0 || count + width > bits || width >= bits ||
+		(target_model::is_aarch64(c_.program.target) && readers(word) > 1))
 		return false;
 	const InstId at = body_.temps[word.index].def;
 	const uint64_t key = (uint64_t(at) << 16) | (count << 8) | width;

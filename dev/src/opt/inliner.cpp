@@ -1182,7 +1182,81 @@ void partial_region(const FunctionBody& kb, const Cfg& cfg, PartialCut& out, boo
 		c = c == 2 ? 1 : 0;
 }
 
-bool partial_cut(const Program& program, const FunctionBody& kb, PartialCut& out, uint32_t cap)
+// Stop before the first call in a loop-bearing callee. Removing the calls'
+// outgoing edges can reveal an acyclic fast region that the complete
+// callee's backedge hides. A path that restarts at the callee entry must
+// not already have changed any observable state.
+bool first_iteration_cut(const FunctionBody& body, const Cfg& cfg, const std::vector<uint8_t>& calls,
+	const std::vector<uint8_t>& side, PartialCut& out, uint32_t cap)
+{
+	if (calls[body.layout.front()])
+		return false;
+	out.cut = calls;
+	// A single call in an acyclic suffix ending at a return can also be
+	// copied. No successor of that call can fall back and repeat its effects.
+	std::vector<uint8_t> remaining(cfg.block_count, 2);
+	for (size_t r = cfg.rpo.size(); r-- > 0;)
+	{
+		const auto b = cfg.rpo[r];
+		const auto last = body.blocks[b].last;
+		if (last == kNoId)
+			continue;
+		unsigned after = body.instructions[last].op == Opcode::Return || cfg.succ_first[b] != cfg.succ_first[b + 1] ? 0
+																													: 2;
+		for (auto k = cfg.succ_first[b]; k < cfg.succ_first[b + 1]; ++k)
+			after = std::max<unsigned>(after, remaining[cfg.succs[k]]);
+		remaining[b] = std::min(2u, after + calls[b]);
+		if (calls[b] && remaining[b] == 1)
+			out.cut[b] = 0;
+	}
+	bool returns = false;
+	partial_region(body, cfg, out, returns);
+	if (!out.cuts || !returns || out.size > cap)
+		return false;
+	std::vector<uint8_t> dirty(cfg.block_count, 0);
+	for (BlockId b : cfg.rpo)
+		if (out.copy[b])
+			for (uint32_t k = cfg.succ_first[b]; k < cfg.succ_first[b + 1]; ++k)
+			{
+				const BlockId to = cfg.succs[k];
+				const bool changed = dirty[b] || side[b];
+				if (out.cut[to] && changed)
+					return false;
+				if (out.copy[to])
+				{
+					if (cfg.rpo_index[to] <= cfg.rpo_index[b])
+						return false;
+					dirty[to] |= changed;
+				}
+			}
+	return true;
+}
+
+bool short_update_return(const FunctionBody& body, const Cfg& cfg, BlockId b)
+{
+	unsigned steps = 0;
+	for (unsigned blocks = 0; blocks < 3; ++blocks)
+	{
+		if (!cfg.reachable(b) || (cfg.flags[b] & (BF_EH | BF_HANDLER)))
+			return false;
+		for (auto i = body.blocks[b].first; i != kNoId; i = body.instructions[i].next)
+		{
+			const auto& x = body.instructions[i];
+			if (++steps > 24 || x.op == Opcode::Call || is_eh_instruction(x.op) || x.op == Opcode::Asm)
+				return false;
+			if (x.op == Opcode::Return)
+				return true;
+		}
+		const auto last = body.blocks[b].last;
+		if (last == kNoId || body.instructions[last].op != Opcode::Jump)
+			return false;
+		b = body.instructions[last].ops[0].index;
+	}
+	return false;
+}
+
+bool partial_cut(const Program& program, const FunctionBody& kb, PartialCut& out, uint32_t cap, bool first_iteration,
+	bool arm_fast_paths)
 {
 	static Cfg scratch; // (reused for its capacity: every build overwrites what
 						// it fills)
@@ -1242,6 +1316,23 @@ bool partial_cut(const Program& program, const FunctionBody& kb, PartialCut& out
 	const BlockId entry = kb.layout[0];
 	bool returns = false;
 	out.cut.assign(n, 0);
+	const auto tail = kb.blocks[entry].last;
+	if (arm_fast_paths && !side[entry] && tail != kNoId && kb.instructions[tail].op == Opcode::Branch)
+	{
+		const auto& condition = kb.instructions[tail];
+		for (unsigned arm = 1; arm <= 2; ++arm)
+		{
+			const BlockId fast_arm = condition.ops[arm].index, slow_arm = condition.ops[3 - arm].index;
+			if (fast_arm == slow_arm || slow_arm == entry || cfg.pred_count(slow_arm) != 1 ||
+				!short_update_return(kb, cfg, fast_arm))
+				continue;
+			out.cut[slow_arm] = 1;
+			partial_region(kb, cfg, out, returns);
+			if (out.cuts == 1 && returns && out.size <= cap)
+				return true;
+			out.cut.assign(n, 0);
+		}
+	}
 	for (BlockId c : cfg.rpo)
 	{
 		if (!calls[c])
@@ -1255,7 +1346,7 @@ bool partial_cut(const Program& program, const FunctionBody& kb, PartialCut& out
 	}
 	partial_region(kb, cfg, out, returns);
 	if (out.cuts == 0 || !returns || out.size > cap)
-		return false;
+		return first_iteration && first_iteration_cut(kb, cfg, calls, side, out, cap);
 	// A loop in the copy would run again in the call behind a cut.
 	std::vector<uint32_t> order(n, 0);
 	for (uint32_t r = 0; r < cfg.rpo.size(); ++r)
@@ -1674,6 +1765,7 @@ public:
 
 private:
 	bool compatible(const Instruction& call, SymbolId callee) const;
+	bool arm_fast_return(SymbolId callee, const Shape& shape) const;
 	bool non_growing(const Shape& shape, const Instruction& call) const;
 	bool pins_slot(const FunctionBody& body, const Shape& shape, const Instruction& call) const;
 	// The charge of inlining `callee` here, or false when the policy keeps
@@ -1683,6 +1775,7 @@ private:
 		uint32_t callee, const Instruction& call, bool handler_code, bool loop_site, uint32_t& charge, bool& once);
 	bool admit_partial(uint32_t g, const Instruction& call, bool handler_code, bool loop_site, PartialCut& partial,
 		uint32_t& charge, const FunctionBody* source);
+	std::vector<uint8_t> cold_paths(const FunctionBody& body, const Cfg& cfg, size_t count) const;
 	bool process(SymbolId caller);
 	void settle(lowir::FunctionBody& body, const std::vector<BlockId>& layout_next, const std::vector<Value>& repl);
 	// A private copy of EH-bearing callee `g` with the call's constant
@@ -1727,6 +1820,15 @@ private:
 	uint32_t recursive_budget_ = 0;
 	uint32_t recursive_depth_ = 0;
 };
+
+// A hinted function with a call-free return can expose its guard to the
+// caller. Keep the ordinary unit budget for the complete copy.
+bool InlineWaveRunner::arm_fast_return(SymbolId callee, const Shape& shape) const
+{
+	return options_.level >= 3 && target_model::is_aarch64(program_.target) &&
+		(program_.symbols[callee].metadata.flags & SF_INLINE_HINT) && shape.fast_return && !shape.loop &&
+		shape.calls <= 2 && shape.size <= 144;
+}
 
 bool InlineWaveRunner::non_growing(const Shape& shape, const Instruction& call) const
 {
@@ -1891,7 +1993,10 @@ bool InlineWaveRunner::admit(
 			? options_.limits.hint_late_cap
 			: kHintAllowance;
 		const uint32_t plain = target_model::is_wasm(program_.target) ? kWasmAllowance : kAllowance;
-		const uint32_t allowance = (hint ? hinted : plain) * (options_.level >= 3 ? 5 : 4) / 4;
+		const uint32_t allowance = (arm_fast_return(callee, shape) ? 2 * hinted
+										   : hint                  ? hinted
+																   : plain) *
+			(options_.level >= 3 ? 5 : 4) / 4;
 		uint32_t hot, unpriced;
 		const FunctionBody& caller_body = *program_.functions[program_.symbols[graph_.functions[caller_]].detail].body;
 		call_cost_after_constants(shape, caller_body, call, hot, unpriced);
@@ -1965,13 +2070,17 @@ bool InlineWaveRunner::admit_partial(uint32_t g, const Instruction& call, bool h
 			return false;
 	}
 	const bool hint = (m.flags & (SF_INLINE_HINT | SF_FORCE_INLINE)) != 0;
-	const uint32_t cap = cycle ? kPartialRecursiveCap
-							   : (graph_.calls_in[g] <= 2 ? kPartialFewCap
-										 : hint           ? kPartialHintCap
-														  : kPartialCap) *
+	const uint32_t ordinary_cap = cycle ? kPartialRecursiveCap
+										: (graph_.calls_in[g] <= 2 ? kPartialFewCap
+												  : hint           ? kPartialHintCap
+																   : kPartialCap) *
 			(loop_site ? kLoopSiteScale : 1);
-	if (!partial_cut(program_, source != nullptr ? *source : *function.body, partial, cap) || partial.size > cap ||
-		(shape.allocates && partial.size > kPartialAllocatingCap))
+	const bool first_iteration = options_.level >= 3 && target_model::is_aarch64(program_.target) && shape.loop &&
+		shape.fast_return && !shape.allocates && !cycle && g != caller_ && shape.calls <= 2 && shape.size <= 144;
+	const uint32_t cap = first_iteration ? std::max(ordinary_cap, 3 * kHintAllowance) : ordinary_cap;
+	if (!partial_cut(program_, source != nullptr ? *source : *function.body, partial, cap, first_iteration,
+			target_model::is_aarch64(program_.target) && !options_.minimize_size) ||
+		partial.size > cap || (shape.allocates && partial.size > kPartialAllocatingCap))
 		return false;
 	charge = partial.size;
 	return charge <= budget_;
@@ -2129,39 +2238,13 @@ void predict_cold_calls(const Program& program, FunctionBody& body, const Cfg& c
 	}
 }
 
-bool InlineWaveRunner::process(SymbolId caller)
+// Any ordinary path from a landing may still carry its exception.
+// A merge with a normal path is not enough to prove otherwise.
+std::vector<uint8_t> handler_paths(const Cfg& cfg, size_t count)
 {
-	caller_ = graph_.index_of[caller];
-	caller_cfg_changed_ = false;
-	caller_loop_ = shapes_[caller_].loop;
-	const uint32_t default_budget = options_.limits.caller_budget != 0 ? options_.limits.caller_budget : kCallerBudget;
-	budget_ = default_budget;
-	outside_loop_budget_ = kOutsideLoopBudget;
-	once_budget_ = options_.limits.once_caller_budget != 0
-		? options_.limits.once_caller_budget
-		: kOnceCallerBudget * (options_.level >= 2 ? kOnceO2Scale : 1);
-	folded_budget_ = kFoldedCallerBudget;
-	FunctionBody& body = *program_.functions[program_.symbols[caller].detail].body;
-	static Cfg scratch; // (reused for its capacity: every build overwrites what
-						// it fills)
-	Cfg& cfg = scratch;
-	// Dominators only for handler code and the loops (find_loops).
-	if (!source_required_)
-		build_cfg_light(program_, body, cfg);
-	if (!source_required_ && caller_loop_)
-		complete_cfg(cfg);
-	bool cold_callee = false;
-	for (uint32_t k = graph_.callee_first[caller_]; !source_required_ && k < graph_.callee_first[caller_ + 1]; ++k)
-		cold_callee = cold_callee ||
-			(program_.symbols[graph_.functions[graph_.callees[k]]].metadata.flags & SF_COLD) != 0;
-	if (cold_callee)
-		predict_cold_calls(program_, body, cfg);
-	// Any ordinary path from a landing may still carry its exception.
-	// A merge with a normal path is not enough to prove otherwise.
-	const size_t policy_blocks = source_required_ ? 0 : body.blocks.size();
-	std::vector<uint8_t> handler(policy_blocks, 0);
+	std::vector<uint8_t> handler(count, 0);
 	std::vector<BlockId> work;
-	if (!source_required_)
+	if (count)
 	{
 		for (BlockId b : cfg.handlers)
 			if (!handler[b])
@@ -2183,12 +2266,16 @@ bool InlineWaveRunner::process(SymbolId caller)
 			}
 		}
 	}
-	work.clear();
-	// Cold blocks: every path from them reaches a noreturn call, a call of
-	// a cold function or an unreachable (O2+: only trivial and forced
-	// callees go inline there; new blocks inherit their split block's
-	// answer).
-	std::vector<uint8_t> cold(policy_blocks, 0);
+	return handler;
+}
+
+// Cold blocks: every path from them reaches a noreturn call, a call of
+// a cold function or an unreachable (O2+: only trivial and forced
+// callees go inline there; new blocks inherit their split block's
+// answer).
+std::vector<uint8_t> InlineWaveRunner::cold_paths(const FunctionBody& body, const Cfg& cfg, size_t count) const
+{
+	std::vector<uint8_t> cold(count, 0);
 	if (options_.level >= 2)
 		for (uint32_t r = static_cast<uint32_t>(cfg.rpo.size()); r-- > 0;)
 		{
@@ -2228,7 +2315,41 @@ bool InlineWaveRunner::process(SymbolId caller)
 				(prediction == BranchPrediction::Likely && branch.ops[2].index == b))
 				cold[b] = 1;
 		}
-	// Loop blocks (new blocks inherit their split block's answer).
+	return cold;
+}
+
+bool InlineWaveRunner::process(SymbolId caller)
+{
+	caller_ = graph_.index_of[caller];
+	caller_cfg_changed_ = false;
+	caller_loop_ = shapes_[caller_].loop;
+	const uint32_t default_budget = options_.limits.caller_budget != 0 ? options_.limits.caller_budget : kCallerBudget;
+	budget_ = default_budget;
+	outside_loop_budget_ = kOutsideLoopBudget;
+	once_budget_ = options_.limits.once_caller_budget != 0
+		? options_.limits.once_caller_budget
+		: kOnceCallerBudget * (options_.level >= 2 ? kOnceO2Scale : 1);
+	folded_budget_ = kFoldedCallerBudget;
+	FunctionBody& body = *program_.functions[program_.symbols[caller].detail].body;
+	static Cfg scratch; // (reused for its capacity: every build overwrites what
+						// it fills)
+	Cfg& cfg = scratch;
+	// Dominators only for handler code and the loops (find_loops).
+	if (!source_required_)
+		build_cfg_light(program_, body, cfg);
+	if (!source_required_ && caller_loop_)
+		complete_cfg(cfg);
+	bool cold_callee = false;
+	for (uint32_t k = graph_.callee_first[caller_]; !source_required_ && k < graph_.callee_first[caller_ + 1]; ++k)
+		cold_callee = cold_callee ||
+			(program_.symbols[graph_.functions[graph_.callees[k]]].metadata.flags & SF_COLD) != 0;
+	if (cold_callee)
+		predict_cold_calls(program_, body, cfg);
+	const size_t policy_blocks = source_required_ ? 0 : body.blocks.size();
+	auto handler = handler_paths(cfg, policy_blocks);
+	std::vector<BlockId> work;
+	auto cold = cold_paths(body, cfg, policy_blocks);
+	// New blocks inherit the loop membership of the block they split.
 	std::vector<uint8_t> in_loop(policy_blocks, 0);
 	if (caller_loop_)
 	{
@@ -2387,8 +2508,8 @@ bool InlineWaveRunner::process(SymbolId caller)
 				callee < original_size_.size() && original_size_[callee] != 0 && original_size_[callee] <= kWrapperCap;
 			const bool outside_loop = options_.level >= 2 && options_.limits.caller_budget == 0 && !source_required_ &&
 				!once && !forced && !free_leaf && !folds_result && copy == kNoId && !fully &&
-				shapes_[g].size > kWrapperCap && shapes_[g].hot_call && shapes_[caller_].size >= kSettledSize &&
-				in_loop[b] == 0 && handler[b] == 0;
+				!arm_fast_return(callee, shapes_[g]) && shapes_[g].size > kWrapperCap && shapes_[g].hot_call &&
+				shapes_[caller_].size >= kSettledSize && in_loop[b] == 0 && handler[b] == 0;
 			if (outside_loop && size > outside_loop_budget_)
 				continue;
 			if (!once && !free_leaf && size > unit)

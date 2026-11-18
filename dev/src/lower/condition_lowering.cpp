@@ -170,8 +170,16 @@ RValue FunctionLowering::truth(const syntax::Expr& expr)
 	// The scalar a branch tests: a floating value compares with zero, a
 	// pointer to member is its truth (member_pointer_truth).
 	const RValue value = truth_operand(expr);
-	if (WithoutParentheses(&expr)->facts->type->unqualified->kind == sema::TypeKind::MemberPointer)
+	const syntax::Expr* source = WithoutParentheses(&expr);
+	const sema::Type* type = source->facts->type->unqualified;
+	if (type->kind == sema::TypeKind::MemberPointer)
 		return member_pointer_truth(value);
+	// A C++ bool result has only one significant bit. Preserve that fact
+	// where an AArch64 branch can test the incoming result register.
+	if (target_model::is_aarch64(program_.target) && source->kind == syntax::ExprKind::Call &&
+		type->kind == sema::TypeKind::Fundamental && type->fundamental == FundamentalType::Bool &&
+		value.type.kind() == lowir::TypeKind::U8)
+		return binary(lowir::BinaryOp::And, value.type, value, integer(value.type, 1));
 	if (!value.type.is_float())
 		return value;
 	return compare(lowir::ComparePredicate::Ne, value.type, value,
