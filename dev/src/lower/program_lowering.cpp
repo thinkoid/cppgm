@@ -755,6 +755,10 @@ void ProgramLowering::define_variable(
 
 bool ProgramLowering::emitted_at_definition(const sema::FunctionEntity* function) const
 {
+	// ISO C inline supplies an external definition if any file-scope
+	// declaration uses extern or leaves out inline (6.7.4p7).
+	if (analyzer_->c_source() && function->is_inline && !function->internal_linkage)
+		return function->c_external_definition && !function->gnu_inline;
 	// An inline definition (7.1.2p4: every unit that odr-uses it defines
 	// it) is emitted where odr-used; so is an internal always_inline one,
 	// or one whose body calls a reserved builtin this compiler lacks (as
@@ -774,7 +778,7 @@ void ProgramLowering::define_function(const sema::FunctionEntity* function, uint
 	{
 		// An inline function one unit already emitted; any other is defined
 		// twice (3.2p3).
-		if (function->is_inline)
+		if (function->is_inline && !analyzer_->c_source())
 			return;
 		throw LoweringError(location, "redefinition of a function across translation units");
 	}
@@ -990,6 +994,9 @@ void ProgramLowering::demand_entry(const sema::FunctionEntity* function, EntryVa
 	const sema::FunctionEntity* pattern = sema::PatternOf(function);
 	if (function->gnu_inline || (function->primary != nullptr && function->primary->gnu_inline) ||
 		(pattern != nullptr && pattern->gnu_inline))
+		return;
+	// An ISO C inline-only definition does not provide the external symbol.
+	if (analyzer_->c_source() && function->is_inline && !function->internal_linkage && !function->c_external_definition)
 		return;
 	// A template's specialization (or an instance's member) is defined
 	// where odr-used, its body instantiated on this demand (14.7.1p2).

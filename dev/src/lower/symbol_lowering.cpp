@@ -2525,9 +2525,10 @@ lowir::SymbolMetadata ProgramLowering::function_metadata(const sema::FunctionEnt
 	}
 	// 3.5p4: a member of a class of internal linkage, or of a local class
 	// (no linkage, 3.5p8), is internal to its unit.
-	metadata.binding = unit_local(function)             ? ir_model::SBM_INTERNAL
-		: function->is_inline || function->instantiated ? ir_model::SBM_WEAK
-														: ir_model::SBM_STRONG;
+	const bool mergeable_inline = function->is_inline && !analyzer_->c_source();
+	metadata.binding = unit_local(function)          ? ir_model::SBM_INTERNAL
+		: mergeable_inline || function->instantiated ? ir_model::SBM_WEAK
+													 : ir_model::SBM_STRONG;
 	// GNU weak (the analysis allows it on entities with external linkage):
 	// replaceable, an inline function's too (lowir.md `replaceable=yes`).
 	const sema::SemanticGraph::SymbolAttributes* attributes = graph_->symbol_attributes(function);

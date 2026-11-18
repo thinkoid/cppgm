@@ -36,8 +36,8 @@ std::string PredefinedText(const PreprocessorOptions& options)
 	if (options.assembler)
 		text += "#define __ASSEMBLER__ 1\n";
 	if (options.language == SourceLanguage::C)
-		text += "#define __STDC__ 1\n#define __STDC_VERSION__ 201710L\n"
-				"#define __STDC_NO_VLA__ 1\n#define __STDC_NO_THREADS__ 1\n";
+		text += std::string("#define __STDC__ 1\n#define __STDC_VERSION__ ") + options.c_version +
+			"\n#define __STDC_NO_VLA__ 1\n#define __STDC_NO_THREADS__ 1\n";
 	else
 		text += "#define __cplusplus " + options.cplusplus + "\n";
 	text += std::string("#define __STDC_HOSTED__ ") + (options.target == target_model::Target::Wasm32 ? "0\n" : "1\n") +

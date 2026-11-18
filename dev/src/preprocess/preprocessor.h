@@ -65,6 +65,8 @@ struct PreprocessorOptions
 	FeatureModes modes;
 	// __cplusplus's value (201103L, 201402L, 201703L or 202002L).
 	std::string cplusplus = "201103L";
+	// __STDC_VERSION__ for C source.
+	const char* c_version = "201710L";
 	// The strict ISO dialect (-std=c++11, c++14, c++17): the host's
 	// predefined macros for it (__STRICT_ANSI__) instead of the GNU
 	// dialect's (gnu++11 ..., and the default).

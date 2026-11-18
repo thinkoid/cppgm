@@ -2097,6 +2097,8 @@ Binding* Analyzer::declare_function(const Specifiers& specifiers, const Declarat
 	if (cxx20_)
 		attach_function_constraint(function, info, befriending);
 	const bool was_defined = function->defined;
+	if (c_source_ && where->kind == ScopeKind::Namespace && (specifiers.is_extern || !specifiers.is_inline))
+		function->c_external_definition = true;
 	function->is_inline = function->is_inline || specifiers.is_inline || specifiers.is_constexpr;
 	function->defined = function->defined || definition || deleted;
 	function->deleted = function->deleted || deleted;

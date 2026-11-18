@@ -435,6 +435,8 @@ struct FunctionEntity : Entity
 	bool unanalyzed_body : 1;
 	bool excluded_instantiation : 1;
 	bool gnu_inline : 1;
+	// A C file-scope declaration with extern or without inline (6.7.4).
+	bool c_external_definition : 1;
 	// GNU used: an object-emission root.
 	bool used : 1;
 	// [[noreturn]] or GNU noreturn on any declaration: its calls do not

@@ -43,11 +43,13 @@ namespace driver {
 // Source dialect and feature gates share the token tools' standard names.
 void language_standard(const std::string& standard, PreprocessorOptions& options)
 {
-	if (standard == "c17" || standard == "gnu17")
+	const bool c99 = standard == "c99" || standard == "gnu99";
+	if (c99 || standard == "c17" || standard == "gnu17")
 	{
 		options.language = SourceLanguage::C;
 		options.cplusplus.clear();
-		options.strict = standard == "c17";
+		options.c_version = c99 ? "199901L" : "201710L";
+		options.strict = standard == "c99" || standard == "c17";
 		return;
 	}
 	options.language = SourceLanguage::Cxx;
