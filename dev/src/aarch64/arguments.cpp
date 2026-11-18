@@ -62,8 +62,29 @@ void Selector::fp_move(bool to_fp, unsigned fp, unsigned gp, Type type)
 
 // An aggregate may end at the last byte of a mapped page. Access only
 // the bytes belonging to each general-register piece, including its tail.
-void Selector::transfer(bool load, const Argument& arg, unsigned base, Type type)
+void Selector::transfer(bool load, const Argument& arg, Value object, Type type)
 {
+	unsigned base = 10, displacement = 0;
+	const bool pair = level_ && arg.bank == Bank::General && arg.pieces == 2 && storage_bytes(type) == 16;
+	const Type place = type_of(object, type);
+	if (level_ && arg.bank == Bank::General && data_alignment(place) <= 16)
+	{
+		const uint32_t offset = object.is(ValueKind::Slot)      ? slots_[object.index]
+			: object.is(ValueKind::Temp) && memory_value(place) ? homes_[object.index]
+																: kNoId;
+		if (offset % 8 == 0 && offset <= (pair ? 504u : 4080u))
+		{
+			base = frame_base();
+			displacement = offset;
+		}
+	}
+	if (base == 10)
+		address(base, object);
+	if (pair)
+	{
+		out_.emit(load ? Op::LdpX : Op::StpX, arg.first, base, 0, ((arg.first + 1) << 10) | ((displacement / 8) << 15));
+		return;
+	}
 	for (unsigned i = 0; i < arg.pieces; ++i)
 	{
 		if (arg.bank == Bank::General)
@@ -77,7 +98,7 @@ void Selector::transfer(bool load, const Argument& arg, unsigned base, Type type
 				const unsigned part = offset ? 15 : reg;
 				if (!load && offset)
 					out_.emit(Op::Ubfm, 15, reg, 0, (offset * 8 << 16) | (63u << 10));
-				access(!load, part, base, i * 8 + offset, chunk);
+				access(!load, part, base, displacement + i * 8 + offset, chunk);
 				if (load && offset)
 					out_.emit(Op::Orr, reg, reg, 15, offset * 8 << 10);
 				offset += chunk;
@@ -110,9 +131,9 @@ void Selector::parameter(TempId id, const Argument& arg)
 	}
 	else if (memory_value(type))
 	{
-		home_address(10, id);
 		if (arg.indirect || arg.bank == Bank::Stack)
 		{
+			home_address(10, id);
 			if (!arg.indirect)
 				frame_address(11, offset);
 			else if (arg.bank == Bank::Stack)
@@ -122,7 +143,7 @@ void Selector::parameter(TempId id, const Argument& arg)
 			copy_bytes(10, 11, storage_bytes(type));
 		}
 		else
-			transfer(false, arg, 10, type);
+			transfer(false, arg, Value::temp(id), type);
 	}
 	else
 	{
@@ -201,10 +222,7 @@ void Selector::pass(const Argument& arg, Value src, Type type, unsigned copy_off
 			copy_value(10, src, type);
 		}
 		else
-		{
-			address(10, src);
-			transfer(true, arg, 10, type);
-		}
+			transfer(true, arg, src, type);
 	}
 	else
 	{
@@ -245,10 +263,7 @@ void Selector::call(const lowir::Instruction& inst)
 	if (inst.type.kind() == TypeKind::V128)
 		save_vector(0, inst.result);
 	else if (memory_value(inst.type))
-	{
-		home_address(10, inst.result);
-		transfer(false, ret, 10, inst.type);
-	}
+		transfer(false, ret, Value::temp(inst.result), inst.type);
 	else if (ret.bank == Bank::Simd)
 		save_fp(0, inst.result);
 	else
@@ -270,10 +285,7 @@ void Selector::epilogue(const lowir::Instruction& inst)
 			copy_value(10, inst.ops[0], type);
 		}
 		else
-		{
-			address(10, inst.ops[0]);
-			transfer(true, result_, 10, type);
-		}
+			transfer(true, result_, inst.ops[0], type);
 	}
 	else if (type.is_float())
 		vector_move(0, fp_operand(inst.ops[0], type, 16));
