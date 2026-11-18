@@ -90,7 +90,12 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 			return;
 		const unsigned dst = address_register(inst.ops[1], 10);
 		const unsigned src = address_register(inst.ops[0], 11);
-		copy_bytes(dst, src, inst.immediate);
+		// LowIR copyobj permits disjoint spans or the same address.
+		// In either case a forward copy is sufficient.
+		if (level_ && dst != src && inst.immediate > 32)
+			copy_run(dst, src, inst.immediate, false);
+		else
+			copy_bytes(dst, src, inst.immediate);
 		return;
 	}
 	case Opcode::ZeroInit:

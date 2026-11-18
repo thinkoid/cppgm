@@ -17,5 +17,14 @@
       "stdout": "ok\n"
     }
   ],
-  "hosted": true
+  "hosted": true,
+  "quality": {
+    "levels": [1, 2, 3],
+    "functions": {
+      "copy65": {
+        "instructions": 10,
+        "calls": 0
+      }
+    }
+  }
 }
