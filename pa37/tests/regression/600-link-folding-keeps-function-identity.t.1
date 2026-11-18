@@ -1,0 +1,4 @@
+extern "C" __attribute__((noinline)) unsigned right(unsigned x)
+{
+    return ((x ^ 13579u) * 37u + 21u) ^ (x >> 2);
+}

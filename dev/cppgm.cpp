@@ -433,6 +433,7 @@ SourceOutputInvocation parse_source_output_invocation(const vector<string>& args
 		{
 			invocation.optimizer.level = optimization_level(args[i]);
 			invocation.optimize_size = args[i] == "-Os" || args[i] == "-Oz";
+			invocation.optimizer.minimize_size = args[i] == "-Oz";
 			invocation.debug_optimization = args[i] == "-Og";
 			continue;
 		}
@@ -1314,7 +1315,9 @@ int run_cppgm(const vector<string>& raw_args)
 			 << "this compiler's flags:\n"
 				"  -S -emit-lowir      write the LowIR that -c compiles, after the LowIR optimizer\n"
 				"                      (default output: <input>.lowir)\n"
-				"  -fno-lowir-passes   compile without the LowIR optimizer; the back end runs at the -O level\n";
+				"  -fno-lowir-passes   compile without the LowIR optimizer; the back end runs at the -O level\n"
+				"  -Oz                optimize for smaller code\n"
+				"  -flto              fold identical function bodies when linking Wasm objects\n";
 		return EXIT_SUCCESS;
 	}
 

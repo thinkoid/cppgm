@@ -1,0 +1,11 @@
+{
+  "source": true,
+  "units": ["600-link-folding-keeps-function-identity.t.1"],
+  "levels": [3],
+  "link_flags": ["-Oz", "-flto"],
+  "exports": ["left", "right"],
+  "calls": [{"export": "check", "args": ["11"], "result": "1004078"}],
+  "quality": {
+    "functions": {"right": {"instructions": 3}}
+  }
+}

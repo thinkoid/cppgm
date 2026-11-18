@@ -18,7 +18,10 @@ struct WasmLinkOptions
 	std::set<std::string> imports;
 	bool export_table = false;
 	bool export_constructors = false;
-	bool requested() const { return export_table || export_constructors || !imports.empty(); }
+	// Link-time identical code folding over resolved Wasm objects.
+	bool fold_functions = false;
+	bool compact_relocations = false;
+	bool requested() const { return export_table || export_constructors || fold_functions || !imports.empty(); }
 };
 
 struct Options

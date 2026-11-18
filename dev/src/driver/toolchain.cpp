@@ -462,8 +462,11 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 		{
 			invocation.optimizer.level = optimization_level(arg);
 			optimize_size = arg == "-Os" || arg == "-Oz";
+			invocation.optimizer.minimize_size = arg == "-Oz";
 			invocation.debug_optimization = arg == "-Og";
 		}
+		else if (arg == "-flto" || arg == "-fno-lto")
+			invocation.wasm_link.fold_functions = arg == "-flto";
 		else if (arg == "-fno-inline" || arg == "-finline")
 			invocation.optimizer.optional_inlining = arg == "-finline";
 		else if (arg == "--inline-limit")
@@ -1116,6 +1119,7 @@ int wasm_mode(const Invocation& invocation)
 	options.no_startfiles = invocation.no_startfiles;
 	options.wasm_atomics = invocation.wasm_atomics;
 	options.wasm_link = invocation.wasm_link;
+	options.wasm_link.compact_relocations = invocation.optimizer.minimize_size;
 	if (invocation.wasm_stack_size != 0)
 		options.wasm_stack_size = invocation.wasm_stack_size;
 	options.optimizer = &invocation.optimizer;

@@ -213,8 +213,10 @@ void Linker::emit(Bytes& output)
 			body.byte(0x00);
 			body.byte(0x0b);
 		}
+		else if (!folded_functions_.empty() && folded_functions_[i] != i)
+			body = forwarding_body(folded_functions_[i]);
 		else
-			body = relocated(ref.first, objects_[ref.first].functions[ref.second].code);
+			body = relocated(ref.first, objects_[ref.first].functions[ref.second].code, false, true);
 		code.unsigned_leb(body.data.size());
 		code.append(body);
 	}

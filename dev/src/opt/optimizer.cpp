@@ -371,7 +371,8 @@ void simplify_function(Program& program, SymbolId symbol, OptimizerStats& stats,
 	// Each run unrolls one level of a nest; the copies fold before the next.
 	const uint64_t rolled = instruction_count(context.body);
 	bool unrolling = false;
-	for (unsigned nest = 0; nest < kUnrollNest && copies_code(context) && RUN_PASS(unroll_loops); ++nest)
+	for (unsigned nest = 0;
+		nest < kUnrollNest && !options.minimize_size && copies_code(context) && RUN_PASS(unroll_loops); ++nest)
 	{
 		again = unrolling = true;
 		if (nest + 1 == kUnrollNest)
@@ -503,12 +504,13 @@ bool hoist_loops(FunctionContext& context)
 	return changed;
 }
 
-bool finish_loops(FunctionContext& context, int level)
+bool finish_loops(FunctionContext& context, const OptimizerOptions& options)
 {
+	const int level = options.level;
 	bool changed = false;
 	changed = RUN_PASS(hoist_loop_loads) || changed;
 	changed = hoist_loops(context) || changed;
-	const bool copies = copies_code(context);
+	const bool copies = !options.minimize_size && copies_code(context);
 	changed = (copies && RUN_PASS(version_fill_loops)) || changed;
 	if (level >= 3 && RUN_PASS(merge_loop_latches))
 	{
@@ -664,7 +666,7 @@ void finish_function(Program& program, SymbolId symbol, OptimizerStats& stats, c
 	if (changed)
 		RUN_PASS(remove_dead_code);
 	changed = (options.has_gnu_sincos && RUN_PASS(combine_sin_cos)) || changed;
-	changed = (options.level >= 2 && RUN_PASS(guard_sqrt_calls)) || changed;
+	changed = (options.level >= 2 && !options.minimize_size && RUN_PASS(guard_sqrt_calls)) || changed;
 	// i128 values as halves once the inliner has sized its callees whole
 	// (a variable shift is a dozen i64 instructions): the halves' slots
 	// promoted and a round over what that exposes.
@@ -697,7 +699,7 @@ void finish_function(Program& program, SymbolId symbol, OptimizerStats& stats, c
 		changed = true;
 	}
 	const bool had_loops = has_loop(context);
-	if (had_loops && finish_loops(context, options.level))
+	if (had_loops && finish_loops(context, options))
 	{
 		// A load the loop passes took out of an arm leaves the arm to compute
 		// only: the branch to it may now be a choice of values.
@@ -993,9 +995,9 @@ void optimize_program(Program& program, const OptimizerOptions& options, Optimiz
 		budgets.once_unit = 2 * budgets.force_unit;
 		run_inline_wave(program, options, stats, InlineWave::Ordinary, budgets, original, unrolled, nounwind, simplify);
 		prune_unreachable(program, stats);
-		if (level >= 2)
+		if (level >= 2 && !options.minimize_size)
 			speculate_virtual_calls(program, stats);
-		if (level >= 2 && copy_for_callees(program, stats))
+		if (level >= 2 && !options.minimize_size && copy_for_callees(program, stats))
 		{
 			original.resize(program.symbols.size(), 0);
 			nounwind.resize(program.symbols.size(), 0);
@@ -1012,7 +1014,7 @@ void optimize_program(Program& program, const OptimizerOptions& options, Optimiz
 		if (level >= 2)
 			forward_calls(program, stats);
 		prune_unreachable(program, stats);
-		if (level >= 2 && specialize_arguments(program, stats, simplify))
+		if (level >= 2 && !options.minimize_size && specialize_arguments(program, stats, simplify))
 			prune_unreachable(program, stats);
 		if (level >= 2)
 			infer_function_memory(program);

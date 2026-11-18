@@ -421,6 +421,8 @@ void Linker::run(Bytes& output)
 		}
 		type_indices_.push_back(std::move(indices));
 	}
+	if (options_.wasm_link.fold_functions)
+		fold_functions();
 	emit(output);
 }
 

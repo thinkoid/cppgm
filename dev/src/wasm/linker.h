@@ -36,7 +36,10 @@ private:
 	bool request_section_boundary(const std::string& name);
 	void group_named_sections();
 	void prepare_data_exports();
-	Bytes relocated(uint32_t object, const ObjectChunk& chunk, bool constant = false) const;
+	uint32_t relocation_value(uint32_t object, const Relocation& relocation, bool constant) const;
+	Bytes relocated(uint32_t object, const ObjectChunk& chunk, bool constant = false, bool code = false) const;
+	void fold_functions();
+	Bytes forwarding_body(uint32_t target) const;
 	void emit(Bytes& output);
 	void data_section(Bytes& output) const;
 	void prepare_address_globals();
@@ -66,6 +69,7 @@ private:
 	// Exported data addresses are immutable i32 globals (index, address).
 	std::map<std::string, std::pair<uint32_t, uint32_t>> data_exports_;
 	std::vector<ObjectRef> ordered_functions_, ordered_data_, ordered_tags_;
+	std::vector<uint32_t> folded_functions_;
 	std::vector<ObjectRef> ordered_globals_, imported_globals_;
 	std::vector<std::pair<uint32_t, ObjectRef>> initializers_;
 	std::vector<Signature> types_;

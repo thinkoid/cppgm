@@ -1882,7 +1882,7 @@ bool InlineWaveRunner::admit(
 	if (!source_required_ && shape.size > kTrivialLeaf &&
 		((m.flags | program_.symbols[graph_.functions[caller_]].metadata.flags) & SF_COLD) != 0)
 		return false;
-	if (wave_ != InlineWave::Once)
+	if (wave_ != InlineWave::Once && !options_.minimize_size)
 	{
 		const bool hint = (m.flags & SF_INLINE_HINT) != 0;
 		// (-O3 admits a quarter more, as LLVM's -O3 threshold is to its -O2 one.)
@@ -1925,7 +1925,8 @@ bool InlineWaveRunner::admit(
 		: requested_once_cap;
 	const bool sole = options_.level >= 2 && m.binding == ir_model::SBM_INTERNAL && graph_.callers_in[g] == 1 &&
 		!graph_.observed[g] && discardable(program_, callee) && size * graph_.calls_in[g] <= once_cap;
-	if (!(single || sole) || size > once_cap || size > once_budget_ || size > budgets_.once_unit)
+	if (!(single || (sole && !options_.minimize_size)) || size > once_cap || size > once_budget_ ||
+		size > budgets_.once_unit)
 		return false;
 	charge = size;
 	once = true;
@@ -1950,8 +1951,8 @@ bool InlineWaveRunner::admit_partial(uint32_t g, const Instruction& call, bool h
 	const SymbolMetadata& m = program_.symbols[callee].metadata;
 	const Shape& shape = shapes_[g];
 	const bool cycle = graph_.recursive[g] && g != caller_;
-	if (options_.level < 2 || (m.flags & (SF_NO_INLINE | SF_REPLACEABLE)) != 0 || shape.unsafe || shape.eh ||
-		(handler_code && shape.unwinds) || (call.result != kNoId && !phi_type(call.type)))
+	if (options_.level < 2 || options_.minimize_size || (m.flags & (SF_NO_INLINE | SF_REPLACEABLE)) != 0 ||
+		shape.unsafe || shape.eh || (handler_code && shape.unwinds) || (call.result != kNoId && !phi_type(call.type)))
 		return false;
 	const Function& function = program_.functions[program_.symbols[callee].detail];
 	const Signature& sig = program_.signatures[function.signature];
@@ -2248,8 +2249,8 @@ bool InlineWaveRunner::process(SymbolId caller)
 	// multiplies them).
 	original_.reset();
 	original_count_ = recursive_budget_ = recursive_depth_ = 0;
-	if (wave_ == InlineWave::Late && options_.level >= 2 && graph_.recursive[caller_] && !shapes_[caller_].eh &&
-		!shapes_[caller_].unsafe && shapes_[caller_].size <= kRecursiveCap)
+	if (wave_ == InlineWave::Late && options_.level >= 2 && !options_.minimize_size && graph_.recursive[caller_] &&
+		!shapes_[caller_].eh && !shapes_[caller_].unsafe && shapes_[caller_].size <= kRecursiveCap)
 	{
 		const uint64_t self_calls = shapes_[caller_].self_calls;
 		// (A loop's one self call, what is left of a tail-recursive function,

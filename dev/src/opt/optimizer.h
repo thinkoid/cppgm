@@ -30,6 +30,7 @@ struct InlineLimits
 struct OptimizerOptions
 {
 	int level = 0;
+	bool minimize_size = false;
 	InlineLimits limits;
 	// -fno-inline suppresses optional copies; always_inline still applies.
 	bool optional_inlining = true;
