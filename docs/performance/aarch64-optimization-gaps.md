@@ -582,6 +582,15 @@ five public programs. Puzzle's conditional loop and the lookup workload
 remain slower individually. These Linux measurements cover the portable
 five-program subset and give no timing estimate for Apple Silicon.
 
+The guarded-store experiment raised Puzzle throughput from 0.692× to
+0.842× on the same Arm VM. Each unrolled iteration keeps its original
+conditional store, including when input and output arrays overlap. On the
+tested build Bubblesort measured 0.962×, lookup 0.854× and explicit NEON
+1.000×. A broader version that also unrolled conditional swaps had lowered
+Bubblesort to 0.851× even though its emulated instruction count dropped.
+The narrower rule excludes those swaps. Puzzle still runs slower than
+Clang even at 392.8 million guest instructions versus Clang's 407.8 million.
+
 Sampling complete native rebuilds at 599 Hz attributed 88,811 samples to
 the self-built compiler and 73,680 to the Clang-built compiler. Of those,
 8,923 and 6,889 respectively landed on stack accesses, and 23,146 and
@@ -614,6 +623,13 @@ retired instructions across the same four levels. On PA36's generated
 function workload, doubling from 800 to 1,600 functions multiplied retired
 instructions by 1.9933 on main and 1.9932 on that feature build. These are
 Linux `perf stat` counters. The wall-time samples came from a shared host.
+
+Repeating the full x86 comparison at 6d86eb6e2 covered the new shared
+result-slot checks. All 144 outputs matched. The O0 through O3 retired
+instruction deltas were −0.009%, +0.022%, +0.028% and +0.024%.
+Peak RSS was 0.07–0.29% lower. Wall deltas were −2.61%, −0.84%,
+−0.55% and +1.96%, with A/A controls of +1.89%, −7.58%, −0.01%
+and +0.05%.
 
 ## Which decisions the targets share
 
