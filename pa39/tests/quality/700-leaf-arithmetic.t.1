@@ -15,7 +15,14 @@ extern "C" unsigned long inspect_widened(unsigned long choice, unsigned long byt
     if (wide != 0xf1234567UL || word != 0xf1234567u || byte != 0xfeUL) return 91;
     return choice == wide ? 13 : choice == byte ? 17 : 99;
 }
+struct Arms { unsigned pad, left, right, tail; };
+extern "C" unsigned replace_fields(Arms*, unsigned, unsigned);
+extern "C" unsigned narrow_ops(unsigned char, unsigned char, unsigned short);
 int main() {
+    Arms fields = {123, 0xf0000001u, 0x10000003u, 456};
+    if (replace_fields(&fields, 11, 19) != 0x20000002u || fields.left != 11 || fields.right != 19 ||
+        fields.pad != 123 || fields.tail != 456) return 16;
+    if (narrow_ops(0xfe, 5, 1) != 0x0003ff02u || narrow_ops(0, 1, 0) != 0x0001ffffu) return 17;
     unsigned word = 0xf1234567u;
     if (widen_across_call(&word, 0xfe, true) != 13 + 2 * 0xf1234567UL) return 14;
     if (widen_across_call(&word, 0xfe, false) != 17 + 0xfe + 0xf1234567UL) return 15;

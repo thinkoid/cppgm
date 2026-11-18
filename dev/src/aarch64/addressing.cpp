@@ -91,6 +91,49 @@ InstId Selector::paired_load(const lowir::Instruction& low)
 	return index.next;
 }
 
+// Adjacent typed field accesses become one pair. Both addresses use the
+// same allocated base and both data registers are already available.
+InstId Selector::paired_fields(const lowir::Instruction& first)
+{
+	if (!first.ops[0].is(ValueKind::Temp) || registers_[first.ops[0].index] == kNoId ||
+		!first.ops[1].is(ValueKind::Integer) || first.next == kNoId || uses_[first.result] != 1)
+		return kNoId;
+	const auto& a = body_.instructions[first.next];
+	const bool store = a.op == Opcode::Store;
+	if ((!store && a.op != Opcode::Load) || a.next == kNoId || !(a.ops[store ? 1 : 0] == Value::temp(first.result)))
+		return kNoId;
+	const unsigned bytes = storage_bytes(a.type);
+	if ((bytes != 4 && bytes != 8) || !(a.type.is_integer() || a.type.is_pointer()))
+		return kNoId;
+	const auto& second = body_.instructions[a.next];
+	if (second.op != Opcode::Index || second.next == kNoId || !(second.ops[0] == first.ops[0]) ||
+		!second.ops[1].is(ValueKind::Integer) || uses_[second.result] != 1)
+		return kNoId;
+	const auto& b = body_.instructions[second.next];
+	if (b.op != a.op || b.type != a.type || !(b.ops[store ? 1 : 0] == Value::temp(second.result)) ||
+		((a.flags | b.flags) & IF_VOLATILE))
+		return kNoId;
+	const uint64_t left = body_.literals[first.ops[1].index].low * storage_bytes(first.type);
+	const uint64_t right = body_.literals[second.ops[1].index].low * storage_bytes(second.type);
+	const uint64_t offset = std::min(left, right);
+	if (std::max(left, right) - offset != bytes || offset % bytes || offset / bytes > 63)
+		return kNoId;
+	const auto reg = [&](const lowir::Instruction& inst) {
+		if (!store)
+			return registers_[inst.result];
+		const Value v = inst.ops[0];
+		return v.is(ValueKind::Temp)                                   ? registers_[v.index]
+			: v.is(ValueKind::Integer) && !body_.literals[v.index].low ? 31u
+																	   : kNoId;
+	};
+	const auto lo = reg(left < right ? a : b), hi = reg(left < right ? b : a);
+	if (lo == kNoId || hi == kNoId || (!store && lo == hi))
+		return kNoId;
+	const auto op = bytes == 4 ? (store ? Op::StpW : Op::LdpW) : (store ? Op::StpX : Op::LdpX);
+	out_.emit(op, lo, registers_[first.ops[0].index], 0, (uint32_t(offset / bytes) << 15) | (hi << 10));
+	return second.next;
+}
+
 // STP writes exactly the two consecutive scalar accesses. Restrict the
 // combine to register sources so neither read can observe the first store.
 InstId Selector::paired_store(const lowir::Instruction& index)
@@ -123,7 +166,9 @@ InstId Selector::address_sequence(InstId id)
 	const lowir::Instruction& first = body_.instructions[id];
 	if (first.op == Opcode::Index)
 	{
-		const auto last = paired_store(first);
+		auto last = paired_fields(first);
+		if (last == kNoId)
+			last = paired_store(first);
 		if (last != kNoId)
 			return last;
 	}

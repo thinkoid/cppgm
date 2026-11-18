@@ -44,3 +44,17 @@ extern "C" unsigned long widen_across_call(const unsigned* in, unsigned char byt
     unsigned long check = inspect_widened(choice, byte, word, wide);
     return check + choice + wide;
 }
+
+struct Arms { unsigned pad, left, right, tail; };
+extern "C" unsigned replace_fields(Arms* p, unsigned left, unsigned right) {
+    unsigned old_right = p->right;
+    unsigned old_left = p->left;
+    p->left = left;
+    p->right = right;
+    return old_right - old_left;
+}
+extern "C" unsigned narrow_ops(unsigned char a, unsigned char b, unsigned short c) {
+    unsigned char sum = a + b;
+    unsigned short diff = c - (a | b);
+    return (unsigned(sum) << 16) | diff;
+}
