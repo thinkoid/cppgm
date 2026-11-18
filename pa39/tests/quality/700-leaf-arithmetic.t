@@ -121,3 +121,12 @@ extern "C" unsigned short place_nibbles(unsigned long a, unsigned long b) {
     return static_cast<unsigned short>(a << 12) | static_cast<unsigned char>(b << 4);
 }
 extern "C" unsigned clear_low_word(unsigned long x) { return static_cast<unsigned>(x << 39); }
+
+extern "C" unsigned narrow_join(bool select, unsigned long a, unsigned long b) {
+    unsigned long both = select ? (a >> 56) : (b & 255);
+    return static_cast<unsigned char>(both) * 257u;
+}
+extern "C" unsigned narrow_join_full(bool select, unsigned long a, unsigned long b) {
+    unsigned long either = select ? (a >> 55) : b;
+    return static_cast<unsigned char>(either) * 257u;
+}

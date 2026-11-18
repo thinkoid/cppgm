@@ -212,7 +212,56 @@ std::vector<uint64_t> spill_weights(
 	return cost;
 }
 
-// A same-type copy and a widening zero extension can share their source's
+namespace {
+// Prove that truncating a canonical integer home leaves every bit unchanged.
+// The shared budget bounds work across both arms of a select and cyclic phis.
+bool fits_unsigned(const FunctionBody& body, Value value, unsigned bits, unsigned& budget)
+{
+	if (value.is(ValueKind::Integer))
+		return (body.literals[value.index].low >> bits) == 0;
+	if (!value.is(ValueKind::Temp) || !budget)
+		return false;
+	--budget;
+	const auto& temp = body.temps[value.index];
+	if (!temp.type.is_integer() || integer_bits(temp.type.kind()) > 64)
+		return false;
+	if (integer_bits(temp.type.kind()) <= bits)
+		return true;
+	if (temp.def == kNoId)
+		return false;
+	const auto& def = body.instructions[temp.def];
+	const auto fits = [&](Value v) { return fits_unsigned(body, v, bits, budget); };
+	if (def.op == Opcode::Compare)
+		return true;
+	if (def.op == Opcode::Binary)
+	{
+		const auto op = static_cast<BinaryOp>(def.sub);
+		if (op == BinaryOp::And)
+			return fits(def.ops[1]) || fits(def.ops[0]);
+		if (op == BinaryOp::Or || op == BinaryOp::Xor)
+			return fits(def.ops[0]) && fits(def.ops[1]);
+		if (op != BinaryOp::UShr || !def.ops[1].is(ValueKind::Integer))
+			return false;
+		const auto shift = body.literals[def.ops[1].index].low;
+		const auto width = integer_bits(def.type.kind());
+		return shift < width && width - shift <= bits;
+	}
+	if (def.op == Opcode::Select)
+		return fits(def.ops[1]) && fits(def.ops[2]);
+	if (def.op == Opcode::Copy ||
+		(def.op == Opcode::Convert &&
+			(def.sub == static_cast<unsigned>(ConvertOp::ZExt) || def.sub == static_cast<unsigned>(ConvertOp::Trunc))))
+		return fits(def.ops[0]);
+	if (def.op != Opcode::Phi || !def.extra_count || def.extra_count > 16)
+		return false;
+	for (uint32_t k = 1; k < def.extra_count; k += 2)
+		if (!fits(body.operands[def.extra_first + k]))
+			return false;
+	return true;
+}
+} // namespace
+
+// A copy or conversion that preserves all bits can share its source's
 // canonical register value or eight-byte spill. Account for every later use
 // before allocating registers, including outgoing arguments and phi edges.
 std::vector<uint32_t> scalar_aliases(const FunctionBody& body)
@@ -231,10 +280,18 @@ std::vector<uint32_t> scalar_aliases(const FunctionBody& body)
 		const Type from = body.temps[src].type;
 		if (inst.op == Opcode::Copy)
 		{
-			// A same-width edge points to an earlier name. A widening edge
-			// points to a strictly narrower type, so the graph is acyclic.
+			// Copy and conversion chains terminate at an SSA producer. In
+			// particular, the phi on a loop backedge retains its own home.
 			if (src >= id || from != inst.type || !(from.is_integer() || from.is_pointer()) ||
 				integer_bits(from.kind()) > 64)
+				continue;
+		}
+		else if (inst.sub == static_cast<unsigned>(ConvertOp::Trunc))
+		{
+			const auto bits = integer_bits(inst.type.kind());
+			unsigned budget = 16;
+			if (!bits || bits >= 64 || !from.is_integer() || integer_bits(from.kind()) > 64 ||
+				from != convert_source_type(inst) || !fits_unsigned(body, inst.ops[0], bits, budget))
 				continue;
 		}
 		else if (inst.sub != static_cast<unsigned>(ConvertOp::ZExt) || from != convert_source_type(inst) ||

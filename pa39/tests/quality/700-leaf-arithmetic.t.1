@@ -35,7 +35,13 @@ extern "C" bool conditions_and(long, long, unsigned);
 extern "C" bool conditions_or(unsigned, unsigned, long);
 extern "C" unsigned short place_nibbles(unsigned long, unsigned long);
 extern "C" unsigned clear_low_word(unsigned long);
+extern "C" unsigned narrow_join(bool, unsigned long, unsigned long);
+extern "C" unsigned narrow_join_full(bool, unsigned long, unsigned long);
 int main() {
+    if (narrow_join(true, 0xa500000000000000UL, 0) != 0xa5a5 ||
+        narrow_join(false, 0, 0x1234UL) != 0x3434) return 32;
+    if (narrow_join_full(true, 0x8080000000000000UL, 0) != 0x0101 ||
+        narrow_join_full(false, 0, 0xfeabUL) != 0xabab) return 33;
     if (place_nibbles(0xfedcba9876543215UL, ~2UL) != 0x50d0 || clear_low_word(~0UL) != 0) return 31;
     for (int mask = 0; mask < 4; ++mask) {
         long a = mask & 1 ? -5 : 9;
