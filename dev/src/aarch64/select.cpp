@@ -108,15 +108,7 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		}
 		if (level_)
 		{
-			const unsigned base = address_register(inst.ops[0], left);
-			if (vectors_[inst.result] != kNoId)
-			{
-				out_.emit(inst.type.kind() == TypeKind::F32 ? Op::LdrS : Op::LdrD, vectors_[inst.result], base);
-				return;
-			}
-			const unsigned dest = registers_[inst.result] == kNoId ? result_reg : registers_[inst.result];
-			access(false, dest, base, 0, storage_bytes(inst.type));
-			save(dest, inst.result, inst.type.kind() != TypeKind::I1);
+			scalar_access(inst);
 			return;
 		}
 		address(left, inst.ops[0]);
@@ -137,14 +129,7 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		}
 		if (level_)
 		{
-			const unsigned base = address_register(inst.ops[1], left);
-			if (inst.ops[0].is(ValueKind::Temp) && vectors_[inst.ops[0].index] != kNoId)
-			{
-				out_.emit(inst.type.kind() == TypeKind::F32 ? Op::StrS : Op::StrD, vectors_[inst.ops[0].index], base);
-				return;
-			}
-			const unsigned source = operand_register(inst.ops[0], inst.type, right);
-			access(true, source, base, 0, storage_bytes(inst.type));
+			scalar_access(inst);
 			return;
 		}
 		address(left, inst.ops[1]);

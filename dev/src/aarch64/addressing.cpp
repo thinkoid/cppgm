@@ -25,6 +25,50 @@ Op indexed_access(bool store, unsigned bytes)
 }
 }
 
+// STR reads register 31 as zero even when the base is SP. Other operand
+// positions have different interpretations for register 31.
+unsigned Selector::store_register(Value source, Type type, unsigned scratch)
+{
+	if (source.is(ValueKind::Integer) && (type.is_integer() || type.is_pointer()) &&
+		body_.literals[source.index].low == 0)
+		return 31;
+	return operand_register(source, type, scratch);
+}
+
+void Selector::scalar_access(const lowir::Instruction& inst)
+{
+	const bool store = inst.op == Opcode::Store;
+	const auto pointer = inst.ops[store ? 1 : 0];
+	const auto value = inst.ops[0];
+	const unsigned bytes = storage_bytes(inst.type);
+	uint32_t offset = 0;
+	unsigned base;
+	if (pointer.is(ValueKind::Slot) && data_alignment(body_.slots[pointer.index].type) <= 16 &&
+		slots_[pointer.index] % bytes == 0 && slots_[pointer.index] / bytes < 4096)
+	{
+		// Named frame slots fit the same scaled displacement as an indexed field.
+		base = frame_base();
+		offset = slots_[pointer.index];
+	}
+	else
+		base = address_register(pointer, 10);
+	const auto fp = !store ? vectors_[inst.result] : value.is(ValueKind::Temp) ? vectors_[value.index] : kNoId;
+	if (fp != kNoId)
+	{
+		const auto op = bytes == 4 ? (store ? Op::StrS : Op::LdrS) : (store ? Op::StrD : Op::LdrD);
+		out_.emit(op, fp, base, 0, (offset / bytes) << 10);
+	}
+	else
+	{
+		const auto reg = store                 ? store_register(value, inst.type, 11)
+			: registers_[inst.result] == kNoId ? 9
+											   : registers_[inst.result];
+		access(store, reg, base, offset, bytes);
+		if (!store)
+			save(reg, inst.result, inst.type.kind() != TypeKind::I1);
+	}
+}
+
 // The shared address-sinking pass leaves typed index expressions beside their
 // users. Consume only adjacent, single-use producers: their inputs are still
 // in their allocated locations, and no memory operation moves past another.
@@ -82,7 +126,7 @@ InstId Selector::address_sequence(InstId id)
 					: data.is(ValueKind::Temp)              ? vectors_[data.index]
 															: kNoId;
 				const unsigned reg = fp != kNoId         ? fp
-					: store                              ? operand_register(data, memory.type, 9)
+					: store                              ? store_register(data, memory.type, 9)
 					: registers_[memory.result] == kNoId ? 9
 														 : registers_[memory.result];
 				if (literal)

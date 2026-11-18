@@ -70,6 +70,8 @@ private:
 	void constant(unsigned reg, uint64_t bits);
 	void move(unsigned to, unsigned from);
 	void extend(unsigned reg, unsigned bits, bool sign);
+	void scalar_access(const lowir::Instruction& inst);
+	unsigned store_register(lowir::Value source, lowir::Type type, unsigned scratch);
 	void access(bool store, unsigned reg, unsigned base, uint32_t offset, unsigned bytes);
 	void darwin_tls_address(unsigned reg, lowir::SymbolId symbol);
 	void address(unsigned reg, lowir::Value value);
