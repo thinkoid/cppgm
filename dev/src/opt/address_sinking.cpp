@@ -386,6 +386,50 @@ bool AddressSinking::run()
 	return true;
 }
 
+// Arm's shifted ADD can form base + (element << shift) at the same cost
+// as an ordinary addition. Express a scaled byte index as a typed index
+// even if several bases use the same product in different blocks.
+bool fold_index_scales(FunctionContext& context)
+{
+	bool changed = false;
+	auto& body = context.body;
+	for (auto b : body.layout)
+		for (auto i = body.blocks[b].first; i != kNoId; i = body.instructions[i].next)
+		{
+			auto& index = body.instructions[i];
+			if (index.op != Opcode::Index || storage_bytes(index.type) != 1 || !index.ops[1].is(ValueKind::Temp))
+				continue;
+			const auto def = body.temps[index.ops[1].index].def;
+			if (def == kNoId)
+				continue;
+			const auto& product = body.instructions[def];
+			if (product.op != Opcode::Binary || integer_bits(product.type.kind()) != 64)
+				continue;
+			auto element = product.ops[0], factor = product.ops[1];
+			const auto op = static_cast<BinaryOp>(product.sub);
+			if (op == BinaryOp::Mul && element.is(ValueKind::Integer))
+				std::swap(element, factor);
+			if (!element.is(ValueKind::Temp) || !factor.is(ValueKind::Integer) ||
+				(op != BinaryOp::Mul && op != BinaryOp::Shl) || body.temps[element.index].type != product.type)
+				continue;
+			const auto literal = body.literals[factor.index].low;
+			const auto scale = op == BinaryOp::Mul ? literal : literal < 31 ? uint64_t(1) << literal : 0;
+			if (scale < 2 || scale > (uint64_t(1) << 30) || (scale & (scale - 1)))
+				continue;
+			index.type = Type::object(scale, 0);
+			index.ops[1] = element;
+			// The original product could wrap before the inbounds byte index.
+			index.set_index_bounds(IndexBounds::None);
+			changed = true;
+		}
+	if (changed)
+	{
+		context.invalidate_uses();
+		remove_dead_code(context);
+	}
+	return changed;
+}
+
 } // namespace
 
 bool sink_addresses(FunctionContext& context)
@@ -393,10 +437,10 @@ bool sink_addresses(FunctionContext& context)
 	if (!context.costs.scaled_memory_operands)
 		return false;
 	// (Again for a copy that its own block reads memory through.)
-	if (!AddressSinking(context).run())
-		return false;
-	AddressSinking(context).run();
-	return true;
+	const bool changed = AddressSinking(context).run();
+	if (changed)
+		AddressSinking(context).run();
+	return (target_model::is_aarch64(context.program.target) && fold_index_scales(context)) || changed;
 }
 
 } // namespace opt
