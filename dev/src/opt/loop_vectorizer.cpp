@@ -2554,15 +2554,16 @@ bool LoopVectorizer::read_live_outs(BlockId after)
 	return live_outs_.empty() || cfg_.pred_count(after) == 1;
 }
 
-// Whether a round runs the lanes' code twice: two lanes of short code, between
+// Whether a round runs the lanes' code twice: a short vector body, between
 // bounds that are not both literals, in a loop the lanes may finish. One test
-// then serves four passes, and a loop of a fixed count leaves after half as
+// then serves two vectors (eight 32-bit elements on Arm) and leaves half as
 // many branches. (Between literals, and where the lanes leave a pass to the
 // scalar loop, the short loop unrolling groups the rounds. More lanes would
 // leave the scalar loop more passes than the rounds save.)
 bool LoopVectorizer::pairs_rounds() const
 {
-	if (copies_ != 1 || lanes_ != 2 || !lane_cells_.empty() || code_.size() > kPairedCode)
+	const bool lanes_fit = lanes_ == 2 || (lanes_ == 4 && target_model::is_aarch64(c_.program.target));
+	if (copies_ != 1 || !lanes_fit || !lane_cells_.empty() || code_.size() > kPairedCode)
 		return false;
 	return std::none_of(reductions_.begin(), reductions_.end(), [](const Reduction& r) { return r.ordered; });
 }
