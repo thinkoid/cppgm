@@ -26,6 +26,8 @@ template<int N> bool boundary(unsigned char* end, void (*copy)(Bytes<N>*, const 
 }
 
 extern "C" void mark_words(const int*, int*, int);
+extern "C" int search_signed(const int*, const int*, int);
+extern "C" int search_unsigned(const int*, const int*, unsigned);
 int main(int argc, char** argv) {
     unsigned long page = getpagesize();
 #ifdef __APPLE__
@@ -44,6 +46,22 @@ int main(int argc, char** argv) {
         for (int i = 0; i < count; ++i)
             if (output[i] != (mask[i] ? 9 : -1)) return 7;
         if (output[count] != 37) return 8;
+    }
+    int* edge = reinterpret_cast<int*>(base + page);
+    edge[-1] = 1;
+    if (!search_signed(edge-1, edge-1, 30) || !search_unsigned(edge-1, edge-1, 30)) return 10;
+    for (int count = 0; count <= 17; ++count) {
+        int* words = edge-count;
+        int other[17] = {};
+        for (int i = 0; i < count; ++i) words[i] = 0;
+        if (search_signed(words, edge, count) || search_unsigned(words, edge, count)) return 11;
+        for (int i = count-1; i >= 0; --i) {
+            words[i] = 1;
+            if (search_signed(words, other, count)) return 12;
+            other[i] = 1;
+            if (!search_unsigned(words, other, count)) return 13;
+            other[i] = 0;
+        }
     }
     auto v = reinterpret_cast<Triple*>(base+page-sizeof(Triple));
     v->bytes[0]=17; v->bytes[1]=22; v->bytes[2]=39;

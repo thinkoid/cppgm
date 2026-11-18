@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <vector>
 
 #include "lowir/builder.h"
@@ -15,6 +16,7 @@ namespace {
 // (its passes' own, then the group's test and branch).
 const unsigned kGroupPasses = 8;
 const unsigned kGroupSize = 28;
+const unsigned kSearchPasses = 4;
 // The greatest step of a tested induction (bytes of a pointer).
 const int64_t kGroupStep = int64_t(1) << 16;
 
@@ -69,6 +71,17 @@ private:
 		const InstId def = body_.temps[v.index].def;
 		return def != kNoId && def < block_of_.size() && in_loop(forest_, loop, block_of_[def]);
 	}
+	struct Search
+	{
+		BlockId header, latch, guard, early;
+		InstId phi;
+	};
+	bool search_shape(uint32_t at, Search& s) const;
+	bool search_body(BlockId b, InstId hp, BlockId latch) const;
+	void search_branch(BlockId b, InstId& id, Value v, BlockId yes, BlockId no);
+	void copy_search_tests(const Search& s, BlockId scalar, const std::vector<BlockId>& blocks, const Instruction& step,
+		const Instruction& hb, const Instruction& gb);
+	void rewrite_search(const Search& s);
 	bool wanted(uint32_t loop) const;
 	bool chain(uint32_t loop, Shape& s) const;
 	Value literal_limit(Type type, ComparePredicate& stays, Value init, Value bound, uint64_t step) const;
@@ -939,6 +952,198 @@ void ShortLoopUnrolling::join_exit(const Shape& s, BlockId left)
 	}
 }
 
+// A counted short-circuit search can leave on either the latch or a match.
+// Copy four full passes in order. A hit bypasses every later load, including
+// the second load of a pass whose first predicate failed. The original loop
+// handles the tail and any induction that might wrap.
+bool ShortLoopUnrolling::search_shape(uint32_t at, Search& s) const
+{
+	const auto& loop = forest_.loops[at];
+	if (!target_model::is_aarch64(c_.program.target) || loop.blocks.size() != 3 || loop.latches.size() != 1 ||
+		!body_.code_labels.empty())
+		return false;
+	const auto h = loop.header, latch = loop.latches[0];
+	if (h == latch || body_.blocks[h].kind == BlockKind::UnrolledGroup)
+		return false;
+	const auto hp = body_.blocks[h].first;
+	const auto phi = body_.instructions[hp], hb = body_.instructions[body_.blocks[h].last];
+	if (phi.op != Opcode::Phi || phi.extra_count != 4 || integer_bits(phi.type.kind()) != 32 ||
+		hb.op != Opcode::Branch || hb.ops[2].index != latch)
+		return false;
+	const auto g = hb.ops[1].index;
+	if (g == h || g == latch || !in_loop(forest_, at, g))
+		return false;
+	const auto gb = body_.instructions[body_.blocks[g].last];
+	if (gb.op != Opcode::Branch)
+		return false;
+	const auto early = gb.ops[gb.ops[1].index == latch ? 2 : 1].index;
+	if ((gb.ops[1].index != latch && gb.ops[2].index != latch) || in_loop(forest_, at, early) ||
+		body_.instructions[body_.blocks[early].first].op == Opcode::Phi)
+		return false;
+	const auto step = body_.instructions[body_.blocks[latch].first];
+	if (step.op != Opcode::Binary || step.sub != static_cast<unsigned>(BinaryOp::Add) || step.type != phi.type ||
+		!(step.ops[0] == Value::temp(phi.result)) || !step.ops[1].is(ValueKind::Integer) ||
+		body_.literals[step.ops[1].index].low != 1 || step.next == kNoId)
+		return false;
+	const auto cmp = body_.instructions[step.next], lb = body_.instructions[body_.blocks[latch].last];
+	const auto pred = static_cast<ComparePredicate>(cmp.sub);
+	if (cmp.op != Opcode::Compare || cmp.next != body_.blocks[latch].last || cmp.type != step.type ||
+		!(cmp.ops[0] == Value::temp(step.result)) || in(at, cmp.ops[1]) || lb.op != Opcode::Branch ||
+		!(lb.ops[0] == Value::temp(cmp.result)) || lb.ops[1].index != h ||
+		!(phi_incoming(body_, phi, latch) == Value::temp(step.result)) ||
+		(pred != ComparePredicate::Lt && pred != ComparePredicate::Le && pred != ComparePredicate::Ult &&
+			pred != ComparePredicate::Ule))
+		return false;
+	// No edge introduced below may acquire a live-out value or bypass an effect.
+	for (auto b : loop.blocks)
+		if (forest_.innermost[b] != at || body_.blocks[b].kind == BlockKind::UnrolledGroup ||
+			!search_body(b, hp, latch))
+			return false;
+	s = { h, latch, g, early, hp };
+	return true;
+}
+
+bool ShortLoopUnrolling::search_body(BlockId b, InstId hp, BlockId latch) const
+{
+	unsigned loads = 0, size = 0;
+	for (auto i = body_.blocks[b].first; i != body_.blocks[b].last; i = body_.instructions[i].next)
+	{
+		const auto& ins = body_.instructions[i];
+		if (ins.result == kNoId || ins.result >= escapes_.size() || escapes_[ins.result])
+			return false;
+		if (b == latch || i == hp)
+			continue;
+		if (ins.op == Opcode::Load && !(ins.flags & IF_VOLATILE))
+			++loads;
+		else if (ins.op != Opcode::Index && ins.op != Opcode::Binary && ins.op != Opcode::Convert &&
+			ins.op != Opcode::Copy && ins.op != Opcode::Compare && ins.op != Opcode::Addr)
+			return false;
+		if (ins.extra_count || ++size > 7)
+			return false;
+	}
+	if (b != latch)
+	{
+		const auto test = body_.instructions[body_.blocks[b].last].ops[0];
+		if (loads != 1 || !test.is(ValueKind::Temp) || body_.temps[test.index].def >= block_of_.size() ||
+			block_of_[body_.temps[test.index].def] != b)
+			return false;
+	}
+	return true;
+}
+
+void ShortLoopUnrolling::search_branch(BlockId b, InstId& id, Value v, BlockId yes, BlockId no)
+{
+	const auto none = Type::scalar(TypeKind::Void);
+	auto branch = make_instruction(Opcode::Branch, none);
+	branch.ops[0] = v;
+	branch.ops[1] = Value::block(yes);
+	branch.ops[2] = Value::block(no);
+	emit(b, id, branch, none);
+}
+
+void ShortLoopUnrolling::copy_search_tests(const Search& s, BlockId scalar, const std::vector<BlockId>& blocks,
+	const Instruction& step, const Instruction& hb, const Instruction& gb)
+{
+	const auto phi = body_.instructions[s.phi];
+	std::vector<Value> names(body_.temps.size());
+	auto add = [&](BlockId b, InstId& pos, unsigned delta) {
+		auto plus = step;
+		plus.ops[1] = integer_value(body_, integer_literal(delta));
+		plus.flags = 0;
+		return emit(b, pos, plus, phi.type);
+	};
+	for (unsigned k = 0; k < kSearchPasses; ++k)
+	{
+		auto pos = kNoId;
+		names[phi.result] = k ? add(blocks[2 * k], pos, k) : Value::temp(phi.result);
+		for (unsigned side = 0; side < 2; ++side)
+		{
+			const auto old = side ? s.guard : scalar, b = blocks[2 * k + side];
+			for (auto i = body_.blocks[old].first; i != body_.blocks[old].last; i = body_.instructions[i].next)
+			{
+				auto original = body_.instructions[i];
+				for (auto& v : original.ops)
+					if (v.is(ValueKind::Temp) && v.index < names.size() && !names[v.index].is(ValueKind::None))
+						v = names[v.index];
+				names[original.result] = emit(b, pos, original, body_.temps[original.result].type, true);
+			}
+			const auto cond = side ? gb : hb;
+			if (side)
+				search_branch(b, pos, names[cond.ops[0].index],
+					gb.ops[1].index == s.latch ? blocks[2 * k + 2] : s.early,
+					gb.ops[2].index == s.latch ? blocks[2 * k + 2] : s.early);
+			else
+				search_branch(b, pos, names[cond.ops[0].index], blocks[2 * k + 1], blocks[2 * k + 2]);
+			pos = kNoId;
+		}
+	}
+}
+
+void ShortLoopUnrolling::rewrite_search(const Search& s)
+{
+	const auto h = s.header, latch = s.latch, hp = s.phi;
+	const auto phi = body_.instructions[hp], hb = body_.instructions[body_.blocks[h].last];
+	const auto gb = body_.instructions[body_.blocks[s.guard].last];
+	const auto step = body_.instructions[body_.blocks[latch].first];
+	const auto cmp = body_.instructions[step.next];
+	const auto pred = static_cast<ComparePredicate>(cmp.sub);
+	const auto word = Type::scalar(TypeKind::I64), none = Type::scalar(TypeKind::Void);
+	const auto convert = [&](Value value) {
+		auto inst = make_instruction(Opcode::Convert, word);
+		inst.sub = static_cast<uint8_t>(
+			pred == ComparePredicate::Le || pred == ComparePredicate::Lt ? ConvertOp::SExt : ConvertOp::ZExt);
+		inst.ops[0] = value;
+		set_convert_source_type(inst, phi.type);
+		return inst;
+	};
+	location_ = hb.location;
+	const unsigned lanes = kSearchPasses;
+	const auto first_pred = body_.operands[phi.extra_first].index;
+	const auto pre = first_pred == latch ? body_.operands[phi.extra_first + 2].index : first_pred;
+	auto before = previous_in_block(body_, pre, body_.blocks[pre].last);
+	const auto bound = emit(pre, before, convert(cmp.ops[1]), word);
+	auto sub = make_instruction(Opcode::Binary, word);
+	sub.sub = static_cast<uint8_t>(BinaryOp::Sub);
+	sub.ops[0] = bound;
+	sub.ops[1] = integer_value(
+		body_, integer_literal(lanes + (pred == ComparePredicate::Lt || pred == ComparePredicate::Ult)));
+	const auto limit = emit(pre, before, sub, word);
+	const auto scalar = append_block(body_, BlockKind::UnrolledGroup);
+	body_.blocks[scalar].first = phi.next;
+	body_.blocks[scalar].last = body_.blocks[h].last;
+	body_.blocks[h].last = hp;
+	body_.instructions[hp].next = kNoId;
+	std::vector<BlockId> blocks;
+	for (unsigned k = 0; k < 2 * lanes + 1; ++k)
+		blocks.push_back(append_block(body_, BlockKind::UnrolledGroup));
+	auto end = hp;
+	const auto wide = emit(h, end, convert(Value::temp(phi.result)), word);
+	auto check = make_instruction(Opcode::Compare, word);
+	check.sub = static_cast<unsigned>(ComparePredicate::Le);
+	check.ops[0] = wide;
+	check.ops[1] = limit;
+	const auto full = emit(h, end, check, word);
+	search_branch(h, end, full, blocks[0], scalar);
+	copy_search_tests(s, scalar, blocks, step, hb, gb);
+	const auto back = blocks.back();
+	auto k = kNoId;
+	auto advance = step;
+	advance.ops[1] = integer_value(body_, integer_literal(lanes));
+	advance.flags = 0;
+	const auto advanced = emit(back, k, advance, phi.type);
+	auto jump = make_instruction(Opcode::Jump, none);
+	jump.ops[0] = Value::block(h);
+	emit(back, k, jump, none);
+	std::vector<Value> incoming(body_.operands.begin() + phi.extra_first, body_.operands.begin() + phi.extra_first + 4);
+	incoming.push_back(Value::block(back));
+	incoming.push_back(advanced);
+	body_.instructions[hp].extra_first = append_operands(body_, incoming.data(), incoming.size());
+	body_.instructions[hp].extra_count = incoming.size();
+	blocks.push_back(scalar);
+	auto found = std::find(body_.layout.begin(), body_.layout.end(), h);
+	body_.layout.insert(found + 1, blocks.begin(), blocks.end());
+}
+
 bool ShortLoopUnrolling::run()
 {
 	// (A loop to take is first given the preheader it lacks: the graph
@@ -989,6 +1194,13 @@ bool ShortLoopUnrolling::run()
 	const size_t loops = forest_.loops.size();
 	for (uint32_t loop = 0; loop < loops; ++loop)
 	{
+		Search search;
+		if (search_shape(loop, search))
+		{
+			rewrite_search(search);
+			changed = true;
+			continue;
+		}
 		Shape s;
 		if (!chain(loop, s) || !tested(loop, s) || !sized(s))
 			continue;
