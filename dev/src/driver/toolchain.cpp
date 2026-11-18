@@ -910,7 +910,12 @@ bool compile_input(const Input& input, const Invocation& invocation, native::EhM
 	native::object::ObjectFile& object, const std::string* lowir_output = nullptr)
 {
 	if (input.kind == Input::Kind::Assembly)
+	{
+		if (target_model::is_aarch64(invocation.target))
+			throw InvocationError(
+				"the integrated module assembler supports x86-64 assembly; pass an assembled AArch64 object");
 		return compile_native_assembly(input.name, invocation.preprocessor, invocation.target, object);
+	}
 	return input.kind == Input::Kind::LowIR
 		? compile_lowir_unit(input.name, invocation, eh_model, object, lowir_output)
 		: compile_native_sources({ &input, &input + 1 }, invocation, eh_model, object, lowir_output);
