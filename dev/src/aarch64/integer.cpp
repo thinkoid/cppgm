@@ -57,6 +57,14 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 	if (rhs.is(ValueKind::Integer))
 	{
 		const uint64_t raw = body_.literals[rhs.index].low;
+		// A coefficient of 1 + 2^k needs just ADD with a shifted register.
+		const uint64_t factor = w ? static_cast<uint32_t>(raw) : raw;
+		if (op == BinaryOp::Mul && factor > 2 && ((factor - 1) & (factor - 2)) == 0)
+		{
+			out_.emit(w ? Op::AddW : Op::Add, dest, left, left, __builtin_ctzll(factor - 1) << 10);
+			save(dest, inst.result, true);
+			return true;
+		}
 		const bool scale = op == BinaryOp::Mul && raw && !(raw & (raw - 1)) && (!w || raw <= UINT32_MAX);
 		if (scale || op == BinaryOp::Shl || op == BinaryOp::Shr || op == BinaryOp::UShr)
 		{
