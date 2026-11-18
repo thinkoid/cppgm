@@ -75,8 +75,12 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		value(result_reg, inst.ops[0], inst.type);
 		break;
 	case Opcode::Addr:
-		address(result_reg, inst.ops[0]);
-		break;
+	{
+		const auto dest = registers_[inst.result] == kNoId ? result_reg : registers_[inst.result];
+		address(dest, inst.ops[0]);
+		save(dest, inst.result, true);
+		return;
+	}
 	case Opcode::CopyObject:
 		address(10, inst.ops[1]);
 		address(11, inst.ops[0]);

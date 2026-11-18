@@ -20,8 +20,8 @@ void Selector::copy_edge(BlockId from, BlockId to)
 		}
 		else
 		{
-			value(10, source, type);
-			access(true, 10, frame_base(), offset, 8);
+			const auto reg = operand_register(source, type, 10);
+			access(true, reg, frame_base(), offset, 8);
 		}
 		offset += (storage_bytes(type) + 7) & ~uint64_t(7);
 	}
@@ -45,8 +45,11 @@ void Selector::copy_edge(BlockId from, BlockId to)
 		}
 		else
 		{
-			access(false, 10, frame_base(), offset, 8);
-			save(10, phi.result);
+			const auto dest = registers_[phi.result] == kNoId ? 10 : registers_[phi.result];
+			access(false, dest, frame_base(), offset, 8);
+			// Scalar SSA values already have their type's canonical high bits.
+			const auto source = phis_.incoming(body_, i, from);
+			save(dest, phi.result, source.is(ValueKind::Temp) || source.is(ValueKind::Integer));
 		}
 		offset += (storage_bytes(phi.type) + 7) & ~uint64_t(7);
 	}

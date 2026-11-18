@@ -418,8 +418,18 @@ void Selector::save(unsigned reg, TempId temp, bool normalized)
 	const Type type = body_.temps[temp].type;
 	if ((!type.is_integer() && !type.is_pointer() && !type.is_float()) || storage_bytes(type) > 8)
 		throw AArch64Error("unsupported AArch64 result type");
+	const auto bits = integer_bits(type.kind());
+	if (!normalized && bits && bits < 64 && registers_[temp] != kNoId)
+	{
+		const auto dest = registers_[temp];
+		if (bits == 32)
+			out_.emit(Op::OrrW, dest, 31, reg);
+		else
+			out_.emit(Op::Ubfm, dest, reg, 0, (bits - 1) << 10);
+		return;
+	}
 	if (!normalized)
-		extend(reg, integer_bits(type.kind()), false);
+		extend(reg, bits, false);
 	if (vectors_[temp] != kNoId)
 		fp_move(true, vectors_[temp], reg, type);
 	else if (registers_[temp] != kNoId)
