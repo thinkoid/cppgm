@@ -7,7 +7,7 @@ by Clang 22.1.2 and one by cppgm. The application workload compares programs
 built by the two different compilers. The initial full rebuild took **1.337×**
 as long in the self-built compiler as in the Clang-built compiler. After the
 core rebase, the 498-object rebuild took **1.022×** as long under QEMU.
-[Previous measurements and reproduction commands](aarch64-codegen-20261118.md)
+[Native Arm gap and next validation batch](aarch64-native-gap-plan.md) · [Previous measurements and reproduction commands](aarch64-codegen-20261118.md)
 
 ## Attribution on the compiler itself
 
