@@ -35,6 +35,8 @@ struct PreprocessorOptions
 	// Directories searched for an included file after the including file's
 	// directory and before the working directory (-I, in order).
 	std::vector<std::string> include_paths;
+	// Directories searched only for quoted includes, before the -I chain.
+	std::vector<std::string> quote_include_paths;
 	// Hosted mode (cppgm's -E, -c and link modes, PA26/PA30): the system
 	// directories searched after include_paths by both #include forms
 	// (-isystem, then the host's standard directories unless -nostdinc),
@@ -254,9 +256,10 @@ private:
 	uint32_t host_predefines_end_;
 	uint32_t builtin_begin_;
 	uint32_t builtin_end_;
-	// The -I directories, then the system directories (hosted mode), which
-	// start at system_paths_.
+	// Quote-only directories, then the -I and system directories.
+	// Includes retain the index in this combined chain for #include_next.
 	std::vector<std::string> include_paths_;
+	size_t angle_paths_;
 	size_t system_paths_;
 	std::string missing_headers_note_;
 	bool hosted_;

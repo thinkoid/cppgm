@@ -15,6 +15,65 @@
 
 namespace driver {
 
+// GCC's include chain (cpplib's remove_duplicates): a directory named
+// twice is searched at its first position only, and an -I directory that
+// is also a system directory (-isystem or a standard one) is searched as
+// that system directory ("the -I option is ignored"), so <stdlib.h> under
+// -I/usr/include still finds libstdc++'s wrapper first. Directories are
+// compared by device and inode.
+void prune_include_paths(PreprocessorOptions& options)
+{
+	std::vector<std::pair<dev_t, ino_t>> seen;
+	const auto identity = [](const std::string& path, std::pair<dev_t, ino_t>& id) {
+		struct stat status;
+		if (stat(path.c_str(), &status) != 0 || !S_ISDIR(status.st_mode))
+			return false;
+		id = std::make_pair(status.st_dev, status.st_ino);
+		return true;
+	};
+	const auto first = [&](const std::string& path) {
+		std::pair<dev_t, ino_t> id;
+		if (!identity(path, id))
+			return true;
+		for (const std::pair<dev_t, ino_t>& other : seen)
+		{
+			if (other == id)
+				return false;
+		}
+		seen.push_back(id);
+		return true;
+	};
+	std::vector<std::string> system;
+	for (const std::string& path : options.system_include_paths)
+	{
+		if (first(path))
+			system.push_back(path);
+	}
+	std::vector<std::string> user;
+	for (const std::string& path : options.include_paths)
+	{
+		if (first(path))
+			user.push_back(path);
+	}
+	if (!options.quote_include_paths.empty())
+	{
+		seen.clear();
+		std::vector<std::string> quote;
+		for (const std::string& path : options.quote_include_paths)
+			if (first(path))
+				quote.push_back(path);
+		// CPP joins the two chains, coalescing only a repeated boundary.
+		const std::vector<std::string>& angle = user.empty() ? system : user;
+		std::pair<dev_t, ino_t> before, after;
+		if (!quote.empty() && !angle.empty() && identity(quote.back(), before) && identity(angle.front(), after) &&
+			before == after)
+			quote.pop_back();
+		options.quote_include_paths.swap(quote);
+	}
+	options.system_include_paths.swap(system);
+	options.include_paths.swap(user);
+}
+
 void configure_target_environment(PreprocessorOptions& options, native::Target target)
 {
 	options.target = target;

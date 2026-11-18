@@ -231,6 +231,20 @@ bool option_value(const std::vector<std::string>& args, size_t& i, const char* o
 	return false;
 }
 
+bool parse_include_option(const std::vector<std::string>& args, size_t& i, PreprocessorOptions& options)
+{
+	std::string value;
+	if (option_value(args, i, "-iquote", value))
+		options.quote_include_paths.push_back(std::move(value));
+	else if (option_value(args, i, "-isystem", value))
+		options.system_include_paths.push_back(std::move(value));
+	else if (option_value(args, i, "-I", value))
+		options.include_paths.push_back(std::move(value));
+	else
+		return false;
+	return true;
+}
+
 // GCC flags that change the program's types, layout, ABI or observable
 // behavior, which this compiler does not honor: refused rather than
 // accepted with another meaning (README: build-system flags are honored or
@@ -254,50 +268,6 @@ bool accepted_flag(const std::string& arg)
 	return starts_with(arg, "-O") || starts_with(arg, "-g") || starts_with(arg, "-W") || starts_with(arg, "-f") ||
 		starts_with(arg, "-m") || arg == "-pedantic" || arg == "-pedantic-errors" || arg == "-w" || arg == "-pipe" ||
 		arg == "-MMD" || arg == "-MD" || arg == "-MP";
-}
-
-// GCC's include chain (cpplib's remove_duplicates): a directory named
-// twice is searched at its first position only, and an -I directory that
-// is also a system directory (-isystem or a standard one) is searched as
-// that system directory ("the -I option is ignored"), so <stdlib.h> under
-// -I/usr/include still finds libstdc++'s wrapper first. Directories are
-// compared by device and inode.
-void prune_include_paths(PreprocessorOptions& options)
-{
-	std::vector<std::pair<dev_t, ino_t>> seen;
-	const auto identity = [](const std::string& path, std::pair<dev_t, ino_t>& id) {
-		struct stat status;
-		if (stat(path.c_str(), &status) != 0 || !S_ISDIR(status.st_mode))
-			return false;
-		id = std::make_pair(status.st_dev, status.st_ino);
-		return true;
-	};
-	const auto first = [&](const std::string& path) {
-		std::pair<dev_t, ino_t> id;
-		if (!identity(path, id))
-			return true;
-		for (const std::pair<dev_t, ino_t>& other : seen)
-		{
-			if (other == id)
-				return false;
-		}
-		seen.push_back(id);
-		return true;
-	};
-	std::vector<std::string> system;
-	for (const std::string& path : options.system_include_paths)
-	{
-		if (first(path))
-			system.push_back(path);
-	}
-	std::vector<std::string> user;
-	for (const std::string& path : options.include_paths)
-	{
-		if (first(path))
-			user.push_back(path);
-	}
-	options.system_include_paths.swap(system);
-	options.include_paths.swap(user);
 }
 
 void configure_target_runtime(Invocation& invocation, bool nostdinc)
@@ -533,10 +503,8 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 			if (!native::parse_target(target, invocation.target))
 				throw InvocationError("unsupported target: " + target);
 		}
-		else if (option_value(args, i, "-isystem", value))
-			invocation.preprocessor.system_include_paths.push_back(value);
-		else if (option_value(args, i, "-I", value))
-			invocation.preprocessor.include_paths.push_back(value);
+		else if (parse_include_option(args, i, invocation.preprocessor))
+			continue;
 		else if (option_value(args, i, "-D", value))
 		{
 			const size_t equals = value.find('=');

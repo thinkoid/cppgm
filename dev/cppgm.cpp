@@ -218,6 +218,7 @@ struct SourceOutputInvocation
 	bool exceptions = true;
 	bool rtti = true;
 	vector<string> include_paths;
+	vector<string> quote_include_paths;
 	vector<string> system_include_paths;
 	string command_line;
 	bool wasm_atomics = true;
@@ -404,6 +405,11 @@ SourceOutputInvocation parse_source_output_invocation(const vector<string>& args
 			invocation.include_paths.push_back(i == option ? args[i].substr(2) : args[i]);
 			continue;
 		}
+		if (consume_joined_or_separate_option(args, i, "-iquote", "path"))
+		{
+			invocation.quote_include_paths.push_back(i == option ? args[i].substr(7) : args[i]);
+			continue;
+		}
 		if (consume_joined_or_separate_option(args, i, "-isystem", "path"))
 		{
 			invocation.system_include_paths.push_back(i == option ? args[i].substr(8) : args[i]);
@@ -536,7 +542,8 @@ bool consume_search_option(const vector<string>& args, size_t& i)
 	{
 		return true;
 	}
-	if (consume_joined_or_separate_option(args, i, "-isystem", "path"))
+	if (consume_joined_or_separate_option(args, i, "-isystem", "path") ||
+		consume_joined_or_separate_option(args, i, "-iquote", "path"))
 	{
 		return true;
 	}
@@ -756,6 +763,7 @@ PreprocessorOptions source_preprocessor_options(const SourceOutputInvocation& in
 {
 	PreprocessorOptions options = source_preprocessor_options();
 	options.include_paths = invocation.include_paths;
+	options.quote_include_paths = invocation.quote_include_paths;
 	options.system_include_paths = invocation.system_include_paths;
 	options.command_line = invocation.command_line;
 	driver::configure_source_language(invocation.language, invocation.standard, options);
@@ -780,6 +788,8 @@ PreprocessorOptions source_preprocessor_options(const SourceOutputInvocation& in
 	}
 	else if (!invocation.sysroot.empty() || !invocation.resource_directory.empty())
 		throw InvocationError("target header directories currently require a Wasm target");
+	if (!options.quote_include_paths.empty())
+		driver::prune_include_paths(options);
 	return options;
 }
 

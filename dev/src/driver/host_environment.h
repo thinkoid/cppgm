@@ -33,6 +33,9 @@ bool add_host_environment(
 // Foreign SDK paths must be explicit; baked host paths are not a foreign SDK.
 void configure_target_environment(PreprocessorOptions& options, native::Target target);
 
+// Canonicalize the GNU include search chains by filesystem identity.
+void prune_include_paths(PreprocessorOptions& options);
+
 // Builtin templates have language semantics independent of va_list or layout.
 const char* builtin_template_declarations();
 

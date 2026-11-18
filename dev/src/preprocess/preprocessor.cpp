@@ -164,8 +164,11 @@ Preprocessor::Preprocessor(const PreprocessorOptions& options, const std::string
 		host_predefines_end_ = source_.current_inclusion().base + static_cast<uint32_t>(predefined_->buffer().size()) +
 			1;
 	}
-	include_paths_ = options.include_paths;
-	system_paths_ = include_paths_.size();
+	angle_paths_ = options.quote_include_paths.size();
+	system_paths_ = angle_paths_ + options.include_paths.size();
+	include_paths_.reserve(system_paths_ + options.system_include_paths.size());
+	include_paths_.insert(include_paths_.end(), options.quote_include_paths.begin(), options.quote_include_paths.end());
+	include_paths_.insert(include_paths_.end(), options.include_paths.begin(), options.include_paths.end());
 	include_paths_.insert(
 		include_paths_.end(), options.system_include_paths.begin(), options.system_include_paths.end());
 }

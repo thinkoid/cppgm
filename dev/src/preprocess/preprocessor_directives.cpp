@@ -481,10 +481,11 @@ SourceFile* Preprocessor::find_include(
 	// one, and nothing else.
 	SourceFile* file = nullptr;
 	index = -1;
+	const size_t start = angle ? angle_paths_ : 0;
 	if (next)
 	{
 		const int32_t found_in = source_.current().search_index;
-		for (size_t i = found_in < 0 ? 0 : static_cast<size_t>(found_in) + 1;
+		for (size_t i = found_in < 0 ? start : static_cast<size_t>(found_in) + 1;
 			file == nullptr && i < include_paths_.size(); ++i)
 		{
 			if ((file = files_.open(path = joined_path(include_paths_[i], name))) != nullptr)
@@ -494,7 +495,7 @@ SourceFile* Preprocessor::find_include(
 	}
 	const std::string current = source_.current_inclusion().presumed_name;
 	const std::size_t slash = current.rfind('/');
-	size_t i = 0;
+	size_t i = start;
 	if (angle)
 	{
 		for (; file == nullptr && i < include_paths_.size(); ++i)
