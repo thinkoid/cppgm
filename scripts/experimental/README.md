@@ -502,7 +502,7 @@ The lane here keeps the full W1/W2/W3, native/WASI x86 and embedding checks.
 
 ## Download native programs from the browser
 
-The optional PA39 cross test compiles two source files with `cppgm.wasm` in Chromium, links the resulting objects with the LLD module packaged by incpption, and saves four actual browser downloads. The arguments select `ld.lld` for x86-64 and AArch64 Linux ELF, and `ld64.lld` for Intel and Apple Silicon Mach-O. Linux uses a small target entry object. The macOS test supplies a minimal libSystem link interface and resolves a call to `exit`. Applications using hosted libraries need their target headers and runtime link inputs.
+The optional PA39 cross test compiles two source files with `cppgm.wasm` in Chromium, links the resulting objects with the LLD module packaged by incpption, and saves the four target executables. It also downloads a second executable for each Arm target built with `-Oz -flto=full`. For those two downloads cppgm compiles both sources to one native object before LLD links it. The arguments select `ld.lld` for x86-64 and AArch64 Linux ELF, and `ld64.lld` for Intel and Apple Silicon Mach-O. Linux uses a small target entry object. The macOS test supplies a minimal libSystem link interface and resolves a call to `exit`. Applications using hosted libraries need their target headers and runtime link inputs.
 
 ```sh
 node scripts/experimental/browser_native_downloads.cjs \

@@ -114,16 +114,19 @@ async function test() {
     const error = await page.evaluate(() => window.state.error);
     if (error) throw Error(error);
     const names = await page.locator('a[download]').allTextContents();
-    if (new Set(names).size !== 4) throw Error('Expected four distinct executable downloads');
+    const expected = ['linux-x86_64', 'linux-arm64', 'linux-arm64-lto', 'macos-x86_64', 'macos-arm64', 'macos-arm64-lto'];
+    if (names.length !== expected.length || !expected.every(name => names.includes(name)))
+      throw Error('Unexpected executable downloads: ' + names.join(', '));
     for (const name of names) {
       const [download] = await Promise.all([page.waitForEvent('download'), page.getByText(name, {exact: true}).click()]);
       const file = path.join(dest, name);
       await download.saveAs(file);
       fs.chmodSync(file, 0o755);
       const bytes = fs.readFileSync(file);
-      checkExecutable(name, bytes);
+      const target = name.replace(/-lto$/, '');
+      checkExecutable(target, bytes);
       console.log(name, bytes.length, hash(bytes));
-      executeDownload(name, file);
+      executeDownload(target, file);
     }
   } finally {
     if (browser) await browser.close();
