@@ -1,3 +1,10 @@
-<svg data-original-label="simdjson sse-compile-gcc; INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz; revision 50b6ccfce58613983aa027e54e11d6a071971a9a" data-original-message="3.71×" data-original-color="14532d" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="simdjson sse-compile-gcc; INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz; revision 50b6ccfce58613983aa027e54e11d6a071971a9a; measured 50b6ccfce58613983aa027e54e11d6a071971a9a; 144 commits behind main: not shown">
-  <title>simdjson sse-compile-gcc; INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz; revision 50b6ccfce58613983aa027e54e11d6a071971a9a; measured 50b6ccfce58613983aa027e54e11d6a071971a9a; 144 commits behind main: not shown</title>
+<svg data-original-label="simdjson sse-compile-gcc; INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz; revision 50b6ccfce58613983aa027e54e11d6a071971a9a" data-original-message="3.71×" data-original-color="14532d" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="simdjson sse-compile-gcc; INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz; revision 50b6ccfce58613983aa027e54e11d6a071971a9a; measured 50b6ccfce58613983aa027e54e11d6a071971a9a; 145 commits behind main: stale">
+  <title>simdjson sse-compile-gcc; INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz; revision 50b6ccfce58613983aa027e54e11d6a071971a9a; measured 50b6ccfce58613983aa027e54e11d6a071971a9a; 145 commits behind main: stale</title>
+  <defs><clipPath id="badge"><rect width="120" height="24" rx="4"/></clipPath></defs>
+  <g clip-path="url(#badge)">
+    <rect width="64" height="24" fill="#555"/>
+    <rect x="64" width="56" height="24" fill="#475569"/>
+  </g>
+  <text x="32" y="16.5" fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="12" font-weight="700" textLength="39" lengthAdjust="spacingAndGlyphs">Intel</text>
+  <text x="92" y="16.5" fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="12" font-weight="700" letter-spacing="1" textLength="39" lengthAdjust="spacingAndGlyphs">stale</text>
 </svg>
