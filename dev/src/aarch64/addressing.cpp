@@ -25,9 +25,8 @@ Op indexed_access(bool store, unsigned bytes)
 }
 }
 
-// STR reads register 31 as zero even when the base is SP. Other operand
-// positions have different interpretations for register 31.
-unsigned Selector::store_register(Value source, Type type, unsigned scratch)
+// Scalar stores and conditional select operands read register 31 as zero.
+unsigned Selector::zero_or_register(Value source, Type type, unsigned scratch)
 {
 	if (source.is(ValueKind::Integer) && (type.is_integer() || type.is_pointer()) &&
 		body_.literals[source.index].low == 0)
@@ -60,7 +59,7 @@ void Selector::scalar_access(const lowir::Instruction& inst)
 	}
 	else
 	{
-		const auto reg = store                 ? store_register(value, inst.type, 11)
+		const auto reg = store                 ? zero_or_register(value, inst.type, 11)
 			: registers_[inst.result] == kNoId ? 9
 											   : registers_[inst.result];
 		access(store, reg, base, offset, bytes);
@@ -179,7 +178,7 @@ InstId Selector::address_sequence(InstId id)
 					: data.is(ValueKind::Temp)              ? vectors_[data.index]
 															: kNoId;
 				const unsigned reg = fp != kNoId         ? fp
-					: store                              ? store_register(data, memory.type, 9)
+					: store                              ? zero_or_register(data, memory.type, 9)
 					: registers_[memory.result] == kNoId ? 9
 														 : registers_[memory.result];
 				if (literal)

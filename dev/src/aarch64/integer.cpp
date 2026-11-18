@@ -156,12 +156,26 @@ void Selector::compare(const lowir::Instruction& inst)
 
 void Selector::choose(const lowir::Instruction& inst, unsigned condition)
 {
-	const unsigned a = operand_register(inst.ops[1], inst.type, 10);
-	const unsigned b = operand_register(inst.ops[2], inst.type, 11);
+	Value yes = inst.ops[1], no = inst.ops[2];
 	const unsigned dest = registers_[inst.result] == kNoId ? 9 : registers_[inst.result];
 	const unsigned bits = integer_bits(inst.type.kind());
-	out_.emit(bits == 32 ? Op::CselW : Op::Csel, dest, a, b, condition << 12);
-	save(dest, inst.result, !bits || bits >= 32);
+	auto one = [&](Value v) { return bits && v.is(ValueKind::Integer) && body_.literals[v.index].low == 1; };
+	if (one(yes))
+	{
+		std::swap(yes, no);
+		condition ^= 1;
+	}
+	// Both CSEL and CSINC read register 31 as zero. For a one-valued
+	// alternative, CSINC constructs the one only on the selected arm.
+	const unsigned a = zero_or_register(yes, inst.type, 10);
+	if (one(no))
+		out_.emit(bits <= 32 ? Op::CsincW : Op::Csinc, dest, a, 31, condition << 12);
+	else
+		out_.emit(bits == 32 ? Op::CselW : Op::Csel, dest, a, zero_or_register(no, inst.type, 11), condition << 12);
+	auto normalized = [&](Value v) {
+		return v.is(ValueKind::Integer) || (v.is(ValueKind::Temp) && body_.temps[v.index].type == inst.type);
+	};
+	save(dest, inst.result, !bits || bits >= 32 || (normalized(yes) && normalized(no)));
 }
 
 bool Selector::compare_consumer(const lowir::Instruction& inst, BlockId block)
@@ -182,15 +196,17 @@ bool Selector::compare_consumer(const lowir::Instruction& inst, BlockId block)
 	if (next.op != Opcode::Branch)
 		return false;
 	const bool eq = inst.sub == static_cast<unsigned>(ComparePredicate::Eq);
-	if ((eq || inst.sub == static_cast<unsigned>(ComparePredicate::Ne)) &&
-		(integer_bits(inst.type.kind()) == 32 || storage_bytes(inst.type) == 8))
+	if (eq || inst.sub == static_cast<unsigned>(ComparePredicate::Ne))
 	{
 		Value a = inst.ops[0], b = inst.ops[1];
 		if (a.is(ValueKind::Integer))
 			std::swap(a, b);
-		if (b.is(ValueKind::Integer) && body_.literals[b.index].low == 0)
+		const unsigned bits = integer_bits(inst.type.kind());
+		const bool canonical = bits >= 32 || inst.type.is_pointer() ||
+			(a.is(ValueKind::Temp) && body_.temps[a.index].type == inst.type);
+		if (canonical && b.is(ValueKind::Integer) && body_.literals[b.index].low == 0)
 		{
-			const bool w = integer_bits(inst.type.kind()) == 32;
+			const bool w = bits && bits <= 32;
 			conditional_edges(block, next, eq ? (w ? Op::CbnzW : Op::Cbnz) : (w ? Op::CbzW : Op::Cbz),
 				operand_register(a, inst.type, 10));
 			return true;

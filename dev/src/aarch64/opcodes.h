@@ -48,6 +48,7 @@
 	M(Subs, 0xeb000000) \
 	M(CselW, 0x1a800000) \
 	M(Csel, 0x9a800000) \
+	M(CsincW, 0x1a800400) \
 	M(Csinc, 0x9a800400) \
 	M(Sbfm, 0x93400000) \
 	M(Ubfm, 0xd3400000) \
