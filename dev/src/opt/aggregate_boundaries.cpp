@@ -22,7 +22,7 @@ bool word_boundary(target_model::Target target, Type t, uint8_t classes, ir_mode
 		using ir_model::AggregateElement;
 		const bool general = shape.element == AggregateElement::Mixed || shape.element == AggregateElement::Pointer ||
 			(shape.element >= AggregateElement::I1 && shape.element <= AggregateElement::I128);
-		return t.is_object() && storage_bytes(t) == 8 && t.align_log2 <= 3 && general;
+		return word_object(t) && storage_bytes(t) <= 8 && general;
 	}
 	return word_object(t) &&
 		(classes == 0 || classes == (OC_STATED | EB_INTEGER | (storage_bytes(t) > 8 ? (EB_INTEGER << 2) : 0)));

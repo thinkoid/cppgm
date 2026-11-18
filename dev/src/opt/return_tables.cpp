@@ -59,6 +59,8 @@ private:
 	bool available(Value value, BlockId block);
 	bool candidate(BlockId block);
 	bool phi_candidate(BlockId block);
+	bool partition_phi(BlockId from, const Instruction& term, Type selector, BlockId join, InstId phi,
+		const std::vector<PhiIncoming>& inputs);
 	void rewrite_phi_table(const Instruction& term, const PhiTable& facts);
 	SymbolId table(const std::vector<uint64_t>& values, Type type);
 	void rewrite(BlockId block, const Instruction& term, Type selector, uint64_t first,
@@ -339,6 +341,89 @@ bool ReturnTables::candidate(BlockId block)
 	return true;
 }
 
+// A result switch may have several dense ranges separated by thousands of
+// unused keys. Each range branches around its own bounded lookup table.
+// Only terminal, constant-valued arms qualify: other users of the join and
+// the switch default keep their original side effects.
+bool ReturnTables::partition_phi(BlockId from, const Instruction& term, Type selector, BlockId join, InstId phi,
+	const std::vector<PhiIncoming>& inputs)
+{
+	if (inputs.size() != term.extra_count / 2 || inputs.size() < 12)
+		return false;
+	const auto& value = b_.instructions[phi];
+	const auto last = b_.blocks[join].last;
+	if (value.next != last || b_.instructions[last].op != Opcode::Return || b_.instructions[last].type != value.type ||
+		!(b_.instructions[last].ops[0] == Value::temp(value.result)))
+		return false;
+	BlockId fallback = term.ops[1].index;
+	if (fallback == join)
+		fallback = from;
+	else
+	{
+		const Block& arm = b_.blocks[fallback];
+		if (arm.first == kNoId || arm.first != arm.last || b_.instructions[arm.last].op != Opcode::Jump ||
+			b_.instructions[arm.last].ops[0].index != join)
+			return false;
+	}
+	const Value otherwise = phi_incoming(b_, value, fallback);
+	if (!otherwise.is(ValueKind::Integer))
+		return false;
+	const Type result = value.type;
+	const uint64_t fill = normalize_integer(result, b_.literals[otherwise.index]).low;
+	std::vector<size_t> starts{ 0 };
+	for (size_t i = 1; i < inputs.size(); ++i)
+	{
+		const auto gap = inputs[i].key - inputs[i - 1].key;
+		if (!gap)
+			return false;
+		if (gap > 16 || inputs[i].key - inputs[starts.back()].key >= kMaxEntries)
+			starts.push_back(i);
+	}
+	if (starts.size() < 2 || starts.size() > 8)
+		return false;
+	starts.push_back(inputs.size());
+	for (size_t k = 0; k + 1 < starts.size(); ++k)
+	{
+		const auto first = starts[k], end = starts[k + 1];
+		if (inputs[end - 1].key - inputs[first].key + 1 > 4 * (end - first))
+			return false;
+	}
+	auto terminal = [&](BlockId block, const Instruction& inst) {
+		insert_after(b_, block, kNoId, append_instruction(b_, inst));
+	};
+	auto fresh = [&]() {
+		const BlockId block = append_block(b_, BlockKind::SwitchCase);
+		b_.layout.push_back(block);
+		return block;
+	};
+	const BlockId miss = fresh();
+	Instruction ret = make_instruction(Opcode::Return, result);
+	ret.ops[0] = otherwise;
+	ret.location = term.location;
+	terminal(miss, ret);
+	BlockId at = from;
+	for (size_t k = 0; k + 1 < starts.size(); ++k)
+	{
+		const size_t first = starts[k], end = starts[k + 1];
+		const uint64_t low = inputs[first].key;
+		std::vector<uint64_t> words(inputs[end - 1].key - low + 1, fill);
+		for (size_t i = first; i < end; ++i)
+			words[inputs[i].key - low] = inputs[i].bits;
+		const BlockId next = k + 2 == starts.size() ? miss : fresh();
+		if (next != miss)
+			terminal(next, ret);
+		Instruction dispatch = term;
+		dispatch.ops[1] = Value::block(next);
+		Result output;
+		output.type = result;
+		rewrite(at, dispatch, selector, low, words, output);
+		at = next;
+	}
+	remove_phi_incoming(b_, join, from);
+	++c_.stats.folded;
+	return true;
+}
+
 bool ReturnTables::phi_candidate(BlockId block)
 {
 	const InstId terminal = b_.blocks[block].last;
@@ -414,7 +499,7 @@ bool ReturnTables::phi_candidate(BlockId block)
 		[&](const PhiIncoming& a, const PhiIncoming& b) { return (a.key ^ bias) < (b.key ^ bias); });
 	const uint64_t first = inputs.front().key, span = inputs.back().key - first;
 	if (span >= 512 || span + 1 > inputs.size() * 2)
-		return false;
+		return target_model::is_aarch64(p_.target) && partition_phi(block, term, selector, join, phi, inputs);
 	// LowIR switches choose their first matching arm. Reject repeated keys
 	// in the candidate window, including arms that are not table candidates.
 	// The accepted span has at most 512 entries, so the bitmap is bounded.

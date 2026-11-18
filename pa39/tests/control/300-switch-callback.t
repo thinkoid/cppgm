@@ -30,3 +30,22 @@ extern "C" int classify_char(int c, int (*f)(int)) {
     default: return f(c & 1) + 7;
     }
 }
+
+struct Code { unsigned char kind, count, offset; };
+extern "C" Code code_for(int n) {
+    switch (n) {
+    case -103: return {1, 0, 19};
+    case -102: return {1, 1, 19};
+    case -100: return {1, 2, 19};
+    case -99: return {1, 3, 19};
+    case -98: return {1, 4, 19};
+    case -97: return {1, 5, 19};
+    case 65530: return {7, 0, 251};
+    case 65531: return {7, 1, 251};
+    case 65532: return {7, 2, 251};
+    case 65534: return {7, 3, 251};
+    case 65535: return {7, 4, 251};
+    case 65536: return {7, 5, 251};
+    default: return {255, 6, 0};
+    }
+}

@@ -3,6 +3,7 @@
 #include "lowir/builder.h"
 #include "opt/loops.h"
 #include "opt/passes.h"
+#include "opt/scalar_fold.h"
 #include "support/flat_map.h"
 
 namespace opt {
@@ -179,6 +180,7 @@ private:
 	bool known_zero(Value address, uint64_t bytes) const;
 	Value float_bits(const Instruction& load);
 	void note_zero(Value address, uint64_t bytes);
+	Value packed_literal(const Instruction& load);
 	void remember(Value address, Type type, Value value, bool typed);
 	void remember_at(const AddressFacts& f, const Key& key, Type type, Value value, bool typed);
 	void copy_facts(const Instruction& copy);
@@ -582,6 +584,44 @@ bool MemoryForwarding::known_zero(Value address, uint64_t bytes) const
 			f.offset + static_cast<int64_t>(bytes) <= r.end)
 			return true;
 	return false;
+}
+
+// Small records can be constructed with byte fields and read through
+// an integer ABI carrier. Fold a load only when live store facts cover
+// every requested byte of the private record.
+Value MemoryForwarding::packed_literal(const Instruction& load)
+{
+	const uint64_t width = storage_bytes(load.type);
+	if (width < 2 || width > 8 || !load.type.is_integer() || live_.empty() || live_.size() > 24)
+		return Value::none();
+	const auto at = facts_of(load.ops[0]);
+	if (at.base != ValueKind::Slot || escaped_[at.index] || at.offset < 0 || at.offset > 16)
+		return Value::none();
+	const auto size = storage_bytes(body_.slots[at.index].type);
+	if (size > 16 || static_cast<uint64_t>(at.offset) + width > size)
+		return Value::none();
+	unsigned covered = 0;
+	uint64_t bits = 0;
+	for (const auto id : live_)
+	{
+		const auto& part = facts_[id].known;
+		if (part.generation != generation_ || part.at.base != at.base || part.at.index != at.index ||
+			!part.value.is(ValueKind::Integer) || !part.type.is_integer() || part.bytes > 8 ||
+			integer_bits(part.type.kind()) != 8 * part.bytes || part.at.offset < 0 || part.at.offset > 16)
+			continue;
+		const auto& literal = body_.literals[part.value.index];
+		const auto first = std::max(at.offset, part.at.offset);
+		const auto end = std::min(
+			at.offset + static_cast<int64_t>(width), part.at.offset + static_cast<int64_t>(part.bytes));
+		for (int64_t pos = first; pos < end; ++pos)
+		{
+			const auto dest = pos - at.offset;
+			bits |= ((literal.low >> (8 * (pos - part.at.offset))) & 255) << (8 * dest);
+			covered |= 1u << dest;
+		}
+	}
+	return covered == (1u << width) - 1 ? integer_value(body_, normalize_integer(load.type, Literal{ bits, 0 }))
+										: Value::none();
 }
 
 // An f32 or f64 load of bytes known as an integer literal of its width
@@ -1021,6 +1061,8 @@ void MemoryForwarding::process(BlockId block)
 					i = next;
 					continue;
 				}
+				if (target_model::is_aarch64(c_.program.target))
+					repl_[inst.result] = packed_literal(inst);
 			}
 			if (!repl_[inst.result].is(ValueKind::None))
 			{
