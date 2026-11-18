@@ -109,6 +109,7 @@ private:
 	lowir::InstId paired_store(const lowir::Instruction& index);
 	lowir::InstId address_sequence(lowir::InstId id);
 	void choose(const lowir::Instruction& inst, unsigned condition);
+	lowir::InstId bit_branch(const lowir::Instruction& inst, lowir::BlockId block);
 	lowir::InstId narrow_range_branch(const lowir::Instruction& sub, lowir::BlockId block);
 	bool compare_consumer(const lowir::Instruction& inst, lowir::BlockId block);
 	bool backedge_move(lowir::BlockId from, lowir::BlockId to, unsigned condition);
@@ -133,6 +134,7 @@ private:
 	std::vector<std::pair<unsigned, uint32_t>> preserved_;
 	machine::PhiInputs phis_;
 	std::vector<uint32_t> entry_regs_, aliases_;
+	std::vector<BitTest> bit_tests_;
 	std::vector<lowir::InstId> entry_elided_;
 	std::vector<std::pair<lowir::BlockId, lowir::BlockId>> snapshot_edges_;
 	std::vector<CallLayout> calls_;

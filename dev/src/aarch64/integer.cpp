@@ -197,6 +197,35 @@ void Selector::choose(const lowir::Instruction& inst, unsigned condition)
 	save(dest, inst.result, !bits || bits >= 32 || (normalized(yes) && normalized(no)));
 }
 
+// Record the two-instruction form. Exact instruction placement determines
+// whether the bit-test branch can reach its destination.
+InstId Selector::bit_branch(const lowir::Instruction& inst, BlockId block)
+{
+	if (out_.exceptions || inst.next == kNoId || uses_[inst.result] != 1)
+		return kNoId;
+	const auto& next = body_.instructions[inst.next];
+	if (next.op != Opcode::Branch || !(next.ops[0] == Value::temp(inst.result)))
+		return kNoId;
+	Value operand = inst.ops[0], literal = inst.ops[1];
+	if (operand.is(ValueKind::Integer))
+		std::swap(operand, literal);
+	const unsigned width = integer_bits(inst.type.kind());
+	if (!literal.is(ValueKind::Integer) || !width || width > 64)
+		return kNoId;
+	const uint64_t mask = body_.literals[literal.index].low & (~uint64_t(0) >> (64 - width));
+	if (!mask || (mask & (mask - 1)))
+		return kNoId;
+	const unsigned bit = __builtin_ctzll(mask);
+	uint32_t field = 0;
+	logical_immediate(mask, width <= 32 ? 32 : 64, field);
+	const unsigned src = operand_register(operand, inst.type, 10);
+	const uint32_t pc = out_.code.size();
+	out_.emit(width <= 32 ? Op::AndImmW : Op::AndImm, 9, src, 0, field);
+	conditional_edges(block, next, width <= 32 ? Op::CbzW : Op::Cbz, 9);
+	bit_tests_.push_back({ pc, bit });
+	return inst.next;
+}
+
 // Test a narrow modular interval using one W subtraction and a compare.
 // Underflow produces a large unsigned value in either width when the
 // comparison threshold is strictly below the smallest wrapped result.

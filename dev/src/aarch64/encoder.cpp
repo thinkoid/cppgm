@@ -22,6 +22,51 @@ void Function::bind(uint32_t label)
 	labels.at(label) = code.size();
 }
 
+// A TBZ/TBNZ displacement is a signed 14-bit word offset. Fuse only pairs
+// already in range; removing instructions can only shorten the distance.
+// Selection records adjacent AND/branch sites with no intervening labels.
+void fold_bit_tests(Function& f, const std::vector<BitTest>& tests)
+{
+	std::vector<uint32_t> removed;
+	for (const auto& test : tests)
+	{
+		auto& mask = f.code[test.pc];
+		const auto& branch = f.code[test.pc + 1];
+		const bool zero = branch.op == Op::Cbz || branch.op == Op::CbzW;
+		if ((!zero && branch.op != Op::Cbnz && branch.op != Op::CbnzW) || branch.fixup != Fixup::Block ||
+			branch.rd != 9)
+			continue;
+		const int64_t distance = int64_t(f.labels[branch.target]) - test.pc;
+		if (distance < -8192 || distance >= 8192)
+			continue;
+		const auto reg = mask.rn;
+		mask = branch;
+		mask.op = zero ? Op::Tbz : Op::Tbnz;
+		mask.rd = reg;
+		mask.field = ((test.bit & 32) << 26) | ((test.bit & 31) << 19);
+		removed.push_back(test.pc + 1);
+	}
+	if (removed.empty())
+		return;
+	uint32_t written = removed.front(), first = written + 1;
+	for (size_t i = 1; i <= removed.size(); ++i)
+	{
+		const uint32_t end = i == removed.size() ? static_cast<uint32_t>(f.code.size()) : removed[i];
+		std::move(f.code.begin() + first, f.code.begin() + end, f.code.begin() + written);
+		written += end - first;
+		first = end + 1;
+	}
+	f.code.resize(written);
+	const auto mapped = [&](uint32_t pc) {
+		return pc - static_cast<uint32_t>(std::lower_bound(removed.begin(), removed.end(), pc) - removed.begin());
+	};
+	for (auto& label : f.labels)
+		if (label != lowir::kNoId)
+			label = mapped(label);
+	for (auto& event : f.frame_events)
+		event.pc = 4 * mapped(event.pc / 4);
+}
+
 // A phi edge may contain a single MOV followed by a branch to the loop
 // header. If the identical MOV already falls through to the header, branch
 // there directly. Keep ordinary labels (including address-taken labels),
@@ -77,7 +122,7 @@ void encode(
 			const int64_t displacement = int64_t(function.labels.at(ins.target)) - int64_t(i);
 			// Local ADR targets are instruction-aligned. Its low two byte-offset
 			// bits are zero, and immhi holds the same word displacement as B.cond.
-			const unsigned bits = ins.op == Op::B ? 26 : 19;
+			const unsigned bits = ins.op == Op::B ? 26 : (ins.op == Op::Tbz || ins.op == Op::Tbnz) ? 14 : 19;
 			const int64_t limit = int64_t(1) << (bits - 1);
 			if (displacement < -limit || displacement >= limit)
 				throw AArch64Error("AArch64 branch displacement out of range");

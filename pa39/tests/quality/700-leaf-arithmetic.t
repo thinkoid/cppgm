@@ -58,3 +58,17 @@ extern "C" unsigned narrow_ops(unsigned char a, unsigned char b, unsigned short 
     unsigned short diff = c - (a | b);
     return (unsigned(sum) << 16) | diff;
 }
+
+extern "C" unsigned narrow_window(unsigned char c) {
+    unsigned char delta = c - 8;
+    if (delta < 2) return 1;
+    unsigned char wrap = c - 250;
+    return wrap < 9 ? 2 : 3;
+}
+
+extern "C" int bit_call(unsigned long x, int (*callback)(int)) {
+    if (x & (1UL << 63)) return callback(9);
+    if (x & (1UL << 31)) return callback(7);
+    if (x & 2) return callback(3);
+    return callback(1);
+}

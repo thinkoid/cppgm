@@ -80,6 +80,11 @@ void emit_unwind(const Function& function, uint32_t symbol, uint32_t shared_sect
 uint32_t external_symbol(native::object::ObjectFile& object, const char* name);
 void dump_function(const Function& function, const lowir::Program& program, const char* name, std::string& dump);
 
+struct BitTest
+{
+	uint32_t pc, bit;
+};
+void fold_bit_tests(Function& function, const std::vector<BitTest>& tests);
 void share_edge_moves(Function& function);
 
 void encode(const Function& function, const std::vector<uint32_t>& symbols, native::object::Section& text,

@@ -18,7 +18,16 @@ extern "C" unsigned long inspect_widened(unsigned long choice, unsigned long byt
 struct Arms { unsigned pad, left, right, tail; };
 extern "C" unsigned replace_fields(Arms*, unsigned, unsigned);
 extern "C" unsigned narrow_ops(unsigned char, unsigned char, unsigned short);
+extern "C" unsigned narrow_window(unsigned char);
+extern "C" int bit_call(unsigned long, int (*)(int));
+static int plus_five(int x) { return x + 5; }
 int main() {
+    for (unsigned i = 0; i < 256; ++i) {
+        unsigned expected = i == 8 || i == 9 ? 1 : (i >= 250 || i < 3 ? 2 : 3);
+        if (narrow_window(i) != expected) return 18;
+    }
+    if (bit_call(0, plus_five) != 6 || bit_call(2, plus_five) != 8 ||
+        bit_call(1UL << 31, plus_five) != 12 || bit_call((1UL << 63) + 2, plus_five) != 14) return 19;
     Arms fields = {123, 0xf0000001u, 0x10000003u, 456};
     if (replace_fields(&fields, 11, 19) != 0x20000002u || fields.left != 11 || fields.right != 19 ||
         fields.pad != 123 || fields.tail != 456) return 16;

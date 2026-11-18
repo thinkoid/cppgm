@@ -28,6 +28,8 @@
 	M(EorImmW, 0x52000000) \
 	M(MovN, 0x92800000) \
 	M(MovNW, 0x12800000) \
+	M(Tbz, 0x36000000) \
+	M(Tbnz, 0x37000000) \
 	M(CbzW, 0x34000000) \
 	M(CbnzW, 0x35000000) \
 	M(AndI, 0x92400000) \

@@ -341,8 +341,12 @@ void Selector::run()
 			{
 				InstId last = inst.op == Opcode::Convert ? truncated_operand(inst, block) : address_sequence(i);
 				if (last == kNoId && inst.op == Opcode::Binary)
-					last = inst.sub == static_cast<unsigned>(BinaryOp::Sub) ? narrow_range_branch(inst, block)
-																			: shifted_operand(inst);
+				{
+					const auto op = static_cast<BinaryOp>(inst.sub);
+					last = op == BinaryOp::And ? bit_branch(inst, block)
+						: op == BinaryOp::Sub  ? narrow_range_branch(inst, block)
+											   : shifted_operand(inst);
+				}
 				if (last != kNoId)
 				{
 					i = last;
@@ -366,6 +370,10 @@ void Selector::run()
 	}
 	if (level_ && !out_.exceptions && !dynamic_stack_ && body_.code_labels.empty())
 		share_edge_moves(out_);
+	// Tail sharing may redirect a branch. Check the final target before
+	// choosing the shorter reach of TBZ or TBNZ.
+	if (!bit_tests_.empty())
+		fold_bit_tests(out_, bit_tests_);
 }
 
 } // namespace aarch64
