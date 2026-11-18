@@ -95,6 +95,34 @@ matched rebuild at 709d060ce took 1.181× as long by the wall clock and
 1.182× by aggregate CPU. Both builders reproduced the same output hashes
 across four calibration builds and eight comparison builds.
 
+### Instructions across all 497 translation units
+
+For 709d060ce we also replayed each compiler invocation under the instruction
+plugin. Every output matched the SHA-256 recorded by the timed rebuild. Across
+all 497 object compilations, Clang-built cppgm executed **456.442 billion**
+guest instructions and self-built cppgm executed **594.428 billion**, or
+**1.302×** as many. This excludes orchestration and the final link. The three
+original profile inputs measured 1.28×, 1.32× and 1.30× at this revision.
+
+| Input source directory | Clang-built cppgm, billions | Self-built cppgm, billions | Self / Clang |
+| --- | ---: | ---: | ---: |
+| sema | 91.24 | 119.26 | 1.307× |
+| lower | 80.39 | 105.07 | 1.307× |
+| native | 75.48 | 98.06 | 1.299× |
+| opt | 69.27 | 90.66 | 1.309× |
+| wasm | 56.69 | 73.47 | 1.296× |
+| aarch64 | 16.37 | 21.11 | 1.289× |
+
+The directory identifies the source being compiled. The excess recurs across
+the frontend, optimizers and backends. The larger directories account for
+more of the total because they require more work from both compilers.
+
+A subsequent whole-rebuild timing at a247c587b averaged **253.1 s** with
+Clang-built cppgm and **285.9 s** with self-built cppgm. The two paired
+wall-time ratios were 1.143× and 1.115×, with an overall 1.129× elapsed
+slowdown, 1.152× in aggregate CPU and 1.050× A/A wall calibration. All
+497 objects and the linked compiler matched for each run.
+
 ## From hot blocks to candidate changes
 
 The QEMU instruction plugin counted all executed guest instructions. For
