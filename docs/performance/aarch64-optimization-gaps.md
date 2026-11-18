@@ -561,6 +561,8 @@ The ratio is the median of the paired block ratios.
 | 58bc050cf, guarded store unrolling | 11.69 | 13.46 | 1.152× | 1.170× | 0.995× |
 | Trial on 58bc050cf, sink SSA addresses to every encodable access | 11.58 | 12.81 | 1.107× | 1.129× | 0.995× |
 | Same trial with signed byte displacements | 12.06 | 13.43 | 1.113× | 1.134× | 0.994× |
+| 681a31fd8, shared field addresses and guarded word groups | 11.78 | 13.00 | 1.103× | 1.123× | 0.983× |
+| Trial with staged object copies through 64 bytes, additional register and narrow-value coalescing | 11.73 | 12.86 | 1.096× | 1.108× | 0.991× |
 
 The baseline's three comparison blocks ranged from 1.137× to 1.141×.
 At 62a178aa6 the two blocks were 1.110× and 1.115×. The emulated
@@ -603,6 +605,17 @@ byte displacements raised FloatMM throughput to 2.395× Clang and left explicit
 NEON at 1.000×. Puzzle fell to 0.662× even though the guest instruction count
 fell from 392.8 million to 392.4 million. Its hot recursive function lost two
 instructions and several of its loop addresses moved.
+
+Relinking one frozen Puzzle object with 16 starting addresses, spaced four
+bytes apart, gave 0.66× to 0.84× Clang throughput. The pattern repeated every
+32 bytes over four paired blocks per address. Aligning small loops recovered
+Puzzle speed but reduced Bubblesort throughput. Recognizing groups of zero
+predicates instead brought Puzzle to 0.890× at 681a31fd8. Other results on
+that revision were 0.984× for calls, 0.851× for lookup, 1.011× for memory,
+1.001× for explicit NEON, 1.034× for primes, 0.963× for Bubblesort, 2.395×
+for FloatMM and 0.978× for Treesort. A separate short-circuit search trial
+reached 0.921× on Puzzle. It keeps both the order of the loads and each
+early exit, including hits immediately before an inaccessible page.
 
 A separate change at d5fa71196 folds constant record fields and divides sparse
 switch results into compact tables. Two real opcode lookups then occupied
@@ -649,6 +662,13 @@ instruction deltas were −0.009%, +0.022%, +0.028% and +0.024%.
 Peak RSS was 0.07–0.29% lower. Wall deltas were −2.61%, −0.84%,
 −0.55% and +1.96%, with A/A controls of +1.89%, −7.58%, −0.01%
 and +0.05%.
+
+At 681a31fd8 the comparison against 90ebfa8f4 repeated all 144 compilations
+with identical output hashes for each optimization level. Retired instructions
+changed by −0.012%, +0.115%, +0.125% and +0.125% at O0 through O3. Peak RSS
+stayed within 0.12%. Wall deltas were +8.54%, +5.89%, +1.47% and −2.17%.
+The corresponding A/A wall deltas were +11.67%, +2.16%, −1.88% and +1.05%.
+Those controls leave the small wall-time differences unresolved.
 
 ## Which decisions the targets share
 
