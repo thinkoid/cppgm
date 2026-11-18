@@ -66,6 +66,30 @@ std::vector<BlockId> Selector::order_blocks() const
 	if (changed)
 		for (auto b = body_.layout.front(); b != kNoId; b = next[b])
 			order.push_back(b);
+	// Put the latch before a two-block loop test. The preheader jumps to
+	// the test once; each successful trip then falls back into the test
+	// and the terminating trip falls straight through to its successor.
+	for (size_t i = 1; i + 2 < body_.layout.size(); ++i)
+	{
+		const auto& placed = order.empty() ? body_.layout : order;
+		const auto pre = placed[i - 1], header = placed[i], latch = placed[i + 1], exit = placed[i + 2];
+		const auto h = body_.blocks[header].last, l = body_.blocks[latch].last, p = body_.blocks[pre].last;
+		if (p == kNoId || h == kNoId || l == kNoId)
+			continue;
+		const auto& test = body_.instructions[h];
+		const auto jumps_to_header = [&](InstId id) {
+			const auto& term = body_.instructions[id];
+			return term.op == Opcode::Jump && term.ops[0].index == header;
+		};
+		if (test.op != Opcode::Branch || !jumps_to_header(l) || !jumps_to_header(p) ||
+			!((test.ops[1].index == latch && test.ops[2].index == exit) ||
+				(test.ops[2].index == latch && test.ops[1].index == exit)))
+			continue;
+		if (order.empty())
+			order = body_.layout;
+		std::swap(order[i], order[i + 1]);
+		++i;
+	}
 	return order;
 }
 
