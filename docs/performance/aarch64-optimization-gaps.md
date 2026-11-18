@@ -558,6 +558,9 @@ The ratio is the median of the paired block ratios.
 | 62ded8d0b, sparse switch and narrow sign extension | 11.89 | 13.39 | 1.126× | 1.148× | 0.989× |
 | cf5c7a3c4, paired copies and direct aggregate returns | 11.75 | 13.38 | 1.139× | 1.161× | 0.953× |
 | 62a178aa6, calls write directly to eligible result slots | 11.85 | 13.18 | 1.113× | 1.133× | 1.003× |
+| 58bc050cf, guarded store unrolling | 11.69 | 13.46 | 1.152× | 1.170× | 0.995× |
+| Trial on 58bc050cf, sink SSA addresses to every encodable access | 11.58 | 12.81 | 1.107× | 1.129× | 0.995× |
+| Same trial with signed byte displacements | 12.06 | 13.43 | 1.113× | 1.134× | 0.994× |
 
 The baseline's three comparison blocks ranged from 1.137× to 1.141×.
 At 62a178aa6 the two blocks were 1.110× and 1.115×. The emulated
@@ -590,6 +593,22 @@ tested build Bubblesort measured 0.962×, lookup 0.854× and explicit NEON
 Bubblesort to 0.851× even though its emulated instruction count dropped.
 The narrower rule excludes those swaps. Puzzle still runs slower than
 Clang even at 392.8 million guest instructions versus Clang's 407.8 million.
+
+The address-placement trial moves only the pure index calculation. A pointer
+that also reaches a call, a phi, a comparison or a stored value keeps its
+definition. On the loop-vectorizer compile, the self-built compiler executed
+2.79 billion instructions, down from 2.92 billion. On the VM the two wall
+ratios for the address-placement trial were 1.110× and 1.104×. Adding signed
+byte displacements raised FloatMM throughput to 2.395× Clang and left explicit
+NEON at 1.000×. Puzzle fell to 0.662× even though the guest instruction count
+fell from 392.8 million to 392.4 million. Its hot recursive function lost two
+instructions and several of its loop addresses moved.
+
+A separate change at d5fa71196 folds constant record fields and divides sparse
+switch results into compact tables. Two real opcode lookups then occupied
+1,836 bytes of code, data and unwind information, down from 21,812 bytes.
+A QEMU comparison with Clang agreed on the return values for all 65,536 input
+values. The corresponding native trial still took 1.127× as long to self-build.
 
 Sampling complete native rebuilds at 599 Hz attributed 88,811 samples to
 the self-built compiler and 73,680 to the Clang-built compiler. Of those,
