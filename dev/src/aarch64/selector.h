@@ -109,6 +109,7 @@ private:
 	lowir::InstId paired_store(const lowir::Instruction& index);
 	lowir::InstId address_sequence(lowir::InstId id);
 	void choose(const lowir::Instruction& inst, unsigned condition);
+	lowir::InstId narrow_range_branch(const lowir::Instruction& sub, lowir::BlockId block);
 	bool compare_consumer(const lowir::Instruction& inst, lowir::BlockId block);
 	bool backedge_move(lowir::BlockId from, lowir::BlockId to, unsigned condition);
 	bool empty_edge(lowir::BlockId block, lowir::BlockId to);

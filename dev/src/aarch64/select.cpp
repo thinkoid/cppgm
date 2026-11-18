@@ -341,7 +341,8 @@ void Selector::run()
 			{
 				InstId last = inst.op == Opcode::Convert ? truncated_operand(inst, block) : address_sequence(i);
 				if (last == kNoId && inst.op == Opcode::Binary)
-					last = shifted_operand(inst);
+					last = inst.sub == static_cast<unsigned>(BinaryOp::Sub) ? narrow_range_branch(inst, block)
+																			: shifted_operand(inst);
 				if (last != kNoId)
 				{
 					i = last;

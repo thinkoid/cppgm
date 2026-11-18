@@ -197,6 +197,37 @@ void Selector::choose(const lowir::Instruction& inst, unsigned condition)
 	save(dest, inst.result, !bits || bits >= 32 || (normalized(yes) && normalized(no)));
 }
 
+// Test a narrow modular interval using one W subtraction and a compare.
+// Underflow produces a large unsigned value in either width when the
+// comparison threshold is strictly below the smallest wrapped result.
+InstId Selector::narrow_range_branch(const lowir::Instruction& sub, BlockId block)
+{
+	const unsigned width = integer_bits(sub.type.kind());
+	if ((width != 8 && width != 16) || sub.sub != static_cast<unsigned>(BinaryOp::Sub) || sub.next == kNoId ||
+		uses_[sub.result] != 1 || !sub.ops[0].is(ValueKind::Temp) || body_.temps[sub.ops[0].index].type != sub.type ||
+		!sub.ops[1].is(ValueKind::Integer))
+		return kNoId;
+	const auto& cmp = body_.instructions[sub.next];
+	if (cmp.op != Opcode::Compare || cmp.next == kNoId || cmp.type != sub.type || uses_[cmp.result] != 1 ||
+		!(cmp.ops[0] == Value::temp(sub.result)) || !cmp.ops[1].is(ValueKind::Integer))
+		return kNoId;
+	const auto pred = static_cast<ComparePredicate>(cmp.sub);
+	const auto& branch = body_.instructions[cmp.next];
+	if ((pred >= ComparePredicate::Lt && pred <= ComparePredicate::Ge) || branch.op != Opcode::Branch ||
+		!(branch.ops[0] == Value::temp(cmp.result)))
+		return kNoId;
+	const unsigned limit = 1u << width;
+	const uint32_t base = body_.literals[sub.ops[1].index].low & (limit - 1);
+	const uint32_t threshold = body_.literals[cmp.ops[1].index].low & (limit - 1);
+	if (threshold >= limit - base || base > 4095 || threshold > 4095)
+		return kNoId;
+	const auto src = operand_register(sub.ops[0], sub.type, 10);
+	out_.emit(Op::SubIW, 9, src, 0, base << 10);
+	out_.emit(Op::SubsIW, 31, 9, 0, threshold << 10);
+	conditional_edges(block, branch, Op::BCond, conditions[cmp.sub] ^ 1);
+	return cmp.next;
+}
+
 bool Selector::compare_consumer(const lowir::Instruction& inst, BlockId block)
 {
 	if (inst.next == kNoId || uses_[inst.result] != 1 ||
