@@ -1,4 +1,6 @@
 #include "aarch64/lifetimes.h"
+#include "machine/block_frequency.h"
+#include "opt/loops.h"
 
 #include <algorithm>
 #include "machine/ssa_segments.h"
@@ -63,7 +65,8 @@ struct FunctionLiveness
 	}
 
 	void extend(const Program& program, const FunctionBody& body, const machine::ExceptionLayout* exceptions,
-		uint32_t end, const std::vector<uint32_t>& uses, std::vector<std::pair<uint32_t, uint32_t>>& segments)
+		uint32_t end, const std::vector<uint32_t>& uses, std::vector<std::pair<uint32_t, uint32_t>>& segments,
+		opt::Cfg& cfg)
 	{
 		if (std::all_of(reads.begin(), reads.end(), [](const Reads& use) { return use.local(); }))
 			return;
@@ -91,7 +94,6 @@ struct FunctionLiveness
 				}
 			return;
 		}
-		opt::Cfg cfg;
 		opt::build_cfg_light(program, body, cfg, true);
 		machine::SsaLiveness walk(cfg.pred_first, cfg.preds, end / 2 + body.layout.size());
 		if (exceptions)
@@ -154,9 +156,61 @@ struct FunctionLiveness
 };
 } // namespace
 
+std::vector<uint64_t> spill_weights(const Program& program, const FunctionBody& body, opt::Cfg& cfg)
+{
+	std::vector<uint64_t> cost(body.temps.size(), 0);
+	opt::complete_cfg(cfg);
+	opt::LoopForest forest;
+	opt::find_loops(body, cfg, forest);
+	std::vector<uint32_t> first(1, 0), members;
+	for (const auto& loop : forest.loops)
+	{
+		members.insert(members.end(), loop.blocks.begin(), loop.blocks.end());
+		first.push_back(members.size());
+	}
+	std::vector<uint8_t> cold(body.blocks.size(), 0);
+	for (BlockId b : body.layout)
+		for (InstId i = body.blocks[b].first; i != kNoId && !cold[b]; i = body.instructions[i].next)
+		{
+			const auto& inst = body.instructions[i];
+			cold[b] = inst.op == Opcode::Throw || inst.op == Opcode::Resume || inst.op == Opcode::Unreachable ||
+				program.rare_call(inst);
+		}
+	std::vector<uint64_t> weights;
+	machine::block_frequencies(
+		body, body.layout.front(), cfg.succ_first, cfg.succs, cfg.pred_first, cfg.preds, cold, first, members,
+		[](BlockId b) { return b; }, [&](BlockId b) { return cfg.reachable(b); },
+		[](uint32_t, uint32_t, const std::vector<uint32_t>&, const std::vector<uint32_t>&, const Instruction&, bool) {
+			return false;
+		},
+		weights);
+	for (BlockId b : body.layout)
+		for (InstId i = body.blocks[b].first; i != kNoId; i = body.instructions[i].next)
+		{
+			const auto& inst = body.instructions[i];
+			if (inst.result != kNoId)
+				cost[inst.result] += weights[b];
+			if (inst.op == Opcode::Phi)
+			{
+				for (uint32_t k = 0; k < inst.extra_count; k += 2)
+				{
+					const auto v = body.operands[inst.extra_first + k + 1];
+					if (v.is(ValueKind::Temp))
+						cost[v.index] += weights[body.operands[inst.extra_first + k].index];
+				}
+			}
+			else
+				opt::for_each_operand(body, inst, [&](Value v) {
+					if (v.is(ValueKind::Temp))
+						cost[v.index] += weights[b];
+				});
+		}
+	return cost;
+}
+
 std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& body,
 	const machine::ExceptionLayout* exceptions, std::vector<uint32_t>& uses, std::vector<uint32_t>& calls,
-	std::vector<std::pair<uint32_t, uint32_t>>& segments)
+	std::vector<std::pair<uint32_t, uint32_t>>& segments, opt::Cfg& cfg)
 {
 	FunctionLiveness plan(body);
 	uses.assign(body.temps.size(), 0);
@@ -222,7 +276,7 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 		}
 	if (body.layout.size() > 1 ||
 		(body.blocks[entry].first != kNoId && body.instructions[body.blocks[entry].first].op == Opcode::Phi))
-		plan.extend(program, body, exceptions, at, uses, segments);
+		plan.extend(program, body, exceptions, at, uses, segments, cfg);
 	return std::move(plan.ranges);
 }
 

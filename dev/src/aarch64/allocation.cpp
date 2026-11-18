@@ -1,5 +1,6 @@
 #include "aarch64/selector.h"
 #include "aarch64/lifetimes.h"
+#include "opt/function_ir.h"
 #include "machine/interval_slots.h"
 #include "machine/register_pressure.h"
 
@@ -18,6 +19,39 @@ void each_interval(const LiveRange& range, const Segments& segments, F f)
 	else
 		for (uint32_t i = range.segments; i < range.segments + range.count; ++i)
 			f(segments[i].first, segments[i].second);
+}
+
+// Count integer values that are definitely live simultaneously. Half-open
+// segments omit values dying at a call and its newly defined result. If
+// this lower bound fits, retain the cheap start-order assignment.
+bool exceeds_capacity(const lowir::FunctionBody& body, const std::vector<LiveRange>& ranges, const Segments& segments,
+	const std::vector<uint32_t>& calls, uint32_t slots, int preserved)
+{
+	if (segments.empty() || ranges.size() <= static_cast<unsigned>(preserved))
+		return false;
+	std::vector<int32_t> change(slots + 1);
+	for (const auto& range : ranges)
+	{
+		const auto type = body.temps[range.id].type;
+		if (range.first == kNoId || !(type.is_pointer() || (type.is_integer() && integer_bits(type.kind()) <= 64)))
+			continue;
+		each_interval(range, segments, [&](uint32_t first, uint32_t last) {
+			++change[first];
+			--change[last];
+		});
+	}
+	uint32_t next = 0;
+	int live = 0;
+	for (uint32_t slot = 0; slot < slots; ++slot)
+	{
+		live += change[slot];
+		const bool at_call = next < calls.size() && calls[next] == slot;
+		if (live > preserved + (at_call ? 0 : 11))
+			return true;
+		if (at_call)
+			++next;
+	}
+	return false;
 }
 
 // A straight-line function only needs the end of each register's last use.
@@ -118,7 +152,8 @@ void Selector::allocate()
 	}
 	std::vector<uint32_t> calls;
 	Segments segments;
-	auto ranges = live_ranges(program_, body_, out_.exceptions.get(), uses_, calls, segments);
+	opt::Cfg cfg;
+	auto ranges = live_ranges(program_, body_, out_.exceptions.get(), uses_, calls, segments, cfg);
 	std::stable_sort(
 		ranges.begin(), ranges.end(), [](const LiveRange& a, const LiveRange& b) { return a.first < b.first; });
 	// x9-x11, x15-x17 and v16-v17 are selector scratch; x18 is platform-reserved.
@@ -135,12 +170,21 @@ void Selector::allocate()
 			incoming[id] = arg.first;
 	}
 	const uint32_t slots = 2 * (body_.instructions.size() + body_.layout.size()) + 3;
-	RegisterBank general(segments, slots), simd(segments, slots);
 	const auto outgoing = call_registers();
-	uint32_t saved = 0;
-	machine::IntervalSlots scalar_spills, vector_spills;
-	for (const auto& range : ranges)
+	std::vector<uint32_t> order;
+	if (exceeds_capacity(body_, ranges, segments, calls, slots, dynamic_stack_ ? 9 : 10))
 	{
+		const auto weight = spill_weights(program_, body_, cfg);
+		order.resize(ranges.size());
+		for (uint32_t i = 0; i < order.size(); ++i)
+			order[i] = i;
+		std::stable_sort(order.begin(), order.end(),
+			[&](uint32_t a, uint32_t b) { return weight[ranges[a].id] > weight[ranges[b].id]; });
+	}
+	RegisterBank general(segments, slots), simd(segments, slots);
+	for (uint32_t i = 0; i < ranges.size(); ++i)
+	{
+		const auto& range = ranges[order.empty() ? i : order[i]];
 		if (range.first == kNoId)
 			continue;
 		bool at_call = false, across_call = false;
@@ -171,25 +215,33 @@ void Selector::allocate()
 			// that crosses a call must be spilled, including its high half.
 			if (type.kind() == TypeKind::V128 && !range.vector_address && !across_call)
 				vectors_[range.id] = simd.assign(range, arguments | 0xfffc0000, kNoId);
-			if (vectors_[range.id] == kNoId)
-				homes_[range.id] = type.kind() == TypeKind::V128 && !range.vector_address
-					? vector_spills.assign(range.first, range.last, [&]() { return home(range.id); })
-					: home(range.id);
 			continue;
 		}
 		const uint32_t caller = across_call ? 0 : arguments | (7u << 12);
 		const uint32_t preserved = (dynamic_stack_ ? 0x1ffu : 0x3ffu) << 19;
 		const unsigned preferred = range.affinity == kNoId ? kNoId : registers_[range.affinity];
-		unsigned reg = general.assign(range, caller | preserved, preferred);
-		registers_[range.id] = reg;
+		registers_[range.id] = general.assign(range, caller | preserved, preferred);
+	}
+	uint32_t saved = 0;
+	machine::IntervalSlots scalar_spills, vector_spills;
+	for (const auto& range : ranges)
+	{
+		const auto id = range.id;
+		const auto reg = registers_[id];
 		if (reg != kNoId && reg >= 19 && !(saved & (1u << reg)))
 		{
 			saved |= 1u << reg;
 			preserved_.push_back({ reg, reserve(8, 8) });
 		}
-		if (registers_[range.id] != kNoId)
+		if (range.first == kNoId || reg != kNoId || vectors_[id] != kNoId)
 			continue;
-		homes_[range.id] = scalar_spills.assign(range.first, range.last, [&]() { return reserve(8, 8); });
+		const auto type = body_.temps[id].type;
+		if (!memory_value(type))
+			homes_[id] = scalar_spills.assign(range.first, range.last, [&]() { return reserve(8, 8); });
+		else if (type.kind() == TypeKind::V128 && !range.vector_address)
+			homes_[id] = vector_spills.assign(range.first, range.last, [&]() { return home(id); });
+		else
+			homes_[id] = home(id);
 	}
 }
 } // namespace aarch64
