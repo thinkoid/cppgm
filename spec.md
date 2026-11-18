@@ -4,8 +4,9 @@
 
 This specification defines the production architecture for a self-contained
 C++ compiler implementing the required C++11/14/17 profile on x86-64 Linux,
-Intel macOS and PA37's wasm32 targets. It is normative and intended for implementation
-reviews and architecture audits.
+Intel macOS and PA37's wasm32 targets. Experimental PA39 applies the same
+pipeline to AArch64 Linux and Apple Silicon. This specification governs
+implementation reviews and architecture audits.
 
 Compile-time performance is a property of semantic design, not a mode that may
 skip required language or ABI behavior. Every required result must be produced
@@ -262,6 +263,11 @@ object compiler to build a representation that only a tool reads.
   Target instruction forms MAY remain separate. Wasm placement uses typed
   locals and its value stack rather than requiring a physical-register allocator.
   Machine dumps MUST describe the selected representation that emission uses.
+- The x86-64 and AArch64 allocators share the bounded SSA liveness walk.
+  Each allocator supplies the positions of definitions, reads and phi transfers
+  in its instruction stream. Register banks, call clobbers and save/restore
+  sequences follow the target ABI. Arm spills and Wasm locals share interval
+  storage assignment within compatible storage classes.
 - Instruction selection, register allocation, local relaxation, and encoding
   SHOULD complete for one function before the next begins, and that
   function's transient state SHOULD then be released or reset for reuse

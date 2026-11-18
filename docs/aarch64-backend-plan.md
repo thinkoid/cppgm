@@ -89,6 +89,23 @@ conventions. Target-specific checks inspect ELF and Mach-O relocations, code
 size and stack traffic. Additional C++ translation units live beside their
 main fixture. The primary executable checker and both native replay tools are Perl.
 
+### Shared allocation code
+
+Both Arm profiles and x86 use the same bounded backward walk over SSA uses and
+control-flow predecessors. Arm accounts for phi inputs on the predecessor
+and phi destinations at edge transfers. It assigns ordinary ranges with a
+linear scan. The x86 allocator also tracks disjoint ranges within a function,
+weights uses in loops and can split a value around a loop. These are candidates
+for further sharing when instruction profiles show a spill inside a hot loop.
+[Shared SSA liveness](../dev/src/machine/ssa_liveness.h) · [Arm live ranges](../dev/src/aarch64/lifetimes.cpp) · [x86 allocation](../dev/src/native/select/register_allocation.cpp)
+
+Arm's spill slots and Wasm's locals use the same interval-slot assignment.
+Arm maintains separate pools for 8-byte scalars and 16-byte vectors. When
+a value's address must stay valid it receives a dedicated home. Wasm keeps
+separate pools by local type. Physical registers, ABI clobbers, and save and
+restore instructions belong to each native target.
+[Interval slots](../dev/src/machine/interval_slots.h) · [Arm register assignment](../dev/src/aarch64/allocation.cpp) · [Wasm locals](../dev/src/wasm/local_lifetimes.cpp)
+
 ### Recorded x86 qualification
 
 The checked PA39 fixture set has 22 controls. The Linux replay executed 416
