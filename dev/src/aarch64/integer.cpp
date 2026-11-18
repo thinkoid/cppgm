@@ -31,7 +31,8 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 	const auto op = static_cast<BinaryOp>(inst.sub);
 	const unsigned bits = inst.type.is_pointer() ? 64 : integer_bits(inst.type.kind());
 	const bool logical = op == BinaryOp::And || op == BinaryOp::Or || op == BinaryOp::Xor;
-	if (bits != 32 && bits != 64 && !((bits == 1 || bits == 8 || bits == 16) && logical))
+	const bool small = bits == 1 || bits == 8 || bits == 16;
+	if (bits != 32 && bits != 64 && !(small && (logical || op == BinaryOp::Add || op == BinaryOp::Sub)))
 		return false;
 	Value lhs = inst.ops[0], rhs = inst.ops[1];
 	if ((op == BinaryOp::Add || op == BinaryOp::Mul || op == BinaryOp::And || op == BinaryOp::Or ||
@@ -45,11 +46,13 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 	const auto canonical = [&](Value v) {
 		return v.is(ValueKind::Integer) || (v.is(ValueKind::Temp) && body_.temps[v.index].type == inst.type);
 	};
-	const bool normalized = bits >= 32 || (canonical(lhs) && canonical(rhs));
+	const bool normalized = bits >= 32 || (logical && canonical(lhs) && canonical(rhs));
 	if ((op == BinaryOp::Add || op == BinaryOp::Sub) && rhs.is(ValueKind::Integer))
 	{
 		const uint64_t raw = body_.literals[rhs.index].low;
-		const int64_t signed_value = w ? static_cast<int32_t>(raw) : static_cast<int64_t>(raw);
+		const uint64_t sign = uint64_t(1) << (bits - 1);
+		const uint64_t value = small ? ((raw & (2 * sign - 1)) ^ sign) - sign : raw;
+		const int64_t signed_value = w ? static_cast<int32_t>(value) : static_cast<int64_t>(value);
 		const uint64_t magnitude = signed_value < 0 ? 0 - uint64_t(signed_value) : uint64_t(signed_value);
 		const unsigned shift = (magnitude & 4095) == 0 ? 12 : 0;
 		if ((magnitude >> shift) <= 4095)
@@ -57,7 +60,7 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 			const bool sub = (op == BinaryOp::Sub) != (signed_value < 0);
 			out_.emit(sub ? (w ? Op::SubIW : Op::SubI) : (w ? Op::AddIW : Op::AddI), dest, left, 0,
 				(shift ? 1u << 22 : 0) | uint32_t(magnitude >> shift) << 10);
-			save(dest, inst.result, true);
+			save(dest, inst.result, normalized);
 			return true;
 		}
 	}
