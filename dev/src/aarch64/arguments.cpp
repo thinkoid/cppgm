@@ -151,6 +151,13 @@ void Selector::parameter(TempId id, const Argument& arg)
 			vector_move(vectors_[id], arg.first);
 			return;
 		}
+		// A W move or bitfield extraction can read the incoming argument
+		// and write its canonical home in a single instruction.
+		if (level_ && arg.bank == Bank::General && registers_[id] != kNoId)
+		{
+			save(arg.first, id);
+			return;
+		}
 		const unsigned dest = registers_[id] == kNoId ? 10 : registers_[id];
 		if (arg.bank == Bank::Stack)
 			access(false, dest, frame_base(), offset, storage_bytes(type));
@@ -158,7 +165,7 @@ void Selector::parameter(TempId id, const Argument& arg)
 			fp_move(false, arg.first, dest, type);
 		else
 			move(dest, arg.first);
-		save(dest, id);
+		save(dest, id, level_ && arg.bank == Bank::Stack && type.kind() != TypeKind::I1);
 	}
 }
 
