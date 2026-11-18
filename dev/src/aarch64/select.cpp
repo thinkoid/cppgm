@@ -168,6 +168,8 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		return;
 	case Opcode::Convert:
 	{
+		if (!aliases_.empty() && aliases_[inst.result] != inst.result)
+			return;
 		const auto op = static_cast<ConvertOp>(inst.sub);
 		const Type from = convert_source_type(inst);
 		if (op != ConvertOp::SExt && op != ConvertOp::ZExt && op != ConvertOp::Trunc)

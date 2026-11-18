@@ -129,7 +129,7 @@ private:
 	std::vector<uint32_t> slots_, homes_, registers_, vectors_, uses_;
 	std::vector<std::pair<unsigned, uint32_t>> preserved_;
 	machine::PhiInputs phis_;
-	std::vector<uint32_t> entry_regs_;
+	std::vector<uint32_t> entry_regs_, aliases_;
 	std::vector<lowir::InstId> entry_elided_;
 	std::vector<std::pair<lowir::BlockId, lowir::BlockId>> snapshot_edges_;
 	std::vector<CallLayout> calls_;

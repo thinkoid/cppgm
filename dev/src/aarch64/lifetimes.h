@@ -20,10 +20,16 @@ struct LiveRange
 	bool vector_address = false;
 };
 
+std::vector<uint32_t> widening_aliases(const lowir::FunctionBody& body);
+inline uint32_t representative(const std::vector<uint32_t>& aliases, uint32_t id)
+{
+	return aliases.empty() ? id : aliases[id];
+}
+
 std::vector<LiveRange> live_ranges(const lowir::Program& program, const lowir::FunctionBody& body,
 	const machine::ExceptionLayout* exceptions, std::vector<uint32_t>& uses, std::vector<uint32_t>& calls,
 	std::vector<std::pair<uint32_t, uint32_t>>& segments, opt::Cfg& cfg, machine::PhiWebs& webs,
-	std::vector<uint32_t>& entries);
+	std::vector<uint32_t>& entries, const std::vector<uint32_t>& aliases);
 
 std::vector<uint64_t> spill_weights(const lowir::Program& program, const lowir::FunctionBody& body, opt::Cfg& cfg);
 

@@ -209,10 +209,45 @@ std::vector<uint64_t> spill_weights(const Program& program, const FunctionBody& 
 	return cost;
 }
 
+// Narrow integer temporaries already hold their zero-extended value in a
+// register or an eight-byte spill slot. Give the wider name the same value
+// throughout allocation, including all its later call and phi uses.
+std::vector<uint32_t> widening_aliases(const FunctionBody& body)
+{
+	std::vector<uint32_t> parent;
+	for (TempId id = body.parameter_count; id < body.temps.size(); ++id)
+	{
+		const InstId def = body.temps[id].def;
+		if (def == kNoId)
+			continue;
+		const auto& inst = body.instructions[def];
+		if (inst.op != Opcode::Convert || inst.sub != static_cast<unsigned>(ConvertOp::ZExt) ||
+			!inst.ops[0].is(ValueKind::Temp) || inst.result != id || integer_bits(inst.type.kind()) > 64)
+			continue;
+		const auto src = inst.ops[0].index;
+		const Type from = convert_source_type(inst);
+		if (body.temps[src].type != from || !from.is_integer() || !inst.type.is_integer() ||
+			integer_bits(from.kind()) >= integer_bits(inst.type.kind()))
+			continue;
+		if (parent.empty())
+		{
+			parent.resize(body.temps.size());
+			for (TempId t = 0; t < parent.size(); ++t)
+				parent[t] = t;
+		}
+		parent[id] = src;
+	}
+	// Each link points to a strictly narrower integer type.
+	for (TempId id = 0; id < parent.size(); ++id)
+		while (parent[id] != parent[parent[id]])
+			parent[id] = parent[parent[id]];
+	return parent;
+}
+
 std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& body,
 	const machine::ExceptionLayout* exceptions, std::vector<uint32_t>& uses, std::vector<uint32_t>& calls,
 	std::vector<std::pair<uint32_t, uint32_t>>& segments, opt::Cfg& cfg, machine::PhiWebs& webs,
-	std::vector<uint32_t>& entries)
+	std::vector<uint32_t>& entries, const std::vector<uint32_t>& aliases)
 {
 	FunctionLiveness plan(body);
 	uses.assign(body.temps.size(), 0);
@@ -230,6 +265,8 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 		for (InstId i = body.blocks[b].first; i != kNoId; i = body.instructions[i].next, at += 2)
 		{
 			const auto& inst = body.instructions[i];
+			if (inst.result != kNoId && representative(aliases, inst.result) != inst.result)
+				continue;
 			if (inst.op == Opcode::Call)
 				calls.push_back(at);
 			if (inst.result != kNoId)
@@ -245,9 +282,12 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 			opt::for_each_operand(body, inst, [&](Value v) {
 				if (v.is(ValueKind::Temp))
 				{
+					const auto id = representative(aliases, v.index);
 					++uses[v.index];
-					plan.read(v.index, b, at);
-					plan.ranges[v.index].vector_address |= inst.op != Opcode::Vector && inst.op != Opcode::Call &&
+					if (id != v.index)
+						++uses[id];
+					plan.read(id, b, at);
+					plan.ranges[id].vector_address |= inst.op != Opcode::Vector && inst.op != Opcode::Call &&
 						inst.op != Opcode::Return && inst.op != Opcode::Store && inst.op != Opcode::Copy;
 				}
 			});
@@ -267,15 +307,18 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 				const auto v = body.operands[phi.extra_first + k + 1];
 				if (v.is(ValueKind::Temp))
 				{
+					const auto id = representative(aliases, v.index);
 					++uses[v.index];
-					plan.read(v.index, pred, plan.spans[pred].last - 1);
+					if (id != v.index)
+						++uses[id];
+					plan.read(id, pred, plan.spans[pred].last - 1);
 					if (webs.empty())
 						webs.reset(body.temps.size());
-					webs.join(v.index, phi.result);
-					plan.ranges[v.index].affinity = phi.result;
-					plan.ranges[phi.result].affinity = v.index;
-					plan.reads[v.index].incoming = true;
-					plan.ranges[v.index].vector_address = true;
+					webs.join(id, phi.result);
+					plan.ranges[id].affinity = phi.result;
+					plan.ranges[phi.result].affinity = id;
+					plan.reads[id].incoming = true;
+					plan.ranges[id].vector_address = true;
 				}
 			}
 		}

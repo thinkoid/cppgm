@@ -120,7 +120,7 @@ std::vector<uint8_t> Selector::call_registers() const
 		const auto& inst = body_.instructions[i];
 		const auto& layout = calls_[call_indices_[i]];
 		if (inst.ops[0].is(ValueKind::Temp))
-			masks[inst.ops[0].index] = 0;
+			masks[representative(aliases_, inst.ops[0].index)] = 0;
 		for (uint32_t n = 0; n < layout.args.size(); ++n)
 		{
 			const auto src = body_.operands[inst.extra_first + n];
@@ -132,7 +132,7 @@ std::vector<uint8_t> Selector::call_registers() const
 			const bool matches = !arg.indirect && arg.pieces == 1 && arg.first < 8 &&
 				arg.bank == (simd ? Bank::Simd : Bank::General) &&
 				(!memory_value(type) || type.kind() == TypeKind::V128);
-			masks[src.index] &= matches ? 1u << arg.first : 0;
+			masks[representative(aliases_, src.index)] &= matches ? 1u << arg.first : 0;
 		}
 	}
 	return masks;
@@ -199,7 +199,9 @@ void Selector::allocate()
 	Segments segments;
 	opt::Cfg cfg;
 	machine::PhiWebs webs;
-	auto ranges = live_ranges(program_, body_, out_.exceptions.get(), uses_, calls, segments, cfg, webs, entry_regs_);
+	aliases_ = widening_aliases(body_);
+	auto ranges = live_ranges(
+		program_, body_, out_.exceptions.get(), uses_, calls, segments, cfg, webs, entry_regs_, aliases_);
 	std::vector<uint32_t> web_regs(webs.empty() ? 0 : count, kNoId);
 	parameter_homes(cfg);
 	std::stable_sort(
@@ -297,5 +299,11 @@ void Selector::allocate()
 		else
 			homes_[id] = home(id);
 	}
+	for (TempId id = 0; id < aliases_.size(); ++id)
+		if (aliases_[id] != id)
+		{
+			registers_[id] = registers_[aliases_[id]];
+			homes_[id] = homes_[aliases_[id]];
+		}
 }
 } // namespace aarch64
