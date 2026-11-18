@@ -52,6 +52,10 @@ compiler a control for the extra work of changing the compiler algorithm itself.
 | Select paired Arm loads, 3e4dc2762 | 734 | 3,450 | 1,313 |
 | Use constant select operands and fuse multiply-add addresses, 709d060ce | 726 | 3,419 | 1,301 |
 | Clang-built cppgm control at 709d060ce | 568 | 2,582 | 1,001 |
+| Hold invariant address strides, unroll short four-lane loops and share x86 phi webs, 09b98b886 | 716 | 3,381 | 1,284 |
+| Fold shifted multiplies, transfer ABI pieces directly, schedule backedge moves and copy through allocated addresses, a247c587b | 708 | 3,341 | 1,271 |
+| Keep loop-invariant masks in a register and coalesce zero extensions, 3ff5a4cb2 | 700 | 3,286 | 1,252 |
+| Clang-built cppgm control at 3ff5a4cb2 | 568 | 2,585 | 1,002 |
 
 The largest allocation gain on the compiler inputs came from exceptional
 control flow. Arm previously reserved every cross-block value for the whole
@@ -75,6 +79,7 @@ blocks. Concurrent host activity affects both.
 | Shared live segments, a57b21310 | 24 | 164.6 s | 159.6 s | 1.239×, 0.826× | 1.256×, 1.040× | 0.884× |
 | Pressure-aware allocation, 0b396b840 | 24 | 204.5 s | 238.7 s | 1.213×, 1.132× | 1.206×, 1.200× | 1.028× |
 | Dense switch selection, 16bbf1f0d | 16 | 251.7 s | 301.7 s | 1.060×, 1.321× | 1.089×, 1.280× | 0.937× |
+| Paired stores and conditional phi fallthrough, 0f09ba077 | 16 | 222.1 s | 266.3 s | 1.178×, 1.220× | 1.162×, 1.221× | 1.090× |
 
 At 0b396b840, the paired ratios were **1.173× elapsed** and **1.203× aggregate
 CPU**. Both compilers rebuilt exactly the same 497 objects and the resulting
@@ -82,7 +87,9 @@ executable matched the self-built input. The earlier checkpoint's wall blocks
 went in opposite directions. The absolute seconds between checkpoints also
 include changes in host load. At 16bbf1f0d the paired slowdown was 1.190×
 elapsed and 1.185× CPU. Both compilers reproduced the same 497 objects and
-the self-built input executable in every build.
+the self-built input executable in every build. At 0f09ba077 the paired ratios were
+1.199× elapsed and 1.192× CPU, again with identical outputs across all
+497 translation units and the final link.
 
 ## From hot blocks to candidate changes
 
@@ -329,6 +336,53 @@ The short calls and memory kernels had wide block ranges, and the identical
 binary calibration on calls and lookup was more than 20% from 1. Treat small
 time differences on this host as unresolved.
 
+### Later measurements on the same workloads
+
+After pairing stores and simplifying phi edges (0f09ba077), each timing
+position used eight fresh emulator launches over six alternating paired
+blocks, following two Clang/Clang calibration blocks. The public-program
+geometric mean reached 0.989× Clang throughput and the four-kernel mean
+reached 0.923×. Puzzle was slower in every paired block.
+
+| Workload | Throughput vs Clang | Six-block range | A/A |
+| --- | ---: | ---: | ---: |
+| calls | 0.979× | 0.863–1.086× | 1.147× |
+| lookup | 0.980× | 0.797–1.186× | 0.956× |
+| memory | 0.760× | 0.628–1.057× | 1.006× |
+| vectors | 0.995× | 0.844–1.101× | 1.071× |
+| primes | 1.039× | 0.994–1.095× | 0.988× |
+| Bubblesort | 1.025× | 0.910–1.180× | 1.024× |
+| FloatMM | 1.090× | 0.930–1.230× | 0.908× |
+| Puzzle | 0.858× | 0.797–0.955× | 1.045× |
+| Treesort | 0.949× | 0.743–1.180× | 1.136× |
+
+The memory transform runs eight elements per loop branch after enabling
+the existing two-round vector unroll for short four-lane Arm loops. Its
+inner function fell from 10.61 to 8.52 million instructions, versus 5.30
+million with Clang. With both cppgm versions measured in the same six
+paired blocks, throughput rose 1.083×, with five blocks improving. The
+corresponding lookup comparison was 0.971× with a 0.867–1.599× range.
+The smaller lookup instruction count has no resolved elapsed-time benefit
+in that comparison.
+
+The call-heavy kernel showed a different bottleneck. With x86's phi-web
+construction, Arm can prefer the same register for incoming values from
+several predecessors. Favoring just a backward predecessor made both calls
+and Treesort worse. The whole-web preference removed 39.2 million
+instructions from the loop-vectorizer compile. A liveness check for moving
+one register copy across a conditional backedge and holding an expensive
+integer mask across calls brought the call kernel to **61,341,775** guest
+instructions. Clang used **61,341,776**. The explicit-SIMD kernel executed
+**192,938,048** with either producer.
+
+A narrow integer in Arm SSA already has canonical high bits, including
+when spilled to an eight-byte home. Charging a zero extension's later uses
+to its original value lets both names share that home across calls and
+phis. At 3ff5a4cb2 this removed another 57.1 million instructions from the
+loop-vectorizer compile and 6.4 million from the lookup application. The
+three compiler-input ratios were 1.234×, 1.271×, 1.250× in table order.
+The independent Clang-built cppgm controls reproduced each target object.
+
 ## Which decisions the targets share
 
 | Decision | Implementations using it |
@@ -338,7 +392,7 @@ time differences on this host as unresolved.
 | Sequential storage for eligible addressable frame slots | All three call the same frame-lifetime analysis. Wasm and Arm also share the check for a whole incoming object copied into one named slot. |
 | Bounded SSA predecessor walk, per-block live segments, loop-backedge phi writes, exception predecessors and the interference tree | Arm and x86 use the same implementation. The x86 selector supplies early and late reads for two-address instructions. Arm supplies separate read and write slots, reserved scratches, both register banks and the AAPCS64/Darwin call rules. |
 | Reusing a storage location after its last use | Arm spills and Wasm locals use the same interval-slot pool, partitioned by compatible storage. The Wasm engine assigns physical host registers. |
-| Spill priority and edge transfers | x86 estimates execution frequency, can split a range around loops and schedules parallel register and memory moves. Both native targets weight uses at their blocks, including a phi input at its predecessor. Arm retains start order when the live segments fit the register set and prefers an available phi partner. It transfers registers and scalar spill slots directly when independent. Small scalar cycles can use the shared resolver and one scratch register. Complex edges retain the memory snapshot. Arm still budgets snapshot space conservatively. |
+| Spill priority and edge transfers | x86 estimates execution frequency, can split a range around loops and schedules parallel register and memory moves. Both native targets weight uses at their blocks, including a phi input at its predecessor. Arm retains start order when the live segments fit the register set and uses the shared phi webs to prefer a register already assigned to related transfers. It transfers registers and scalar spill slots directly when independent. Small scalar cycles can use the shared resolver and one scratch register. Complex edges retain the memory snapshot. Arm still budgets snapshot space conservatively. |
 | Floating-point ABI | Linux and Darwin Arm use SIMD registers for scalar floating arguments and results. Arm keeps eligible scalar FP values in that bank through arithmetic. A value spanning a call can use a preserved GPR or a spill slot. Full-width vector preservation has different ABI rules. |
 
 [Shared live segments](../../dev/src/machine/ssa_segments.h) ·
