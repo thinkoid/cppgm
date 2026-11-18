@@ -174,7 +174,16 @@ void AddressSinking::note(TempId address, const Instruction& user, unsigned slot
 		return;
 	// A field's address composes with it (and forms from its parts).
 	if (user.op == Opcode::Index && slot == 0 && user.ops[1].is(ValueKind::Integer) && candidate(user))
-		++info.reads;
+	{
+		// A64 loads accept a register index or a field displacement. An
+		// array element's address is already needed to read its field.
+		const auto& base = body_.instructions[body_.temps[address].def];
+		if (target_model::is_aarch64(c_.program.target) && !base.ops[1].is(ValueKind::Integer) &&
+			body_.literals[user.ops[1].index].low != 0)
+			info.held = true;
+		else
+			++info.reads;
+	}
 	else
 		info.held = true;
 }
