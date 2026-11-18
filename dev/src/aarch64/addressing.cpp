@@ -23,6 +23,23 @@ Op indexed_access(bool store, unsigned bytes)
 		return store ? Op::StrXReg : Op::LdrXReg;
 	}
 }
+Op unscaled_access(bool store, unsigned bytes, bool fp)
+{
+	if (fp)
+		return bytes == 4 ? (store ? Op::SturS : Op::LdurS) : (store ? Op::SturD : Op::LdurD);
+	switch (bytes)
+	{
+	case 1:
+		return store ? Op::SturB : Op::LdurB;
+	case 2:
+		return store ? Op::SturH : Op::LdurH;
+	case 4:
+		return store ? Op::SturW : Op::LdurW;
+	default:
+		return store ? Op::SturX : Op::LdurX;
+	}
+}
+
 }
 
 // Scalar stores and conditional select operands read register 31 as zero.
@@ -218,7 +235,7 @@ InstId Selector::address_sequence(InstId id)
 		}
 		index_id = first.next;
 	}
-	if (!power_of_two(scale) || !(offset.is(ValueKind::Integer) || offset.is(ValueKind::Temp)))
+	if (!offset.is(ValueKind::Integer) && !(offset.is(ValueKind::Temp) && power_of_two(scale)))
 		return kNoId;
 	const auto& index = body_.instructions[index_id];
 	const Type type = type_of(offset, Type::scalar(TypeKind::I64));
@@ -244,14 +261,18 @@ InstId Selector::address_sequence(InstId id)
 		const Value pointer = memory.ops[store ? 1 : 0];
 		const bool consumes = (store || memory.op == Opcode::Load) && pointer.is(ValueKind::Temp) &&
 			(aliases_.empty() ? pointer.index : aliases_[pointer.index]) == index.result;
-		if (consumes && memory.type.kind() == TypeKind::V128 && literal && !(displacement % 16) &&
-			displacement / 16 < 4096 && index.ops[0].is(ValueKind::Temp) && registers_[index.ops[0].index] != kNoId)
+		if (consumes && memory.type.kind() == TypeKind::V128 && literal &&
+			((!(displacement % 16) && displacement / 16 < 4096) || displacement + 256 < 512) &&
+			index.ops[0].is(ValueKind::Temp) && registers_[index.ops[0].index] != kNoId)
 		{
 			const auto base = registers_[index.ops[0].index];
 			const auto reg = store                 ? vector_value(memory.ops[0], 16)
 				: vectors_[memory.result] == kNoId ? 16
 												   : vectors_[memory.result];
-			out_.emit(store ? Op::StrQ : Op::LdrQ, reg, base, 0, uint32_t(displacement / 16) << 10);
+			if (!(displacement % 16) && displacement / 16 < 4096)
+				out_.emit(store ? Op::StrQ : Op::LdrQ, reg, base, 0, uint32_t(displacement / 16) << 10);
+			else
+				out_.emit(store ? Op::SturQ : Op::LdurQ, reg, base, 0, (uint32_t(displacement) & 511) << 12);
 			if (!store)
 				save_vector(reg, memory.result);
 			return next;
@@ -260,7 +281,8 @@ InstId Selector::address_sequence(InstId id)
 		{
 			const unsigned bytes = storage_bytes(memory.type);
 			const bool fits = power_of_two(bytes) && bytes <= 8 &&
-				(literal ? displacement % bytes == 0 && displacement / bytes < 4096 : scale == 1 || scale == bytes);
+				(literal ? (displacement % bytes == 0 && displacement / bytes < 4096) || displacement + 256 < 512
+						 : scale == 1 || scale == bytes);
 			const Value data = memory.ops[0];
 			if (fits &&
 				(!store || data.is(ValueKind::Temp) || data.is(ValueKind::Integer) || data.is(ValueKind::Float)))
@@ -276,7 +298,10 @@ InstId Selector::address_sequence(InstId id)
 														 : registers_[memory.result];
 				if (literal)
 				{
-					if (fp == kNoId)
+					if (displacement % bytes || displacement / bytes >= 4096)
+						out_.emit(unscaled_access(store, bytes, fp != kNoId), reg, base, 0,
+							(uint32_t(displacement) & 511) << 12);
+					else if (fp == kNoId)
 						access(store, reg, base, displacement, bytes);
 					else
 						out_.emit(bytes == 4 ? (store ? Op::StrS : Op::LdrS) : (store ? Op::StrD : Op::LdrD), reg, base,
@@ -304,7 +329,7 @@ InstId Selector::address_sequence(InstId id)
 	}
 	const uint64_t magnitude = static_cast<int64_t>(displacement) < 0 ? 0 - displacement : displacement;
 	const unsigned imm_shift = (magnitude & 4095) == 0 ? 12 : 0;
-	if ((literal && (magnitude >> imm_shift) > 4095) || (!literal && bits < 64 && scale > 16))
+	if ((literal && (magnitude >> imm_shift) > 4095) || (!literal && bits < 64 && sign && scale > 16))
 		return kNoId;
 	const unsigned base = address_register(index.ops[0], 10);
 	const unsigned dest = registers_[index.result] == kNoId ? 9 : registers_[index.result];
@@ -317,7 +342,8 @@ InstId Selector::address_sequence(InstId id)
 		while ((uint64_t(1) << shift) != scale)
 			++shift;
 		const unsigned subscript = operand_register(offset, type, 11);
-		out_.emit(Op::Add, dest, base, subscript, (shift << 10) | (bits < 64 ? (1u << 21) | (extension << 13) : 0));
+		out_.emit(Op::Add, dest, base, subscript,
+			(shift << 10) | (bits < 64 && scale <= 16 ? (1u << 21) | (extension << 13) : 0));
 	}
 	save(dest, index.result, true);
 	return index_id;

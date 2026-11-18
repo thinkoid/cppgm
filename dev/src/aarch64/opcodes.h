@@ -69,6 +69,10 @@
 	M(SturW, 0xb8000000) \
 	M(LdurX, 0xf8400000) \
 	M(SturX, 0xf8000000) \
+	M(LdurS, 0xbc400000) \
+	M(SturS, 0xbc000000) \
+	M(LdurD, 0xfc400000) \
+	M(SturD, 0xfc000000) \
 	M(LdurQ, 0x3cc00000) \
 	M(SturQ, 0x3c800000) \
 	M(LdpQ, 0xad400000) \

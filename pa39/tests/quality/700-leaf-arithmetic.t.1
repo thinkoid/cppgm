@@ -20,8 +20,17 @@ extern "C" unsigned replace_fields(Arms*, unsigned, unsigned);
 extern "C" unsigned narrow_ops(unsigned char, unsigned char, unsigned short);
 extern "C" unsigned narrow_window(unsigned char);
 extern "C" int bit_call(unsigned long, int (*)(int));
+extern "C" void update_at(float* p, float v) { *p = v; }
+extern "C" float before_cursor(float*, bool);
+extern "C" unsigned field_across_branch(Arms*, unsigned, bool);
 static int plus_five(int x) { return x + 5; }
 int main() {
+    float cursor[] = {3.0f, 1.0f};
+    if (before_cursor(cursor + 1, false) != 6.0f || before_cursor(cursor + 1, true) != 10.0f ||
+        cursor[0] != 7.0f || cursor[1] != 1.0f) return 20;
+    Arms rows[] = {{2, 3, 5, 7}, {11, 13, 17, 19}};
+    if (field_across_branch(rows, 1, false) != 34 || field_across_branch(rows, 1, true) != 37 ||
+        rows[0].right != 5 || rows[1].right != 20 || rows[1].tail != 19) return 21;
     for (unsigned i = 0; i < 256; ++i) {
         unsigned expected = i == 8 || i == 9 ? 1 : (i >= 250 || i < 3 ? 2 : 3);
         if (narrow_window(i) != expected) return 18;

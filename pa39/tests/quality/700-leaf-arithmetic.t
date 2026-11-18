@@ -72,3 +72,16 @@ extern "C" int bit_call(unsigned long x, int (*callback)(int)) {
     if (x & 2) return callback(3);
     return callback(1);
 }
+
+extern "C" void update_at(float*, float);
+extern "C" float before_cursor(float* end, bool update) {
+    float* previous = end - 1;
+    float old = *previous;
+    if (update) update_at(previous, old + 4.0f);
+    return *previous + old;
+}
+extern "C" unsigned field_across_branch(Arms* a, unsigned i, bool write) {
+    unsigned old = a[i].right;
+    if (write) a[i].right = old + 3;
+    return a[i].right + old;
+}

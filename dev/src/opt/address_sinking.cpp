@@ -430,53 +430,90 @@ bool fold_index_scales(FunctionContext& context)
 	return changed;
 }
 
-// Move a single-use field address beside the load or store that can encode
-// its displacement. Stay within a short straight-line window and retain
-// the order of every memory access. No register has to survive a call.
-bool place_field_addresses(FunctionContext& context)
+// An SSA index can be recomputed in each consuming block if every use
+// encodes its displacement or scale. Its inputs dominate the original
+// definition and its uses. Loads and stores stay in their original order.
+bool encodable_access(const FunctionBody& body, const Instruction& field, const Instruction& use)
+{
+	const bool store = use.op == Opcode::Store;
+	if ((!store && use.op != Opcode::Load) || !(use.ops[store ? 1 : 0] == Value::temp(field.result)))
+		return false;
+	const auto bytes = storage_bytes(use.type), scale = storage_bytes(field.type);
+	if (!bytes || use.type.is_object() || (bytes > 8 && use.type.kind() != TypeKind::V128))
+		return false;
+	if (field.ops[1].is(ValueKind::Integer))
+	{
+		const auto offset = body.literals[field.ops[1].index].low * scale;
+		return (offset % bytes == 0 && offset / bytes < 4096) || offset + 256 < 512;
+	}
+	return field.ops[1].is(ValueKind::Temp) && bytes <= 8 && (scale == 1 || scale == bytes);
+}
+
+bool place_memory_addresses(FunctionContext& context)
 {
 	auto& body = context.body;
 	const auto& uses = context.entry_uses(sink_addresses);
+	std::vector<uint32_t> encodable;
+	// The complete use count includes calls, phi edges, comparisons, and
+	// storing the pointer itself. Only purely memory-address uses qualify.
+	for (auto block : body.layout)
+		for (auto i = body.blocks[block].first; i != kNoId; i = body.instructions[i].next)
+		{
+			const auto& use = body.instructions[i];
+			if (use.op != Opcode::Load && use.op != Opcode::Store)
+				continue;
+			const auto v = use.ops[use.op == Opcode::Store ? 1 : 0];
+			if (!v.is(ValueKind::Temp) || v.index < body.parameter_count || body.temps[v.index].def == kNoId)
+				continue;
+			const auto& index = body.instructions[body.temps[v.index].def];
+			if (index.op != Opcode::Index || !index.ops[0].is(ValueKind::Temp) ||
+				(index.next == i && uses[v.index] == 1) || !encodable_access(body, index, use))
+				continue;
+			if (encodable.empty())
+				encodable.resize(body.temps.size());
+			++encodable[v.index];
+		}
+	if (encodable.empty())
+		return false;
 	bool changed = false;
-	for (auto b : body.layout)
+	const auto chosen = [&](TempId t) { return t < encodable.size() && encodable[t] && encodable[t] == uses[t]; };
+	for (auto block : body.layout)
 	{
 		InstId prev = kNoId;
-		for (InstId i = body.blocks[b].first; i != kNoId;)
+		for (auto i = body.blocks[block].first; i != kNoId;)
 		{
-			const auto& field = body.instructions[i];
-			const auto next = field.next;
-			bool moved = false;
-			if (next != kNoId && field.op == Opcode::Index && field.ops[0].is(ValueKind::Temp) &&
-				field.ops[1].is(ValueKind::Integer) && uses[field.result] == 1)
+			const auto inst = body.instructions[i];
+			const auto next = inst.next;
+			if (inst.op == Opcode::Index && chosen(inst.result))
 			{
-				const auto offset = body.literals[field.ops[1].index].low * storage_bytes(field.type);
-				InstId prior = i, scan = next;
-				for (unsigned n = 0; scan != kNoId && n < 8; ++n)
-				{
-					const auto& use = body.instructions[scan];
-					if (use.op == Opcode::Call)
-						break;
-					const bool store = use.op == Opcode::Store;
-					if ((store || use.op == Opcode::Load) && use.ops[store ? 1 : 0] == Value::temp(field.result))
-					{
-						const auto bytes = storage_bytes(use.type);
-						if (prior != i && bytes && (bytes <= 8 || use.type.kind() == TypeKind::V128) &&
-							!use.type.is_object() && offset % bytes == 0 && offset / bytes < 4096)
-						{
-							unlink_after(body, b, prev, i);
-							insert_after(body, b, prior, i);
-							moved = changed = true;
-						}
-						break;
-					}
-					prior = scan;
-					scan = use.next;
-				}
+				unlink_after(body, block, prev, i);
+				changed = true;
 			}
-			if (!moved)
+			else
+			{
+				const bool store = inst.op == Opcode::Store;
+				if (store || inst.op == Opcode::Load)
+				{
+					const auto v = inst.ops[store ? 1 : 0];
+					if (v.is(ValueKind::Temp) && chosen(v.index))
+					{
+						const auto copied = body.instructions[body.temps[v.index].def];
+						const auto id = append_instruction(body, copied);
+						const auto tmp = append_temp(body, body.pointer_type(), id);
+						body.instructions[id].result = tmp;
+						insert_after(body, block, prev, id);
+						body.instructions[i].ops[store ? 1 : 0] = Value::temp(tmp);
+					}
+				}
 				prev = i;
+			}
 			i = next;
 		}
+	}
+	if (changed)
+	{
+		context.invalidate_uses();
+		context.invalidate_block_of();
 	}
 	return changed;
 }
@@ -494,7 +531,7 @@ bool sink_addresses(FunctionContext& context)
 	if (!target_model::is_aarch64(context.program.target))
 		return changed;
 	const bool scaled = fold_index_scales(context);
-	return place_field_addresses(context) || scaled || changed;
+	return place_memory_addresses(context) || scaled || changed;
 }
 
 } // namespace opt
