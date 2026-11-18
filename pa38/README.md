@@ -73,9 +73,11 @@ The first fixture set covers these parts of the C17 input profile:
   reuse a tag spelling for an unrelated type; struct and enum tags, typedefs,
   aggregate initialization, C member and array
   designators, member access,
-  function parameters and results, C object linkage and tentative definitions. A C inline definition with
+  function parameters and results, compatible record copy and assignment, C object
+  linkage and tentative definitions. A C inline definition with
   external linkage supplies the external symbol if a file-scope declaration
-  uses `extern` or leaves out `inline`.
+  uses `extern` or leaves out `inline`. GNU `gnu_inline` and `always_inline`
+  attributes can also occur after the return type's pointer operator.
 - C compound literals of scalar, pointer, record and array types, including
   array-bound deduction and designators. Each occurrence denotes an lvalue;
   block-scope objects survive the full expression and file-scope objects have

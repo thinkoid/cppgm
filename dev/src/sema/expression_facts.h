@@ -285,6 +285,10 @@ enum : uint64_t
 	kLiteralCallRaw = 4
 };
 
+// Extra intrinsic facts for GNU checked arithmetic predicates.
+constexpr uint64_t kOverflowPredicate = 1u << 8;
+constexpr unsigned kOverflowResultWidthShift = 9;
+
 struct ExprFacts
 {
 	// 5p5, 5p6: never a reference type; glvalues keep their cv-qualifiers.

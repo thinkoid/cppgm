@@ -1250,6 +1250,7 @@ private:
 	ExprFacts* vector_lane_builtin(const syntax::CallExpr& expr, uint8_t variant, Scope* scope);
 	ExprFacts* vector_shift_builtin(const syntax::CallExpr& expr, uint8_t variant, Scope* scope);
 	ExprFacts* vector_shuffle_builtin(const syntax::CallExpr& expr, uint8_t variant, Scope* scope);
+	ExprFacts* vector_ternary_builtin(const syntax::CallExpr& expr, Scope* scope);
 	ExprFacts* vector_binary_immediate_builtin(const syntax::CallExpr& expr, uint8_t variant, Scope* scope);
 	ExprFacts* vector_permute_builtin(const syntax::CallExpr& expr, uint8_t variant, Scope* scope);
 	ExprFacts* vector_index_shuffle_builtin(const syntax::CallExpr& expr, Scope* scope);

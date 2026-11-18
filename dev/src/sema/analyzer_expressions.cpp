@@ -1029,6 +1029,24 @@ const Type* Analyzer::usual_arithmetic(const Type* a, const Type* b)
 	return CommonType(types_, promoted(a), promoted(b));
 }
 
+static bool CAssignableRecord(const ClassEntity* record)
+{
+	if (!record->complete)
+		return false;
+	for (const DataMember* member = record->members; member != nullptr; member = member->next)
+	{
+		const Type* type = member->variable->type;
+		while (type->kind == TypeKind::Array)
+			type = type->element;
+		if ((type->cv & kConst) != 0)
+			return false;
+		if (const ClassEntity* nested = ClassOf(type))
+			if (!CAssignableRecord(nested))
+				return false;
+	}
+	return true;
+}
+
 bool Analyzer::modifiable_lvalue(const ExprFacts* facts) const
 {
 	// 3.10p10.
@@ -1039,6 +1057,9 @@ bool Analyzer::modifiable_lvalue(const ExprFacts* facts) const
 		return false;
 	if ((type->cv & kConst) != 0)
 		return false;
+	if (c_source_)
+		if (const ClassEntity* record = ClassOf(type))
+			return CAssignableRecord(record);
 	return !IsVoid(type);
 }
 
@@ -1841,9 +1862,9 @@ ExprFacts* Analyzer::assignment(const syntax::BinaryExpr& expr, Scope* scope)
 	}
 	if (typed(*expr.right, scope) == nullptr)
 		return nullptr;
-	if (ExprFacts* overloaded = MayOverload(expr.left) || MayOverload(expr.right) ? binary_operator(expr, scope)
-																				  : nullptr)
-		return overloaded;
+	if (!c_source_ && (MayOverload(expr.left) || MayOverload(expr.right)))
+		if (ExprFacts* overloaded = binary_operator(expr, scope))
+			return overloaded;
 	if (failed())
 		return nullptr;
 	// A class operand of a compound assignment may now stand for its
@@ -1852,7 +1873,7 @@ ExprFacts* Analyzer::assignment(const syntax::BinaryExpr& expr, Scope* scope)
 	// 13.5.3: a class object is assigned by an operator= member (its
 	// implicit copy or move assignment operator at least, 12.8p18-p20).
 	// An invalid assignment in a substitution is its failure (14.8.2p8).
-	if (expr.op == TokenKind::OP_ASS && left->type->unqualified->kind == TypeKind::Class)
+	if (!c_source_ && expr.op == TokenKind::OP_ASS && left->type->unqualified->kind == TypeKind::Class)
 	{
 		substitution_error(expr.location, "no viable assignment operator for the class object");
 		return nullptr;

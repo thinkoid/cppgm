@@ -824,9 +824,11 @@ RValue FunctionLowering::shuffle_vector(const syntax::CallExpr& expr)
 	const sema::Type* vector = expr.facts->type;
 	const bool doubles = vector->bound == 2;
 	const bool paired = expr.arguments.size == 3;
-	const bool words = vector->bound == 8;
+	const bool words = vector->bound == 8 && vector->element->fundamental == FundamentalType::ShortInt;
+	const bool masked = (expr.facts->value >> 18 & 1) != 0;
+	const bool wide_dwords = vector->bound >= 8 && !words;
 	const uint64_t start = words && (expr.facts->value >> 17 & 1) != 0 ? 4 : 0;
-	const uint64_t mask = words ? 3 : vector->bound - 1;
+	const uint64_t mask = words || wide_dwords ? 3 : vector->bound - 1;
 	const RValue first_value = operand(*expr.arguments[0], ConversionContext::Argument);
 	const RValue second_value = paired ? operand(*expr.arguments[1], ConversionContext::Argument) : first_value;
 	const syntax::Expr& selector = *expr.arguments[paired ? 2 : 1];
@@ -856,6 +858,11 @@ RValue FunctionLowering::shuffle_vector(const syntax::CallExpr& expr)
 			convert_op(lowir::ConvertOp::Trunc, lowir::Type::scalar(lowir::TypeKind::I32), count));
 	const lowir::Value first = vector_storage(first_value);
 	const lowir::Value second = paired ? vector_storage(second_value) : first;
+	const lowir::Value merge = masked ? vector_storage(operand(*expr.arguments[2], ConversionContext::Argument))
+									  : lowir::Value();
+	const RValue lanes = masked
+		? convert_op(lowir::ConvertOp::ZExt, i64, operand(*expr.arguments[3], ConversionContext::Argument))
+		: RValue();
 	const uint64_t immediate = expr.facts->value >> 8 & 0xff;
 	lowir::SlotId slot = lowir::kNoId;
 	const lowir::Value out = zeroed_vector(vector, slot);
@@ -866,22 +873,29 @@ RValue FunctionLowering::shuffle_vector(const syntax::CallExpr& expr)
 			set_vector_lane(out, vector, i, vector_lane(first, vector, i));
 			continue;
 		}
-		const uint64_t shift = (i - start) * (doubles ? 1 : 2);
+		const uint64_t half = wide_dwords ? (i & ~uint64_t(3)) : start;
+		const uint64_t shift = (i - half) * (doubles ? 1 : 2);
 		const lowir::Value source = paired && i >= vector->bound / 2 ? second : first;
 		RValue lane;
 		if (runtime)
 		{
 			RValue offset = binary(lowir::BinaryOp::UShr, i64, count, integer(i64, shift));
 			offset = binary(lowir::BinaryOp::And, i64, offset, integer(i64, mask));
-			if (start != 0)
-				offset = binary(lowir::BinaryOp::Add, i64, offset, integer(i64, start));
-			offset = binary(lowir::BinaryOp::Mul, i64, offset, integer(i64, 16 / vector->bound));
+			if (half != 0)
+				offset = binary(lowir::BinaryOp::Add, i64, offset, integer(i64, half));
+			offset = binary(lowir::BinaryOp::Mul, i64, offset, integer(i64, wide_dwords ? 4 : 16 / vector->bound));
 			Place place = Place();
 			place.storage = index(lowir::Type::scalar(lowir::TypeKind::I8), ir_model::IPK_FIELD, source, offset).value;
 			lane = load(lowering_.storage_type(vector->element), place);
 		}
 		else
-			lane = vector_lane(source, vector, start + (immediate >> shift & mask));
+			lane = vector_lane(source, vector, half + (immediate >> shift & mask));
+		if (masked)
+		{
+			const RValue bit = binary(lowir::BinaryOp::And, i64, lanes, integer(i64, uint64_t(1) << i));
+			const RValue enabled = compare(lowir::ComparePredicate::Ne, i64, bit, integer(i64, 0));
+			lane = select_value(enabled, lane, vector_lane(merge, vector, i));
+		}
 		set_vector_lane(out, vector, i, lane);
 	}
 	Place place = Place();

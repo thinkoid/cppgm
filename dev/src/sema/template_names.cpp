@@ -1130,7 +1130,7 @@ void Analyzer::declare_alias_template(const syntax::AliasDecl& decl, Scope* scop
 	// it (14p5 for templates, 3.3.1p4).
 	Specifiers specifiers;
 	this->specifiers(decl.type->specifiers, scope, specifiers, false);
-	if (specifiers.type == nullptr || specifiers.type == auto_placeholder_)
+	if (specifiers.type == nullptr)
 		error(decl.location, "alias-declaration without a type");
 	if (specifiers.declared != nullptr && specifiers.defines)
 		error(decl.location, "a class or enumeration defined in an alias template");
@@ -1138,6 +1138,9 @@ void Analyzer::declare_alias_template(const syntax::AliasDecl& decl, Scope* scop
 		filter_mode_alias(specifiers);
 	const DeclaratorInfo info = declarator(decl.type->declarator, specifiers.type, scope, decl.location,
 		specifiers.mode_specifiers.empty() ? nullptr : &specifiers, DeclaratorUse::TypeId);
+	if ((specifiers.type == auto_placeholder_ || specifiers.type == decltype_auto_placeholder_) &&
+		holds_auto(info.type))
+		error(decl.location, "alias-declaration without a type");
 	check_type_packs(info.type, decl.location);
 	if (info.virt_suffix != nullptr || specifiers.is_virtual)
 		error(decl.location, "a virt-specifier or virtual in an alias-declaration");

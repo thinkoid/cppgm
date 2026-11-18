@@ -2187,17 +2187,32 @@ bool ConstantInterpreter::overflow_builtin(const syntax::CallExpr& expr, ConstVa
 	// it.
 	const Intrinsic which = static_cast<Intrinsic>(expr.facts->value & 0xff);
 	ConstValue a, b, pointer;
-	if (!operand(*expr.arguments[0], a) || !operand(*expr.arguments[1], b) || !operand(*expr.arguments[2], pointer))
+	const bool predicate = (expr.facts->value & kOverflowPredicate) != 0;
+	if (!operand(*expr.arguments[0], a) || !operand(*expr.arguments[1], b))
 		return false;
+	const Type* result_type = expr.arguments[2]->facts->type->unqualified;
+	if (predicate)
+	{
+		if (!discard(*expr.arguments[2]))
+			return false;
+	}
+	else
+	{
+		if (!operand(*expr.arguments[2], pointer))
+			return false;
+		if (pointer.kind != ValueKind::Pointer || pointer.root == RootKind::Null)
+			return fail(expr.location, "an overflow builtin's result through a null pointer");
+		result_type = pointer.type->unqualified->element;
+	}
 	if (a.kind != ValueKind::Integer || b.kind != ValueKind::Integer)
 		return false;
-	if (pointer.kind != ValueKind::Pointer || pointer.root == RootKind::Null)
-		return fail(expr.location, "an overflow builtin's result through a null pointer");
-	const Type* result_type = pointer.type->unqualified->element;
 	IntegralKind left_kind, right_kind, result_kind;
 	if (!IntegralKindOf(a.type, left_kind) || !IntegralKindOf(b.type, right_kind) ||
 		!IntegralKindOf(result_type, result_kind))
 		return false;
+	const uint64_t width = expr.facts->value >> kOverflowResultWidthShift;
+	if (width != 0 && width < result_kind.bits)
+		result_kind.bits = static_cast<uint32_t>(width);
 	ExactInteger x = ExactOf(a, left_kind), y = ExactOf(b, right_kind);
 	if (which == Intrinsic::SubOverflow)
 		y.negative = !y.negative;
@@ -2209,12 +2224,15 @@ bool ConstantInterpreter::overflow_builtin(const syntax::CallExpr& expr, ConstVa
 	const bool zero = exact.low == 0 && exact.high == 0;
 	const bool fits = exact.high == 0 && (!exact.negative || result_kind.is_signed || zero) &&
 		(limit == 0 || exact.low < limit || (exact.negative && result_kind.is_signed && exact.low == limit));
-	const WideBits wrapped = exact.negative ? 0 - exact.low : exact.low;
-	const ConstValue stored = result_kind.bits > 64
-		? WideValue(result_type, wrapped)
-		: IntegerValue(result_type, ConvertIntegral(static_cast<uint64_t>(wrapped), result_kind));
-	if (!write(PlaceOf(pointer, result_type), stored, expr.location))
-		return false;
+	if (!predicate)
+	{
+		const WideBits wrapped = exact.negative ? 0 - exact.low : exact.low;
+		const ConstValue stored = result_kind.bits > 64
+			? WideValue(result_type, wrapped)
+			: IntegerValue(result_type, ConvertIntegral(static_cast<uint64_t>(wrapped), result_kind));
+		if (!write(PlaceOf(pointer, result_type), stored, expr.location))
+			return false;
+	}
 	out = IntegerValue(analyzer_.types_.fundamental(FundamentalType::Bool), fits ? 0 : 1);
 	return true;
 }

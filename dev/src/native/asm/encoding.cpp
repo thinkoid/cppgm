@@ -167,7 +167,11 @@ void encode_instruction(Assembler& out, const assembly::Instruction& inst)
 	uint16_t suffix = 0;
 	const Form* form = asm_detail::assembly_form(inst.mnemonic, suffix, static_cast<uint32_t>(inst.operands.size()));
 	if (form == nullptr)
+	{
+		if (encode_bmi2_shift(out, inst))
+			return;
 		fail(inst, "instruction form is not implemented");
+	}
 	if (form->encoding == Encoding::Control)
 	{
 		encode_control_form(out, inst, *form, suffix);

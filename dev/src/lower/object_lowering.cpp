@@ -1,4 +1,5 @@
 #include "lower/function_lowering.h"
+#include "sema/analyzer.h"
 
 #include "sema/aggregates.h"
 #include "sema/conversions.h"
@@ -892,6 +893,19 @@ void FunctionLowering::materialize_prvalue(const syntax::Expr& expr, lowir::Valu
 		return;
 	}
 	const sema::ExprFacts* facts = e->facts;
+	if (lowering_.analyzer_->c_source() && sema::ClassOf(facts->type) != nullptr)
+	{
+		// C records initialize from their values, without a copy constructor.
+		if (facts->category == sema::ValueCategory::LValue || e->kind == syntax::ExprKind::Assign)
+		{
+			Place target = Place();
+			target.storage = object;
+			const lowir::Type storage = lowering_.storage_type(facts->type);
+			store(storage, rvalue(*e), target);
+			return;
+		}
+	}
+
 	if (e->kind == syntax::ExprKind::Binary &&
 		(facts->flags & (sema::kRewrittenComparison | sema::kUserConverted | sema::kImmediateValue)) ==
 			sema::kRewrittenComparison)

@@ -223,7 +223,7 @@ private:
 	// ------------------------------------------------------- declarators
 	Declarator* parse_declarator(DeclaratorMode mode);
 	bool parse_declarator_into(DeclaratorMode mode, Declarator* declarator);
-	bool parse_ptr_operator(ListFrame<PtrOperator>& pointers);
+	bool parse_ptr_operator(ListFrame<PtrOperator>& pointers, Attribute** inline_attributes);
 	bool parse_declarator_suffixes(DeclaratorMode mode, Declarator* declarator, bool named, Scope* member_of);
 	ParameterClause* parse_parameter_clause(Scope* member_of, bool definite, bool type_only = false);
 	ParameterDeclaration* parse_c_identifier_parameter();

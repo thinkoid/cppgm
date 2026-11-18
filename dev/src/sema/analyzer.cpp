@@ -859,14 +859,16 @@ void Analyzer::alias_declaration(const syntax::AliasDecl& decl, Scope* scope)
 	// A deferred reserved builtin call (see deferrable_statement).
 	if (deferred_reserved_call())
 		return;
-	if (specifiers.type == nullptr || specifiers.type == auto_placeholder_ ||
-		specifiers.type == decltype_auto_placeholder_)
+	if (specifiers.type == nullptr)
 		error(decl.location, "alias-declaration without a type");
 	if (!specifiers.mode_specifiers.empty())
 		filter_mode_alias(specifiers);
 	const DeclaratorInfo info = declarator(decl.type->declarator, specifiers.type, scope, decl.location,
 		specifiers.mode_specifiers.empty() ? nullptr : &specifiers, DeclaratorUse::TypeId);
 	const Type* type = info.type;
+	if ((specifiers.type == auto_placeholder_ || specifiers.type == decltype_auto_placeholder_) &&
+		holds_auto(info.type))
+		error(decl.location, "alias-declaration without a type");
 	check_type_packs(type, decl.location);
 	// 9.2p9, 7.1.2p1: no virt-specifier or function-specifier here.
 	if (info.virt_suffix != nullptr || specifiers.is_virtual)

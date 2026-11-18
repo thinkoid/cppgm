@@ -1488,6 +1488,7 @@ private:
 	// 0 left, 1 logical right, 2 arithmetic right by an int count.
 	RValue shift_lanes(const sema::Type* vector, const RValue& value, const RValue& count, unsigned operation);
 	RValue shuffle_vector(const syntax::CallExpr& expr);
+	RValue ternary_vector(const syntax::CallExpr& expr);
 	RValue binary_immediate_vector(const syntax::CallExpr& expr);
 	RValue immediate_vector(const syntax::CallExpr& expr);
 	bool immediate_vector_helper(lowir::VectorOp operation);
@@ -1693,7 +1694,7 @@ private:
 	RValue source_location(sema::Intrinsic kind, uint32_t location);
 	RValue quiet_bit(const RValue& x);
 	RValue wide_overflow(sema::Intrinsic kind, const RValue& a, const sema::IntegralKind& left_kind, const RValue& b,
-		const sema::IntegralKind& right_kind, const Place& target, lowir::Type stored,
+		const sema::IntegralKind& right_kind, const Place* target, lowir::Type stored,
 		const sema::IntegralKind& result_kind);
 	void push_converted(const syntax::Expr& argument, const sema::Type* parameter, const sema::Conversion* conversion);
 	// ------------------ new and delete (lower/allocation_lowering.cpp)

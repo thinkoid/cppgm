@@ -201,7 +201,10 @@ bool ModuleAssembler::directive(const std::string& name, assembly::ModuleCursor&
 	{
 		if (name == ".pushsection")
 			section_stack_.push_back(section_);
-		std::string section_name = cursor.quoted_start() ? cursor.quoted() : cursor.word();
+		const bool quoted = cursor.quoted_start();
+		std::string section_name = quoted ? cursor.quoted() : cursor.word();
+		while (!quoted && cursor.take('-'))
+			section_name += "-" + cursor.word();
 		if (section_name.empty())
 			cursor.fail("module section name cannot be empty");
 		SectionKind kind = SectionKind::Data;

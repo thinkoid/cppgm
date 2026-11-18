@@ -102,6 +102,7 @@ RValue FunctionLowering::binary_immediate_vector(const syntax::CallExpr& expr)
 		discard(*expr.arguments[2]);
 	if (multiply && !deferred)
 		return vector_instruction(lowir::VectorOp::Pclmulqdq, &first, &second, nullptr, immediate);
+	const bool insertion = (expr.facts->value >> 17 & 1) != 0;
 	const lowir::Value a = vector_storage(first);
 	const lowir::Value b = vector_storage(second);
 	const auto read_word = [&](lowir::Value base, const RValue& offset) {
@@ -124,6 +125,25 @@ RValue FunctionLowering::binary_immediate_vector(const syntax::CallExpr& expr)
 	}
 	lowir::SlotId slot = lowir::kNoId;
 	const lowir::Value out = zeroed_vector(expr.facts->type, slot);
+	if (insertion)
+	{
+		const RValue selected = binary(lowir::BinaryOp::And, i64, count, integer(i64, 1));
+		const sema::Type* type = expr.facts->type;
+		for (uint32_t half = 0; half < 2; ++half)
+		{
+			const RValue replace = compare(lowir::ComparePredicate::Eq, i64, selected, integer(i64, half));
+			for (uint32_t lane = 0; lane < 2; ++lane)
+			{
+				const uint32_t index = half * 2 + lane;
+				const RValue value = select_value(
+					replace, read_word(b, integer(i64, lane * 8)), read_word(a, integer(i64, index * 8)));
+				set_vector_lane(out, type, index, value);
+			}
+		}
+		Place result = Place();
+		result.storage = out;
+		return load(lowering_.storage_type(type), result);
+	}
 	RValue first_address;
 	first_address.type = ptr;
 	first_address.value = a;
@@ -149,6 +169,69 @@ RValue FunctionLowering::binary_immediate_vector(const syntax::CallExpr& expr)
 	Place result = Place();
 	result.storage = lowir::Value::slot(slot);
 	return load(lowering_.storage_type(expr.facts->type), result);
+}
+
+RValue FunctionLowering::ternary_vector(const syntax::CallExpr& expr)
+{
+	using lowir::BinaryOp;
+	const sema::Type* type = expr.facts->type;
+	const lowir::Type word = lowir::Type::scalar(lowir::TypeKind::I32);
+	const RValue zero = integer(word, 0);
+	const RValue ones = integer(word, UINT32_MAX);
+	lowir::Value args[3];
+	for (unsigned i = 0; i < 3; ++i)
+		args[i] = vector_storage(operand(*expr.arguments[i], ConversionContext::Argument));
+	const bool deferred = (expr.facts->value >> 16 & 1) != 0;
+	const unsigned immediate = static_cast<unsigned>(expr.facts->value >> 8 & 255);
+	RValue selector;
+	if (deferred)
+	{
+		selector = operand(*expr.arguments[3], ConversionContext::Argument);
+		builder_.call(lowir::Type::scalar(lowir::TypeKind::Void),
+			lowir::Value::symbol(lowering_.source_immediate_guard()), &selector.value, 1, lowir::kNoId, 0);
+	}
+	else
+		discard(*expr.arguments[3]);
+	const RValue lanes = convert_op(
+		lowir::ConvertOp::ZExt, word, operand(*expr.arguments[4], ConversionContext::Argument));
+	RValue table[8];
+	if (deferred)
+		for (unsigned i = 0; i < 8; ++i)
+			table[i] = binary(BinaryOp::Sub, word, zero,
+				binary(
+					BinaryOp::And, word, binary(BinaryOp::UShr, word, selector, integer(word, i)), integer(word, 1)));
+	lowir::SlotId slot = lowir::kNoId;
+	const lowir::Value out = zeroed_vector(type, slot);
+	for (unsigned lane = 0; lane < type->bound; ++lane)
+	{
+		const RValue a = vector_lane(args[0], type, lane);
+		const RValue b = vector_lane(args[1], type, lane);
+		const RValue c = vector_lane(args[2], type, lane);
+		const RValue inputs[] = { c, b, a };
+		RValue result = zero;
+		if (!deferred && immediate == 0x96)
+			result = binary(BinaryOp::Xor, word, binary(BinaryOp::Xor, word, a, b), c);
+		else
+			for (unsigned i = 0; i < 8; ++i)
+			{
+				if (!deferred && (immediate & (1u << i)) == 0)
+					continue;
+				RValue term = deferred ? table[i] : ones;
+				for (unsigned bit = 0; bit < 3; ++bit)
+				{
+					const RValue value = (i & (1u << bit)) != 0 ? inputs[bit]
+																: binary(BinaryOp::Xor, word, inputs[bit], ones);
+					term = binary(BinaryOp::And, word, term, value);
+				}
+				result = binary(BinaryOp::Or, word, result, term);
+			}
+		const RValue mask = binary(BinaryOp::And, word, lanes, integer(word, uint64_t(1) << lane));
+		const RValue enabled = compare(lowir::ComparePredicate::Ne, word, mask, zero);
+		set_vector_lane(out, type, lane, select_value(enabled, result, a));
+	}
+	Place place = Place();
+	place.storage = out;
+	return load(lowering_.storage_type(type), place);
 }
 
 } // namespace lower

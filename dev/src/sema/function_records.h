@@ -231,6 +231,7 @@ enum class Intrinsic : uint8_t
 	// SSE2 lane shuffles: selector in bits 8-15; bit 16 denotes a
 	// deferred selector; bit 17 selects the high half of eight word lanes.
 	VectorShuffle,
+	VectorTernary,
 	VectorCarrylessMultiply,
 	VectorPermuteHalves,
 	// __builtin_add/sub/mul_overflow(a, b, result): the infinitely precise

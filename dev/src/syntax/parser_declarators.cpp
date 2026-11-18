@@ -138,7 +138,7 @@ bool Parser::ptr_operator_ahead(uint32_t ahead)
 	return false;
 }
 
-bool Parser::parse_ptr_operator(ListFrame<PtrOperator>& pointers)
+bool Parser::parse_ptr_operator(ListFrame<PtrOperator>& pointers, Attribute** inline_attributes)
 {
 	if (c_source_ && (at(TokenKind::OP_AMP) || at(TokenKind::OP_LAND) || member_pointer_ahead(0)))
 		return fail();
@@ -158,12 +158,31 @@ bool Parser::parse_ptr_operator(ListFrame<PtrOperator>& pointers)
 		if (pointer.class_name == nullptr || !expect(TokenKind::OP_COLON2) || !expect(TokenKind::OP_STAR))
 			return false;
 	}
+	// GNU function inline attributes can follow a return pointer's star.
+	const auto parse_attributes = [&]() {
+		if (inline_attributes == nullptr)
+			return skip_attributes();
+		Attribute* attributes = nullptr;
+		if (!collect_attributes(attributes))
+			return false;
+		while (attributes != nullptr)
+		{
+			Attribute* current = attributes;
+			attributes = current->next;
+			if (current->kind == AttributeKind::AlwaysInline || current->kind == AttributeKind::GnuInline)
+			{
+				current->next = *inline_attributes;
+				*inline_attributes = current;
+			}
+		}
+		return true;
+	};
 	if (pointer.kind == TokenKind::OP_STAR || pointer.kind == TokenKind::OP_COLON2 || pointer.kind == TokenKind::OP_XOR)
 	{
 		ListFrame<TokenKind> cv(cvs_);
 		for (;;)
 		{
-			if (!skip_attributes())
+			if (!parse_attributes())
 				return false;
 			if (c_source_ && tok().is_identifier() &&
 				gnu_names_.kind(tok().identifier) == static_cast<uint8_t>(GnuTrait::AddAtomic) + 1)
@@ -187,7 +206,7 @@ bool Parser::parse_ptr_operator(ListFrame<PtrOperator>& pointers)
 		}
 		pointer.cv = cv.take(arena_);
 	}
-	else if (!skip_attributes())
+	else if (!parse_attributes())
 	{
 		return false;
 	}
@@ -251,7 +270,8 @@ bool Parser::parse_declarator_into(DeclaratorMode mode, Declarator* declarator)
 		ListFrame<PtrOperator> pointers(pointers_);
 		while (ptr_operator_ahead(0))
 		{
-			if (!parse_ptr_operator(pointers))
+			if (!parse_ptr_operator(
+					pointers, c_source_ && mode == DeclaratorMode::Named ? &declarator->attributes : nullptr))
 				return false;
 		}
 		declarator->pointers = pointers.take(arena_);

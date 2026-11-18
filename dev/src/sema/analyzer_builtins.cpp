@@ -254,6 +254,8 @@ ExprFacts* Analyzer::builtin_operation(const syntax::CallExpr& expr, const Funct
 		return vector_shift_builtin(expr, variant, scope);
 	case GnuBuiltin::VectorShuffle:
 		return vector_shuffle_builtin(expr, variant, scope);
+	case GnuBuiltin::VectorTernary:
+		return vector_ternary_builtin(expr, scope);
 	case GnuBuiltin::VectorBinaryImmediate:
 		return vector_binary_immediate_builtin(expr, variant, scope);
 	case GnuBuiltin::VectorLanewise:
@@ -617,8 +619,7 @@ ExprFacts* Analyzer::gnu_intrinsic(const syntax::CallExpr& expr, GnuBuiltin buil
 			if (typed_value(*expr.arguments[i], scope) == nullptr)
 				return nullptr;
 			const bool constant = constant_value(*expr.arguments[i], scope, value, false);
-			if (!constant &&
-				(variant == 0 || body_ == nullptr || body_->function == nullptr || !body_->function->always_inline))
+			if (!constant && (body_ == nullptr || body_->function == nullptr || !body_->function->always_inline))
 				error(expr.arguments[i]->location, "a prefetch control must be an integral constant");
 			if (variant == 0 && constant && value.bits > (i == 1 ? 1u : 3u))
 				error(expr.arguments[i]->location, "__builtin_prefetch control is outside its permitted range");
@@ -1161,33 +1162,64 @@ ExprFacts* Analyzer::vector_shuffle_builtin(const syntax::CallExpr& expr, uint8_
 	const bool doubles = variant == 1;
 	const bool words = variant == 2 || variant == 3;
 	const bool floats = variant == 4;
-	const uint32_t count = doubles || floats ? 3 : 2;
+	const bool masked = variant == 6;
+	const uint32_t count = masked ? 4 : doubles || floats ? 3 : 2;
+	const uint32_t selector_index = doubles || floats ? 2 : 1;
 	if (expr.arguments.size != count)
 		error(expr.location, "wrong number of arguments to a packed lane shuffle");
 	const Type* vector = types_.vector(types_.fundamental(words ? FundamentalType::ShortInt
 											   : doubles        ? FundamentalType::Double
 											   : floats         ? FundamentalType::Float
 																: FundamentalType::Int),
-		words         ? 8
-			: doubles ? 2
-					  : 4);
+		masked                      ? 16
+			: words || variant == 5 ? 8
+			: doubles               ? 2
+									: 4);
 	for (uint32_t i = 0; i < count; ++i)
 	{
 		if (typed_value(*expr.arguments[i], scope) == nullptr)
 			return nullptr;
-		convert(*expr.arguments[i], i == count - 1 ? types_.fundamental(FundamentalType::Int) : vector, false);
+		const Type* argument_type = i == selector_index ? types_.fundamental(FundamentalType::Int)
+			: masked && i == 3                          ? types_.fundamental(FundamentalType::UnsignedShortInt)
+														: vector;
+		convert(*expr.arguments[i], argument_type, false);
 	}
 	Constant selector;
-	const bool constant = constant_value(*expr.arguments[count - 1], scope, selector, false);
+	const bool constant = constant_value(*expr.arguments[selector_index], scope, selector, false);
 	if (!constant && template_depth_ == 0 &&
 		(body_ == nullptr || body_->function == nullptr || !body_->function->always_inline))
-		error(expr.arguments[count - 1]->location,
+		error(expr.arguments[selector_index]->location,
 			"a packed lane shuffle selector that is no integral constant expression");
 	ExprFacts* facts = new_facts(expr, vector, ValueCategory::PRValue);
 	facts->flags |= kIntrinsic;
 	facts->value = static_cast<uint64_t>(Intrinsic::VectorShuffle) |
 		(constant ? (selector.bits & (doubles ? 3U : 255U)) << 8 : uint64_t(1) << 16) |
-		(variant == 3 ? uint64_t(1) << 17 : 0);
+		(variant == 3 ? uint64_t(1) << 17 : 0) | (masked ? uint64_t(1) << 18 : 0);
+	return facts;
+}
+
+ExprFacts* Analyzer::vector_ternary_builtin(const syntax::CallExpr& expr, Scope* scope)
+{
+	if (expr.arguments.size != 5)
+		error(expr.location, "wrong number of arguments to a masked ternary logic operation");
+	const Type* vector = types_.vector(types_.fundamental(FundamentalType::Int), 16);
+	const Type* integer = types_.fundamental(FundamentalType::Int);
+	const Type* args[] = { vector, vector, vector, integer, types_.fundamental(FundamentalType::UnsignedShortInt) };
+	for (uint32_t i = 0; i < 5; ++i)
+	{
+		if (typed_value(*expr.arguments[i], scope) == nullptr)
+			return nullptr;
+		convert(*expr.arguments[i], args[i], false);
+	}
+	Constant selector;
+	const bool constant = constant_value(*expr.arguments[3], scope, selector, false);
+	if (!constant && template_depth_ == 0 &&
+		(body_ == nullptr || body_->function == nullptr || !body_->function->always_inline))
+		error(expr.arguments[3]->location, "a ternary logic selector that is no integral constant expression");
+	ExprFacts* facts = new_facts(expr, vector, ValueCategory::PRValue);
+	facts->flags |= kIntrinsic;
+	facts->value = static_cast<uint64_t>(Intrinsic::VectorTernary) |
+		(constant ? (selector.bits & 255U) << 8 : uint64_t(1) << 16);
 	return facts;
 }
 
@@ -1200,7 +1232,10 @@ ExprFacts* Analyzer::vector_binary_immediate_builtin(const syntax::CallExpr& exp
 	{
 		if (typed_value(*expr.arguments[i], scope) == nullptr)
 			return nullptr;
-		convert(*expr.arguments[i], i == 2 ? types_.fundamental(FundamentalType::Int) : vector, false);
+		const Type* type = i == 2    ? types_.fundamental(FundamentalType::Int)
+			: variant == 2 && i == 1 ? types_.vector(vector->element, 2)
+									 : vector;
+		convert(*expr.arguments[i], type, false);
 		if (failed())
 			return nullptr;
 	}
@@ -1220,7 +1255,7 @@ ExprFacts* Analyzer::vector_binary_immediate_builtin(const syntax::CallExpr& exp
 	facts->flags |= kIntrinsic;
 	facts->value = static_cast<uint64_t>(
 					   variant == 0 ? Intrinsic::VectorCarrylessMultiply : Intrinsic::VectorPermuteHalves) |
-		(constant ? (selector.bits & 255U) << 8 : uint64_t(1) << 16);
+		(constant ? (selector.bits & 255U) << 8 : uint64_t(1) << 16) | (variant == 2 ? uint64_t(1) << 17 : 0);
 	return facts;
 }
 
@@ -1406,7 +1441,10 @@ ExprFacts* Analyzer::overflow_builtin(const syntax::CallExpr& expr, uint8_t vari
 	// GCC's __builtin_add/sub/mul_overflow(a, b, r): a and b of integral
 	// or unscoped enumeration type (bool too; both host compilers), promoted,
 	// and r a pointer to a non-const integral object (no bool or
-	// enumeration); a bool.
+	// enumeration); a bool. The _p forms take an expression of the result
+	// type and evaluate it for effects only.
+	const bool predicate = variant >= 3;
+	uint32_t result_width = 0;
 	if (expr.arguments.size != 3)
 		error(expr.location, "wrong number of arguments to an overflow builtin");
 	for (uint32_t i = 0; i < 3; ++i)
@@ -1417,6 +1455,19 @@ ExprFacts* Analyzer::overflow_builtin(const syntax::CallExpr& expr, uint8_t vari
 		const Type* type = operand->type->unqualified;
 		if (i == 2)
 		{
+			if (predicate)
+			{
+				if (!IsIntegralType(type) || type->fundamental == FundamentalType::Bool)
+					error(expr.arguments[i]->location, "an overflow predicate's result type is no integer");
+				if ((operand->flags & kBitField) != 0 && operand->entity != nullptr &&
+					operand->entity->kind == EntityKind::Variable)
+				{
+					const DataMember* member = static_cast<const VariableEntity*>(operand->entity)->data_member;
+					if (member != nullptr && member->bit_field)
+						result_width = member->width;
+				}
+				continue;
+			}
 			const Type* pointer = type->kind == TypeKind::Array ? types_.pointer(type->element) : type;
 			const Type* result = pointer->kind == TypeKind::Pointer ? pointer->element : nullptr;
 			if (result == nullptr || (result->cv & kConst) != 0 || !IsIntegralType(result->unqualified) ||
@@ -1432,7 +1483,9 @@ ExprFacts* Analyzer::overflow_builtin(const syntax::CallExpr& expr, uint8_t vari
 	}
 	ExprFacts* facts = new_facts(expr, types_.fundamental(FundamentalType::Bool), ValueCategory::PRValue);
 	facts->flags |= kIntrinsic;
-	facts->value = static_cast<uint64_t>(Intrinsic::AddOverflow) + variant;
+	facts->value = static_cast<uint64_t>(Intrinsic::AddOverflow) + (predicate ? variant - 3 : variant);
+	if (predicate)
+		facts->value |= kOverflowPredicate | (static_cast<uint64_t>(result_width) << kOverflowResultWidthShift);
 	return facts;
 }
 

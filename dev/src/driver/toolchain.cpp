@@ -12,6 +12,7 @@
 
 #include "abi/itanium/abi_encoding_error.h"
 #include "driver/host_environment.h"
+#include "driver/native_assembly.h"
 #include "driver/wasm_environment.h"
 #include "driver/wasm_link_options.h"
 #include "lex/post_token_writer.h"
@@ -860,6 +861,8 @@ bool compile_lowir_unit(const std::string& path, const Invocation& invocation, n
 bool compile_input(const Input& input, const Invocation& invocation, native::EhModel eh_model,
 	native::object::ObjectFile& object, const std::string* lowir_output = nullptr)
 {
+	if (input.kind == Input::Kind::Assembly)
+		return compile_native_assembly(input.name, invocation.preprocessor, invocation.target, object);
 	return input.kind == Input::Kind::LowIR ? compile_lowir_unit(input.name, invocation, eh_model, object, lowir_output)
 											: compile_unit(input.name, invocation, eh_model, object, lowir_output);
 }
@@ -923,8 +926,8 @@ int compile_mode(const Invocation& invocation)
 	{
 		if (input.kind == Input::Kind::Library)
 			continue;
-		if (input.kind != Input::Kind::Source && input.kind != Input::Kind::LowIR)
-			throw InvocationError("-c needs C++ source or LowIR inputs: " + input.name);
+		if (input.kind == Input::Kind::Object)
+			throw InvocationError("-c needs source, assembly or LowIR inputs: " + input.name);
 		native::object::ObjectFile object;
 		const std::string output = default_output_name(invocation, input);
 		if (invocation.emit_lowir)
@@ -975,7 +978,8 @@ int link_mode(const Invocation& invocation)
 	{
 		objects.push_back(native::object::ObjectFile());
 		native::object::ObjectFile& object = objects.back();
-		if (input.kind == Input::Kind::Source || input.kind == Input::Kind::LowIR)
+		if (input.kind == Input::Kind::Source || input.kind == Input::Kind::LowIR ||
+			input.kind == Input::Kind::Assembly)
 		{
 			if (!compile_input(input, invocation, native::EhModel::Course, object))
 				return EXIT_FAILURE;
@@ -1286,8 +1290,8 @@ int run_toolchain(const std::vector<std::string>& args, const PreprocessorOption
 	const Invocation invocation = parse(args, base);
 	for (const Input& input : invocation.inputs)
 		if (input.kind == Input::Kind::Assembly &&
-			(!target_model::is_wasm(invocation.target) || invocation.preprocess_only || invocation.syntax_only))
-			throw InvocationError("Wasm assembly requires a Wasm compile or link invocation");
+			(invocation.preprocess_only || invocation.syntax_only || invocation.emit_lowir))
+			throw InvocationError("assembly input requires a compile or link invocation");
 
 	if (!target_model::is_wasm(invocation.target) && !invocation.exports.empty())
 		throw InvocationError("explicit function exports require a Wasm target");

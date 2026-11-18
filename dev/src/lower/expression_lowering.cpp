@@ -1902,8 +1902,6 @@ Place FunctionLowering::assignment(const syntax::BinaryExpr& expr)
 	// 5.17p1: the right operand is evaluated before the left's address.
 	const sema::ExprFacts* left_facts = WithoutParentheses(expr.left)->facts;
 	const sema::Type* type = left_facts->type;
-	if (type->unqualified->kind == sema::TypeKind::Class)
-		throw LoweringError(expr.location, "class assignment is outside the procedural lowering slice");
 	RValue value;
 	if (expr.right->kind == syntax::ExprKind::BracedInit)
 	{
@@ -1912,6 +1910,18 @@ Place FunctionLowering::assignment(const syntax::BinaryExpr& expr)
 		value = sema::LaneList(type, list) ? vector_list(type, list)
 			: list.elements.empty()        ? zero_value(type)
 										   : operand(*list.elements[0], ConversionContext::Assignment);
+	}
+	else if (sema::ClassOf(type) != nullptr)
+	{
+		const syntax::Expr* source = WithoutParentheses(expr.right);
+		if (source->facts->category == sema::ValueCategory::PRValue && source->kind != syntax::ExprKind::Assign)
+		{
+			Place temporary = Place();
+			temporary.storage = temporary_object(*source);
+			value = load(lowering_.storage_type(type), temporary);
+		}
+		else
+			value = rvalue(*source);
 	}
 	else
 	{

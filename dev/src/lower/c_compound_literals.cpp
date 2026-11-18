@@ -1,6 +1,7 @@
 #include "lower/function_lowering.h"
 
 #include "sema/conversions.h"
+#include "sema/aggregates.h"
 
 namespace lower {
 
@@ -30,6 +31,8 @@ Place FunctionLowering::compound_literal(const syntax::FunctionalCastExpr& expr)
 	else if (sema::ClassOf(type) != nullptr)
 		aggregate_object(type, AddressPath{ AddressPath::Root::Storage, object.storage, path_steps_.size() },
 			expr.braced, true, expr.location);
+	else if (sema::LaneList(type, *expr.braced))
+		store(lowering_.storage_type(type), vector_list(type, *expr.braced), object);
 	else
 	{
 		const RValue value = expr.braced->elements.empty()

@@ -51,7 +51,31 @@ void emit(Assembler& out, const VexForm& form, unsigned bits, unsigned reg, unsi
 		out.byte(control);
 }
 
+} // namespace
+
+bool encode_bmi2_shift(Assembler& out, const Instruction& inst)
+{
+	const std::string& name = inst.mnemonic;
+	const uint8_t prefix = name.compare(0, 4, "shlx") == 0 ? 1
+		: name.compare(0, 4, "sarx") == 0                  ? 2
+		: name.compare(0, 4, "shrx") == 0                  ? 3
+														   : 0;
+	if (prefix == 0 || (name.size() != 4 && (name.size() != 5 || (name.back() != 'l' && name.back() != 'q'))))
+		return false;
+	if (inst.prefix != 0 || inst.operands.size() != 3 || inst.operands[0].kind != OperandKind::Register ||
+		inst.operands[2].kind != OperandKind::Register)
+		fail(inst, "BMI2 shift requires a register destination, register or memory source, and register count");
+	const unsigned suffix = name.size() == 4 ? 0 : name.back() == 'q' ? 64 : 32;
+	const unsigned bits = asm_detail::integer_width(inst, static_cast<uint16_t>(suffix));
+	if (bits != 32 && bits != 64)
+		fail(inst, "BMI2 shift requires 32-bit or 64-bit operands");
+	const VexForm form = { nullptr, L::Move, 0xf7, 2, prefix, static_cast<uint8_t>(bits == 64), 0, 0, 0, 0 };
+	emit(out, form, bits, asm_detail::physical(inst.operands[0].reg, inst),
+		asm_detail::physical(inst.operands[2].reg, inst), asm_detail::rm(inst.operands[1], inst), form.opcode, false,
+		0);
+	return true;
 }
+
 void encode_vex_plan(Assembler& out, const x86_asm_model::VexForm& form, const VectorEncodingPlan& plan)
 {
 	emit(out, form, plan.bits, plan.reg, plan.source, plan.other, plan.opcode, plan.has_immediate, plan.control);

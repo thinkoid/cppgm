@@ -72,9 +72,31 @@ uint32_t reference(const std::string& source, std::size_t& pos, const std::vecto
 void pieces(PacketBuilder& packet, const std::string& source, const std::vector<GnuOperand>& operands, bool basic)
 {
 	std::string literal;
+	bool alternatives = false;
+	bool selected = true;
 	for (std::size_t pos = 0; pos < source.size();)
 	{
 		const char c = source[pos++];
+		// Source GNU packets use AT&T, the first dialect alternative.
+		if (!basic && c == '{')
+		{
+			if (alternatives)
+				fail("nested assembly dialect alternatives");
+			alternatives = true;
+			continue;
+		}
+		if (alternatives && (c == '|' || c == '}'))
+		{
+			alternatives = c != '}';
+			selected = !alternatives;
+			continue;
+		}
+		if (!selected)
+		{
+			if (c == '%' && pos < source.size())
+				++pos;
+			continue;
+		}
 		if (c != '%' || basic)
 		{
 			literal += c;
@@ -131,6 +153,7 @@ void pieces(PacketBuilder& packet, const std::string& source, const std::vector<
 					piece.bits = 512;
 					break;
 				case 'P':
+				case 'X': // Raw spelling without a PIC suffix.
 				case 'c':
 					piece.format = Format::Bare;
 					break;
@@ -157,6 +180,8 @@ void pieces(PacketBuilder& packet, const std::string& source, const std::vector<
 		}
 		packet.pieces.push_back(piece);
 	}
+	if (alternatives)
+		fail("unterminated assembly dialect alternatives");
 	text(packet, literal);
 }
 

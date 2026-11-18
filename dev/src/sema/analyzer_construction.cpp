@@ -1517,8 +1517,9 @@ FunctionEntity* Analyzer::initialize_object(
 {
 	// 8.5: an object (or reference) of `type` from its initializer; the
 	// constructor a class object runs is returned.
-	if (ClassEntity* entity = type->is_reference() || type->kind == TypeKind::Array ? nullptr : ObjectClass(type))
-		return initialize_class(entity, type, init, scope, location);
+	if (!c_source_ && !type->is_reference() && type->kind != TypeKind::Array)
+		if (ClassEntity* entity = ObjectClass(type))
+			return initialize_class(entity, type, init, scope, location);
 	const syntax::Expr* single = nullptr;
 	bool direct = false;
 	switch (init.kind)

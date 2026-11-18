@@ -425,6 +425,8 @@ RValue FunctionLowering::gnu_intrinsic(const syntax::CallExpr& expr, sema::Intri
 		return shift_vector_lanes(expr);
 	case sema::Intrinsic::VectorShuffle:
 		return shuffle_vector(expr);
+	case sema::Intrinsic::VectorTernary:
+		return ternary_vector(expr);
 	case sema::Intrinsic::VectorCarrylessMultiply:
 	case sema::Intrinsic::VectorPermuteHalves:
 		return binary_immediate_vector(expr);
@@ -948,18 +950,26 @@ RValue FunctionLowering::overflow_intrinsic(const syntax::CallExpr& expr, sema::
 		: expr.arguments[1]->facts->type;
 	const RValue a = operand(*expr.arguments[0], ConversionContext::Argument);
 	const RValue b = operand(*expr.arguments[1], ConversionContext::Argument);
-	const RValue pointer = operand(*expr.arguments[2], ConversionContext::Argument);
+	const bool predicate = (expr.facts->value & sema::kOverflowPredicate) != 0;
 	const sema::Type* result_type = expr.arguments[2]->facts->type->unqualified;
-	result_type = result_type->element->unqualified;
+	Place target = Place();
+	if (predicate)
+		discard(*expr.arguments[2]);
+	else
+	{
+		target.storage = operand(*expr.arguments[2], ConversionContext::Argument).value;
+		result_type = result_type->element->unqualified;
+	}
 	sema::IntegralKind left_kind, right_kind, result_kind;
 	sema::IntegralKindOf(left_type, left_kind);
 	sema::IntegralKindOf(right_type, right_kind);
 	sema::IntegralKindOf(result_type, result_kind);
+	const uint64_t width = expr.facts->value >> sema::kOverflowResultWidthShift;
+	if (width != 0 && width < result_kind.bits)
+		result_kind.bits = static_cast<uint32_t>(width);
 	const lowir::Type stored = lowering_.storage_type(result_type);
 	const lowir::Type i64 = lowir::Type::scalar(lowir::TypeKind::I64);
-	Place target = Place();
-	target.storage = pointer.value;
-	const bool same = left_type->unqualified == result_type && right_type->unqualified == result_type;
+	const bool same = width == 0 && left_type->unqualified == result_type && right_type->unqualified == result_type;
 	if (same && (kind != sema::Intrinsic::MulOverflow || result_kind.bits == 32) && result_kind.bits >= 32)
 	{
 		const lowir::Type type = a.type;
@@ -970,12 +980,14 @@ RValue FunctionLowering::overflow_intrinsic(const syntax::CallExpr& expr, sema::
 			const RValue wide_b = convert_op(widen, i64, b);
 			const RValue wide = binary(lowir::BinaryOp::Mul, i64, convert_op(widen, i64, a), wide_b);
 			const RValue narrow = convert_op(lowir::ConvertOp::Trunc, type, wide);
-			store(stored, narrow, target);
+			if (!predicate)
+				store(stored, narrow, target);
 			return compare(lowir::ComparePredicate::Ne, i64, wide, convert_op(widen, i64, narrow));
 		}
 		const bool add = kind == sema::Intrinsic::AddOverflow;
 		const RValue r = binary(add ? lowir::BinaryOp::Add : lowir::BinaryOp::Sub, type, a, b);
-		store(stored, r, target);
+		if (!predicate)
+			store(stored, r, target);
 		if (!result_kind.is_signed)
 			return add ? compare(lowir::ComparePredicate::Ult, type, r, a)
 					   : compare(lowir::ComparePredicate::Ult, type, a, b);
@@ -987,7 +999,7 @@ RValue FunctionLowering::overflow_intrinsic(const syntax::CallExpr& expr, sema::
 		return compare(lowir::ComparePredicate::Lt, type, signs, integer(type, 0));
 	}
 	if (left_kind.bits > 64 || right_kind.bits > 64 || result_kind.bits > 64)
-		return wide_overflow(kind, a, left_kind, b, right_kind, target, stored, result_kind);
+		return wide_overflow(kind, a, left_kind, b, right_kind, predicate ? nullptr : &target, stored, result_kind);
 	const lowir::Type i128 = lowir::Type::scalar(lowir::TypeKind::I128);
 	const auto widen = [&](const RValue& value, const sema::IntegralKind& kind) {
 		return convert_op(kind.is_signed ? lowir::ConvertOp::SExt : lowir::ConvertOp::ZExt, i128, value);
@@ -997,7 +1009,8 @@ RValue FunctionLowering::overflow_intrinsic(const syntax::CallExpr& expr, sema::
 																	: lowir::BinaryOp::Mul;
 	const RValue wide_b = widen(b, right_kind);
 	const RValue r = binary(op, i128, widen(a, left_kind), wide_b);
-	store(stored, convert_op(lowir::ConvertOp::Trunc, stored, r), target);
+	if (!predicate)
+		store(stored, convert_op(lowir::ConvertOp::Trunc, stored, r), target);
 	const uint32_t bits = result_kind.bits;
 	const uint64_t max = result_kind.is_signed ? (uint64_t(1) << (bits - 1)) - 1
 		: bits == 64                           ? ~uint64_t(0)
@@ -1012,7 +1025,7 @@ RValue FunctionLowering::overflow_intrinsic(const syntax::CallExpr& expr, sema::
 }
 
 RValue FunctionLowering::wide_overflow(sema::Intrinsic kind, const RValue& a, const sema::IntegralKind& left_kind,
-	const RValue& b, const sema::IntegralKind& right_kind, const Place& target, lowir::Type stored,
+	const RValue& b, const sema::IntegralKind& right_kind, const Place* target, lowir::Type stored,
 	const sema::IntegralKind& result_kind)
 {
 	// A 128-bit operand or result: each operand as a sign and a 128-bit
@@ -1090,9 +1103,12 @@ RValue FunctionLowering::wide_overflow(sema::Intrinsic kind, const RValue& a, co
 	// Stored modulo 2^N; representable when below 2^(N-1) (2^N unsigned)
 	// in magnitude, or 2^(N-1) itself negative and signed, never negative
 	// and unsigned (but zero).
-	const RValue mask = binary(lowir::BinaryOp::Sub, i128, zero, negative);
-	const RValue value = binary(lowir::BinaryOp::Sub, i128, binary(lowir::BinaryOp::Xor, i128, result, mask), mask);
-	store(stored, result_kind.bits == 128 ? value : convert_op(lowir::ConvertOp::Trunc, stored, value), target);
+	if (target != nullptr)
+	{
+		const RValue mask = binary(lowir::BinaryOp::Sub, i128, zero, negative);
+		const RValue value = binary(lowir::BinaryOp::Sub, i128, binary(lowir::BinaryOp::Xor, i128, result, mask), mask);
+		store(stored, result_kind.bits == 128 ? value : convert_op(lowir::ConvertOp::Trunc, stored, value), *target);
+	}
 	const unsigned bits = result_kind.bits - (result_kind.is_signed ? 1 : 0);
 	const lowir::Literal limit_bits = bits >= 128 ? lowir::Literal{ ~uint64_t(0), ~uint64_t(0) }
 		: bits >= 64                              ? lowir::Literal{ ~uint64_t(0), (uint64_t(1) << (bits - 64)) - 1 }

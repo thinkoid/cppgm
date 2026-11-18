@@ -128,6 +128,7 @@ private:
 	uint32_t strtab_ = 0;
 	uint32_t shstrtab_ = 0;
 	bool extended_ = false;
+	bool has_stack_note_ = false;
 };
 
 uint32_t Encoder::section_name(bool rela, uint32_t name)
@@ -217,6 +218,8 @@ void Encoder::add_contents()
 		const Section& from = object_.sections[s];
 		OutputSection section = OutputSection();
 		section.name = section_name(false, from.name);
+		if (from.kind == SectionKind::Metadata && std::strcmp(object_.string(from.name), ".note.GNU-stack") == 0)
+			has_stack_note_ = true;
 		section.type = section_type(from.kind);
 		section.flags = section_flags(from.kind) | (from.group != kNoGroup ? kShfGroup : 0);
 		const bool nobits = from.kind == SectionKind::Bss || from.kind == SectionKind::TlsBss;
@@ -325,12 +328,14 @@ void Encoder::encode(std::vector<uint8_t>& out)
 	shstrtab.type = kShtStrtab;
 	shstrtab.align = 1;
 	OutputSection stack = OutputSection();
-	stack.name = name(".note.GNU-stack", "");
+	if (!has_stack_note_)
+		stack.name = name(".note.GNU-stack", "");
 	stack.type = kShtProgbits;
 	stack.align = 1;
 	shstrtab.built.assign(names_.begin(), names_.end());
 	sections_.push_back(std::move(shstrtab));
-	sections_.push_back(std::move(stack));
+	if (!has_stack_note_)
+		sections_.push_back(std::move(stack));
 	write(out);
 }
 
