@@ -3,7 +3,7 @@
 On x86 Linux, QEMU can execute the same AArch64 ELF files that the native Arm
 benchmark lane measures. Use emulation to find expensive instruction sequences.
 Use the native lane for hardware timings and counters.
-[Current self-build and program measurements](../../docs/performance/aarch64-codegen-20261118.md) · [Original baseline](../../docs/performance/aarch64-qemu-20261117.md)
+[Current optimization measurements](../../docs/performance/aarch64-optimization-gaps.md) · [Previous self-build and program measurements](../../docs/performance/aarch64-codegen-20261118.md) · [Original baseline](../../docs/performance/aarch64-qemu-20261117.md)
 
 ## Programs and NEON
 

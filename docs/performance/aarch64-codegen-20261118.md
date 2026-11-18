@@ -147,3 +147,5 @@ and missed its 25% release margin. The repeat measured 2.13 and 2.07.
 Reproduce the full comparison with the paired rebuild and guest profiling
 commands. The final ELF SHA-256 was `5ce319c4418711ac5cf01a301c27d04283cca9b8d9dedd3cae54634f323ff6c1`.
 [Reproduction commands](../../benchmarks/aarch64/README.md)
+
+The subsequent allocator experiments, instruction attribution and paired rebuilds are recorded in the [Arm optimization investigation](aarch64-optimization-gaps.md).

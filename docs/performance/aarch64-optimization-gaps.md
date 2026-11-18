@@ -1,0 +1,376 @@
+# Where the AArch64 backend spends its instructions
+
+This investigation compares Linux AArch64 executables under QEMU user mode
+10.2.1 on an x86-64 host, using the Cortex-A53 CPU model. The compiler workload
+compares two Arm executables of **cppgm** built from matching sources, one
+by Clang 22.1.2 and one by cppgm. The application workload compares programs
+built by the two different compilers. The previous full rebuild took **1.337×**
+as long in the self-built compiler as in the Clang-built compiler.
+[Previous measurements and reproduction commands](aarch64-codegen-20261118.md)
+
+## Attribution on the compiler itself
+
+Each column below counts millions of guest instructions to compile the same
+frozen cppgm translation unit at O3. For each compiler revision, the Clang-built
+and cppgm-built compilers produced byte-identical target objects. Different
+revisions can produce different machine code. This makes the Clang-built
+compiler a control for the extra work of changing the compiler algorithm itself.
+
+| Change in the self-built compiler | Vector selector | Loop vectorizer | Host environment |
+| --- | ---: | ---: | ---: |
+| Previous measured backend | 1,280 | 7,121 | 2,418 |
+| Free argument registers between calls, select integer immediates and remainders | 1,185 | 6,694 | 2,260 |
+| Use x86 per-block intervals and the interference tree, prefer a phi partner's register | 1,151 | 6,536 | 2,195 |
+| Add the exceptional predecessors already used on x86 | 1,091 | 5,712 | 2,006 |
+| Select from comparison flags, fuse branches, remove redundant extensions | 1,032 | 5,320 | 1,882 |
+| Copy objects using bounded register transfers and wider loops | 991 | 5,153 | 1,822 |
+| Enable loop-literal holding and fix NEON packing scratch, a57b21310 | 990 | 5,159 | 1,823 |
+| Select narrow comparisons, indices and constant power-of-two scales, 81df21b7c | 872 | 4,427 | 1,589 |
+| Keep scalar FP operations in SIMD registers and select widening and narrowing, c916a559d | 872 | 4,427 | 1,589 |
+| Fold shifted operands and 32-bit conversions, pair callee saves and use the allocated indirect-call register, 836846bb9 | 856 | 4,386 | 1,568 |
+| Transfer independent scalar, SIMD and spilled phi inputs directly, d3e0a40bd | 844 | 4,273 | 1,537 |
+| Clang-built cppgm control at d3e0a40bd | 567 | 2,664 | 998 |
+| Keep dying scalar arguments in their outgoing registers, 4c5e16765 | 845 | 4,263 | 1,537 |
+| Combine adjacent halves of a packed integer load in the shared optimizer, e9f3089c2 | 845 | 4,264 | 1,537 |
+| Clang-built cppgm control at e9f3089c2 | 568 | 2,672 | 999 |
+| Share x86 block frequencies when simultaneous integer values exceed Arm register capacity, 0b396b840 | 837 | 4,112 | 1,499 |
+| Clang-built cppgm control at 0b396b840 | 568 | 2,678 | 1,000 |
+| Compare switch values against immediate operands and branch directly to cases with no phi transfers | 804 | 3,959 | 1,442 |
+| Use the shared dense-switch planner to select Arm jump tables, 16bbf1f0d | 794 | 3,920 | 1,427 |
+| Clang-built cppgm control at 16bbf1f0d | 568 | 2,679 | 1,000 |
+| Write addresses, narrow results and phi reloads directly to the allocated register, 745793f39 | 761 | 3,785 | 1,372 |
+| Clang-built cppgm control at 745793f39 | 568 | 2,678 | 1,000 |
+| Resolve small parallel scalar copies with the same scheduling rule on x86 and Arm, e388a3f7b | 751 | 3,745 | 1,354 |
+| Fold frame offsets and the zero register into memory operands, 5f5dcaa8f | 741 | 3,708 | 1,337 |
+| Place unconditional jump targets without breaking existing fallthrough, ca01d358d | 741 | 3,708 | 1,337 |
+| Keep an indexed address live when a second field displacement cannot fold, b08f2acd8 | 740 | 3,693 | 1,334 |
+| Pair adjacent stores and fall through after conditional phi copies, 0f09ba077 | 735 | 3,672 | 1,326 |
+| Clang-built cppgm control at 0f09ba077 | 568 | 2,678 | 1,000 |
+| Pass naturally aligned eight-byte integer aggregates as scalars, e81d18f06 | 734 | 3,463 | 1,315 |
+| Use the named slot as the incoming aggregate home, f0cd28853 | 733 | 3,450 | 1,313 |
+| Clang-built cppgm control at f0cd28853 | 568 | 2,582 | 1,000 |
+| Select paired Arm loads, 3e4dc2762 | 734 | 3,450 | 1,313 |
+| Use constant select operands and fuse multiply-add addresses, 709d060ce | 726 | 3,419 | 1,301 |
+| Clang-built cppgm control at 709d060ce | 568 | 2,582 | 1,001 |
+
+The largest allocation gain on the compiler inputs came from exceptional
+control flow. Arm previously reserved every cross-block value for the whole
+function if the function had a handler. Sharing the exceptional predecessor
+graph lets it preserve a value across the particular call that can unwind into
+its handler. The five public programs showed essentially unchanged counts in
+that experiment. A public-only screen would have undervalued the change.
+
+### Last-stage compiler rebuild
+
+A is the AArch64 executable of cppgm compiled by Clang. B is the AArch64
+executable of cppgm compiled by cppgm. Each then compiles the entire compiler
+from an empty object directory under QEMU. Each revision has its own matching
+A and B. The four A-only calibration builds precede an ABBA and a BAAB block.
+Elapsed seconds and aggregate child CPU seconds below are arithmetic means
+of the four comparison runs per executable. Ratios come from the paired
+blocks. Concurrent host activity affects both.
+
+| Compiler revision | Jobs | A elapsed | B elapsed | B/A elapsed, per block | B/A CPU, per block | A/A elapsed |
+| --- | ---: | ---: | ---: | --- | --- | ---: |
+| Shared live segments, a57b21310 | 24 | 164.6 s | 159.6 s | 1.239×, 0.826× | 1.256×, 1.040× | 0.884× |
+| Pressure-aware allocation, 0b396b840 | 24 | 204.5 s | 238.7 s | 1.213×, 1.132× | 1.206×, 1.200× | 1.028× |
+| Dense switch selection, 16bbf1f0d | 16 | 251.7 s | 301.7 s | 1.060×, 1.321× | 1.089×, 1.280× | 0.937× |
+
+At 0b396b840, the paired ratios were **1.173× elapsed** and **1.203× aggregate
+CPU**. Both compilers rebuilt exactly the same 497 objects and the resulting
+executable matched the self-built input. The earlier checkpoint's wall blocks
+went in opposite directions. The absolute seconds between checkpoints also
+include changes in host load. At 16bbf1f0d the paired slowdown was 1.190×
+elapsed and 1.185× CPU. Both compilers reproduced the same 497 objects and
+the self-built input executable in every build.
+
+## From hot blocks to candidate changes
+
+The QEMU instruction plugin counted all executed guest instructions. For
+attribution we replayed the same commands with the hot-block plugin reporting
+every entry. We disassembled each measured ELF, credited each instruction in
+a translated block with its execution count, and grouped the result by opcode,
+operand and symbol. The largest difference between reconstructed and counted
+totals for the three compiler inputs at a57b21310 was below 0.02%. QEMU
+translation blocks and successful guest instructions can differ around exits.
+Frame-relative memory includes arguments, locals, callee saves and spills.
+The move category includes register copies, FP transfers and materializing
+constants. These categories locate work for inspection. Causal estimates come
+from separately built compiler variants.
+
+| Workload and observation | Disassembly and resulting decision |
+| --- | --- |
+| Compiling the loop vectorizer, before segmented allocation | cppgm executed about 1.48 billion more SP/FP-relative memory instructions than Clang-built cppgm. Reused x86 live intervals and exceptional edges before changing instruction patterns. At a57b21310 the excess was 417 million. |
+| Compiling the loop vectorizer, after segmented allocation | Moves and constant materialization still cost about 882 million excess instructions and explicit width operations cost 422 million. In `restore_definition_order`, comparing a loaded byte with a small enum constant took two copies, two extensions and a register comparison. AArch64 can compare the already normalized byte against an immediate. |
+| Identifier scanning | `PPLexer::take_identifier_bytes` copied a table base and a byte subscript into scratch registers and extended the subscript again before loading. The Arm selector now consumes the same typed indexed address as x86 and uses the target's extend-and-scale addressing forms. Signed byte/short indices have separate treatment. |
+| Hash lookup | The hot loop built each of two 64-bit multiplicands with four instructions per iteration. The existing loop-literal pass initially missed a guarded loop with no dedicated preheader. Allowing these effect-free copies in its dominating test removed **33.6 million** instructions on this workload alone. |
+| Object copies | Two of the most frequently entered blocks of the self-built compiler copied eight bytes with seven instructions per trip. Arm now loads both ends before storing short copies, uses paired 128-bit transfers in longer loops, and chooses the direction when ranges can overlap. This follows the Wasm small-object strategy and preserves page boundaries. |
+| Matrix multiplication | At a57b21310 cppgm executed about 715 million more move/materialization instructions and 718 million fewer non-frame memory instructions than Clang. The total was already lower than Clang's. Allocating scalar floats to SIMD registers and selecting FP loads, stores and arithmetic directly reduced cppgm's count from 1,837 million to 1,709 million. |
+| Bubble sort | Clang carries one adjacent element in a register. Its hot comparison reads one new element, while cppgm reads both. At a57b21310 non-frame memory instructions were 37.9 million versus 19.0 million. Both paths return to a latch placed after the function epilogue, adding a second opportunity to improve the loop. A loop-carried load transformation needs a proof covering both the swap and the no-swap backedges. |
+| Puzzle | A loop trip copied a W register immediately before comparing its low 32 bits and branching. This sequence ran 52.6 million times. Folding single-use truncations into their consuming W comparisons and combining shifted operands removed 79 million instructions on this input. |
+| SIMD and the memory kernel | The NEON arithmetic kernel ran exactly 192,938,048 guest instructions with either producer. In the memory workload the most heavily weighted checksum block was the same six instructions in both ELFs. Attribute time in the common harness before drawing conclusions about the kernel body. |
+
+On the loop-vectorizer compile, 2.49 billion excess instructions remained at
+a57b21310. After the operand and phi changes, 1.61 billion remained. The same
+Clang-built control compiled the input in about 2.66 billion instructions in
+both comparisons. Direct inspection separated the largest remaining classes.
+
+| Excess executed instructions over Clang, millions | a57b21310 | d3e0a40bd | 0b396b840 | 16bbf1f0d | 0f09ba077 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Moves and materializing constants | 882 | 413 | 420 | 303 | 204 |
+| Frame-relative loads and stores | 417 | 345 | 160 | 160 | 99 |
+| Other loads and stores | 266 | 266 | 265 | 265 | 253 |
+| Explicit integer widths | 422 | 112 | 112 | 91 | 61 |
+| Conditional branches | 52 | 52 | 52 | 25 | 25 |
+| Unconditional jumps and returns | 92 | 91 | 94 | 92 | 71 |
+| Calls | 2 | 2 | 1 | 1 | 1 |
+| Other instructions | 363 | 328 | 329 | 304 | 280 |
+
+At 0b396b840 the same three compiler inputs also ran without instrumentation
+on a pinned x86 CPU. The median self-built / Clang-built CPU-time ratios were
+**1.24×**, **1.27×** and **1.28×**, respectively. Four paired blocks alternated
+ABBA and BAAB after an identical-compiler calibration. The vectorizer’s
+individual ratios ranged from 1.19× to 1.67×. Each run checked the emitted
+object. At 0f09ba077 the corresponding time ratios were **1.086×**, **1.209×**
+and **1.282×**. The host-environment input ranged from 1.089× to 1.584× over
+its four blocks. These observations measure one translation unit at a time.
+
+The frame-relative count includes prologues and epilogues. For example,
+`MemoryForwarding::may_alias` reserves 352 bytes and saves ten callee-saved
+registers even on early-return paths. x86 already moves some saves and restores
+down into the paths that need them. That is a separate opportunity from choosing
+which values should spill. The nearly unchanged ordinary memory and branch counts
+also show where additional improvements in register-only instructions have
+limited leverage.
+
+### Choosing a spill priority
+
+Three private comparisons used the same inputs to separate the value of
+prioritization from its compile-time cost. Sorting every non-straight-line
+function by raw use counts put the compiler input panel at **839 / 4,194 /
+1,516 million** guest instructions. It increased the hash and memory kernels
+from 139.1 to 147.5 million and 42.1 to 44.2 million. Replacing raw counts
+with x86’s Wu–Larus block-frequency estimator improved the compiler panel
+to **825 / 4,101 / 1,482 million**, but still increased the hash kernel.
+
+A second allocation only after observing a spill protected the kernels but
+added optimizer work. The Clang-built compiler took 2,718 million instructions
+on the loop vectorizer in that experiment. The retained policy first counts
+simultaneous integer and pointer values in the existing live segments. It uses
+the preserved-register limit across calls and the full GPR limit elsewhere.
+Only functions exceeding that lower bound pay for loop frequencies and
+priority sorting. The Clang-built control used 2,678 million instructions,
+versus 2,672 million before the priority experiment. The self-built compiler
+saved 152 million on the same input. The nine application counts retained the
+earlier gains.
+
+### Switch dispatch
+
+At 0b396b840 the self-built compiler executed 223 million `mov` instructions
+with an immediate or a special register operand on the loop-vectorizer input.
+Disassembly showed enum switches repeatedly materializing a constant and
+comparing two registers. Encoding an immediate in `cmp` and branching directly
+to a case with no edge transfers removed 153 million guest instructions.
+Arm now uses the same density and range planner as x86 and Wasm. A dense Arm
+switch subtracts the low case, performs an unsigned bounds check, computes a
+PC-relative table address with `adr`, and branches through a table of local
+branches. Holes go to the default. A case that needs phi transfers keeps
+its explicit edge. This removed another 39 million instructions on the same
+input. The jump table needs no embedded host address on Linux or Darwin.
+
+Immediate and special-register moves fell to 126 million after both changes.
+The full move and materialization category still exceeds Clang by 303 million.
+The hottest remaining copies include arguments shuffled around calls, scalar
+values temporarily written to the stack on phi edges, and narrow values
+extended in a scratch register before a second move. Those are distinct from
+ordinary register-pressure spills.
+
+### What happened to the remaining copies and branches
+
+The loop-vectorizer input at 16bbf1f0d had a hot parallel copy that stored
+registers into temporary frame slots, reloaded each into scratch, then copied
+it to its destination. Writing addresses and canonical narrow values into
+their assigned registers saved 135 million instructions on that input.
+For small parallel copies, both native backends now emit a move whose
+destination nobody still needs to read. A cycle saves one value in scratch
+and redirects its readers there. Arm can also schedule full-sized scalar
+spill slots. An independent simultaneous-assignment oracle exercised every
+mapping of one through six destinations to registers or distinct literals,
+including cycles and repeated sources, **126,125 cases**. Larger or mixed
+Arm transfers retain the existing fallback. The x86 caller uses the shared
+scheduler for small general-register copies. Its existing general resolver
+still handles its memory-address and SIMD dependencies.
+
+Bubble sort's conditional swap showed where selection and placement interact.
+The old latch sat after the function's return. Moving it beside the swap
+removed 18.8 million instructions. Arm also kept the array element's address
+in a register because an indexed A64 load cannot also encode a field
+displacement. That removed another 6.4 million. In the taken arm, one
+`stp wB, wA, [xBase]` now covers the two adjacent nonvolatile stores without
+a separate address calculation. At 0f09ba077 Bubble sort runs 107.7 million
+instructions against Clang's 88.6 million. Its two consecutive reads can also
+share one instruction. `ldp wA, wB, [xBase]` saves 12.5 million more, bringing
+the count to **95.2 million**. The selector checks the exact read widths,
+address, stride, volatility, single-use index and distinct result registers.
+
+We also tried forwarding the next iteration's element through a loop phi. The
+proof used the identical SSA index arriving on the backedge and split the
+taken entry edge so a zero-trip loop acquired no memory read. The transformation
+removed one load per iteration. Before improving edge layout it **increased**
+the count from 120.5 to 126.7 million. With paired stores and the improved
+layout it moved 107.70 to 107.39 million. The extra phi moves and branches
+nearly canceled the load saving, so this transformation remains an experiment.
+
+### Aggregates at function boundaries
+
+The typed LowIR representation of cppgm’s own `Type` packs several bitfields
+in eight bytes. Both Arm ABIs pass it in one general-purpose register.
+Previously the optimizer recognized only a single eight-byte member. In
+`normalize_integer`, cppgm wrote the incoming value to the stack, copied it
+into a second home, and then read the fields. Clang used the incoming register.
+Applying the existing scalar-boundary pass to all known integer-class shapes
+of size and alignment eight reduced the frame from 80 to 64 bytes. The
+self-built compiler saved 209 million instructions on the loop vectorizer.
+The Clang-built control also saved 96 million, so part of the benefit was
+less work to optimize the target translation unit.
+
+Two-word aggregates require separate treatment. An eight-aligned pair can
+start at an odd general register on Linux. An `i128` carrier can skip that
+register, and the Darwin stack layout also depends on alignment. A trial
+scalarized general two-word results and only sixteen-aligned two-word
+arguments. Its compiler panel used 745 / 3,618 / 1,335 million instructions,
+versus 734 / 3,463 / 1,315 million with the one-word change. We retained
+the one-word rule. The mixed-Clang fixture checks bitfields, both pair
+alignments, a floating homogeneous aggregate and a returned pair.
+
+Arm can still avoid redundant homes for parameters wider than a word.
+The x86 selector already puts a single-use incoming aggregate into its named
+slot when its first access is a whole-object copy. Wasm resolves the same
+copy to a slot using LowIR address facts. Arm and Wasm now share that
+whole-copy check. On Arm it applies to initial copies on a non-reentered
+entry block with independent, suitably aligned slots. Cross-block reads of
+the slot still use its original address. This removed another 12.8 million
+instructions on the loop vectorizer.
+
+## Generated applications
+
+The starting column uses the previous published Arm checkpoint. The generated-program
+columns count guest instructions in millions, including the harness and any
+linked runtime. All nine binaries produced the expected output. The four
+kernels exercise calls, hash lookup, object memory operations and SIMD. The
+public panel contains the five fixed programs used in the previous comparison.
+
+| Workload | Previous cppgm | cppgm at 16bbf1f0d | cppgm at 709d060ce | Clang 22 |
+| --- | ---: | ---: | ---: | ---: |
+| primes | 1,351.7 | 610.8 | 610.8 | 703.0 |
+| Bubblesort | 171.1 | 145.8 | 95.2 | 88.6 |
+| FloatMM | 2,382.5 | 1,218.7 | 1,218.7 | 1,923.0 |
+| Puzzle | 837.1 | 469.2 | 458.0 | 407.8 |
+| Treesort | 199.6 | 170.1 | 168.4 | 155.4 |
+| calls | 91.8 | 74.4 | 74.4 | 61.3 |
+| lookup | 356.1 | 139.1 | 132.7 | 113.6 |
+| memory | 47.4 | 42.1 | 42.1 | 36.8 |
+| vectors | 192.9 | 192.9 | 192.9 | 192.9 |
+
+Two earlier changes had a larger effect on individual programs than on the compiler inputs. An argument that dies at a call
+can already occupy its outgoing register. Intersecting eligible registers over
+every use, including indirect targets and repeated arguments, saved **46.3
+million** instructions on `primes`. In `lookup`, the two adjacent 32-bit fields
+of a key now compile to one 64-bit load. A bounded same-block proof checks the
+offset, operand widths, single uses and intervening effects. The wider load
+carries no source-language alias-type promise. This removed **24.6 million**
+instructions on `lookup`.
+
+The remaining `lookup` probe computes a table address from a slot number and a
+12-byte stride. Clang holds the stride in a register and uses `umaddl`. cppgm
+initially materialized the stride and used separate multiply and add
+instructions. At 709d060ce the selector emits `madd` to calculate the
+whole address, saving 6.4 million instructions.
+On `Treesort`, the allocator and C library also matter to interpretation. The
+two binaries spend virtually the same 87 million instructions inside
+`_int_malloc`, `__libc_malloc2` and `malloc`. The application function
+`Trees(int)` accounts for most of the excess.
+
+The complete memory kernel costs cppgm 42.1 million instructions to Clang’s
+36.8 million. The common driver accounts for the same 31.5 million in both.
+Inside `transform`, the figures are **10.61 million versus 5.30 million**.
+Both compilers emit NEON. cppgm processes four integers per branch with
+separate indexed addresses, vector multiply and vector add. Clang processes
+eight, uses paired vector loads and stores and uses the integer multiply-
+accumulate instruction. This differs from the explicit-SIMD kernel, whose
+two binaries execute exactly the same instruction count.
+
+### Application throughput under QEMU
+
+The five public ELFs and the kernel executable are byte-identical between
+0b396b840 and 16bbf1f0d for each producer. The same timed run applies to both
+revisions. Each position averages five fresh emulator launches. The first
+two four-position blocks compare Clang against itself, followed by four
+alternating ABBA and BAAB blocks. Every launch checks exit status and output.
+Throughput is Clang CPU time divided by cppgm CPU time. A value above 1 means
+the cppgm-generated application ran faster.
+
+| Workload | cppgm throughput / Clang | Range across four paired blocks | Clang / Clang calibration |
+| --- | ---: | ---: | ---: |
+| primes | 1.060× | 0.88–1.21× | 1.033× |
+| Bubblesort | 0.805× | 0.74–0.97× | 1.042× |
+| FloatMM | 1.086× | 0.87–1.20× | 1.107× |
+| Puzzle | 0.812× | 0.70–0.88× | 1.006× |
+| Treesort | 0.990× | 0.85–1.03× | 1.004× |
+| calls | 1.176× | 0.81–2.20× | 1.215× |
+| lookup | 0.896× | 0.87–0.98× | 1.218× |
+| memory | 0.808× | 0.65–1.76× | 0.904× |
+| vectors | 1.038× | 0.71–1.18× | 0.952× |
+
+The geometric mean is **0.943×** for the five public programs and **0.969×**
+for the four kernels. Bubble sort and Puzzle were slower in all four paired
+blocks. SIMD ran identical instruction counts. Its paired blocks crossed 1.0.
+The short calls and memory kernels had wide block ranges, and the identical
+binary calibration on calls and lookup was more than 20% from 1. Treat small
+time differences on this host as unresolved.
+
+## Which decisions the targets share
+
+| Decision | Implementations using it |
+| --- | --- |
+| LowIR simplification, inlining, loop transforms, address sinking and vectorization | x86, Arm and Wasm consume the shared typed optimizer. Profitability and instruction legalization depend on the target. |
+| Dense switch range, density and default holes | All three targets share the same planner. x86 and Arm encode local branches and Wasm emits structured `br_table` dispatch. |
+| Sequential storage for eligible addressable frame slots | All three call the same frame-lifetime analysis. Wasm and Arm also share the check for a whole incoming object copied into one named slot. |
+| Bounded SSA predecessor walk, per-block live segments, loop-backedge phi writes, exception predecessors and the interference tree | Arm and x86 use the same implementation. The x86 selector supplies early and late reads for two-address instructions. Arm supplies separate read and write slots, reserved scratches, both register banks and the AAPCS64/Darwin call rules. |
+| Reusing a storage location after its last use | Arm spills and Wasm locals use the same interval-slot pool, partitioned by compatible storage. The Wasm engine assigns physical host registers. |
+| Spill priority and edge transfers | x86 estimates execution frequency, can split a range around loops and schedules parallel register and memory moves. Both native targets weight uses at their blocks, including a phi input at its predecessor. Arm retains start order when the live segments fit the register set and prefers an available phi partner. It transfers registers and scalar spill slots directly when independent. Small scalar cycles can use the shared resolver and one scratch register. Complex edges retain the memory snapshot. Arm still budgets snapshot space conservatively. |
+| Floating-point ABI | Linux and Darwin Arm use SIMD registers for scalar floating arguments and results. Arm keeps eligible scalar FP values in that bank through arithmetic. A value spanning a call can use a preserved GPR or a spill slot. Full-width vector preservation has different ABI rules. |
+
+[Shared live segments](../../dev/src/machine/ssa_segments.h) ·
+[Shared block frequencies](../../dev/src/machine/block_frequency.h) ·
+[Shared switch planner](../../dev/src/machine/switch_plan.h) ·
+[Shared interference tree](../../dev/src/machine/register_pressure.cpp) ·
+[Shared exceptional predecessors](../../dev/src/machine/exception_predecessors.h) ·
+[Shared storage pool](../../dev/src/machine/interval_slots.h) ·
+[x86 allocation](../../dev/src/native/select/register_allocation.cpp) ·
+[Wasm local allocation](../../dev/src/wasm/local_lifetimes.cpp)
+
+## Measurement controls
+
+We used the existing x86 procedure of screening on immutable binaries and
+frozen compiler inputs, checking emitted objects and inspecting instructions
+before changing policy. The Wasm procedure supplied the distinction between
+deterministic execution counts, bounded code shape and elapsed time. Linux
+and Darwin use the same selector with distinct ABI rules. Native Apple
+Silicon and Linux Arm timings need separate hardware runs.
+
+The mixed-producer PA39 fixtures exercise live values at an exception
+landing, byte/short indexing and comparisons, saturation in a vectorized
+loop, mixed-width floating calls, and object copies next to an inaccessible
+page. The pre-existing field-projection fixture also exposed a cost of widening
+two words before a phi whose consumer reads only one field. The shared
+optimization now requires a local whole-word consumer, preserving the typed
+narrow loads in that case. Two informational references returning both words
+were regenerated with the course tools. The vectorized test caught a hard-coded
+v0 scratch overwriting a live value. The mixed-producer switch fixture covers signed
+64-bit selectors, holes, callbacks and values beyond the case range. A compiler comparison on five public sources also produced
+byte-identical x86 and Wasm objects at O0 and O3, twenty comparisons in all.
+
+[x86 investigation method](llvm-gap-strategy-20261110.md) ·
+[Wasm qualification](../wasm32-completion-status.md) ·
+[QEMU comparison runner](../../scripts/aarch64_qemu_profile.py)

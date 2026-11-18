@@ -212,7 +212,7 @@ The Wasm SIMD128 and scalar workloads time warmed exports in one engine.
 Arm64 kernel timings include integer and floating-point NEON. Linux Arm64
 hardware supplies the timings in this table. On x86, QEMU can check the same
 executables, time a compiler rebuild and count guest instructions.
-[Local QEMU results and instruction profiles](docs/performance/aarch64-codegen-20261118.md)
+[Arm optimization results and instruction profiles](docs/performance/aarch64-optimization-gaps.md) · [Earlier QEMU measurements](docs/performance/aarch64-codegen-20261118.md)
 
 [Native self-build reports](https://github.com/vishvananda/cppgm/blob/benchmark-badges/self-build-hosts.md) · [simdjson](benchmarks/simdjson/README.md) · [PA37 workloads](pa37/benchmarks/README.md) · [WASI self-build](scripts/experimental/README.md#full-compiler-benchmark) · [Arm kernels](docs/aarch64-backend-plan.md) · [Local Arm benchmark instructions](benchmarks/aarch64/README.md) · [Dedicated Intel measurements](docs/performance/intel-benchmarks.md)
 
