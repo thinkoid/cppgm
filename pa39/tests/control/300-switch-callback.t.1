@@ -2,7 +2,7 @@ extern "C" int dispatch(int, int (*)(int), int);
 int twice(int x) { return 2 * x; }
 extern "C" int dense(long, int (*)(int), int);
 int main() {
-    const int expected[] = {27, 27, 21, 3, 27, 9, 9, 98, 19, 27, -7, 23, 27, 27};
+    static const int expected[] = {27, 27, 21, 3, 27, 9, 9, 98, 19, 27, -7, 23, 27, 27};
     for (int i = 0; i < 14; ++i)
         if (dense(i - 7, twice, 7) != expected[i]) return 1;
     if (dense(0x100000000L, twice, 7) != 27 || dense(-0x100000000L, twice, 7) != 27) return 2;
