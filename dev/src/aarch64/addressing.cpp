@@ -77,11 +77,22 @@ InstId Selector::address_sequence(InstId id)
 				(!store || data.is(ValueKind::Temp) || data.is(ValueKind::Integer) || data.is(ValueKind::Float)))
 			{
 				const unsigned base = address_register(index.ops[0], 10);
-				const unsigned reg = store               ? operand_register(data, memory.type, 9)
+				const unsigned fp = !memory.type.is_float() ? kNoId
+					: !store                                ? vectors_[memory.result]
+					: data.is(ValueKind::Temp)              ? vectors_[data.index]
+															: kNoId;
+				const unsigned reg = fp != kNoId         ? fp
+					: store                              ? operand_register(data, memory.type, 9)
 					: registers_[memory.result] == kNoId ? 9
 														 : registers_[memory.result];
 				if (literal)
-					access(store, reg, base, displacement, bytes);
+				{
+					if (fp == kNoId)
+						access(store, reg, base, displacement, bytes);
+					else
+						out_.emit(bytes == 4 ? (store ? Op::StrS : Op::LdrS) : (store ? Op::StrD : Op::LdrD), reg, base,
+							0, (displacement / bytes) << 10);
+				}
 				else
 				{
 					unsigned subscript = operand_register(offset, type, 11);
@@ -91,10 +102,12 @@ InstId Selector::address_sequence(InstId id)
 						subscript = 11;
 					}
 					const unsigned index_extension = bits == 64 ? 3 : sign ? 6 : 2;
-					out_.emit(indexed_access(store, bytes), reg, base, subscript,
-						(index_extension << 13) | ((scale != 1) << 12));
+					const Op op = fp == kNoId ? indexed_access(store, bytes)
+						: bytes == 4          ? (store ? Op::StrSReg : Op::LdrSReg)
+											  : (store ? Op::StrDReg : Op::LdrDReg);
+					out_.emit(op, reg, base, subscript, (index_extension << 13) | ((scale != 1) << 12));
 				}
-				if (!store)
+				if (!store && fp == kNoId)
 					save(reg, memory.result, memory.type.kind() != TypeKind::I1);
 				return index.next;
 			}

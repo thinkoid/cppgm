@@ -379,6 +379,8 @@ void Selector::value(unsigned reg, Value operand, Type type)
 			if (!type.is_pointer())
 				access(false, reg, reg, 0, storage_bytes(type));
 		}
+		else if (vectors_[operand.index] != kNoId)
+			fp_move(false, vectors_[operand.index], reg, body_.temps[operand.index].type);
 		else if (registers_[operand.index] != kNoId)
 			move(reg, registers_[operand.index]);
 		else
@@ -403,7 +405,9 @@ void Selector::save(unsigned reg, TempId temp, bool normalized)
 		throw AArch64Error("unsupported AArch64 result type");
 	if (!normalized)
 		extend(reg, integer_bits(type.kind()), false);
-	if (registers_[temp] != kNoId)
+	if (vectors_[temp] != kNoId)
+		fp_move(true, vectors_[temp], reg, type);
+	else if (registers_[temp] != kNoId)
 		move(registers_[temp], reg);
 	else
 		access(true, reg, frame_base(), homes_[temp], 8);

@@ -15,3 +15,10 @@ struct Box { long* value; };
 extern "C" Word word_after_eight(long, long, long, long, long, long, long, long bias, Word w, Box b) {
     return Word{bias + w.value + *b.value};
 }
+
+extern "C" double fp_peer(double, float);
+extern "C" double sum_samples(const float* a, const double* b, int n) {
+    double sum = 0.5;
+    for (int i = 0; i < n; ++i) sum += a[i] * b[i];
+    return fp_peer(sum, a[0]) - sum;
+}

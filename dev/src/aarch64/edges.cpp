@@ -54,25 +54,37 @@ void Selector::copy_edge(BlockId from, BlockId to)
 bool Selector::register_edge(BlockId from, BlockId to)
 {
 	// Commit in order only when an earlier write cannot destroy a later source.
-	uint32_t written = 0;
+	uint32_t written[2] = {};
 	const auto first = body_.blocks[to].first;
 	for (auto i = first; i != kNoId && body_.instructions[i].op == Opcode::Phi; i = body_.instructions[i].next)
 	{
 		const auto& phi = body_.instructions[i];
 		const auto source = phis_.incoming(body_, i, from);
-		const auto dest = registers_[phi.result];
+		const bool simd = vectors_[phi.result] != kNoId;
+		const auto dest = simd ? vectors_[phi.result] : registers_[phi.result];
 		if (dest == kNoId ||
 			!(source.is(ValueKind::Integer) || source.is(ValueKind::Temp) || source.is(ValueKind::Float)))
 			return false;
-		if (source.is(ValueKind::Temp) && registers_[source.index] != kNoId &&
-			(written & (1u << registers_[source.index])))
-			return false;
-		written |= 1u << dest;
+		if (source.is(ValueKind::Temp))
+		{
+			const bool vector_source = vectors_[source.index] != kNoId;
+			const auto reg = vector_source ? vectors_[source.index] : registers_[source.index];
+			if (reg != kNoId && (written[vector_source] & (1u << reg)))
+				return false;
+			if (simd == vector_source && reg == dest)
+				continue;
+		}
+		written[simd] |= 1u << dest;
 	}
 	for (auto i = first; i != kNoId && body_.instructions[i].op == Opcode::Phi; i = body_.instructions[i].next)
 	{
 		const auto& phi = body_.instructions[i];
-		value(registers_[phi.result], phis_.incoming(body_, i, from), phi.type);
+		const auto source = phis_.incoming(body_, i, from);
+		if (vectors_[phi.result] != kNoId)
+			vector_move(vectors_[phi.result],
+				phi.type.kind() == TypeKind::V128 ? vector_value(source, 16) : fp_operand(source, phi.type, 16));
+		else
+			value(registers_[phi.result], source, phi.type);
 	}
 	return true;
 }
@@ -88,8 +100,9 @@ void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch
 		{
 			const auto& phi = body_.instructions[i];
 			const auto source = phis_.incoming(body_, i, block);
-			if (!level_ || !source.is(ValueKind::Temp) || registers_[phi.result] == kNoId ||
-				registers_[phi.result] != registers_[source.index])
+			if (!level_ || !source.is(ValueKind::Temp) ||
+				!((registers_[phi.result] != kNoId && registers_[phi.result] == registers_[source.index]) ||
+					(vectors_[phi.result] != kNoId && vectors_[phi.result] == vectors_[source.index])))
 				return false;
 		}
 		return true;

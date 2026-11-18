@@ -12,7 +12,12 @@ extern "C" Large peer_large(Large l) {
 struct Word { long value; };
 struct Box { long* value; };
 extern "C" Word word_after_eight(long, long, long, long, long, long, long, long, Word, Box);
+extern "C" double sum_samples(const float*, const double*, int);
+extern "C" double fp_peer(double x, float y) { return x * 2.0 + y; }
 int main() {
+    const float a[] = {-2.0f, 0.5f, 8.0f};
+    const double b[] = {3.0, -4.0, 0.25};
+    if (sum_samples(a, b, 3) != -7.5 || sum_samples(a, b, 0) != -1.5) return 2;
     long delta = -4;
     if (word_after_eight(1,2,3,4,5,6,7,8, Word{30}, Box{&delta}).value != 34) return 1;
     Four f = {{1, 2, 3, 4}};

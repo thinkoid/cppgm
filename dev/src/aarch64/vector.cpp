@@ -178,6 +178,10 @@ void Selector::vector_instruction(const lowir::Instruction& inst)
 			}
 		switch (op)
 		{
+		case VectorOp::Cvtps2pd:
+		case VectorOp::Cvtpd2ps:
+			out_.emit(op == VectorOp::Cvtps2pd ? Op::VFcvtl : Op::VFcvtn, dest, left);
+			break;
 		case VectorOp::Movhlps:
 			out_.emit(Op::VZip2, dest, right, left, 3u << 22);
 			break;

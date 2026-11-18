@@ -126,6 +126,11 @@ void Selector::parameter(TempId id, const Argument& arg)
 	}
 	else
 	{
+		if (arg.bank == Bank::Simd && vectors_[id] != kNoId)
+		{
+			vector_move(vectors_[id], arg.first);
+			return;
+		}
 		const unsigned dest = registers_[id] == kNoId ? 10 : registers_[id];
 		if (arg.bank == Bank::Stack)
 			access(false, dest, frame_base(), offset, storage_bytes(type));
@@ -184,6 +189,8 @@ void Selector::pass(const Argument& arg, Value src, Type type, unsigned copy_off
 	}
 	else if (type.kind() == TypeKind::V128 && arg.bank == Bank::Simd)
 		vector_move(arg.first, vector_value(src, 16));
+	else if (arg.bank == Bank::Simd && type.is_float() && !memory_value(type))
+		vector_move(arg.first, fp_operand(src, type, 16));
 	else if (type.kind() == TypeKind::I128 && arg.bank == Bank::General)
 		pair(src, arg.first, arg.first + 1);
 	else if (memory_value(type))
@@ -243,12 +250,10 @@ void Selector::call(const lowir::Instruction& inst)
 		home_address(10, inst.result);
 		transfer(false, ret, 10, inst.type);
 	}
+	else if (ret.bank == Bank::Simd)
+		save_fp(0, inst.result);
 	else
-	{
-		if (ret.bank == Bank::Simd)
-			fp_move(false, 0, 0, inst.type);
 		save(0, inst.result);
-	}
 }
 
 void Selector::epilogue(const lowir::Instruction& inst)
@@ -271,12 +276,12 @@ void Selector::epilogue(const lowir::Instruction& inst)
 			transfer(true, result_, 10, type);
 		}
 	}
+	else if (type.is_float())
+		vector_move(0, fp_operand(inst.ops[0], type, 16));
 	else if (type.kind() != TypeKind::Void)
 	{
 		value(0, inst.ops[0], type);
-		if (type.is_float())
-			fp_move(true, 0, 0, type);
-		else if (named_.darwin && type.is_integer() && integer_bits(type.kind()) < 32)
+		if (named_.darwin && type.is_integer() && integer_bits(type.kind()) < 32)
 			extend(0, integer_bits(type.kind()), !is_unsigned(type.kind()) && type.kind() != TypeKind::I1);
 	}
 	if (frame_)

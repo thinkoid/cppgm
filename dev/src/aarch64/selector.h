@@ -58,6 +58,8 @@ private:
 	void pass(const Argument& arg, lowir::Value src, lowir::Type type, unsigned copy_offset);
 	void transfer(bool load, const Argument& arg, unsigned base, lowir::Type type);
 	void float_instruction(const lowir::Instruction& inst);
+	unsigned fp_operand(lowir::Value operand, lowir::Type type, unsigned scratch);
+	void save_fp(unsigned reg, lowir::TempId temp);
 	void fp_move(bool to_fp, unsigned fp, unsigned gp, lowir::Type type);
 	bool floating(const lowir::Instruction& inst) const;
 	uint32_t reserve(uint64_t size, uint32_t alignment);

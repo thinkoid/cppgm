@@ -71,6 +71,10 @@
 	M(StpQPost, 0xac800000) \
 	M(LdpQPre, 0xadc00000) \
 	M(StpQPre, 0xad800000) \
+	M(LdrSReg, 0xbc600800) \
+	M(StrSReg, 0xbc200800) \
+	M(LdrDReg, 0xfc600800) \
+	M(StrDReg, 0xfc200800) \
 	M(LdrBReg, 0x38600800) \
 	M(StrBReg, 0x38200800) \
 	M(LdrHReg, 0x78600800) \
@@ -145,6 +149,8 @@
 	M(VMul, 0x4e209c00) \
 	M(VAnd, 0x4e201c00) \
 	M(VOrr, 0x4ea01c00) \
+	M(VFcvtl, 0x0e617800) \
+	M(VFcvtn, 0x0e616800) \
 	M(VEor, 0x6e201c00) \
 	M(VBic, 0x4e601c00) \
 	M(VCmeq, 0x6e208c00) \

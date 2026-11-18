@@ -97,7 +97,7 @@ void Selector::allocate()
 			continue;
 		const auto arg = args.next(param.type, param.shape);
 		if ((arg.bank == Bank::General && !memory_value(param.type)) ||
-			(arg.bank == Bank::Simd && param.type.kind() == TypeKind::V128))
+			(arg.bank == Bank::Simd && (param.type.kind() == TypeKind::V128 || !memory_value(param.type))))
 			incoming[id] = arg.first;
 	}
 	const uint32_t slots = 2 * (body_.instructions.size() + body_.layout.size()) + 3;
@@ -119,6 +119,17 @@ void Selector::allocate()
 		uint32_t arguments = at_call ? 0 : 0xff;
 		if (range.first == 0)
 			arguments &= range.id < incoming.size() && incoming[range.id] != kNoId ? 1u << incoming[range.id] : 0;
+		if (type.is_float() && !memory_value(type))
+		{
+			if (!across_call)
+				vectors_[range.id] = simd.assign(
+					range, arguments | 0xfffc0000, range.affinity == kNoId ? kNoId : vectors_[range.affinity]);
+			if (vectors_[range.id] != kNoId)
+				continue;
+			// The incoming SIMD argument does not own the corresponding GPR.
+			if (range.first == 0)
+				arguments = 0;
+		}
 		if (memory_value(type))
 		{
 			// Argument registers are free between calls. A quadword
