@@ -19,7 +19,7 @@ Holding the *current* compiler source fixed changes which experiment to promote.
 
 An independent experiment held the compiler source fixed at a0bb0662a. Two versions of the cppgm code generator, the committed version and the development build R153, each built that source. Those two executables then compiled identical inputs and produced identical outputs. The development generator saved **2.64% wall time** (13.19 to 12.84 seconds) and **3.11% child CPU**. Both comparison blocks improved, by 3.17% and 2.11%. The A/A ratio was 0.979. This makes the combined changes a candidate for integration. It leaves the contribution of each individual change open.
 
-A 997 Hz user CPU-clock profile of the current commit recorded **140,493 samples in self-built cppgm and 124,061 in Clang-built cppgm**. A second pair of profiles at R153 provides a cross-check. Each sample is grouped by the instruction at the sampled address. A stall may be charged to an instruction after the load that caused it. This VM exposes software performance events, so cache misses and branch mispredictions remain unmeasured.
+A 997 Hz user CPU-clock profile of the current commit recorded **140,493 samples in self-built cppgm and 124,061 in Clang-built cppgm**. A second pair of profiles at R153 provides a cross-check. Each sample is grouped by the instruction at the sampled address. A stall may be charged to an instruction after the load that caused it. The Ampere VM exposes software events. The Axion comparison below measures hardware events on the same compiler binaries.
 
 | Sampled instruction | Current self-built | Current Clang-built | Current difference | R153 difference |
 | --- | ---: | ---: | ---: | ---: |
@@ -112,3 +112,26 @@ The final compiler commit, 6ceb479e8, and origin/main at 90ebfa8f4 each compiled
 PA39 passed all 22 controls. The strict course report passed 11,325 cases, debug-info checks and PA35 through PA5 passed, and inception reproduced cppgm. The Apple cross-target package contains 265 objects, 52 course executables and 256 SDK link cases. Native macOS execution remains a release check. The Arm timings in this report were measured on Linux.
 
 The PA39 placement check found no misplaced tests. The full placement scan recorded 10,690 tests and zero placement findings. At the preceding compiler commit, 7eaf2af02, all 17 ordinary PA36 limits passed, but the course implementation missed the maintainer release margin for compile scaling (2.67, required at most 2.40). A single pinned repeat of the speed checks with the same compiler binaries measured 2.18. The student result was 2.39 and the recomputed release report passed 17/17. Both sets of observations are retained.
+
+## Native instruction-fetch counters
+
+On a four-core Google Axion VM, the ELF executables from 6ceb479e8 compiled the six frozen replay inputs. Each worker owned one core. For each event group and input, four Clang-built control positions preceded ABBA and BAAB. All 288 output objects matched their expected hashes. Each group ran for at least 98% of its scheduled time. The table uses sums across inputs in each block and gives the self-built compiler's count divided by the Clang-built compiler's count. The release wall-time comparison uses the 16-core Ampere VM.
+
+| User-mode event | A/A | ABBA | BAAB |
+| --- | ---: | ---: | ---: |
+| Cycles | 0.997 | 1.138 | 1.133 |
+| Retired instructions | 1.000 | 1.081 | 1.081 |
+| Predicted or executed branches (architectural BR_PRED event) | 1.000 | 1.147 | 1.147 |
+| Mispredicted branches | 1.000 | 1.020 | 1.019 |
+| Frontend stall cycles | 0.997 | 1.312 | 1.309 |
+| Backend stall cycles | 0.990 | 1.017 | 1.002 |
+| Level-one instruction cache misses (L1I_CACHE_LMISS) | 1.002 | 1.209 | 1.212 |
+| Level-one data cache refills | 0.997 | 1.002 | 1.000 |
+| Level-two cache refills | 1.000 | 1.092 | 1.092 |
+| Level-one instruction TLB refills | 1.001 | 1.148 | 1.148 |
+
+The instruction-fetch gap appears in both orders. Stall counters overlap, and the events cannot attribute 31% of elapsed time to any individual cause. To distinguish fetch footprint from instruction count, the earlier R176 QEMU traces count each four-byte instruction touched, each 64-byte line and each 4-KiB code page. Across the loop vectorizer, vector selector and host environment inputs the self-built compiler touched 12.7–13.3% more instruction bytes, 15.7–16.8% more lines and 21.1–22.2% more pages than Clang. Even the smallest set of instruction addresses accounting for 90% of the execution was 12.3–12.7% larger. These are address coverage measurements. The hardware miss counts above come from Axion. [LLVM gap investigation](llvm-gap-strategy-20261110.md) · [Google Cloud PMU event reference](https://docs.cloud.google.com/compute/docs/pmu-overview)
+
+A compiler with the archived R175 changes and broader guarded-accessor inlining saved 4.0% of Axion cycles and 2.9% of retired instructions on the fixed replay versus the committed self-built compiler. Its L1 instruction cache misses increased 5.8%. Its two full Ampere wall blocks still took 8.7% and 7.2% longer than its own Clang-built compiler. Improving the weighted replay alone would have promoted it prematurely.
+
+Three placements of the same compiler code isolated locality on Ampere. Splitting the ordinary text into function sections cost 0.33% replay CPU. With the sectioned binary as the control, sorting by sampled function frequency cost another 1.61% (+1.35%, +1.87%). Ordering sections by direct caller/callee execution counts from three QEMU compiler inputs saved 1.22% (−1.64%, −0.80%). Each placement reproduced all replay objects. The last comparison uses workload profile information. Compiler-emitted static placement needs its own measurement.
