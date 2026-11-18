@@ -218,10 +218,17 @@ InstId Selector::address_sequence(InstId id)
 	const unsigned extension = part | ((bits < 64 && sign) ? 4 : 0);
 	if (index.next != kNoId && uses_[index.result] == 1)
 	{
-		const auto& memory = body_.instructions[index.next];
+		// The optimizer can attach nonnull to a pointer copy. A coalesced
+		// copy emits no code and leaves the address operands in place.
+		InstId next = index.next;
+		const auto& copy = body_.instructions[next];
+		if (copy.op == Opcode::Copy && copy.next != kNoId && !aliases_.empty() && aliases_[copy.result] == index.result)
+			next = copy.next;
+		const auto& memory = body_.instructions[next];
 		const bool store = memory.op == Opcode::Store;
-		if ((store || memory.op == Opcode::Load) && memory.ops[store ? 1 : 0] == Value::temp(index.result) &&
-			!memory_value(memory.type))
+		const Value pointer = memory.ops[store ? 1 : 0];
+		if ((store || memory.op == Opcode::Load) && pointer.is(ValueKind::Temp) &&
+			(aliases_.empty() ? pointer.index : aliases_[pointer.index]) == index.result && !memory_value(memory.type))
 		{
 			const unsigned bytes = storage_bytes(memory.type);
 			const bool fits = power_of_two(bytes) && bytes <= 8 &&
@@ -263,7 +270,7 @@ InstId Selector::address_sequence(InstId id)
 				}
 				if (!store && fp == kNoId)
 					save(reg, memory.result, memory.type.kind() != TypeKind::I1);
-				return index.next;
+				return next;
 			}
 		}
 	}
