@@ -1,5 +1,6 @@
 #include "wasm/object_places.h"
 
+#include "machine/frame_lifetimes.h"
 #include "opt/loops.h"
 
 namespace wasm {
@@ -34,8 +35,6 @@ public:
 
 private:
 	void touch(const lowir::Instruction& inst, Value value, uint32_t operand, BlockId block, uint32_t position);
-	// The slot that a complete copy of `bytes` bytes writes; kNoId otherwise.
-	uint32_t whole_slot(Value destination, uint64_t bytes) const;
 	void parameters(ObjectPlaces& places) const;
 	void result(ObjectPlaces& places) const;
 	void call_results(ObjectPlaces& places) const;
@@ -102,15 +101,6 @@ void Planner::touch(const lowir::Instruction& inst, Value value, uint32_t operan
 		use.escaped = true;
 }
 
-uint32_t Planner::whole_slot(Value destination, uint64_t bytes) const
-{
-	const auto address = opt::locate(body_, destination);
-	if (!address.root.is(ValueKind::Slot) || !address.known || address.offset != 0)
-		return kNoId;
-	const Type type = body_.slots[address.root.index].type;
-	return type.is_object() && storage_bytes(type) == bytes ? address.root.index : kNoId;
-}
-
 // A by-value parameter that passes through memory, and that the entry block
 // copies whole into a slot before anything else touches the slot.
 void Planner::parameters(ObjectPlaces& places) const
@@ -120,17 +110,12 @@ void Planner::parameters(ObjectPlaces& places) const
 	for (InstId i = body_.blocks[body_.layout[0]].first; i != kNoId; i = body_.instructions[i].next)
 	{
 		const auto& inst = body_.instructions[i];
-		if (inst.op != Opcode::CopyObject || !inst.ops[0].is(ValueKind::Temp) ||
-			inst.ops[0].index >= body_.parameter_count)
+		const uint32_t slot = machine::parameter_copy_slot(body_, inst, reads_);
+		if (slot == kNoId)
 			continue;
 		const uint32_t parameter = inst.ops[0].index;
-		const Type type = body_.temps[parameter].type;
-		if (boundary_.parameters[parameter].passing != Passing::Indirect || !type.is_object() ||
-			reads_[parameter] != 1 || inst.immediate < 0 ||
-			static_cast<uint64_t>(inst.immediate) != storage_bytes(type))
-			continue;
-		const uint32_t slot = whole_slot(inst.ops[1], storage_bytes(type));
-		if (slot != kNoId && places.parameter_of[slot] == kNoId && uses_[slot].first == positions_[i])
+		if (boundary_.parameters[parameter].passing == Passing::Indirect && places.parameter_of[slot] == kNoId &&
+			uses_[slot].first == positions_[i])
 			places.parameter_of[slot] = parameter;
 	}
 }
@@ -171,7 +156,7 @@ void Planner::call_results(ObjectPlaces& places) const
 			if (copy.op != Opcode::CopyObject || !(copy.ops[0] == Value::temp(call.result)) || copy.immediate < 0 ||
 				static_cast<uint64_t>(copy.immediate) != storage_bytes(call.type))
 				continue;
-			const uint32_t slot = whole_slot(copy.ops[1], storage_bytes(call.type));
+			const uint32_t slot = machine::whole_object_slot(body_, copy.ops[1], storage_bytes(call.type));
 			if (slot == kNoId || uses_[slot].escaped)
 				continue;
 			places.slot_of[call.result] = slot;

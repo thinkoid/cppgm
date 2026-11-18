@@ -310,6 +310,7 @@ void Selector::run()
 	}
 	const auto placed = order_blocks();
 	const auto& layout = placed.empty() ? body_.layout : placed;
+	auto elided = entry_elided_.begin();
 	for (size_t index = 0; index < layout.size(); ++index)
 	{
 		const BlockId block = layout[index];
@@ -329,6 +330,11 @@ void Selector::run()
 		out_.bind(block);
 		for (InstId i = body_.blocks[block].first; i != kNoId; i = body_.instructions[i].next)
 		{
+			if (elided != entry_elided_.end() && *elided == i)
+			{
+				++elided;
+				continue;
+			}
 			const auto& inst = body_.instructions[i];
 			if (level_ && (inst.op == Opcode::Index || inst.op == Opcode::Binary || inst.op == Opcode::Convert))
 			{

@@ -4,6 +4,10 @@
 #include "aarch64/abi.h"
 #include "machine/phi_inputs.h"
 
+namespace opt {
+struct Cfg;
+}
+
 namespace aarch64 {
 
 class Selector
@@ -23,6 +27,7 @@ private:
 	uint32_t site(const lowir::Instruction& inst) const;
 	std::vector<uint8_t> call_registers() const;
 	void allocate();
+	void parameter_homes(opt::Cfg& cfg);
 	unsigned vector_value(lowir::Value value, unsigned scratch);
 	void save_vector(unsigned reg, lowir::TempId result);
 	void vector_instruction(const lowir::Instruction& inst);
@@ -123,6 +128,7 @@ private:
 	std::vector<uint32_t> slots_, homes_, registers_, vectors_, uses_;
 	std::vector<std::pair<unsigned, uint32_t>> preserved_;
 	machine::PhiInputs phis_;
+	std::vector<lowir::InstId> entry_elided_;
 	std::vector<std::pair<lowir::BlockId, lowir::BlockId>> snapshot_edges_;
 	std::vector<CallLayout> calls_;
 	std::vector<uint32_t> call_indices_;

@@ -1,6 +1,7 @@
 #include "aarch64/selector.h"
 #include "aarch64/lifetimes.h"
 #include "opt/function_ir.h"
+#include "machine/frame_lifetimes.h"
 #include "machine/interval_slots.h"
 #include "machine/register_pressure.h"
 
@@ -134,6 +135,47 @@ std::vector<uint8_t> Selector::call_registers() const
 	return masks;
 }
 
+// Incoming objects can go straight into their named slots when the entry
+// starts with whole-object initializations. On a backedge the LowIR copy
+// must execute again. Slots that share frame storage may have an earlier owner.
+void Selector::parameter_homes(opt::Cfg& cfg)
+{
+	if (body_.layout.empty() || out_.exceptions || !body_.code_labels.empty() || slots_.empty())
+		return;
+	const BlockId entry = body_.layout.front();
+	InstId previous = kNoId;
+	for (InstId i = body_.blocks[entry].first; i != kNoId; previous = i, i = body_.instructions[i].next)
+	{
+		const auto& inst = body_.instructions[i];
+		if (inst.op == Opcode::Addr)
+			continue;
+		const uint32_t slot = machine::parameter_copy_slot(body_, inst, uses_);
+		if (slot == kNoId)
+			break;
+		const auto id = inst.ops[0].index;
+		const Type type = body_.temps[id].type;
+		if (body_.slots[slot].type != type || data_alignment(type) > 16 ||
+			std::count(slots_.begin(), slots_.end(), slots_[slot]) != 1 ||
+			std::find(homes_.begin(), homes_.begin() + body_.parameter_count, slots_[slot]) !=
+				homes_.begin() + body_.parameter_count)
+			break;
+		if (entry_elided_.empty() &&
+			(body_.layout.size() != 1 || body_.instructions[body_.blocks[entry].last].op != Opcode::Return))
+		{
+			if (cfg.pred_first.empty())
+				opt::build_cfg_light(program_, body_, cfg, true);
+			if (cfg.pred_count(entry))
+				break;
+		}
+		homes_[id] = slots_[slot];
+		const Value dst = inst.ops[1];
+		if (previous != kNoId && body_.instructions[previous].op == Opcode::Addr && dst.is(ValueKind::Temp) &&
+			body_.temps[dst.index].def == previous && uses_[dst.index] == 1)
+			entry_elided_.push_back(previous);
+		entry_elided_.push_back(i);
+	}
+}
+
 void Selector::allocate()
 {
 	const size_t count = body_.temps.size();
@@ -154,6 +196,7 @@ void Selector::allocate()
 	Segments segments;
 	opt::Cfg cfg;
 	auto ranges = live_ranges(program_, body_, out_.exceptions.get(), uses_, calls, segments, cfg);
+	parameter_homes(cfg);
 	std::stable_sort(
 		ranges.begin(), ranges.end(), [](const LiveRange& a, const LiveRange& b) { return a.first < b.first; });
 	// x9-x11, x15-x17 and v16-v17 are selector scratch; x18 is platform-reserved.
@@ -233,7 +276,7 @@ void Selector::allocate()
 			saved |= 1u << reg;
 			preserved_.push_back({ reg, reserve(8, 8) });
 		}
-		if (range.first == kNoId || reg != kNoId || vectors_[id] != kNoId)
+		if (range.first == kNoId || reg != kNoId || vectors_[id] != kNoId || homes_[id] != kNoId)
 			continue;
 		const auto type = body_.temps[id].type;
 		if (!memory_value(type))

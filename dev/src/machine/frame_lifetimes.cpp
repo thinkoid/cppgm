@@ -52,6 +52,28 @@ void touch(const Program& program, const FunctionBody& body, const Instruction& 
 
 } // namespace
 
+uint32_t whole_object_slot(const lowir::FunctionBody& body, lowir::Value destination, uint64_t bytes)
+{
+	const auto address = opt::locate(body, destination);
+	if (!address.root.is(ValueKind::Slot) || !address.known || address.offset != 0)
+		return kNoId;
+	const Type type = body.slots[address.root.index].type;
+	return type.is_object() && storage_bytes(type) == bytes ? address.root.index : kNoId;
+}
+
+uint32_t parameter_copy_slot(
+	const lowir::FunctionBody& body, const lowir::Instruction& inst, const std::vector<uint32_t>& reads)
+{
+	const auto from = inst.ops[0];
+	if (inst.op != Opcode::CopyObject || !from.is(ValueKind::Temp) || from.index >= body.parameter_count ||
+		reads[from.index] != 1 || inst.immediate < 0)
+		return kNoId;
+	const Type type = body.temps[from.index].type;
+	if (!type.is_object() || static_cast<uint64_t>(inst.immediate) != storage_bytes(type))
+		return kNoId;
+	return whole_object_slot(body, inst.ops[1], storage_bytes(type));
+}
+
 std::vector<uint32_t> sequential_copy_slots(const lowir::Program& program, const lowir::FunctionBody& body)
 {
 	std::vector<CopyLife> lives;
