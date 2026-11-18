@@ -383,6 +383,42 @@ loop-vectorizer compile and 6.4 million from the lookup application. The
 three compiler-input ratios were 1.234×, 1.271×, 1.250× in table order.
 The independent Clang-built cppgm controls reproduced each target object.
 
+### Where the remaining compiler instructions execute
+
+The loop-vectorizer translation unit isolates several different costs. The
+table gives excess millions of guest instructions executed by self-built
+cppgm over its matching Clang-built cppgm. The disassembly counts agree
+with the independent instruction plugin within 0.01% on these runs.
+
+| Instructions | Paired stores and phi fallthrough | Multiply-add addressing | Canonical zero extensions |
+| --- | ---: | ---: | ---: |
+| SP/FP-relative loads and stores | 98.8 | 82.2 | 95.0 |
+| Other loads and stores | 253.2 | 208.1 | 193.9 |
+| Moves and constant construction | 203.9 | 180.0 | 64.3 |
+| Explicit width operations | 61.4 | 57.5 | 57.5 |
+| Unconditional jumps and returns | 70.9 | 67.3 | 57.9 |
+| Conditional branches | 24.8 | 22.1 | 21.0 |
+| Calls | 1.5 | 0.2 | 0.1 |
+| Remaining arithmetic and other instructions | 279.6 | 219.8 | 210.8 |
+
+At 3ff5a4cb2 the largest difference among the named functions appearing in
+both hot-symbol lists is `Simplifier::process_block`, at 132.2 versus 97.1
+million instructions. A loop header loads a base pointer, adds 104, and
+reloads through the computed address. Clang folds 104 into the load. The next
+address calculation uses a shift and a separate add, while Clang folds the
+shift into the add. In `MemoryForwarding::may_alias`, 958,795 entries pay for
+the full prologue, including fast-return cases. The total is 46.5 versus
+32.6 million. Reducing register copies has made address generation and
+frame accesses a larger fraction of the excess.
+
+The tree walk in the public Treesort executable illustrated a separate
+control-flow cost. Its backedge targeted a move followed by a branch.
+An identical move already fell through to the loop header. Retargeting
+that edge using the x86 backend's short-tail sharing strategy removed
+6.57 million executed instructions, bringing Treesort to 161.19 million
+versus 155.45 million for Clang. The Arm pass preserves the original
+labels, instruction addresses and frame records.
+
 ## Which decisions the targets share
 
 | Decision | Implementations using it |
