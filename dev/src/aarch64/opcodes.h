@@ -45,6 +45,10 @@
 	M(Lsl, 0x9ac02000) \
 	M(Lsr, 0x9ac02400) \
 	M(Asr, 0x9ac02800) \
+	M(CcmpW, 0x7a400000) \
+	M(Ccmp, 0xfa400000) \
+	M(CcmpIW, 0x7a400800) \
+	M(CcmpI, 0xfa400800) \
 	M(SubsW, 0x6b000000) \
 	M(SubsIW, 0x71000000) \
 	M(SubsIX, 0xf1000000) \

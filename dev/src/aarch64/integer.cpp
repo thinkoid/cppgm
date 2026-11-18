@@ -169,9 +169,14 @@ void Selector::compare(const lowir::Instruction& inst, bool flags_ready)
 {
 	if (!flags_ready)
 		compare_flags(inst);
-	const unsigned dest = registers_[inst.result] == kNoId ? 9 : registers_[inst.result];
-	out_.emit(Op::Csinc, dest, 31, 31, (conditions[inst.sub] ^ 1) << 12);
-	save(dest, inst.result, true);
+	set_condition(inst.result, conditions[inst.sub]);
+}
+
+void Selector::set_condition(TempId result, unsigned condition)
+{
+	const unsigned dest = registers_[result] == kNoId ? 9 : registers_[result];
+	out_.emit(Op::CsincW, dest, 31, 31, (condition ^ 1) << 12);
+	save(dest, result, true);
 }
 
 void Selector::choose(const lowir::Instruction& inst, unsigned condition)
@@ -256,6 +261,124 @@ InstId Selector::narrow_range_branch(const lowir::Instruction& sub, BlockId bloc
 	out_.emit(Op::SubsIW, 31, 9, 0, threshold << 10);
 	conditional_edges(block, branch, Op::BCond, conditions[cmp.sub] ^ 1);
 	return cmp.next;
+}
+
+// The frontend may promote comparison results to int before a bitwise AND/OR.
+// A truncated comparison is still exactly zero or one.
+namespace {
+InstId predicate_join(const FunctionBody& body, const std::vector<uint32_t>& uses, const lowir::Instruction& first,
+	const lowir::Instruction& second)
+{
+	Value a = Value::temp(first.result), b = Value::temp(second.result);
+	InstId id = second.next;
+	for (unsigned n = 0; n < 2 && id != kNoId; ++n)
+	{
+		const auto& cast = body.instructions[id];
+		if (cast.op != Opcode::Convert || cast.sub != static_cast<unsigned>(ConvertOp::Trunc) ||
+			!cast.type.is_integer() || uses[cast.result] != 1)
+			break;
+		if (cast.ops[0] == a)
+			a = Value::temp(cast.result);
+		else if (cast.ops[0] == b)
+			b = Value::temp(cast.result);
+		else
+			return kNoId;
+		id = cast.next;
+	}
+	if (id == kNoId)
+		return kNoId;
+	const auto& join = body.instructions[id];
+	if (join.op != Opcode::Binary ||
+		(join.sub != static_cast<unsigned>(BinaryOp::Or) && join.sub != static_cast<unsigned>(BinaryOp::And)) ||
+		!((join.ops[0] == a && join.ops[1] == b) || (join.ops[1] == a && join.ops[0] == b)))
+		return kNoId;
+	return id;
+}
+}
+
+// CCMP keeps both predicates in flags. If the first decides the combined
+// test, the fallback NZCV makes the second condition report that result.
+InstId Selector::compare_pair(const lowir::Instruction& first, BlockId block)
+{
+	if (first.next == kNoId || uses_[first.result] != 1 || !(first.type.is_integer() || first.type.is_pointer()) ||
+		integer_bits(first.type.kind()) > 64 || first.ops[0].is(ValueKind::Symbol) ||
+		first.ops[1].is(ValueKind::Symbol))
+		return kNoId;
+	const auto& second = body_.instructions[first.next];
+	if (second.op != Opcode::Compare || second.next == kNoId || uses_[second.result] != 1 ||
+		!second.ops[0].is(ValueKind::Temp) ||
+		!(second.ops[1].is(ValueKind::Temp) || second.ops[1].is(ValueKind::Integer)))
+		return kNoId;
+	const auto width = integer_bits(second.type.kind());
+	if ((!width && !second.type.is_pointer()) || width > 64)
+		return kNoId;
+	const auto pred = static_cast<ComparePredicate>(second.sub);
+	const bool narrow = width && width < 32;
+	if (narrow &&
+		((pred >= ComparePredicate::Lt && pred <= ComparePredicate::Ge) ||
+			body_.temps[second.ops[0].index].type != second.type ||
+			(second.ops[1].is(ValueKind::Temp) && body_.temps[second.ops[1].index].type != second.type)))
+		return kNoId;
+	const InstId join_id = predicate_join(body_, uses_, first, second);
+	if (join_id == kNoId)
+		return kNoId;
+	const bool either = body_.instructions[join_id].sub == static_cast<unsigned>(BinaryOp::Or);
+	compare_flags(first);
+	const bool w = width && width <= 32;
+	const unsigned lhs = operand_register(second.ops[0], second.type, 10);
+	unsigned rhs = 0;
+	Op selected = w ? Op::CcmpW : Op::Ccmp;
+	if (second.ops[1].is(ValueKind::Integer))
+	{
+		uint64_t raw = body_.literals[second.ops[1].index].low;
+		if (width && width < 64)
+			raw &= (uint64_t(1) << width) - 1;
+		if (raw < 32)
+		{
+			selected = w ? Op::CcmpIW : Op::CcmpI;
+			rhs = raw;
+		}
+		else
+		{
+			constant(11, raw);
+			rhs = 11;
+		}
+	}
+	else
+		rhs = operand_register(second.ops[1], second.type, 11);
+	const unsigned cond = conditions[second.sub];
+	// Each entry is an NZCV value for which its architectural condition is true.
+	static const unsigned true_flags[] = { 4, 0, 2, 0, 8, 0, 1, 0, 2, 0, 0, 8, 0, 4 };
+	out_.emit(selected, true_flags[cond ^ !either], lhs, rhs, (conditions[first.sub] ^ either) << 12);
+	return finish_condition(join_id, cond, block);
+}
+
+// Delay materializing the flags through adjacent uses that preserve a boolean.
+InstId Selector::finish_condition(InstId id, unsigned condition, BlockId block)
+{
+	while (body_.instructions[id].next != kNoId && uses_[body_.instructions[id].result] == 1)
+	{
+		const auto next_id = body_.instructions[id].next;
+		const auto& next = body_.instructions[next_id];
+		if (!(next.ops[0] == Value::temp(body_.instructions[id].result)))
+			break;
+		if (next.op == Opcode::Branch)
+		{
+			conditional_edges(block, next, Op::BCond, condition ^ 1);
+			return next_id;
+		}
+		if (next.op == Opcode::Compare && next.ops[1].is(ValueKind::Integer) && next.type.is_integer() &&
+			integer_bits(next.type.kind()) <= 64 && body_.literals[next.ops[1].index].low == 0 &&
+			(next.sub == static_cast<unsigned>(ComparePredicate::Eq) ||
+				next.sub == static_cast<unsigned>(ComparePredicate::Ne)))
+			condition ^= next.sub == static_cast<unsigned>(ComparePredicate::Eq);
+		else if (next.op != Opcode::Convert || next.sub != static_cast<unsigned>(ConvertOp::Trunc) ||
+			!next.type.is_integer() || integer_bits(next.type.kind()) > 64)
+			break;
+		id = next_id;
+	}
+	set_condition(body_.instructions[id].result, condition);
+	return id;
 }
 
 bool Selector::compare_consumer(const lowir::Instruction& inst, BlockId block, bool flags_ready)

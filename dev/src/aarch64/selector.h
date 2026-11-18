@@ -126,6 +126,9 @@ private:
 	void choose(const lowir::Instruction& inst, unsigned condition);
 	lowir::InstId bit_branch(const lowir::Instruction& inst, lowir::BlockId block);
 	lowir::InstId narrow_range_branch(const lowir::Instruction& sub, lowir::BlockId block);
+	lowir::InstId finish_condition(lowir::InstId id, unsigned condition, lowir::BlockId block);
+	void set_condition(lowir::TempId result, unsigned condition);
+	lowir::InstId compare_pair(const lowir::Instruction& first, lowir::BlockId block);
 	bool compare_consumer(const lowir::Instruction& inst, lowir::BlockId block, bool flags_ready = false);
 	bool backedge_move(lowir::BlockId from, lowir::BlockId to, unsigned condition);
 	bool empty_edge(lowir::BlockId block, lowir::BlockId to);

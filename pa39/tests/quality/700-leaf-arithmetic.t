@@ -113,3 +113,6 @@ extern "C" int shift_cmp(long limit, long value) {
     return limit < (value >> 5) ? 7 : -3;
 }
 extern "C" bool shift_eq(unsigned a, unsigned b) { return a == (b << 29); }
+
+extern "C" bool conditions_and(long a, long b, unsigned k) { return (a < b) & (k >= 19); }
+extern "C" bool conditions_or(unsigned c, unsigned d, long x) { return (x != -37) | (c <= d); }

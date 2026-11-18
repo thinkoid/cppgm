@@ -31,7 +31,15 @@ extern "C" unsigned projected_bytes(unsigned long*, unsigned char, unsigned char
 extern "C" unsigned shift_fields(unsigned long, int);
 extern "C" int shift_cmp(long, long);
 extern "C" bool shift_eq(unsigned, unsigned);
+extern "C" bool conditions_and(long, long, unsigned);
+extern "C" bool conditions_or(unsigned, unsigned, long);
 int main() {
+    for (int mask = 0; mask < 4; ++mask) {
+        long a = mask & 1 ? -5 : 9;
+        unsigned k = mask & 2 ? 0x80000000u : 18;
+        if (conditions_and(a, 0, k) != (mask == 3)) return 29;
+        if (conditions_or(k, 19, a == -5 ? 0 : -37) != (bool(mask & 1) || !(mask & 2))) return 30;
+    }
     if (shift_fields(127UL << 41,-1) != 127 + 257*255 ||
         shift_fields(163UL << 41,0x70000000) != 163 + 257*7) return 26;
     if (shift_cmp(-6,-160) != 7 || shift_cmp(-5,-160) != -3 || shift_cmp(5,159) != -3) return 27;

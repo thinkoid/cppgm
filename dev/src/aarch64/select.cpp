@@ -367,10 +367,16 @@ void Selector::run()
 					continue;
 				}
 			}
-			if (level_ && inst.op == Opcode::Compare && compare_consumer(inst, block))
-				i = inst.next;
-			else
-				select(inst, block);
+			if (level_ && inst.op == Opcode::Compare)
+			{
+				const auto last = compare_pair(inst, block);
+				if (last != kNoId || compare_consumer(inst, block))
+				{
+					i = last == kNoId ? inst.next : last;
+					continue;
+				}
+			}
+			select(inst, block);
 		}
 	}
 	if (level_ && !out_.exceptions && !dynamic_stack_ && body_.code_labels.empty())

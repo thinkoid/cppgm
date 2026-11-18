@@ -37,6 +37,16 @@
         "instructions": 4,
         "memory_ops": 1,
         "stack_ops": 0
+      },
+      "conditions_and": {
+        "instructions": 7,
+        "memory_ops": 0,
+        "calls": 0
+      },
+      "conditions_or": {
+        "instructions": 8,
+        "memory_ops": 0,
+        "calls": 0
       }
     }
   }
