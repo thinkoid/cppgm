@@ -308,11 +308,13 @@ void Selector::run()
 			param.pass == ir_model::PPM_INDIRECT_RESULT ? Argument{ Bank::General, 8, 1, 8, false }
 														: named_.next(param.type, param.shape));
 	}
-	for (size_t index = 0; index < body_.layout.size(); ++index)
+	const auto placed = order_blocks();
+	const auto& layout = placed.empty() ? body_.layout : placed;
+	for (size_t index = 0; index < layout.size(); ++index)
 	{
-		const BlockId block = body_.layout[index];
+		const BlockId block = layout[index];
 		// A landing prologue can precede its LowIR block label.
-		fallthrough_ = level_ && index + 1 < body_.layout.size() ? body_.layout[index + 1] : kNoId;
+		fallthrough_ = level_ && index + 1 < layout.size() ? layout[index + 1] : kNoId;
 		if (out_.exceptions && fallthrough_ != kNoId &&
 			(!out_.exceptions->analysis.blocks_[index + 1].reachable ||
 				out_.exceptions->analysis.eh_landing_index_[index + 1] != kNoId))

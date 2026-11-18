@@ -14,6 +14,7 @@ public:
 
 private:
 	void plan();
+	std::vector<lowir::BlockId> order_blocks() const;
 	void prepare_exceptions();
 	void landing(lowir::BlockId block);
 	void resume(uint32_t site);

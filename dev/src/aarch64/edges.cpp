@@ -5,6 +5,70 @@
 namespace aarch64 {
 using namespace lowir;
 
+namespace {
+bool can_fall_through(const FunctionBody& body, BlockId from, BlockId to)
+{
+	if (from == kNoId || to == kNoId)
+		return false;
+	const auto last = body.blocks[from].last;
+	if (last == kNoId)
+		return true;
+	const auto& term = body.instructions[last];
+	if (term.op == Opcode::Jump)
+		return term.ops[0].index == to;
+	if (term.op == Opcode::Branch)
+		return term.ops[1].index == to || term.ops[2].index == to;
+	return term.op != Opcode::Return && term.op != Opcode::Unreachable;
+}
+} // namespace
+
+// Place an unconditional branch's target directly after it when neither
+// neighbor of the target uses the original adjacency. This makes one more
+// edge fall through without taking a fallthrough away from another path.
+std::vector<BlockId> Selector::order_blocks() const
+{
+	if (!level_ || out_.exceptions || body_.layout.size() < 4)
+		return {};
+	std::vector<BlockId> prev, next;
+	bool changed = false;
+	for (size_t k = 0; k < body_.layout.size(); ++k)
+	{
+		const auto block = body_.layout[k], last = body_.blocks[block].last;
+		if (last == kNoId || body_.instructions[last].op != Opcode::Jump)
+			continue;
+		const auto to = body_.instructions[last].ops[0].index;
+		const auto after = next.empty() ? (k + 1 < body_.layout.size() ? body_.layout[k + 1] : kNoId) : next[block];
+		if (to == after || to == block || to == body_.layout.front())
+			continue;
+		if (next.empty())
+		{
+			prev.assign(body_.blocks.size(), kNoId);
+			next.assign(body_.blocks.size(), kNoId);
+			for (size_t j = 1; j < body_.layout.size(); ++j)
+			{
+				prev[body_.layout[j]] = body_.layout[j - 1];
+				next[body_.layout[j - 1]] = body_.layout[j];
+			}
+		}
+		if (prev[to] == kNoId || can_fall_through(body_, prev[to], to) || can_fall_through(body_, to, next[to]))
+			continue;
+		next[prev[to]] = next[to];
+		if (next[to] != kNoId)
+			prev[next[to]] = prev[to];
+		next[block] = to;
+		prev[to] = block;
+		next[to] = after;
+		if (after != kNoId)
+			prev[after] = to;
+		changed = true;
+	}
+	std::vector<BlockId> order;
+	if (changed)
+		for (auto b = body_.layout.front(); b != kNoId; b = next[b])
+			order.push_back(b);
+	return order;
+}
+
 bool Selector::small_scalar_edge(BlockId from, BlockId to)
 {
 	machine::ScalarTransfer moves[machine::kSmallTransfers];
