@@ -80,6 +80,7 @@ blocks. Concurrent host activity affects both.
 | Pressure-aware allocation, 0b396b840 | 24 | 204.5 s | 238.7 s | 1.213×, 1.132× | 1.206×, 1.200× | 1.028× |
 | Dense switch selection, 16bbf1f0d | 16 | 251.7 s | 301.7 s | 1.060×, 1.321× | 1.089×, 1.280× | 0.937× |
 | Paired stores and conditional phi fallthrough, 0f09ba077 | 16 | 222.1 s | 266.3 s | 1.178×, 1.220× | 1.162×, 1.221× | 1.090× |
+| Fused multiply-add addressing, 709d060ce | 16 | 265.9 s | 313.5 s | 1.234×, 1.128× | 1.196×, 1.167× | 1.078× |
 
 At 0b396b840, the paired ratios were **1.173× elapsed** and **1.203× aggregate
 CPU**. Both compilers rebuilt exactly the same 497 objects and the resulting
@@ -89,7 +90,10 @@ include changes in host load. At 16bbf1f0d the paired slowdown was 1.190×
 elapsed and 1.185× CPU. Both compilers reproduced the same 497 objects and
 the self-built input executable in every build. At 0f09ba077 the paired ratios were
 1.199× elapsed and 1.192× CPU, again with identical outputs across all
-497 translation units and the final link.
+497 translation units and the final link. The
+matched rebuild at 709d060ce took 1.181× as long by the wall clock and
+1.182× by aggregate CPU. Both builders reproduced the same output hashes
+across four calibration builds and eight comparison builds.
 
 ## From hot blocks to candidate changes
 
@@ -418,6 +422,23 @@ that edge using the x86 backend's short-tail sharing strategy removed
 6.57 million executed instructions, bringing Treesort to 161.19 million
 versus 155.45 million for Clang. The Arm pass preserves the original
 labels, instruction addresses and frame records.
+
+With callee saves grouped before named stack slots, the selector can use
+consecutive `stp` and `ldp` pairs and combine the first transfer with the
+stack adjustment. This cut 50.5 million more instructions from the loop-
+vectorizer compile. It applies to ordinary exits as well as early exits.
+On the three compiler inputs, grouping saves, coalescing canonical scalar
+copies, folding through pointer facts and selecting narrow arithmetic
+brought the self-built counts to 665.9, 3,157.9, 1,199.1 million, versus
+567.7, 2,585.1, 1,001.6 million for Clang-built cppgm.
+
+The nine-application timing at 3ff5a4cb2 used two calibration and four
+paired blocks, with four launches at each position. Its geometric mean was
+0.977× Clang throughput on the five public applications and 0.943× on the
+four kernels. Puzzle was 0.821×, while FloatMM was 1.053×. The call-heavy
+kernel was 0.851× on elapsed guest-process CPU despite the two producers'
+instruction counts differing by only one. QEMU wall and CPU time also
+depend on how the emulator translates and chains the guest blocks.
 
 ## Which decisions the targets share
 
