@@ -28,7 +28,14 @@ extern "C" unsigned rotate_word(unsigned);
 extern "C" unsigned long rotate_mix(unsigned long, unsigned long);
 extern "C" unsigned different_shifts(unsigned);
 extern "C" unsigned projected_bytes(unsigned long*, unsigned char, unsigned char*, signed char);
+extern "C" unsigned shift_fields(unsigned long, int);
+extern "C" int shift_cmp(long, long);
+extern "C" bool shift_eq(unsigned, unsigned);
 int main() {
+    if (shift_fields(127UL << 41,-1) != 127 + 257*255 ||
+        shift_fields(163UL << 41,0x70000000) != 163 + 257*7) return 26;
+    if (shift_cmp(-6,-160) != 7 || shift_cmp(-5,-160) != -3 || shift_cmp(5,159) != -3) return 27;
+    if (!shift_eq(0x80000000u, 12) || shift_eq(1,8)) return 28;
     unsigned long carrier = ~0UL;
     unsigned char other = 0;
     unsigned char* bytes = reinterpret_cast<unsigned char*>(&carrier);

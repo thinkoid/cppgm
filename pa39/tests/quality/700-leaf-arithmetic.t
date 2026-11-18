@@ -105,3 +105,11 @@ extern "C" unsigned projected_bytes(unsigned long* word, unsigned char v, unsign
     *word = static_cast<unsigned long>(s);
     return before + 3 * after + 65536u * b[1];
 }
+
+extern "C" unsigned shift_fields(unsigned long v, int s) {
+    return static_cast<unsigned char>(v >> 41) + 257u * static_cast<unsigned char>(s >> 28);
+}
+extern "C" int shift_cmp(long limit, long value) {
+    return limit < (value >> 5) ? 7 : -3;
+}
+extern "C" bool shift_eq(unsigned a, unsigned b) { return a == (b << 29); }

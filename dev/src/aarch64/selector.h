@@ -112,11 +112,11 @@ private:
 	bool simple_binary(const lowir::Instruction& inst);
 	void integer_unary(const lowir::Instruction& inst);
 	void binary(const lowir::Instruction& inst);
-	void compare(const lowir::Instruction& inst);
+	void compare(const lowir::Instruction& inst, bool flags_ready = false);
 	void compare_flags(const lowir::Instruction& inst);
 	lowir::InstId truncated_operand(const lowir::Instruction& trunc, lowir::BlockId block);
 	lowir::InstId rotated_operand(const lowir::Instruction& first);
-	lowir::InstId shifted_operand(const lowir::Instruction& shift);
+	lowir::InstId shifted_operand(const lowir::Instruction& shift, lowir::BlockId block);
 	bool emit_scalar_pair(
 		const lowir::Instruction& low, const lowir::Instruction& high, lowir::Value base, uint64_t offset);
 	lowir::InstId paired_access(const lowir::Instruction& low);
@@ -126,7 +126,7 @@ private:
 	void choose(const lowir::Instruction& inst, unsigned condition);
 	lowir::InstId bit_branch(const lowir::Instruction& inst, lowir::BlockId block);
 	lowir::InstId narrow_range_branch(const lowir::Instruction& sub, lowir::BlockId block);
-	bool compare_consumer(const lowir::Instruction& inst, lowir::BlockId block);
+	bool compare_consumer(const lowir::Instruction& inst, lowir::BlockId block, bool flags_ready = false);
 	bool backedge_move(lowir::BlockId from, lowir::BlockId to, unsigned condition);
 	bool empty_edge(lowir::BlockId block, lowir::BlockId to);
 	void conditional_edges(lowir::BlockId block, const lowir::Instruction& branch, Op test, unsigned operand);

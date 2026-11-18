@@ -165,9 +165,10 @@ void Selector::compare_flags(const lowir::Instruction& inst)
 	out_.emit(Op::Subs, 31, 10, 11);
 }
 
-void Selector::compare(const lowir::Instruction& inst)
+void Selector::compare(const lowir::Instruction& inst, bool flags_ready)
 {
-	compare_flags(inst);
+	if (!flags_ready)
+		compare_flags(inst);
 	const unsigned dest = registers_[inst.result] == kNoId ? 9 : registers_[inst.result];
 	out_.emit(Op::Csinc, dest, 31, 31, (conditions[inst.sub] ^ 1) << 12);
 	save(dest, inst.result, true);
@@ -257,7 +258,7 @@ InstId Selector::narrow_range_branch(const lowir::Instruction& sub, BlockId bloc
 	return cmp.next;
 }
 
-bool Selector::compare_consumer(const lowir::Instruction& inst, BlockId block)
+bool Selector::compare_consumer(const lowir::Instruction& inst, BlockId block, bool flags_ready)
 {
 	if (inst.next == kNoId || uses_[inst.result] != 1 ||
 		!(inst.type.is_pointer() || (inst.type.is_integer() && integer_bits(inst.type.kind()) <= 64)))
@@ -268,14 +269,15 @@ bool Selector::compare_consumer(const lowir::Instruction& inst, BlockId block)
 	if (next.op == Opcode::Select && !memory_value(next.type) && !next.ops[1].is(ValueKind::Symbol) &&
 		!next.ops[2].is(ValueKind::Symbol))
 	{
-		compare_flags(inst);
+		if (!flags_ready)
+			compare_flags(inst);
 		choose(next, conditions[inst.sub]);
 		return true;
 	}
 	if (next.op != Opcode::Branch)
 		return false;
 	const bool eq = inst.sub == static_cast<unsigned>(ComparePredicate::Eq);
-	if (eq || inst.sub == static_cast<unsigned>(ComparePredicate::Ne))
+	if (!flags_ready && (eq || inst.sub == static_cast<unsigned>(ComparePredicate::Ne)))
 	{
 		Value a = inst.ops[0], b = inst.ops[1];
 		if (a.is(ValueKind::Integer))
@@ -291,7 +293,8 @@ bool Selector::compare_consumer(const lowir::Instruction& inst, BlockId block)
 			return true;
 		}
 	}
-	compare_flags(inst);
+	if (!flags_ready)
+		compare_flags(inst);
 	conditional_edges(block, next, Op::BCond, conditions[inst.sub] ^ 1);
 	return true;
 }

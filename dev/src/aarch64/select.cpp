@@ -350,7 +350,7 @@ void Selector::run()
 					const auto op = static_cast<BinaryOp>(inst.sub);
 					last = op == BinaryOp::And ? bit_branch(inst, block)
 						: op == BinaryOp::Sub  ? narrow_range_branch(inst, block)
-											   : shifted_operand(inst);
+											   : shifted_operand(inst, block);
 				}
 				if (last != kNoId)
 				{

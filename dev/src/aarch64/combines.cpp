@@ -94,7 +94,7 @@ InstId Selector::rotated_operand(const lowir::Instruction& first)
 // ADD, SUB and the logical instructions have a shifted second operand.
 // The producer is adjacent and single-use, so both input locations still
 // hold the values the combined instruction needs.
-InstId Selector::shifted_operand(const lowir::Instruction& shift)
+InstId Selector::shifted_operand(const lowir::Instruction& shift, BlockId block)
 {
 	const auto op = static_cast<BinaryOp>(shift.sub);
 	const unsigned bits = integer_bits(shift.type.kind());
@@ -105,6 +105,35 @@ InstId Selector::shifted_operand(const lowir::Instruction& shift)
 	if (rotated != kNoId)
 		return rotated;
 	const auto& next = body_.instructions[shift.next];
+	const unsigned count = body_.literals[shift.ops[1].index].low & (bits - 1);
+	const unsigned kind = op == BinaryOp::Shl ? 0 : op == BinaryOp::UShr ? 1 : 2;
+	// A shifted register comparison produces the same flags as SUBS. Keep
+	// those flags for its branch or select before materializing a boolean.
+	if (next.op == Opcode::Compare && next.type == shift.type && next.ops[1] == Value::temp(shift.result) &&
+		!(next.ops[0] == next.ops[1]) && !next.ops[0].is(ValueKind::Symbol) && !shift.ops[0].is(ValueKind::Symbol))
+	{
+		const unsigned lhs = operand_register(next.ops[0], next.type, 10);
+		const unsigned rhs = operand_register(shift.ops[0], shift.type, 11);
+		out_.emit(bits == 32 ? Op::SubsW : Op::Subs, 31, lhs, rhs, (kind << 22) | (count << 10));
+		if (compare_consumer(next, block, true))
+			return next.next;
+		compare(next, true);
+		return shift.next;
+	}
+	// All selected bits must come from the input, even for an arithmetic shift.
+	if (op != BinaryOp::Shl && next.op == Opcode::Convert && next.sub == static_cast<unsigned>(ConvertOp::Trunc) &&
+		next.ops[0] == Value::temp(shift.result) && convert_source_type(next) == shift.type)
+	{
+		const unsigned width = integer_bits(next.type.kind());
+		if (width && width < bits && count + width <= bits)
+		{
+			const unsigned src = operand_register(shift.ops[0], shift.type, 11);
+			const unsigned dest = registers_[next.result] == kNoId ? 9 : registers_[next.result];
+			out_.emit(Op::Ubfm, dest, src, 0, (count << 16) | ((count + width - 1) << 10));
+			save(dest, next.result, true);
+			return shift.next;
+		}
+	}
 	if (next.op != Opcode::Binary || next.type != shift.type)
 		return kNoId;
 	const auto combine = static_cast<BinaryOp>(next.sub);
@@ -134,8 +163,6 @@ InstId Selector::shifted_operand(const lowir::Instruction& shift)
 	const auto other = next.ops[1] == result ? next.ops[0] : next.ops[1];
 	if (!(next.ops[1] == result) && (!(next.ops[0] == result) || combine == BinaryOp::Sub))
 		return kNoId;
-	const unsigned count = body_.literals[shift.ops[1].index].low & (bits - 1);
-	const unsigned kind = op == BinaryOp::Shl ? 0 : op == BinaryOp::UShr ? 1 : 2;
 	const unsigned a = operand_register(other, shift.type, 10), b = operand_register(shift.ops[0], shift.type, 11);
 	const unsigned dest = registers_[next.result] == kNoId ? 9 : registers_[next.result];
 	out_.emit(selected, dest, a, b, (kind << 22) | (count << 10));
