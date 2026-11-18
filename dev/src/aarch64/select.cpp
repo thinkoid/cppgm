@@ -174,7 +174,8 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		const Type from = convert_source_type(inst);
 		if (op != ConvertOp::SExt && op != ConvertOp::ZExt && op != ConvertOp::Trunc)
 			throw AArch64Error("unsupported AArch64 conversion");
-		if (level_ && (op != ConvertOp::SExt || integer_bits(inst.type.kind()) == 64))
+		const auto to_bits = integer_bits(inst.type.kind());
+		if (level_ && (op != ConvertOp::SExt || to_bits == 32 || to_bits == 64))
 		{
 			const unsigned src = operand_register(inst.ops[0], from, left);
 			const unsigned dest = registers_[inst.result] == kNoId ? result_reg : registers_[inst.result];
@@ -184,7 +185,8 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 			else if (bits == 32 && op != ConvertOp::SExt)
 				out_.emit(Op::OrrW, dest, 31, src);
 			else if (bits && bits < 64)
-				out_.emit(op == ConvertOp::SExt ? Op::Sbfm : Op::Ubfm, dest, src, 0, (bits - 1) << 10);
+				out_.emit(op == ConvertOp::SExt ? (to_bits == 32 ? Op::SbfmW : Op::Sbfm) : Op::Ubfm, dest, src, 0,
+					(bits - 1) << 10);
 			else
 				move(dest, src);
 			save(dest, inst.result, true);

@@ -412,15 +412,24 @@ void Selector::switch_edges(const lowir::Instruction& inst, BlockId from)
 				subtract(31, c.lo ? 9 : source, uint64_t(c.hi) - uint64_t(c.lo));
 			}
 		}
-		const bool direct = empty_edge(from, c.target);
-		const uint32_t label = direct ? c.target : static_cast<uint32_t>(out_.labels.size());
+		// The last successful case can fall into its own block. Branch on a
+		// miss directly to the default when that edge needs no phi copies.
+		const bool last_falls = &c == &clusters.back() && c.target == fallthrough_ && empty_edge(from, fallback);
+		const bool direct = last_falls || empty_edge(from, c.target);
+		const uint32_t label = last_falls ? fallback : direct ? c.target : static_cast<uint32_t>(out_.labels.size());
+		const bool on_match = direct && !last_falls;
 		if (!direct)
 			out_.labels.push_back(kNoId);
 		if (zero)
-			out_.reference(
-				direct ? (narrow ? Op::CbzW : Op::Cbz) : (narrow ? Op::CbnzW : Op::Cbnz), Fixup::Block, label, source);
+			out_.reference(on_match ? (narrow ? Op::CbzW : Op::Cbz) : (narrow ? Op::CbnzW : Op::Cbnz), Fixup::Block,
+				label, source);
 		else
-			out_.reference(Op::BCond, Fixup::Block, label, (single ? 0u : 9u) ^ (direct ? 0u : 1u));
+			out_.reference(Op::BCond, Fixup::Block, label, (single ? 0u : 9u) ^ (on_match ? 0u : 1u));
+		if (last_falls)
+		{
+			edge(from, c.target, true);
+			return;
+		}
 		if (!direct)
 		{
 			edge(from, c.target);
