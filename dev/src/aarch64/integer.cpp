@@ -1,6 +1,7 @@
 #include "aarch64/selector.h"
 
 #include "machine/switch_plan.h"
+#include <algorithm>
 
 namespace aarch64 {
 
@@ -253,22 +254,78 @@ void Selector::switch_edges(const lowir::Instruction& inst, BlockId from)
 	std::vector<machine::CaseCluster> clusters;
 	std::vector<uint32_t> targets;
 	machine::cluster_switch_cases(cases, clusters, targets, 0);
-	value(15, inst.ops[0], type);
-	extend(15, bits, false);
+	const unsigned source = operand_register(inst.ops[0], type, 15);
+	const bool narrow = bits <= 32;
+	auto subtract = [&](unsigned dest, unsigned input, uint64_t amount) {
+		const unsigned shift = (amount & 4095) == 0 ? 12 : 0;
+		if ((amount >> shift) <= 4095)
+			out_.emit(narrow ? Op::SubsIW : Op::SubsIX, dest, input, 0,
+				(shift ? 1u << 22 : 0) | (uint32_t(amount >> shift) << 10));
+		else
+		{
+			constant(10, amount);
+			out_.emit(narrow ? Op::SubsW : Op::Subs, dest, input, 10);
+		}
+	};
+	const BlockId fallback = inst.ops[1].index;
+	if (level_ && clusters.size() >= 5 && machine::dense_switch(cases, 4096, 4, 5) && empty_edge(from, fallback) &&
+		std::all_of(clusters.begin(), clusters.end(),
+			[&](const machine::CaseCluster& c) { return empty_edge(from, c.target); }))
+	{
+		const auto first = static_cast<uint64_t>(cases.front().first);
+		const auto span = static_cast<uint64_t>(cases.back().first) - first;
+		const unsigned index = first ? 9 : source;
+		if (first)
+			subtract(index, source, first);
+		subtract(31, index, span);
+		out_.reference(Op::BCond, Fixup::Block, fallback, 8);
+		// Each table entry is one branch instruction. ADR reaches the table
+		// on both object formats without an absolute pointer or a data relocation.
+		const auto table = static_cast<uint32_t>(out_.labels.size());
+		out_.labels.push_back(kNoId);
+		out_.reference(Op::Adr, Fixup::Block, table, 16);
+		out_.emit(Op::Add, 16, 16, index, (2u << 10) | (narrow ? (1u << 21) | (2u << 13) : 0u));
+		out_.emit(Op::Br, 0, 16);
+		out_.bind(table);
+		size_t cluster = 0;
+		for (uint64_t i = 0; i <= span; ++i)
+		{
+			while (uint64_t(clusters[cluster].hi) - first < i)
+				++cluster;
+			const auto target = i < uint64_t(clusters[cluster].lo) - first ? fallback : clusters[cluster].target;
+			out_.reference(Op::B, Fixup::Block, target);
+		}
+		return;
+	}
 	for (const auto& c : clusters)
 	{
-		const uint32_t next = out_.labels.size();
-		out_.labels.push_back(kNoId);
-		constant(10, c.lo);
-		out_.emit(Op::Subs, 9, 15, 10);
-		if (c.lo != c.hi)
+		const bool single = c.lo == c.hi;
+		const bool zero = single && !c.lo;
+		if (!zero)
 		{
-			constant(10, uint64_t(c.hi) - uint64_t(c.lo));
-			out_.emit(Op::Subs, 31, 9, 10);
+			if (single)
+				subtract(31, source, c.lo);
+			else
+			{
+				if (c.lo)
+					subtract(9, source, c.lo);
+				subtract(31, c.lo ? 9 : source, uint64_t(c.hi) - uint64_t(c.lo));
+			}
 		}
-		out_.reference(Op::BCond, Fixup::Block, next, c.lo == c.hi ? 1 : 8);
-		edge(from, c.target);
-		out_.bind(next);
+		const bool direct = empty_edge(from, c.target);
+		const uint32_t label = direct ? c.target : static_cast<uint32_t>(out_.labels.size());
+		if (!direct)
+			out_.labels.push_back(kNoId);
+		if (zero)
+			out_.reference(
+				direct ? (narrow ? Op::CbzW : Op::Cbz) : (narrow ? Op::CbnzW : Op::Cbnz), Fixup::Block, label, source);
+		else
+			out_.reference(Op::BCond, Fixup::Block, label, (single ? 0u : 9u) ^ (direct ? 0u : 1u));
+		if (!direct)
+		{
+			edge(from, c.target);
+			out_.bind(label);
+		}
 	}
 	edge(from, inst.ops[1].index, true);
 }

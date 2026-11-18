@@ -114,6 +114,7 @@
 	M(Addv8B, 0x0e31b800) \
 	M(UmovB, 0x0e013c00) \
 	M(Bl, 0x94000000) \
+	M(Br, 0xd61f0000) \
 	M(Blr, 0xd63f0000) \
 	M(Ret, 0xd65f0000) \
 	M(FmovWS, 0x1e260000) \
@@ -141,6 +142,7 @@
 	M(StrQ, 0x3d800000) \
 	M(Svc, 0xd4000001) \
 	M(Brk, 0xd4200000) \
+	M(Adr, 0x10000000) \
 	M(Adrp, 0x90000000) \
 	M(Adds, 0xab000000) \
 	M(Adc, 0x9a000000) \

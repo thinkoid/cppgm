@@ -151,23 +151,25 @@ void Selector::register_edge(BlockId from, BlockId to)
 	}
 }
 
+bool Selector::empty_edge(BlockId block, BlockId to)
+{
+	const auto first = body_.blocks[to].first;
+	if (out_.exceptions && out_.exceptions->entry_selectors[to])
+		return false;
+	for (auto i = first; i != kNoId && body_.instructions[i].op == Opcode::Phi; i = body_.instructions[i].next)
+	{
+		const auto& phi = body_.instructions[i];
+		const auto source = phis_.incoming(body_, i, block);
+		if (!level_ || !same_home(phi.result, source))
+			return false;
+	}
+	return true;
+}
+
 void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch, Op test, unsigned operand)
 {
 	const BlockId yes = branch.ops[1].index, no = branch.ops[2].index;
-	const auto direct = [&](BlockId to) {
-		const auto first = body_.blocks[to].first;
-		if (out_.exceptions && out_.exceptions->entry_selectors[to])
-			return false;
-		for (auto i = first; i != kNoId && body_.instructions[i].op == Opcode::Phi; i = body_.instructions[i].next)
-		{
-			const auto& phi = body_.instructions[i];
-			const auto source = phis_.incoming(body_, i, block);
-			if (!level_ || !same_home(phi.result, source))
-				return false;
-		}
-		return true;
-	};
-	if (no == fallthrough_ && direct(yes))
+	if (no == fallthrough_ && empty_edge(block, yes))
 	{
 		const auto inverse = test == Op::Cbz ? Op::Cbnz
 			: test == Op::Cbnz               ? Op::Cbz
@@ -178,7 +180,7 @@ void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch
 		edge(block, no, true);
 		return;
 	}
-	if (level_ && direct(no))
+	if (level_ && empty_edge(block, no))
 	{
 		out_.reference(test, Fixup::Block, no, operand);
 		edge(block, yes, true);

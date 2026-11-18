@@ -98,6 +98,7 @@ private:
 	lowir::InstId address_sequence(lowir::InstId id);
 	void choose(const lowir::Instruction& inst, unsigned condition);
 	bool compare_consumer(const lowir::Instruction& inst, lowir::BlockId block);
+	bool empty_edge(lowir::BlockId block, lowir::BlockId to);
 	void conditional_edges(lowir::BlockId block, const lowir::Instruction& branch, Op test, unsigned operand);
 	void call(const lowir::Instruction& inst);
 	void epilogue(const lowir::Instruction& inst);

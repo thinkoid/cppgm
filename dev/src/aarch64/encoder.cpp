@@ -30,6 +30,8 @@ void encode(
 		if (ins.fixup == Fixup::Block)
 		{
 			const int64_t displacement = int64_t(function.labels.at(ins.target)) - int64_t(i);
+			// Local ADR targets are instruction-aligned. Its low two byte-offset
+			// bits are zero, and immhi holds the same word displacement as B.cond.
 			const unsigned bits = ins.op == Op::B ? 26 : 19;
 			const int64_t limit = int64_t(1) << (bits - 1);
 			if (displacement < -limit || displacement >= limit)
