@@ -1,10 +1,3 @@
-<svg data-original-label="godot build-clang; Intel(R) Xeon(R) 6975P-C; revision 0785eb82196d630572f71a1967b3aa589dce33d3" data-original-message="3.32×" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="godot build-clang; Intel(R) Xeon(R) 6975P-C; revision 0785eb82196d630572f71a1967b3aa589dce33d3; measured 0785eb82196d630572f71a1967b3aa589dce33d3; 9 commits behind main: 3.32×">
-  <title>godot build-clang; Intel(R) Xeon(R) 6975P-C; revision 0785eb82196d630572f71a1967b3aa589dce33d3; measured 0785eb82196d630572f71a1967b3aa589dce33d3; 9 commits behind main: 3.32×</title>
-  <defs><clipPath id="badge"><rect width="120" height="24" rx="4"/></clipPath></defs>
-  <g clip-path="url(#badge)">
-    <rect width="64" height="24" fill="#555"/>
-    <rect x="64" width="56" height="24" fill="#14532d"/>
-  </g>
-  <text x="32" y="16.5" fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="12" font-weight="700" textLength="52" lengthAdjust="spacingAndGlyphs">CI Intel</text>
-  <text x="92" y="16.5" fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="12" font-weight="700" letter-spacing="1" textLength="39" lengthAdjust="spacingAndGlyphs">3.32×</text>
+<svg data-original-label="godot build-clang; Intel(R) Xeon(R) 6975P-C; revision 0785eb82196d630572f71a1967b3aa589dce33d3" data-original-message="3.32×" data-original-color="14532d" xmlns="http://www.w3.org/2000/svg" width="120" height="24" viewBox="0 0 120 24" role="img" aria-label="godot build-clang; Intel(R) Xeon(R) 6975P-C; revision 0785eb82196d630572f71a1967b3aa589dce33d3; measured 0785eb82196d630572f71a1967b3aa589dce33d3; 134 commits behind main: not shown">
+  <title>godot build-clang; Intel(R) Xeon(R) 6975P-C; revision 0785eb82196d630572f71a1967b3aa589dce33d3; measured 0785eb82196d630572f71a1967b3aa589dce33d3; 134 commits behind main: not shown</title>
 </svg>
