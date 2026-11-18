@@ -24,6 +24,25 @@ cppgm --target=aarch64-linux-gnu -S -emit-lowir -O2 main.cpp -o main.lowir
 lowir2native --target=aarch64-linux-gnu main.lowir -o main
 ```
 
+### Size optimization and source LTO
+
+Both Arm targets support the experimental `-Oz` size profile and full source LTO.
+For full LTO, pass consecutive source files to `cppgm -flto=full` (or `-flto`).
+Each file has its own preprocessor and file-local names. The optimizer sees
+their definitions together and can inline across file boundaries. Objects and
+archives before or after that source group participate in ordinary linking.
+Keep a strong override of a weak definition in a separate object.
+
+```sh
+cppgm --target=aarch64-linux-gnu -Oz -flto main.cpp work.cpp -o program
+cppgm --target=arm64-apple-macos11 -Oz -flto=full -c main.cpp work.cpp -o combined.o
+```
+
+The second command produces an arm64 Mach-O object that Apple’s SDK linker can
+consume. The corresponding Linux command produces an AArch64 ELF object.
+`-fno-lto` restores separate compilation. `-Oz` also applies to single-source
+and serialized LowIR inputs.
+
 ### Build for Apple Silicon
 
 Use `--target=arm64-apple-macos11` for the macOS 11 deployment profile. Its LowIR spelling is `arm64_macos`. The compiler selects the Apple calling convention and emits 64-bit arm64 Mach-O objects directly. Darwin has signed plain char and wchar_t, 8-byte long double, packed fixed stack arguments and a pointer va_list. On the stack, fixed scalar arguments and homogeneous floating records keep their natural sizes. A direct record in the general register class takes one or two whole eight-byte slots. The caller extends narrow register arguments to 32 bits. The x18 register is reserved, and non-leaf functions maintain a frame record in x29. The target supports GOT-relative PIC and Darwin thread-local variable descriptors. [Apple ARM64 ABI](https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms)

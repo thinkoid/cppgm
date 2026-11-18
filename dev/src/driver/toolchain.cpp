@@ -373,6 +373,7 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 	std::string gcc_install_dir;
 	bool nostdinc = false;
 	bool pthread = false;
+	bool default_lto = false;
 	bool optimize_size = false, popcnt_explicit = false, char_signedness_explicit = false;
 	unsigned pic_level = 0, pie_level = 0;
 	bool assembly_output = false;
@@ -504,7 +505,7 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 		}
 		else if (arg == "-flto" || arg == "-flto=full" || arg == "-fno-lto")
 		{
-			invocation.wasm_link.fold_functions = arg == "-flto";
+			default_lto = arg == "-flto";
 			invocation.whole_source_lto = arg == "-flto=full";
 		}
 		else if (arg == "-fno-inline" || arg == "-finline")
@@ -574,6 +575,10 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 		else
 			invocation.inputs.push_back(source_input(arg));
 	}
+	if (default_lto && target_model::is_aarch64(invocation.target))
+		invocation.whole_source_lto = true;
+	else
+		invocation.wasm_link.fold_functions = default_lto;
 	input_language(invocation);
 	if (invocation.inputs.empty())
 		throw InvocationError("no input files");
@@ -968,6 +973,16 @@ native::EhModel object_eh_model(const std::string& output)
 	return ends_with(output, ".obj") ? native::EhModel::Course : native::EhModel::Host;
 }
 
+bool write_native_object(const native::object::ObjectFile& object, const std::string& output, native::Target target)
+{
+	std::string error;
+	if (target_model::is_darwin(target) ? native::object::write_macho_object(object, output, error)
+										: native::object::write_elf_object(object, output, error))
+		return true;
+	std::cerr << "ERROR: " << error << std::endl;
+	return false;
+}
+
 int compile_lto_object(const Invocation& invocation)
 {
 	const SourceInputs sources = source_lto_inputs(invocation);
@@ -979,11 +994,7 @@ int compile_lto_object(const Invocation& invocation)
 	native::object::ObjectFile object;
 	if (!compile_native_sources(sources, invocation, object_eh_model(output), object))
 		return EXIT_FAILURE;
-	std::string error;
-	if (native::object::write_elf_object(object, output, error))
-		return EXIT_SUCCESS;
-	std::cerr << "ERROR: " << error << std::endl;
-	return EXIT_FAILURE;
+	return write_native_object(object, output, invocation.target) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 // Libraries are link inputs: -c compiles the sources and ignores them.
@@ -1014,14 +1025,9 @@ int compile_mode(const Invocation& invocation)
 		}
 		if (!compile_input(input, invocation, object_eh_model(output), object))
 			return EXIT_FAILURE;
-		std::string error;
 		check_output(invocation, output);
-		if (!(target_model::is_darwin(invocation.target) ? native::object::write_macho_object(object, output, error)
-														 : native::object::write_elf_object(object, output, error)))
-		{
-			std::cerr << "ERROR: " << error << std::endl;
+		if (!write_native_object(object, output, invocation.target))
 			return EXIT_FAILURE;
-		}
 	}
 	return EXIT_SUCCESS;
 }
@@ -1436,11 +1442,11 @@ int run_toolchain(const std::vector<std::string>& args, const PreprocessorOption
 	const bool wasm_target = target_model::is_wasm(invocation.target);
 	if (invocation.whole_source_lto)
 	{
-		if (!wasm_target && invocation.target != native::Target::Linux)
-			throw InvocationError("-flto=full requires x86-64 ELF or a Wasm target");
+		if (!wasm_target && !target_model::is_aarch64(invocation.target) && invocation.target != native::Target::Linux)
+			throw InvocationError("-flto=full requires an AArch64, Linux x86-64 or Wasm target");
 		if (invocation.preprocess_only || invocation.syntax_only || invocation.emit_lowir ||
 			(wasm_target && invocation.compile_only))
-			throw InvocationError("-flto=full requires a link command or an x86-64 ELF object build");
+			throw InvocationError("-flto=full requires a link command or a supported native object build");
 	}
 	for (const Input& input : invocation.inputs)
 		if (input.kind == Input::Kind::Assembly &&

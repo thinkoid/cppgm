@@ -222,10 +222,11 @@ executables, time a compiler rebuild and count guest instructions.
 - C++20 and C have partial support. The profile lists the selected C++20 features. The optional [PA38](pa38/README.md) compiles C sources in the `c17` and `gnu17` modes.
 - The x86-64 backend targets Linux and Intel macOS. PA37 targets `wasm32-unknown-unknown` and `wasm32-wasip1`. **AArch64 support is experimental** on Linux (ELF) and Apple Silicon macOS (Mach-O) in PA39. [PA37](pa37/README.md) · [PA39](pa39/README.md)
 - `-Oz` and the LTO flags are experimental. `-Oz` optimizes for size.
-  `-flto` shares identical function bodies when linking Wasm.
-  `-flto=full` optimizes consecutive source inputs together on Wasm and
-  Linux x86-64. On Linux x86-64, use `-flto=full -c -o combined.o` to
-  produce one object for the host linker. Full LTO needs the source files
+  `-flto=full` optimizes consecutive source inputs together on Wasm, Linux
+  x86-64 and both AArch64 targets. On these native targets, add
+  `-c -o combined.o` to write a host-linkable ELF or Mach-O object.
+  On AArch64, `-flto` is shorthand for full source LTO. On Wasm, `-flto`
+  shares identical function bodies when linking objects. Full LTO needs the source files
   in the same command and can use more memory. Keep competing weak and
   strong definitions in separate objects so the linker can select one.
 - [Integrated assembly](pa29/README.md) is complete for its documented x86-64 profile. It is not a general assembler.

@@ -149,7 +149,7 @@ sub check_apple_fixture {
     my $target = '--target=arm64-apple-macos11';
     my @inputs = ($test, fixture_units($test, $expect));
     my @link = apple_silicon() ? () : ('-nostdlib');
-    for my $level (0 .. 3) {
+    for my $level (@{$expect->{levels} // [0..3]}) {
         my @flags = ($target, "-O$level", @{$expect->{flags} // []});
         my (@cppgm, @clang, @raw);
         my $relocation_seen = 0;
@@ -166,7 +166,7 @@ sub check_apple_fixture {
             }
             for my $optimized (0, 1) {
                 my @emit = $optimized ? ("-O$level", '-S', '-emit-lowir') : ('-O0', '--emit-lowir', '-g0',
-                    ($level ? '-D__OPTIMIZE__=1' : ()));
+                    ($level ? '-D__OPTIMIZE__=1' : ()), ($level eq 'z' ? '-D__OPTIMIZE_SIZE__=1' : ()));
                 run_tool($dir, 0, $compiler, $target, @emit, @{$expect->{flags} // []}, '-x', 'c++', $src, '-o', "$dir/unit.lowir");
                 my $ir = "$dir/unit-$i-$optimized.lowir";
                 run_tool($dir, 0, $opt, '-O0', "$dir/unit.lowir", '-o', $ir);
@@ -178,6 +178,13 @@ sub check_apple_fixture {
         }
         die "$test: missing $expect->{relocation} relocation\n" if $expect->{relocation} && !$relocation_seen;
         my @cases = ([$compiler, @cppgm], [$clang, @clang]);
+        if ($expect->{source_link_flags}) {
+            my @group = ($compiler, @flags, @{$expect->{source_link_flags}}, '-x', 'c++', @inputs);
+            run_tool($dir, 0, @group, @link, '-o', "$dir/program");
+            execute_macho($dir, $expect->{commands}, $clang);
+            run_tool($dir, 0, @group, '-c', '-o', "$dir/combined.o");
+            push @cases, [$clang, "$dir/combined.o"];
+        }
         if (@inputs > 1 && $expect->{llvm_interop}) {
             push @cases, [$compiler, $clang[0], @cppgm[1 .. $#cppgm]], [$compiler, $cppgm[0], @clang[1 .. $#clang]];
         }
@@ -189,7 +196,7 @@ sub check_apple_fixture {
             execute_macho($dir, $expect->{commands}, $clang);
         }
         my @backend_inputs = macho_link_inputs($dir, $expect->{archive_units}, $raw[0], @clang[1 .. $#clang]);
-        run_tool($dir, 0, $backend, @flags, @link, @backend_inputs, '-o', "$dir/program");
+        run_tool($dir, 0, $backend, $target, "-O$level", @link, @backend_inputs, '-o', "$dir/program");
         execute_macho($dir, $expect->{commands}, $clang);
     }
 }

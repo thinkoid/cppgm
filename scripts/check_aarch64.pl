@@ -113,7 +113,7 @@ for my $asm (@{$expect->{reference_assembly} // []}) {
     run(0, $clang, @target, @{$expect->{reference_flags} // []}, '-c',
         File::Spec->catfile(dirname($test), $asm), '-o', $assembly[-1]);
 }
-for my $level (0..3) {
+for my $level (@{$expect->{levels} // [0..3]}) {
     $level_name = "O$level";
     $producers = 'clang';
     my @flags = (@target, "-O$level", @{$expect->{flags} // []});
@@ -134,7 +134,7 @@ for my $level (0..3) {
     die "$test: expected relocation $expect->{relocation}\n"
         if $expect->{relocation} && index($header, $expect->{relocation}) < 0;
     my $quality = $expect->{quality};
-    if ($quality && grep { $_ == $level } @{$quality->{levels} // [1, 2, 3]}) {
+    if ($quality && grep { $_ eq $level } @{$quality->{levels} // [1, 2, 3]}) {
         for my $symbol (sort keys %{$quality->{functions}}) {
             for my $unit ($other, $object) {
                 my $assembly = run(0, $objdump, '-t', '-d', '--no-show-raw-insn', "--disassemble-symbols=$symbol", $unit);
@@ -157,12 +157,20 @@ for my $level (0..3) {
     }
     for my $optimized (0,1) {
         my @emit = $optimized ? ("-O$level", '-S', '-emit-lowir') :
-            ('-O0', '--emit-lowir', '-g0', ($level ? '-D__OPTIMIZE__=1' : ()));
+            ('-O0', '--emit-lowir', '-g0', ($level ? '-D__OPTIMIZE__=1' : ()), ($level eq 'z' ? '-D__OPTIMIZE_SIZE__=1' : ()));
         run(0, $compiler, @target, @emit, @{$expect->{flags} // []}, '-x', 'c++', $test, '-o', "$directory/unit.lowir");
         run(0, $opt, '-O0', "$directory/unit.lowir", '-o', "$directory/roundtrip.lowir");
         run(0, $compiler, @flags, ($optimized ? '-fno-lowir-passes' : ()), '-c', "$directory/roundtrip.lowir", '-o', "$directory/roundtrip.o");
         copy("$directory/roundtrip.lowir", "$directory/raw.lowir") or die "$!" unless $optimized;
         die "$test: O$level LowIR object differs (optimized=$optimized)\n" if compare($object, "$directory/roundtrip.o");
+    }
+    if ($expect->{source_link_flags}) {
+        my @group = ($compiler, @flags, @{$expect->{source_link_flags}}, '-x', 'c++', $test, @units);
+        $producers = 'cppgm-source-lto';
+        run(0, @group, '-o', "$directory/program");
+        execute_image('course');
+        run(0, @group, '-c', '-o', "$directory/combined.o");
+        link_external("$directory/combined.o");
     }
     if (@units) {
         my (@clang_peers, @cppgm_peers);

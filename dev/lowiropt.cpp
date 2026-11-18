@@ -72,12 +72,14 @@ Invocation parse_invocation(const vector<string>& args)
 	for (size_t i = 0; i < args.size(); ++i)
 	{
 		const string& option = args[i];
-		if (option.size() == 3 && option[0] == '-' && option[1] == 'O' && option[2] >= '0' && option[2] <= '3')
+		if (option.size() == 3 && option[0] == '-' && option[1] == 'O' &&
+			((option[2] >= '0' && option[2] <= '3') || option[2] == 'z'))
 		{
 			if (invocation.has_level)
 				throw InvocationError("multiple optimization levels provided");
 			invocation.has_level = true;
-			invocation.options.level = option[2] - '0';
+			invocation.options.minimize_size = option[2] == 'z';
+			invocation.options.level = invocation.options.minimize_size ? 2 : option[2] - '0';
 		}
 		else if (option == "-o")
 		{
@@ -130,7 +132,7 @@ int run_lowiropt_mode(const vector<string>& args)
 		return run_not_implemented_batch_mode();
 	if (has_arg(args, "--help", "-h"))
 	{
-		cout << lowiropt_help_text();
+		cout << lowiropt_help_text() << "  -Oz   optimize for smaller code\n";
 		return EXIT_SUCCESS;
 	}
 	Invocation invocation = parse_invocation(args);

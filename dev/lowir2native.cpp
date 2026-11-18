@@ -6,6 +6,7 @@
 #include "backend/compile.h"
 #include "driver/wasm_link_options.h"
 #include "native/backend.h"
+#include "opt/optimizer.h"
 #include "native/link/linker.h"
 #include "native/object/object_compiler.h"
 #include "support/internal_error.h"
@@ -27,6 +28,7 @@ struct LowIR2NativeInvocation
 {
 	bool has_optimization_level = false;
 	int optimization_level = 0;
+	bool minimize_size = false;
 	native::Target target = native::host_target();
 	string output_target;
 	string outfile;
@@ -73,6 +75,11 @@ bool has_help_arg(const vector<string>& args)
 
 bool is_optimization_level(const string& arg, int& level)
 {
+	if (arg == "-Oz")
+	{
+		level = 2;
+		return true;
+	}
 	if (arg.size() == 3 && arg[0] == '-' && arg[1] == 'O' && arg[2] >= '0' && arg[2] <= '3')
 	{
 		level = arg[2] - '0';
@@ -114,6 +121,7 @@ LowIR2NativeInvocation parse_lowir2native_invocation(const vector<string>& args)
 			}
 			invocation.has_optimization_level = true;
 			invocation.optimization_level = optimization_level;
+			invocation.minimize_size = args[i] == "-Oz";
 			continue;
 		}
 		if (args[i] == "--stats")
@@ -258,7 +266,7 @@ int run_lowir2native_mode(const vector<string>& args)
 
 	if (has_help_arg(args))
 	{
-		cout << lowir2native_help_text();
+		cout << lowir2native_help_text() << "  -Oz   optimize for smaller code\n";
 		return EXIT_SUCCESS;
 	}
 
@@ -289,6 +297,17 @@ int run_lowir2native_mode(const vector<string>& args)
 	options.output = invocation.outfile;
 	options.machine_ir = invocation.machine_ir_file;
 	options.optimization_level = invocation.optimization_level;
+	opt::OptimizerOptions optimization;
+	if (invocation.minimize_size)
+	{
+		optimization.level = invocation.optimization_level;
+		optimization.minimize_size = true;
+		optimization.has_gnu_sincos = target_model::has_gnu_sincos(options.target);
+		options.optimizer = &optimization;
+		options.wasm_link.compact_relocations = target_model::is_wasm(options.target);
+		if (target_model::describe(options.target).architecture == target_model::Architecture::X86_64)
+			opt::optimize_program(program, optimization, nullptr);
+	}
 	options.stats = invocation.stats;
 	bool undefined = false;
 	options.undefined_symbol = &undefined;

@@ -40,7 +40,7 @@ sub build_fixture {
         $manifest->{objects}{$name} = digest("$directory/$name");
         push @assembly, $name;
     }
-    for my $level (0 .. 3) {
+    for my $level (@{$expect->{levels} // [0..3]}) {
         my %objects;
         for my $pair (['cppgm', $compiler], ['clang', $clang]) {
             my ($label, $tool) = @$pair;
@@ -56,6 +56,17 @@ sub build_fixture {
         if (@units > 1 && $expect->{llvm_interop}) {
             push @cases, [$objects{cppgm}[0], @{$objects{clang}}[1 .. $#units]],
                          [$objects{clang}[0], @{$objects{cppgm}}[1 .. $#units]];
+        }
+        if ($expect->{source_link_flags}) {
+            my $name = "$stem-O$level-combined.o";
+            my @group = ($compiler, $target, "-O$level", @{$expect->{flags} // []},
+                @{$expect->{source_link_flags}}, '-x', 'c++', @units);
+            run_tool($dir, 0, @group, '-c', '-o', "$directory/$name");
+            $manifest->{objects}{$name} = digest("$directory/$name");
+            push @cases, [$name];
+            my $exe = "$stem-O$level-source-lto";
+            run_tool($dir, 0, @group, '-o', "$directory/$exe");
+            $manifest->{executables}{$exe} = {sha256 => digest("$directory/$exe"), commands => $expect->{commands}};
         }
         for my $case (@cases) {
             my @names = (@$case, @assembly);
