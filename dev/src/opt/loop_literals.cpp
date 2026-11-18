@@ -55,6 +55,15 @@ bool LoopLiterals::held_literal(const Instruction& inst, Value v) const
 	if (!v.is(ValueKind::Integer) || !target_model::is_aarch64(c_.program.target) || inst.op != Opcode::Binary ||
 		inst.sub != static_cast<unsigned>(BinaryOp::Mul) || integer_bits(inst.type.kind()) != 64)
 		return false;
+	// A multiply-add address needs a register stride, even if a single
+	// move constructs the literal. A power of two already folds as a shift.
+	const uint64_t stride = body_.literals[v.index].low;
+	if (inst.next != kNoId && stride && (stride & (stride - 1)))
+	{
+		const auto& next = body_.instructions[inst.next];
+		if (next.op == Opcode::Index && storage_bytes(next.type) == 1 && next.ops[1] == Value::temp(inst.result))
+			return true;
+	}
 	// A multiply needs its literal in a register. Several MOVKs in the
 	// loop cost more than using a register for the invariant multiplicand.
 	uint64_t bits = body_.literals[v.index].low;
