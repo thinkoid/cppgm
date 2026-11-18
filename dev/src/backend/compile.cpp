@@ -42,7 +42,7 @@ bool compile_program(lowir::Program& program, const Options& options, std::strin
 				dump = "machine_ir aarch64 1\n";
 			const bool darwin = target_model::is_darwin(options.target);
 			aarch64::compile_object(program, objects.front(), options.optimization_level, darwin,
-				dump.empty() ? nullptr : &dump, false, darwin);
+				dump.empty() ? nullptr : &dump, false, darwin, options.optimizer && options.optimizer->minimize_size);
 			if (!dump.empty())
 			{
 				FileHandle file(std::fopen(options.machine_ir.c_str(), "wb"));

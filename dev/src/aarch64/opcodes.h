@@ -14,6 +14,7 @@
 	M(UDiv, 0x9ac00800) \
 	M(SDivW, 0x1ac00c00) \
 	M(UDivW, 0x1ac00800) \
+	M(MaddW, 0x1b000000) \
 	M(Madd, 0x9b000000) \
 	M(Msub, 0x9b008000) \
 	M(MsubW, 0x1b008000) \
@@ -41,6 +42,11 @@
 	M(OrrW, 0x2a000000) \
 	M(Eor, 0xca000000) \
 	M(EorW, 0x4a000000) \
+	M(OrnW, 0x2a200000) \
+	M(BicW, 0x0a200000) \
+	M(Bic, 0x8a200000) \
+	M(EonW, 0x4a200000) \
+	M(Eon, 0xca200000) \
 	M(Orn, 0xaa200000) \
 	M(Lsl, 0x9ac02000) \
 	M(Lsr, 0x9ac02400) \

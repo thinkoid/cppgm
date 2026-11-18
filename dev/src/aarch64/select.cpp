@@ -1,6 +1,7 @@
 #include "aarch64/selector.h"
 
 #include "aarch64/error.h"
+#include "opt/function_ir.h"
 
 namespace aarch64 {
 
@@ -34,7 +35,8 @@ void Selector::binary(const lowir::Instruction& inst)
 
 void Selector::select(const lowir::Instruction& inst, BlockId block)
 {
-	if (inst.result != kNoId && !aliases_.empty() && aliases_[inst.result] != inst.result)
+	if (inst.result != kNoId &&
+		(rematerialized(inst.result) || (!aliases_.empty() && aliases_[inst.result] != inst.result)))
 		return;
 	if ((inst.type.kind() == TypeKind::I128 ||
 			(inst.op == Opcode::Convert && convert_source_type(inst).kind() == TypeKind::I128)) &&
@@ -206,7 +208,7 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 	}
 	case Opcode::Unary:
 		integer_unary(inst);
-		break;
+		return;
 	case Opcode::Switch:
 		switch_edges(inst, block);
 		return;
@@ -291,9 +293,161 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 	save(result_reg, inst.result);
 }
 
+unsigned Selector::incoming_scalar(Value param) const
+{
+	if (!param.is(ValueKind::Temp) || param.index >= body_.parameter_count)
+		return kNoId;
+	Arguments args(named_.darwin);
+	for (unsigned i = 0; i <= param.index; ++i)
+	{
+		const auto& p = program_.parameters_of(signature_)[i];
+		if (p.pass == ir_model::PPM_INDIRECT_RESULT)
+			return kNoId;
+		const auto arg = args.next(p.type, p.shape);
+		if (i == param.index && arg.bank == Bank::General && !memory_value(p.type) &&
+			(p.type.is_integer() || p.type.is_pointer()))
+			return arg.first;
+	}
+	return kNoId;
+}
+
+// Recognize a direct parameter, or a scalar field of a parameter, tested
+// once at entry. Every skipped definition has exactly one use in the test.
+bool Selector::entry_guard(BlockId entry, EntryGuard& guard) const
+{
+	const auto& bb = body_.blocks[entry];
+	if (bb.last == kNoId)
+		return false;
+	const auto& branch = body_.instructions[bb.last];
+	if (branch.op != Opcode::Branch || !branch.ops[0].is(ValueKind::Temp))
+		return false;
+	InstId id = bb.first;
+	Value expected = Value::none();
+	if (body_.instructions[id].op == Opcode::Index)
+	{
+		const auto& index = body_.instructions[id];
+		if (uses_[index.result] != 1 || !index.ops[1].is(ValueKind::Integer))
+			return false;
+		const uint64_t stride = storage_bytes(index.type), count = body_.literals[index.ops[1].index].low;
+		if (!stride || count > 32760 / stride)
+			return false;
+		guard.offset = count * stride;
+		guard.reg = incoming_scalar(index.ops[0]);
+		expected = Value::temp(index.result);
+		id = index.next;
+	}
+	if (body_.instructions[id].op == Opcode::Load)
+	{
+		const auto& load = body_.instructions[id];
+		if ((!load.type.is_integer() && !load.type.is_pointer()) || (load.flags & IF_VOLATILE) ||
+			uses_[load.result] != 1)
+			return false;
+		if (expected.is(ValueKind::None))
+			guard.reg = incoming_scalar(load.ops[0]);
+		else if (!(expected == load.ops[0]))
+			return false;
+		guard.bytes = storage_bytes(load.type);
+		if (guard.bytes > 8 || load.type.kind() == TypeKind::I1 || guard.offset % guard.bytes ||
+			guard.offset / guard.bytes >= 4096)
+			return false;
+		expected = Value::temp(load.result);
+		id = load.next;
+	}
+	else if (!expected.is(ValueKind::None))
+		return false;
+	const bool compared = body_.instructions[id].op == Opcode::Compare;
+	const auto& last = body_.instructions[id];
+	const Value tested = compared ? last.ops[0] : branch.ops[0];
+	if (!tested.is(ValueKind::Temp))
+		return false;
+	if (expected.is(ValueKind::None))
+		guard.reg = incoming_scalar(tested);
+	else if (!(tested == expected))
+		return false;
+	guard.bits = integer_bits(body_.temps[tested.index].type.kind());
+	if (guard.reg == kNoId || (!guard.bytes && guard.bits && guard.bits < 32))
+		return false;
+	if (!compared)
+		return id == bb.last;
+	if (last.next != bb.last || uses_[last.result] != 1 || !(Value::temp(last.result) == branch.ops[0]) ||
+		last.type != body_.temps[tested.index].type || !last.ops[1].is(ValueKind::Integer) ||
+		(last.sub != static_cast<unsigned>(ComparePredicate::Eq) &&
+			last.sub != static_cast<unsigned>(ComparePredicate::Ne)))
+		return false;
+	const uint64_t mask = !guard.bits || guard.bits == 64 ? ~0ull : (1ull << guard.bits) - 1;
+	const uint64_t literal = body_.literals[last.ops[1].index].low & mask;
+	if (literal > 4095)
+		return false;
+	guard.literal = literal;
+	guard.equal = last.sub == static_cast<unsigned>(ComparePredicate::Eq);
+	return true;
+}
+
+BlockId Selector::early_return()
+{
+	if (level_ < 2 || named_.darwin || !frame_ || out_.exceptions || !body_.code_labels.empty() ||
+		program_.symbols[symbol_].metadata.tls_for != kNoId)
+		return kNoId;
+	const auto entry = body_.layout.front();
+	EntryGuard guard;
+	if (!entry_guard(entry, guard))
+		return kNoId;
+	const auto& branch = body_.instructions[body_.blocks[entry].last];
+	for (unsigned side = 1; side <= 2; ++side)
+	{
+		const auto fast = branch.ops[side].index, slow = branch.ops[3 - side].index;
+		const auto& b = body_.blocks[fast];
+		if (b.first != b.last || b.last == kNoId || fast == slow)
+			continue;
+		const auto& ret = body_.instructions[b.last];
+		const Type type = signature_.result;
+		const unsigned width = integer_bits(type.kind());
+		if (ret.op != Opcode::Return || !(type.is_void() || type.is_pointer() || (width && width <= 64)))
+			continue;
+		const Value value = ret.ops[0];
+		const auto returned = incoming_scalar(value);
+		if (!type.is_void() && !value.is(ValueKind::Integer) &&
+			(returned == kNoId || type != body_.temps[value.index].type || (width && width < 32)))
+			continue;
+		opt::Cfg cfg;
+		opt::build_cfg_light(program_, body_, cfg, true);
+		if (cfg.pred_count(entry))
+			return kNoId;
+		const auto skip = static_cast<uint32_t>(out_.labels.size());
+		out_.labels.push_back(kNoId);
+		const unsigned reg = guard.bytes ? 9 : guard.reg;
+		if (guard.bytes)
+			access(false, reg, guard.reg, guard.offset, guard.bytes);
+		const bool nonzero = (side == 2) != guard.equal;
+		const bool word = guard.bits && guard.bits <= 32;
+		if (guard.literal)
+		{
+			out_.emit(word ? Op::SubsIW : Op::SubsIX, 31, reg, 0, guard.literal << 10);
+			out_.reference(Op::BCond, Fixup::Block, skip, nonzero ? 1 : 0);
+		}
+		else
+			out_.reference(
+				nonzero ? (word ? Op::CbnzW : Op::Cbnz) : (word ? Op::CbzW : Op::Cbz), Fixup::Block, skip, reg);
+		if (!type.is_void())
+		{
+			if (value.is(ValueKind::Integer))
+				constant(0, body_.literals[value.index].low & (width && width < 64 ? (1ull << width) - 1 : ~0ull));
+			else if (width == 32)
+				out_.emit(Op::OrrW, 0, 31, returned);
+			else
+				move(0, returned);
+		}
+		out_.emit(Op::Ret, 0, 30);
+		out_.bind(skip);
+		return slow;
+	}
+	return kNoId;
+}
+
 void Selector::run()
 {
 	plan();
+	const BlockId slow_entry = minimize_size_ ? kNoId : early_return();
 	stack_adjust(true);
 	if (tls_vectors_ != kNoId)
 	{
@@ -309,7 +463,9 @@ void Selector::run()
 		out_.emit(Op::AddI, 28, 31);
 		out_.frame_rule(FrameRule::Register, 28);
 	}
-	if (result_pointer_ != kNoId)
+	if (result_reg_ != kNoId)
+		move(result_reg_, 8);
+	else if (result_pointer_ != kNoId)
 		access(true, 8, frame_base(), result_pointer_, 8);
 	save_variadic_registers();
 	for (unsigned i = 0; i < body_.parameter_count; ++i)
@@ -327,10 +483,13 @@ void Selector::run()
 		const BlockId block = layout[index];
 		// A landing prologue can precede its LowIR block label.
 		fallthrough_ = level_ && index + 1 < layout.size() ? layout[index + 1] : kNoId;
-		if (out_.exceptions && fallthrough_ != kNoId &&
-			(!out_.exceptions->analysis.blocks_[index + 1].reachable ||
-				out_.exceptions->analysis.eh_landing_index_[index + 1] != kNoId))
-			fallthrough_ = kNoId;
+		if (out_.exceptions && fallthrough_ != kNoId)
+		{
+			const auto next = out_.exceptions->layout_of[fallthrough_];
+			if (!out_.exceptions->analysis.blocks_[next].reachable ||
+				out_.exceptions->analysis.eh_landing_index_[next] != kNoId)
+				fallthrough_ = kNoId;
+		}
 		if (out_.exceptions)
 		{
 			const auto& plan = *out_.exceptions;
@@ -339,6 +498,11 @@ void Selector::run()
 			landing(block);
 		}
 		out_.bind(block);
+		if (slow_entry != kNoId && block == body_.layout.front())
+		{
+			edge(block, slow_entry, true);
+			continue;
+		}
 		for (InstId i = body_.blocks[block].first; i != kNoId; i = body_.instructions[i].next)
 		{
 			if (elided != entry_elided_.end() && *elided == i)
@@ -347,6 +511,34 @@ void Selector::run()
 				continue;
 			}
 			const auto& inst = body_.instructions[i];
+			if (!word_accesses_.empty() && word_accesses_[i] && register_access(inst))
+				continue;
+			if (inst.op == Opcode::Call && calls_[call_indices_[i]].tail)
+			{
+				call(inst);
+				i = inst.next;
+				continue;
+			}
+			if (level_ && inst.op == Opcode::Call)
+			{
+				const auto last = inst.type.is_object() ? projected_call(inst) : branch_on_result(inst, block);
+				if (last != kNoId)
+				{
+					i = last;
+					continue;
+				}
+			}
+			if (level_ &&
+				((inst.op == Opcode::Unary && inst.sub == static_cast<unsigned>(UnaryOp::BitNot)) ||
+					(inst.op == Opcode::Binary && inst.sub == static_cast<unsigned>(BinaryOp::Mul))))
+			{
+				const auto last = arithmetic_operand(inst);
+				if (last != kNoId)
+				{
+					i = last;
+					continue;
+				}
+			}
 			if (level_ && (inst.op == Opcode::Index || inst.op == Opcode::Binary || inst.op == Opcode::Convert))
 			{
 				InstId last = inst.op == Opcode::Convert ? truncated_operand(inst, block) : address_sequence(i);
@@ -384,12 +576,14 @@ void Selector::run()
 			select(inst, block);
 		}
 	}
-	if (level_ && !out_.exceptions && !dynamic_stack_ && body_.code_labels.empty())
+	if (level_ && !dynamic_stack_ && body_.code_labels.empty())
 		share_edge_moves(out_);
 	// Tail sharing may redirect a branch. Check the final target before
 	// choosing the shorter reach of TBZ or TBNZ.
 	if (!bit_tests_.empty())
 		fold_bit_tests(out_, bit_tests_);
+	if (level_ >= 2 && !dynamic_stack_ && body_.code_labels.empty())
+		simplify_branches(out_);
 }
 
 } // namespace aarch64

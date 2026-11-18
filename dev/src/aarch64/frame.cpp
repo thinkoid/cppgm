@@ -11,10 +11,12 @@ namespace aarch64 {
 
 using namespace lowir;
 
-Selector::Selector(const Program& program, SymbolId symbol, Function& out, int level, bool pic)
+Selector::Selector(const Program& program, SymbolId symbol, Function& out, int level, bool pic,
+	const std::vector<uint32_t>& leaf_registers, bool minimize_size)
 	: program_(program), symbol_(symbol), body_(*program.functions[program.symbols[symbol].detail].body),
 	  signature_(program.signatures[program.functions[program.symbols[symbol].detail].signature]), out_(out),
-	  level_(level), pic_(pic), named_(target_model::is_darwin(program.target))
+	  level_(level), pic_(pic), minimize_size_(minimize_size), leaf_registers_(leaf_registers),
+	  named_(target_model::is_darwin(program.target))
 {}
 
 uint32_t Selector::reserve(uint64_t size, uint32_t alignment)
@@ -60,6 +62,9 @@ void Selector::plan()
 	};
 	bool calls = named_.darwin && std::any_of(body_.operands.begin(), body_.operands.end(), tls_access),
 		 starts_variadic = false, eh = false;
+	bool tail_safe = level_ >= 2 && signature_.boundary.arity != ir_model::CAM_VARIADIC &&
+		program_.symbols[symbol_].metadata.tls_for == kNoId;
+	bool has_tail = false;
 	for (BlockId block : body_.layout)
 	{
 		for (InstId i = body_.blocks[block].first; i != kNoId; i = body_.instructions[i].next)
@@ -68,6 +73,7 @@ void Selector::plan()
 			if (named_.darwin && !calls)
 				for (const auto operand : inst.ops)
 					calls |= tls_access(operand);
+			tail_safe &= inst.op != Opcode::Asm && !(inst.op == Opcode::Addr && !inst.ops[0].is(ValueKind::Symbol));
 			dynamic_stack_ |= inst.op == Opcode::StackSave || inst.op == Opcode::StackAlloc ||
 				inst.op == Opcode::StackRestore;
 			if (inst.op == Opcode::FrameAddress)
@@ -79,14 +85,37 @@ void Selector::plan()
 			has_phi |= inst.op == Opcode::Phi;
 			if (inst.op == Opcode::Call)
 			{
-				calls = true;
 				if (call_indices_.empty())
 					call_indices_.resize(body_.instructions.size(), kNoId);
 				call_indices_[i] = calls_.size();
 				calls_.push_back(call_layout(inst));
+				auto& layout = calls_.back();
+				layout.block = block;
+				if (!leaf_registers_.empty() && inst.ops[0].is(ValueKind::Symbol))
+				{
+					layout.preserved_callers = leaf_registers_[inst.ops[0].index];
+					if (layout.preserved_callers)
+						for (const auto& arg : layout.args)
+							if (arg.bank == Bank::General)
+								layout.preserved_callers &= ~(((1u << arg.pieces) - 1) << arg.first);
+				}
+				layout.tail = tail_safe && tail_compatible(inst, layout);
+				has_tail |= layout.tail;
+				calls |= !layout.tail;
 				outgoing = std::max(outgoing, calls_.back().size);
 			}
 		}
+	}
+	if (has_tail && tail_safe && !body_.slots.empty())
+	{
+		const auto escaped = opt::escaped_slots(body_, true);
+		tail_safe = std::none_of(escaped.begin(), escaped.end(), [](uint8_t used) { return used != 0; });
+	}
+	if (has_tail && (!tail_safe || eh || starts_variadic || dynamic_stack_ || frame_pointer_ != kNoId))
+	{
+		for (auto& layout : calls_)
+			layout.tail = false;
+		calls = true;
 	}
 	outgoing_ = (outgoing + 15) & ~15u;
 	reserve(outgoing_, 16);
@@ -115,6 +144,21 @@ void Selector::plan()
 		preserved_.push_back({ 30, reserve(8, 8) });
 	}
 	allocate();
+	// The existing result-pointer home can save a spare nonvolatile register.
+	// The pointer then survives calls without a reload at each output access.
+	if (level_ >= 2 && result_pointer_ != kNoId && !eh && !dynamic_stack_ &&
+		program_.symbols[symbol_].metadata.tls_for == kNoId)
+	{
+		unsigned used = 0;
+		for (const auto& saved : preserved_)
+			used |= 1u << saved.first;
+		const unsigned available = (0x3ffu << 19) & ~used;
+		if (available)
+		{
+			result_reg_ = __builtin_ctz(available);
+			preserved_.insert(preserved_.begin(), std::make_pair(result_reg_, result_pointer_));
+		}
+	}
 	if (named_.darwin && program_.symbols[symbol_].metadata.tls_for != kNoId)
 	{
 		// Darwin C++ TLS accessors may call initializers. Their callers
@@ -160,6 +204,23 @@ void Selector::constant(unsigned reg, uint64_t bits)
 	{
 		out_.emit(width == 64 ? Op::OrrImm : Op::OrrImmW, reg, 31, 0, mask);
 		return;
+	}
+	// Reciprocal multipliers often differ from a repeated bit mask in
+	// only one halfword. ORR and one MOVK can then replace four moves.
+	if (width == 64 && std::max(zeros, ones) <= 1)
+	{
+		const uint64_t repeated = ((bits >> 32) & 65535) * 0x0001000100010001ull;
+		uint64_t changed = bits ^ repeated;
+		if (changed && logical_immediate(repeated, 64, mask))
+		{
+			const unsigned halfword = __builtin_ctzll(changed) / 16;
+			if ((changed >> (halfword * 16)) <= 65535)
+			{
+				out_.emit(Op::OrrImm, reg, 31, 0, mask);
+				out_.emit(Op::MovK, reg, 0, 0, (halfword << 21) | (((bits >> (halfword * 16)) & 65535) << 5));
+				return;
+			}
+		}
 	}
 	const bool invert = ones > zeros;
 	const unsigned fill = invert ? 65535 : 0;
@@ -264,7 +325,9 @@ void Selector::base_address(unsigned reg, unsigned base, uint32_t offset, unsign
 
 void Selector::result_address(unsigned reg)
 {
-	if (result_pointer_ == kNoId)
+	if (result_reg_ != kNoId)
+		move(reg, result_reg_);
+	else if (result_pointer_ == kNoId)
 		move(reg, 8);
 	else
 		access(false, reg, frame_base(), result_pointer_, 8);
@@ -410,6 +473,8 @@ void Selector::value(unsigned reg, Value operand, Type type)
 			if (!type.is_pointer())
 				access(false, reg, reg, 0, storage_bytes(type));
 		}
+		else if (rematerialized(operand.index))
+			address(reg, Value::slot(remat_slots_[operand.index]));
 		else if (vectors_[operand.index] != kNoId)
 			fp_move(false, vectors_[operand.index], reg, body_.temps[operand.index].type);
 		else if (registers_[operand.index] != kNoId)

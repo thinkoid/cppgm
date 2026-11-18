@@ -1,5 +1,6 @@
 #include "aarch64/mir.h"
 #include "aarch64/link.h"
+#include "native/object/elf_format.h"
 
 #include "aarch64/error.h"
 
@@ -22,30 +23,8 @@ void Function::bind(uint32_t label)
 	labels.at(label) = code.size();
 }
 
-// A TBZ/TBNZ displacement is a signed 14-bit word offset. Fuse only pairs
-// already in range; removing instructions can only shorten the distance.
-// Selection records adjacent AND/branch sites with no intervening labels.
-void fold_bit_tests(Function& f, const std::vector<BitTest>& tests)
+static void remove_instructions(Function& f, const std::vector<uint32_t>& removed)
 {
-	std::vector<uint32_t> removed;
-	for (const auto& test : tests)
-	{
-		auto& mask = f.code[test.pc];
-		const auto& branch = f.code[test.pc + 1];
-		const bool zero = branch.op == Op::Cbz || branch.op == Op::CbzW;
-		if ((!zero && branch.op != Op::Cbnz && branch.op != Op::CbnzW) || branch.fixup != Fixup::Block ||
-			branch.rd != 9)
-			continue;
-		const int64_t distance = int64_t(f.labels[branch.target]) - test.pc;
-		if (distance < -8192 || distance >= 8192)
-			continue;
-		const auto reg = mask.rn;
-		mask = branch;
-		mask.op = zero ? Op::Tbz : Op::Tbnz;
-		mask.rd = reg;
-		mask.field = ((test.bit & 32) << 26) | ((test.bit & 31) << 19);
-		removed.push_back(test.pc + 1);
-	}
 	if (removed.empty())
 		return;
 	uint32_t written = removed.front(), first = written + 1;
@@ -65,6 +44,41 @@ void fold_bit_tests(Function& f, const std::vector<BitTest>& tests)
 			label = mapped(label);
 	for (auto& event : f.frame_events)
 		event.pc = 4 * mapped(event.pc / 4);
+	for (auto& site : f.sites)
+	{
+		site.begin = 4 * mapped(site.begin / 4);
+		site.end = 4 * mapped(site.end / 4);
+	}
+	for (auto& pad : f.pads)
+		if (pad != lowir::kNoId)
+			pad = 4 * mapped(pad / 4);
+}
+
+// A TBZ/TBNZ displacement is a signed 14-bit word offset. Fuse only pairs
+// already in range; removing instructions can only shorten the distance.
+// Selection records adjacent AND/branch sites with no intervening labels.
+void fold_bit_tests(Function& f, const std::vector<BitTest>& tests)
+{
+	std::vector<uint32_t> removed;
+	for (const auto& test : tests)
+	{
+		auto& mask = f.code[test.pc];
+		const auto& branch = f.code[test.pc + 1];
+		const bool zero = branch.op == Op::Cbz || branch.op == Op::CbzW;
+		if ((!zero && branch.op != Op::Cbnz && branch.op != Op::CbnzW) || branch.fixup != Fixup::Block ||
+			branch.rd != mask.rd)
+			continue;
+		const int64_t distance = int64_t(f.labels[branch.target]) - test.pc;
+		if (distance < -8192 || distance >= 8192)
+			continue;
+		const auto reg = mask.rn;
+		mask = branch;
+		mask.op = zero ? Op::Tbz : Op::Tbnz;
+		mask.rd = reg;
+		mask.field = ((test.bit & 32) << 26) | ((test.bit & 31) << 19);
+		removed.push_back(test.pc + 1);
+	}
+	remove_instructions(f, removed);
 }
 
 // A phi edge may contain a single MOV followed by a branch to the loop
@@ -108,6 +122,152 @@ void share_edge_moves(Function& f)
 		for (auto& ins : f.code)
 			if (ins.fixup == Fixup::Block && ins.op != Op::Adr && redirect[ins.target] != lowir::kNoId)
 				ins.target = redirect[ins.target];
+}
+
+// Redirect jumps after register allocation, where a phi transfer may have
+// assigned the constant tested at the start of the target. Table entries
+// remain one instruction wide even when their destination is adjacent.
+void simplify_branches(Function& f)
+{
+	if (f.code.size() < 2 || f.code.size() >= (1u << 18))
+		return;
+	std::vector<uint8_t> anchored(f.code.size() + 1), table;
+	for (auto pc : f.labels)
+		if (pc < anchored.size())
+			anchored[pc] = 1;
+	for (const auto& event : f.frame_events)
+		anchored[event.pc / 4] = 1;
+	for (uint32_t pad : f.pads)
+		if (pad != lowir::kNoId)
+			anchored[pad / 4] = 1;
+	for (const auto& inst : f.code)
+		if (inst.op == Op::Adr && inst.fixup == Fixup::Block)
+		{
+			if (table.empty())
+				table.resize(f.code.size());
+			for (auto i = f.labels[inst.target]; i < f.code.size() && f.code[i].op == Op::B && !table[i]; ++i)
+				table[i] = 1;
+		}
+	const unsigned n = f.code.size();
+	std::vector<unsigned> removed;
+	for (unsigned pc = 0; pc < n; ++pc)
+	{
+		auto& br = f.code[pc];
+		if (br.fixup != Fixup::Block || br.op == Op::Adr)
+			continue;
+		auto to = f.labels[br.target];
+		if (to >= n)
+			continue;
+		// A short branch keeps its original encodable displacement.
+		for (unsigned step = 0; step < 8 && f.code[to].op == Op::B && f.code[to].fixup == Fixup::Block; ++step)
+		{
+			const auto target = f.code[to].target;
+			const auto dest = f.labels[target];
+			const int64_t distance = static_cast<int64_t>(dest) - pc;
+			if (dest >= n || dest == to ||
+				((br.op == Op::Tbz || br.op == Op::Tbnz) && (distance < -8192 || distance >= 8192)))
+				break;
+			to = dest;
+			br.target = target;
+		}
+		if (br.op != Op::B)
+			continue;
+		if (pc && !anchored[pc])
+		{
+			const auto& prev = f.code[pc - 1];
+			const auto& test = f.code[to];
+			if (prev.op == Op::MovZ && prev.rd != 31 && prev.fixup == Fixup::None && prev.rd == test.rd &&
+				test.fixup == Fixup::Block &&
+				(test.op == Op::Cbz || test.op == Op::CbzW || test.op == Op::Cbnz || test.op == Op::CbnzW))
+			{
+				const uint64_t value = uint64_t((prev.field >> 5) & 65535) << (16 * ((prev.field >> 21) & 3));
+				const bool is_zero = test.op == Op::CbzW || test.op == Op::CbnzW ? static_cast<uint32_t>(value) == 0
+																				 : value == 0;
+				if (is_zero == (test.op == Op::Cbz || test.op == Op::CbzW))
+					br.target = test.target;
+				else if (to + 1 < n)
+				{
+					br.target = f.labels.size();
+					f.labels.push_back(to + 1);
+					anchored[to + 1] = 1;
+				}
+				to = f.labels[br.target];
+			}
+		}
+		if (!table.empty() && table[pc])
+			continue;
+		if (to == pc + 1)
+		{
+			removed.push_back(pc);
+			continue;
+		}
+		if (!pc || anchored[pc])
+			continue;
+		auto& cond = f.code[pc - 1];
+		if (cond.fixup != Fixup::Block || f.labels[cond.target] != pc + 1)
+			continue;
+		switch (cond.op)
+		{
+		case Op::BCond:
+			cond.rd ^= 1;
+			break;
+		case Op::Cbz:
+			cond.op = Op::Cbnz;
+			break;
+		case Op::Cbnz:
+			cond.op = Op::Cbz;
+			break;
+		case Op::CbzW:
+			cond.op = Op::CbnzW;
+			break;
+		case Op::CbnzW:
+			cond.op = Op::CbzW;
+			break;
+		case Op::Tbz:
+		case Op::Tbnz:
+		{
+			const int64_t words = int64_t(to) - (pc - 1);
+			if (words < -8192 || words >= 8192)
+				continue;
+			cond.op = cond.op == Op::Tbz ? Op::Tbnz : Op::Tbz;
+			break;
+		}
+		default:
+			continue;
+		}
+		cond.target = br.target;
+		removed.push_back(pc);
+	}
+	if (!removed.empty())
+		remove_instructions(f, removed);
+}
+
+// Choose the start of a function so its short backward branches fetch from
+// fewer cache lines. At most three unused instruction words precede the
+// function. Nothing is inserted into the loop or its unwind program.
+void place_short_loops(const Function& function, native::object::Section& text)
+{
+	unsigned contained[4] = {};
+	const unsigned base = text.bytes.size() / 4;
+	for (unsigned end = 0; end < function.code.size(); ++end)
+	{
+		const auto& ins = function.code[end];
+		if (ins.fixup != Fixup::Block || ins.op == Op::Adr)
+			continue;
+		const auto start = function.labels[ins.target];
+		if (start >= end || end - start >= 16)
+			continue;
+		for (unsigned pad = 0; pad < 4; ++pad)
+			if (((base + start + pad) & 15) + (end - start) < 16)
+				++contained[pad];
+	}
+	const unsigned pad = std::max_element(contained, contained + 4) - contained;
+	if (contained[pad])
+	{
+		text.align = std::max<uint64_t>(text.align, 64);
+		for (unsigned i = 0; i < pad; ++i)
+			native::object::put32(text.bytes, 0xd503201f);
+	}
 }
 
 void encode(

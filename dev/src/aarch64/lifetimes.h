@@ -31,7 +31,9 @@ std::vector<LiveRange> live_ranges(const lowir::Program& program, const lowir::F
 	std::vector<std::pair<uint32_t, uint32_t>>& segments, opt::Cfg& cfg, machine::PhiWebs& webs,
 	std::vector<uint32_t>& entries, const std::vector<uint32_t>& aliases);
 
+void block_frequencies(
+	const lowir::Program& program, const lowir::FunctionBody& body, opt::Cfg& cfg, std::vector<uint64_t>& weights);
 std::vector<uint64_t> spill_weights(const lowir::Program& program, const lowir::FunctionBody& body, opt::Cfg& cfg,
-	const std::vector<uint32_t>& aliases);
+	const std::vector<uint32_t>& aliases, std::vector<uint64_t>& weights);
 
 } // namespace aarch64

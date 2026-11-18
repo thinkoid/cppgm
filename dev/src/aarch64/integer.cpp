@@ -1,3 +1,4 @@
+#include "machine/exact_division.h"
 #include "aarch64/selector.h"
 #include "aarch64/logical_immediate.h"
 
@@ -38,6 +39,56 @@ void Selector::narrow_left(Value src, Type type, TempId result, unsigned width, 
 	const unsigned dest = registers_[result] == kNoId ? 9 : registers_[result];
 	out_.emit(Op::UbfmW, dest, operand_register(src, type, 10), 0, ((-count & 31) << 16) | ((width - count - 1) << 10));
 	save(dest, result, true);
+}
+
+// A known multiple needs no rounding. Remove the divisor's powers of two,
+// then multiply by its odd part's modular inverse, as on x86-64.
+bool Selector::constant_quotient(
+	const lowir::Instruction& inst, uint64_t divisor, unsigned bits, unsigned lhs, unsigned dst)
+{
+	const auto op = static_cast<BinaryOp>(inst.sub);
+	const bool sign = op == BinaryOp::Div;
+	if ((!sign && op != BinaryOp::UDiv) || (bits != 32 && bits != 64))
+		return false;
+	const bool w = bits == 32;
+	if (w)
+		divisor = static_cast<uint32_t>(divisor);
+	if (!divisor)
+		return false;
+	const bool negative = sign && (divisor >> (bits - 1));
+	const uint64_t magnitude = negative ? (w ? static_cast<uint32_t>(0 - divisor) : 0 - divisor) : divisor;
+	const unsigned shift = __builtin_ctzll(magnitude);
+	const uint64_t odd = magnitude >> shift;
+	const bool exact = inst.flags & IF_EXACT;
+	if (odd != 1 && !exact)
+		return false;
+	unsigned from = lhs;
+	if (shift)
+	{
+		if (sign && !exact)
+		{
+			out_.emit(w ? Op::SbfmW : Op::Sbfm, 9, lhs, 0, ((bits - 1) << 16) | ((bits - 1) << 10));
+			out_.emit(w ? Op::AddW : Op::Add, 9, lhs, 9, (1u << 22) | ((bits - shift) << 10));
+			from = 9;
+		}
+		out_.emit(sign ? (w ? Op::SbfmW : Op::Sbfm) : (w ? Op::UbfmW : Op::Ubfm), dst, from, 0,
+			(shift << 16) | ((bits - 1) << 10));
+		from = dst;
+	}
+	if (odd != 1)
+	{
+		uint64_t inverse = machine::odd_inverse(odd);
+		if (negative)
+			inverse = 0 - inverse;
+		constant(11, w ? static_cast<uint32_t>(inverse) : inverse);
+		out_.emit(w ? Op::MulW : Op::Mul, dst, from, 11);
+	}
+	else if (negative)
+		out_.emit(w ? Op::SubW : Op::Sub, dst, 31, from);
+	else if (from != dst)
+		out_.emit(w ? Op::OrrW : Op::Orr, dst, 31, from);
+	save(dst, inst.result, true);
+	return true;
 }
 
 bool Selector::simple_binary(const lowir::Instruction& inst)
@@ -99,6 +150,8 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 		const uint64_t raw = body_.literals[rhs.index].low;
 		// A coefficient of 1 + 2^k needs just ADD with a shifted register.
 		const uint64_t factor = w ? static_cast<uint32_t>(raw) : raw;
+		if ((op == BinaryOp::Div || op == BinaryOp::UDiv) && constant_quotient(inst, raw, bits, left, dest))
+			return true;
 		if (op == BinaryOp::Mul && factor > 2 && ((factor - 1) & (factor - 2)) == 0)
 		{
 			out_.emit(w ? Op::AddW : Op::Add, dest, left, left, __builtin_ctzll(factor - 1) << 10);
@@ -235,31 +288,63 @@ void Selector::choose(const lowir::Instruction& inst, unsigned condition)
 
 // Record the two-instruction form. Exact instruction placement determines
 // whether the bit-test branch can reach its destination.
-InstId Selector::bit_branch(const lowir::Instruction& inst, BlockId block)
+InstId Selector::bit_branch(const lowir::Instruction& inst, BlockId block, const lowir::Instruction* shift)
 {
-	if (out_.exceptions || inst.next == kNoId || uses_[inst.result] != 1)
-		return kNoId;
-	const auto& next = body_.instructions[inst.next];
-	if (next.op != Opcode::Branch || !(next.ops[0] == Value::temp(inst.result)))
-		return kNoId;
-	Value operand = inst.ops[0], literal = inst.ops[1];
-	if (operand.is(ValueKind::Integer))
-		std::swap(operand, literal);
 	const unsigned width = integer_bits(inst.type.kind());
-	if (!literal.is(ValueKind::Integer) || !width || width > 64)
+	if (inst.next == kNoId || uses_[inst.result] != 1 || !width || width > 64)
 		return kNoId;
-	const uint64_t mask = body_.literals[literal.index].low & (~uint64_t(0) >> (64 - width));
-	if (!mask || (mask & (mask - 1)))
+	InstId edge = inst.next;
+	Value condition = Value::temp(inst.result);
+	Op test_zero = Op::Cbz;
+	const auto& test = body_.instructions[edge];
+	if (test.op == Opcode::Compare && test.type == inst.type && test.ops[0] == condition &&
+		test.ops[1].is(ValueKind::Integer) && body_.literals[test.ops[1].index].low == 0 &&
+		(test.sub == static_cast<unsigned>(ComparePredicate::Ne) ||
+			test.sub == static_cast<unsigned>(ComparePredicate::Eq)) &&
+		uses_[test.result] == 1 && test.next != kNoId)
+	{
+		test_zero = test.sub == static_cast<unsigned>(ComparePredicate::Eq) ? Op::Cbnz : Op::Cbz;
+		condition = Value::temp(test.result);
+		edge = test.next;
+	}
+	const auto& branch = body_.instructions[edge];
+	if (branch.op != Opcode::Branch || !(branch.ops[0] == condition))
 		return kNoId;
-	const unsigned bit = __builtin_ctzll(mask);
+	Value operand = inst.ops[0], mask = inst.ops[1];
+	unsigned src, bit;
+	if (shift)
+	{
+		// Test bit zero of word >> index. W and X shifts mask the count
+		// identically to the original 1 << index at their respective widths.
+		if (operand == Value::temp(shift->result))
+			std::swap(operand, mask);
+		if (!(mask == Value::temp(shift->result)) || operand == mask || !operand.is(ValueKind::Temp))
+			return kNoId;
+		const unsigned word = operand_register(operand, inst.type, 10);
+		const unsigned index = operand_register(shift->ops[1], shift->type, 11);
+		out_.emit(width == 32 ? Op::LsrW : Op::Lsr, 9, word, index);
+		src = 9;
+		bit = 0;
+	}
+	else
+	{
+		if (operand.is(ValueKind::Integer))
+			std::swap(operand, mask);
+		if (!mask.is(ValueKind::Integer))
+			return kNoId;
+		const uint64_t value = body_.literals[mask.index].low & (~uint64_t(0) >> (64 - width));
+		if (!value || (value & (value - 1)))
+			return kNoId;
+		bit = __builtin_ctzll(value);
+		src = operand_register(operand, inst.type, 10);
+	}
 	uint32_t field = 0;
-	logical_immediate(mask, width <= 32 ? 32 : 64, field);
-	const unsigned src = operand_register(operand, inst.type, 10);
+	logical_immediate(uint64_t(1) << bit, width <= 32 ? 32 : 64, field);
 	const uint32_t pc = out_.code.size();
 	out_.emit(width <= 32 ? Op::AndImmW : Op::AndImm, 9, src, 0, field);
-	conditional_edges(block, next, width <= 32 ? Op::CbzW : Op::Cbz, 9);
+	conditional_edges(block, branch, test_zero, 9);
 	bit_tests_.push_back({ pc, bit });
-	return inst.next;
+	return edge;
 }
 
 // Test a narrow modular interval using one W subtraction and a compare.
@@ -456,38 +541,44 @@ void Selector::integer_unary(const lowir::Instruction& inst)
 {
 	const unsigned bits = integer_bits(inst.type.kind());
 	const auto op = static_cast<UnaryOp>(inst.sub);
-	value(10, inst.ops[0], inst.type);
+	unsigned src = operand_register(inst.ops[0], inst.type, 10);
+	const unsigned dst = registers_[inst.result] == kNoId ? 9 : registers_[inst.result];
 	switch (op)
 	{
 	case UnaryOp::Neg:
-		out_.emit(Op::Sub, 9, 31, 10);
+		out_.emit(bits <= 32 ? Op::SubW : Op::Sub, dst, 31, src);
 		break;
 	case UnaryOp::BitNot:
-		out_.emit(Op::Orn, 9, 31, 10);
+		out_.emit(bits <= 32 ? Op::OrnW : Op::Orn, dst, 31, src);
 		break;
 	case UnaryOp::Not:
-		out_.emit(Op::Subs, 31, 10, 31);
-		out_.emit(Op::Csinc, 9, 31, 31, 1u << 12);
+		out_.emit(Op::Subs, 31, src, 31);
+		out_.emit(Op::CsincW, dst, 31, 31, 1u << 12);
 		break;
 	case UnaryOp::ByteSwap:
-		out_.emit(bits == 64 ? Op::Rev64 : bits == 32 ? Op::Rev32 : Op::Rev16, 9, 10);
+		out_.emit(bits == 64 ? Op::Rev64 : bits == 32 ? Op::Rev32 : Op::Rev16, dst, src);
 		break;
 	case UnaryOp::CountTrailingZeros:
 	case UnaryOp::CountLeadingZeros:
 		if (op == UnaryOp::CountTrailingZeros)
-			out_.emit(Op::Rbit, 10, 10, 0, bits == 64 ? 1u << 31 : 0);
-		out_.emit(Op::Clz, 9, 10, 0, bits == 64 ? 1u << 31 : 0);
+		{
+			out_.emit(Op::Rbit, 10, src, 0, bits == 64 ? 1u << 31 : 0);
+			src = 10;
+		}
+		out_.emit(Op::Clz, dst, src, 0, bits == 64 ? 1u << 31 : 0);
 		break;
 	case UnaryOp::CountOnes:
+		move(10, src);
 		extend(10, bits, false);
 		out_.emit(Op::FmovDX, 16, 10);
 		out_.emit(Op::Cnt8B, 16, 16);
 		out_.emit(Op::Addv8B, 16, 16);
-		out_.emit(Op::UmovB, 9, 16);
+		out_.emit(Op::UmovB, dst, 16);
 		break;
 	case UnaryOp::Sqrt:
 		break; // Handled by float_instruction.
 	}
+	save(dst, inst.result, bits == 32 || bits == 64);
 }
 
 void Selector::switch_edges(const lowir::Instruction& inst, BlockId from)
@@ -524,32 +615,79 @@ void Selector::switch_edges(const lowir::Instruction& inst, BlockId from)
 		}
 	};
 	const BlockId fallback = inst.ops[1].index;
-	if (level_ && machine::native_table(cases, clusters.size(), targets.size()) && empty_edge(from, fallback) &&
-		std::all_of(clusters.begin(), clusters.end(),
-			[&](const machine::CaseCluster& c) { return empty_edge(from, c.target); }))
+	const uint64_t first = cases.empty() ? 0 : static_cast<uint64_t>(cases.front().first);
+	const uint64_t span = cases.empty() ? 0 : static_cast<uint64_t>(cases.back().first) - first;
+	const bool masks = !cases.empty() && span < 64 && !targets.empty() && targets.size() <= 2 &&
+		clusters.size() >= 2 * targets.size() + 1;
+	if (level_ && (masks || machine::native_table(cases, clusters.size(), targets.size())))
 	{
-		const auto first = static_cast<uint64_t>(cases.front().first);
-		const auto span = static_cast<uint64_t>(cases.back().first) - first;
+		// Several entries may share the same phi transfer. Give each
+		// nonempty edge one stub, including the out-of-range default.
+		std::vector<std::pair<BlockId, uint32_t>> stubs;
+		auto label = [&](BlockId target) {
+			if (empty_edge(from, target))
+				return target;
+			for (const auto& stub : stubs)
+				if (stub.first == target)
+					return stub.second;
+			const auto next = static_cast<uint32_t>(out_.labels.size());
+			out_.labels.push_back(kNoId);
+			stubs.push_back({ target, next });
+			return next;
+		};
+		const auto other = label(fallback);
 		const unsigned index = first ? 9 : source;
 		if (first)
 			subtract(index, source, first);
 		subtract(31, index, span);
-		out_.reference(Op::BCond, Fixup::Block, fallback, 8);
-		// Each table entry is one branch instruction. ADR reaches the table
-		// on both object formats without an absolute pointer or a data relocation.
-		const auto table = static_cast<uint32_t>(out_.labels.size());
-		out_.labels.push_back(kNoId);
-		out_.reference(Op::Adr, Fixup::Block, table, 16);
-		out_.emit(Op::Add, 16, 16, index, (2u << 10) | (narrow ? (1u << 21) | (2u << 13) : 0u));
-		out_.emit(Op::Br, 0, 16);
-		out_.bind(table);
-		size_t cluster = 0;
-		for (uint64_t i = 0; i <= span; ++i)
+		out_.reference(Op::BCond, Fixup::Block, other, 8);
+		if (masks)
 		{
-			while (uint64_t(clusters[cluster].hi) - first < i)
-				++cluster;
-			const auto target = i < uint64_t(clusters[cluster].lo) - first ? fallback : clusters[cluster].target;
-			out_.reference(Op::B, Fixup::Block, target);
+			for (BlockId target : targets)
+			{
+				if (target == fallback)
+					continue;
+				uint64_t members = 0;
+				for (const auto& c : clusters)
+					if (c.target == target)
+					{
+						const auto lo = static_cast<uint64_t>(c.lo) - first;
+						const auto hi = static_cast<uint64_t>(c.hi) - first;
+						members |= (UINT64_MAX >> (63 - hi + lo)) << lo;
+					}
+				constant(10, members);
+				out_.emit(Op::Lsr, 11, 10, index);
+				uint32_t field = 0;
+				logical_immediate(1, 64, field);
+				const uint32_t pc = out_.code.size();
+				out_.emit(Op::AndImm, 11, 11, 0, field);
+				out_.reference(Op::Cbnz, Fixup::Block, label(target), 11);
+				if (!out_.exceptions)
+					bit_tests_.push_back({ pc, 0 });
+			}
+			out_.reference(Op::B, Fixup::Block, other);
+		}
+		else
+		{
+			const auto table = static_cast<uint32_t>(out_.labels.size());
+			out_.labels.push_back(kNoId);
+			out_.reference(Op::Adr, Fixup::Block, table, 16);
+			out_.emit(Op::Add, 16, 16, index, (2u << 10) | (narrow ? (1u << 21) | (2u << 13) : 0u));
+			out_.emit(Op::Br, 0, 16);
+			out_.bind(table);
+			size_t cluster = 0;
+			uint32_t destination = label(clusters[0].target);
+			for (uint64_t i = 0; i <= span; ++i)
+			{
+				while (uint64_t(clusters[cluster].hi) - first < i)
+					destination = label(clusters[++cluster].target);
+				out_.reference(Op::B, Fixup::Block, i < uint64_t(clusters[cluster].lo) - first ? other : destination);
+			}
+		}
+		for (const auto& stub : stubs)
+		{
+			out_.bind(stub.second);
+			edge(from, stub.first, &stub == &stubs.back());
 		}
 		return;
 	}

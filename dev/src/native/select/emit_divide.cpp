@@ -1,6 +1,7 @@
 #include "native/select/function_selector.h"
 
 #include "native/mir/type_kinds.h"
+#include "machine/exact_division.h"
 
 // Integer division and remainder. A divisor that is not a constant uses
 // the hardware divide (cqo/idiv or a zeroed rdx and div: rax and rdx).
@@ -188,16 +189,6 @@ SignedMagic signed_magic(int64_t d)
 		magic.multiplier = static_cast<int64_t>(0 - static_cast<uint64_t>(magic.multiplier));
 	magic.shift = p - 64;
 	return magic;
-}
-
-// The inverse of an odd number modulo 2^64 (Newton's iteration doubles
-// the correct low bits: 3 -> 6 -> 12 -> 24 -> 48 -> 96).
-uint64_t odd_inverse(uint64_t odd)
-{
-	uint64_t x = odd;
-	for (unsigned k = 0; k < 5; ++k)
-		x *= 2 - odd * x;
-	return x;
 }
 
 unsigned integer_width(TypeKind kind)
@@ -486,7 +477,7 @@ void FunctionSelector::emit_exact_divide(Reg x, Reg d, int64_t divisor)
 		emit2(Op::Sar, TypeKind::I64, reg(d), imm(k));
 	if (odd != 1)
 	{
-		const int64_t inverse = static_cast<int64_t>(odd_inverse(odd));
+		const int64_t inverse = static_cast<int64_t>(machine::odd_inverse(odd));
 		if (inverse >= INT32_MIN && inverse <= INT32_MAX)
 			emit2(Op::Imul, TypeKind::I64, reg(d), imm(inverse));
 		else

@@ -99,8 +99,17 @@ InstId Selector::shifted_operand(const lowir::Instruction& shift, BlockId block)
 	const auto op = static_cast<BinaryOp>(shift.sub);
 	const unsigned bits = integer_bits(shift.type.kind());
 	if ((bits != 32 && bits != 64) || shift.next == kNoId || uses_[shift.result] != 1 ||
-		(op != BinaryOp::Shl && op != BinaryOp::Shr && op != BinaryOp::UShr) || !shift.ops[1].is(ValueKind::Integer))
+		(op != BinaryOp::Shl && op != BinaryOp::Shr && op != BinaryOp::UShr))
 		return kNoId;
+	if (!shift.ops[1].is(ValueKind::Integer))
+	{
+		const auto& mask = body_.instructions[shift.next];
+		if (op == BinaryOp::Shl && shift.ops[0].is(ValueKind::Integer) && body_.literals[shift.ops[0].index].low == 1 &&
+			shift.ops[1].is(ValueKind::Temp) && mask.op == Opcode::Binary && mask.type == shift.type &&
+			mask.sub == static_cast<unsigned>(BinaryOp::And))
+			return bit_branch(mask, block, &shift);
+		return kNoId;
+	}
 	const auto rotated = rotated_operand(shift);
 	if (rotated != kNoId)
 		return rotated;
@@ -174,5 +183,48 @@ InstId Selector::shifted_operand(const lowir::Instruction& shift, BlockId block)
 	out_.emit(selected, dest, a, b, (kind << 22) | (count << 10));
 	save(dest, next.result, true);
 	return shift.next;
+}
+// Fuse an adjacent single-use product or complement into its consumer. A
+// producer's inputs may share the consumer's destination after allocation.
+InstId Selector::arithmetic_operand(const lowir::Instruction& inst)
+{
+	const unsigned bits = integer_bits(inst.type.kind());
+	if ((bits != 32 && bits != 64) || inst.next == kNoId || uses_[inst.result] != 1)
+		return kNoId;
+	const auto& next = body_.instructions[inst.next];
+	if (next.op != Opcode::Binary || next.type != inst.type)
+		return kNoId;
+	const auto v = Value::temp(inst.result);
+	const bool right = next.ops[1] == v;
+	if (!right && !(next.ops[0] == v))
+		return kNoId;
+	const auto other = next.ops[right ? 0 : 1];
+	if (other.is(ValueKind::Symbol) || inst.ops[0].is(ValueKind::Symbol) || inst.ops[1].is(ValueKind::Symbol))
+		return kNoId;
+	const auto op = static_cast<BinaryOp>(next.sub);
+	const auto dest = registers_[next.result] == kNoId ? 9 : registers_[next.result];
+	if (inst.op == Opcode::Unary)
+	{
+		if (op != BinaryOp::And && op != BinaryOp::Or && op != BinaryOp::Xor)
+			return kNoId;
+		const unsigned lhs = operand_register(other, next.type, 10);
+		const unsigned rhs = operand_register(inst.ops[0], inst.type, 11);
+		const Op selected = op == BinaryOp::And ? (bits == 32 ? Op::BicW : Op::Bic)
+			: op == BinaryOp::Or                ? (bits == 32 ? Op::OrnW : Op::Orn)
+												: (bits == 32 ? Op::EonW : Op::Eon);
+		out_.emit(selected, dest, lhs, rhs);
+	}
+	else
+	{
+		if (op != BinaryOp::Add && (op != BinaryOp::Sub || !right))
+			return kNoId;
+		const unsigned lhs = operand_register(inst.ops[0], inst.type, 10);
+		const unsigned rhs = operand_register(inst.ops[1], inst.type, 11);
+		const unsigned acc = operand_register(other, inst.type, 15);
+		out_.emit(op == BinaryOp::Sub ? (bits == 32 ? Op::MsubW : Op::Msub) : (bits == 32 ? Op::MaddW : Op::Madd), dest,
+			lhs, rhs, acc << 10);
+	}
+	save(dest, next.result, true);
+	return inst.next;
 }
 } // namespace aarch64

@@ -122,8 +122,28 @@ void aliases(const Program& program, const std::vector<uint32_t>& symbols, obj::
 
 }
 
+// Only previously emitted local leaf definitions can promise more than the
+// ABI. Exclude every register field (including pair operands and writeback
+// bases); treating immediate bits as registers merely shortens this mask.
+static uint32_t untouched_callers(const Function& function)
+{
+	uint32_t mask = (0xfcu | (7u << 12));
+	for (const auto& inst : function.code)
+	{
+		if (inst.op == Op::Bl || inst.op == Op::Blr || inst.op == Op::Br || inst.op == Op::Svc ||
+			(inst.op == Op::B && inst.fixup != Fixup::Block) || inst.fixup == Fixup::Resume)
+			return 0;
+		const uint32_t word = static_cast<uint32_t>(inst.op) | inst.rd | (inst.rn << 5) | (inst.rm << 16) | inst.field;
+		mask &= ~((1u << (word & 31)) | (1u << ((word >> 5) & 31)) | (1u << ((word >> 10) & 31)) |
+			(1u << ((word >> 16) & 31)));
+		if (!mask)
+			break;
+	}
+	return mask;
+}
+
 void compile_object(Program& program, obj::ObjectFile& object, int level, bool pic, std::string* dump,
-	bool function_sections, bool host)
+	bool function_sections, bool host, bool minimize_size)
 {
 	if (program.explicit_target && !target_model::is_aarch64(program.target))
 		throw AArch64Error("input and output target profiles differ");
@@ -138,8 +158,11 @@ void compile_object(Program& program, obj::ObjectFile& object, int level, bool p
 		throw AArch64Error("conflicting AArch64 object definitions");
 	std::vector<uint32_t> symbols(program.symbols.size(), kNoId);
 	create_symbols(program, canonical, symbols, object, host);
+	std::vector<uint32_t> leaf_registers(level >= 2 ? program.symbols.size() : 0);
 	const uint32_t code = object.add_section(".text", obj::SectionKind::Text, 4);
 	const uint32_t eh = object.add_section(".eh_frame", obj::SectionKind::Rodata, 8);
+	const bool darwin = target_model::is_darwin(program.target);
+	std::vector<obj::Group> weak_groups;
 	for (SymbolId id : program.order)
 	{
 		const auto& src = program.symbols[id];
@@ -150,20 +173,37 @@ void compile_object(Program& program, obj::ObjectFile& object, int level, bool p
 		if (src.kind != SymbolKind::FunctionDefinition)
 			continue;
 		Function function;
-		Selector(program, id, function, level, pic).run();
+		Selector(program, id, function, level, pic, leaf_registers, minimize_size).run();
+		if (level >= 2 && src.metadata.binding == ir_model::SBM_INTERNAL && !function.exceptions)
+			leaf_registers[id] = untouched_callers(function);
 		const uint32_t resume = function.needs_resume ? external_symbol(object, "_Unwind_Resume") : kNoId;
 		auto& sym = object.symbols[symbols[id]];
 		const char* name = object.symbol_name(symbols[id]);
 		if (dump)
 			dump_function(function, program, name, *dump);
+		const bool comdat = !darwin && src.metadata.binding == ir_model::SBM_WEAK &&
+			(src.metadata.flags & SF_REPLACEABLE) == 0;
+		const uint32_t first_section = object.sections.size();
 		sym.section = function_sections
 			? object.add_section((std::string(".text.") + name).c_str(), obj::SectionKind::Text, 4)
-			: code;
+			: comdat ? object.add_section(".text", obj::SectionKind::Text, 4)
+					 : code;
 		auto& section = object.sections[sym.section];
+		if (level >= 2 && !darwin && !minimize_size)
+			place_short_loops(function, section);
 		sym.value = section.bytes.size();
 		encode(function, symbols, section, resume);
 		sym.size = section.bytes.size() - sym.value;
-		emit_unwind(function, symbols[id], eh, symbols, object, target_model::is_darwin(program.target));
+		const auto unwind = comdat ? kNoId : eh;
+		emit_unwind(function, symbols[id], unwind, symbols, object, darwin);
+		if (comdat)
+		{
+			obj::Group group;
+			group.signature = symbols[id];
+			for (size_t k = first_section; k < object.sections.size(); ++k)
+				group.sections.push_back(k);
+			weak_groups.push_back(std::move(group));
+		}
 		if (src.metadata.role == ir_model::SR_INIT || src.metadata.role == ir_model::SR_FINI)
 		{
 			const bool init = src.metadata.role == ir_model::SR_INIT;
@@ -182,6 +222,22 @@ void compile_object(Program& program, obj::ObjectFile& object, int level, bool p
 		}
 	}
 	aliases(program, symbols, object);
+	if (!weak_groups.empty())
+	{
+		// A definition may export another ABI name. Until its complete
+		// bundle can be coalesced, keep every name available to foreign objects.
+		std::vector<unsigned> exported(object.sections.size());
+		for (const auto& symbol : object.symbols)
+			if (symbol.binding != obj::Binding::Local && symbol.section < exported.size())
+				++exported[symbol.section];
+		for (auto& group : weak_groups)
+			if (exported[object.symbols[group.signature].section] == 1)
+			{
+				for (auto index : group.sections)
+					object.sections[index].group = object.groups.size();
+				object.groups.push_back(std::move(group));
+			}
+	}
 }
 
 } // namespace aarch64

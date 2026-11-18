@@ -13,13 +13,27 @@ namespace aarch64 {
 class Selector
 {
 public:
-	Selector(const lowir::Program& program, lowir::SymbolId symbol, Function& out, int level, bool pic);
+	Selector(const lowir::Program& program, lowir::SymbolId symbol, Function& out, int level, bool pic,
+		const std::vector<uint32_t>& leaf_registers, bool minimize_size);
 	void run();
 
 private:
 	void plan();
+	struct EntryGuard
+	{
+		unsigned reg = lowir::kNoId, bytes = 0, offset = 0, bits = 0, literal = 0;
+		bool equal = false;
+	};
+	unsigned incoming_scalar(lowir::Value param) const;
+	bool entry_guard(lowir::BlockId entry, EntryGuard& guard) const;
+	lowir::BlockId early_return();
+	lowir::InstId branch_on_result(const lowir::Instruction& inst, lowir::BlockId block);
+	lowir::InstId projected_call(const lowir::Instruction& inst);
+	std::vector<uint32_t> slot_mentions_;
+	uint32_t result_reg_ = lowir::kNoId;
 	void plan_slots();
 	std::vector<lowir::BlockId> order_blocks() const;
+	std::vector<uint64_t> block_weights_;
 	void prepare_exceptions();
 	void landing(lowir::BlockId block);
 	void resume(uint32_t site);
@@ -35,6 +49,9 @@ private:
 	void allocate();
 	void call_result_homes();
 	void parameter_homes(opt::Cfg& cfg);
+	void register_objects();
+	bool register_access(const lowir::Instruction& inst);
+	std::vector<uint8_t> object_words_, parameter_words_, word_accesses_;
 	unsigned vector_value(lowir::Value value, unsigned scratch);
 	void save_vector(unsigned reg, lowir::TempId result);
 	void vector_instruction(const lowir::Instruction& inst);
@@ -70,8 +87,13 @@ private:
 		std::vector<unsigned> copies;
 		unsigned size;
 		bool parallel = false;
+		bool tail = false;
+		lowir::BlockId block = lowir::kNoId;
+		uint16_t saved_args = 0;
+		uint32_t preserved_callers = 0;
 	};
 	void pass_parallel(const lowir::Instruction& inst, const CallLayout& layout);
+	bool tail_compatible(const lowir::Instruction& inst, const CallLayout& layout) const;
 	CallLayout call_layout(const lowir::Instruction& inst) const;
 	void parameter(lowir::TempId id, const Argument& arg);
 	void pass(const Argument& arg, lowir::Value src, lowir::Type type, unsigned copy_offset);
@@ -110,7 +132,9 @@ private:
 	unsigned condition_register(lowir::Value operand, unsigned scratch);
 	unsigned operand_register(lowir::Value operand, lowir::Type type, unsigned scratch);
 	void narrow_left(lowir::Value src, lowir::Type type, lowir::TempId result, unsigned width, unsigned count);
+	bool constant_quotient(const lowir::Instruction& inst, uint64_t divisor, unsigned bits, unsigned lhs, unsigned dst);
 	bool simple_binary(const lowir::Instruction& inst);
+	lowir::InstId arithmetic_operand(const lowir::Instruction& producer);
 	void integer_unary(const lowir::Instruction& inst);
 	void binary(const lowir::Instruction& inst);
 	void compare(const lowir::Instruction& inst, bool flags_ready = false);
@@ -125,7 +149,8 @@ private:
 	lowir::InstId paired_store(const lowir::Instruction& index);
 	lowir::InstId address_sequence(lowir::InstId id);
 	void choose(const lowir::Instruction& inst, unsigned condition);
-	lowir::InstId bit_branch(const lowir::Instruction& inst, lowir::BlockId block);
+	lowir::InstId bit_branch(
+		const lowir::Instruction& inst, lowir::BlockId block, const lowir::Instruction* shift = nullptr);
 	lowir::InstId narrow_range_branch(const lowir::Instruction& sub, lowir::BlockId block);
 	lowir::InstId finish_condition(lowir::InstId id, unsigned condition, lowir::BlockId block);
 	void set_condition(lowir::TempId result, unsigned condition);
@@ -135,7 +160,11 @@ private:
 	bool empty_edge(lowir::BlockId block, lowir::BlockId to);
 	void conditional_edges(lowir::BlockId block, const lowir::Instruction& branch, Op test, unsigned operand);
 	void call(const lowir::Instruction& inst);
+	void emit_call(const lowir::Instruction& inst, const CallLayout& layout, bool projected = false);
+	std::vector<uint32_t> argument_spills_, remat_slots_;
+	bool rematerialized(lowir::TempId id) const { return !remat_slots_.empty() && remat_slots_[id] != lowir::kNoId; }
 	void epilogue(const lowir::Instruction& inst);
+	void finish(lowir::SymbolId tail = lowir::kNoId);
 
 	const lowir::Program& program_;
 	lowir::SymbolId symbol_;
@@ -145,7 +174,8 @@ private:
 	const lowir::Signature& signature_;
 	Function& out_;
 	int level_;
-	bool pic_;
+	bool pic_, minimize_size_;
+	const std::vector<uint32_t>& leaf_registers_;
 	bool dynamic_stack_ = false, stack_pair_ = false;
 	lowir::BlockId fallthrough_ = lowir::kNoId;
 	uint32_t outgoing_ = 0;

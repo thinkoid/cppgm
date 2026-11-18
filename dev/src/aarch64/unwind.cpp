@@ -78,8 +78,9 @@ void emit_unwind(const Function& function, uint32_t symbol, uint32_t shared_sect
 	const bool handler = lsda != lowir::kNoId;
 	const uint32_t personality = handler ? external_symbol(object, "__gxx_personality_v0") : lowir::kNoId;
 	const uint32_t cell = handler && !darwin ? pointer_cell(object, personality) : personality;
-	const uint32_t section_index = handler ? object.add_section(".eh_frame", obj::SectionKind::Rodata, 8)
-										   : shared_section;
+	const uint32_t section_index = handler || shared_section == lowir::kNoId
+		? object.add_section(".eh_frame", obj::SectionKind::Rodata, 8)
+		: shared_section;
 	auto& section = object.sections[section_index];
 	if (section.bytes.empty())
 	{

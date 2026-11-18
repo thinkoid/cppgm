@@ -6,6 +6,6 @@
 namespace aarch64 {
 
 void compile_object(lowir::Program& program, native::object::ObjectFile& object, int level, bool pic = false,
-	std::string* dump = nullptr, bool function_sections = false, bool host = false);
+	std::string* dump = nullptr, bool function_sections = false, bool host = false, bool minimize_size = false);
 
 } // namespace aarch64

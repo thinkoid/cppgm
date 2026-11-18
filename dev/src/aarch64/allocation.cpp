@@ -55,6 +55,48 @@ bool exceeds_capacity(const lowir::FunctionBody& body, const std::vector<LiveRan
 	return false;
 }
 
+// A guarded call that cannot repeat has a path to a return on which
+// preserving its live registers would be unnecessary.
+bool guarded_call(const FunctionBody& body, const opt::Cfg& cfg, BlockId site)
+{
+	if (cfg.succ_first.empty() || body.layout.size() < 3 || body.layout.size() > 96 || site == body.layout.front())
+		return false;
+	std::vector<uint8_t> seen(body.blocks.size());
+	std::vector<BlockId> pending;
+	auto successors = [&](BlockId b) {
+		pending.insert(pending.end(), cfg.succs.begin() + cfg.succ_first[b], cfg.succs.begin() + cfg.succ_first[b + 1]);
+	};
+	successors(site);
+	while (!pending.empty())
+	{
+		const auto b = pending.back();
+		pending.pop_back();
+		if (b == site)
+			return false;
+		if (!seen[b])
+		{
+			seen[b] = 1;
+			successors(b);
+		}
+	}
+	std::fill(seen.begin(), seen.end(), 0);
+	seen[site] = 1;
+	pending.push_back(body.layout.front());
+	while (!pending.empty())
+	{
+		const auto b = pending.back();
+		pending.pop_back();
+		if (seen[b])
+			continue;
+		seen[b] = 1;
+		const auto last = body.blocks[b].last;
+		if (last != kNoId && body.instructions[last].op == Opcode::Return)
+			return true;
+		successors(b);
+	}
+	return false;
+}
+
 // A straight-line function only needs the end of each register's last use.
 // When a register has holes, query the same interference tree used on x86.
 class RegisterBank
@@ -147,7 +189,7 @@ std::vector<Selector::CallRegisters> Selector::call_registers() const
 // must execute again. Slots that share frame storage may have an earlier owner.
 void Selector::parameter_homes(opt::Cfg& cfg)
 {
-	if (body_.layout.empty() || out_.exceptions || !body_.code_labels.empty() || slots_.empty())
+	if (body_.layout.empty() || !body_.code_labels.empty() || slots_.empty())
 		return;
 	const BlockId entry = body_.layout.front();
 	InstId previous = kNoId;
@@ -187,7 +229,7 @@ void Selector::parameter_homes(opt::Cfg& cfg)
 // copy consumes the result and nothing exposes that slot to the callee.
 void Selector::call_result_homes()
 {
-	if (calls_.empty() || out_.exceptions || body_.slots.empty())
+	if (calls_.empty() || body_.slots.empty())
 		return;
 	std::vector<uint8_t> escaped;
 	for (BlockId block : body_.layout)
@@ -195,6 +237,8 @@ void Selector::call_result_homes()
 		{
 			const auto& call = body_.instructions[i];
 			const auto slot = machine::call_result_copy_slot(body_, call, uses_);
+			if (slot != kNoId && out_.exceptions && site(call) && opt::may_unwind(program_, call))
+				continue;
 			if (slot == kNoId || body_.slots[slot].type != call.type ||
 				!classify(call.type, program_.call_boundary(call)->boundary.result_shape).indirect)
 				continue;
@@ -240,11 +284,15 @@ void Selector::allocate()
 	// x9-x11, x15-x17 and v16-v17 are selector scratch; x18 is platform-reserved.
 	std::vector<unsigned> incoming(body_.parameter_count, kNoId);
 	Arguments args(named_.darwin);
+	bool free_x8 = !named_.darwin && !result_.indirect && !out_.exceptions;
 	for (TempId id = 0; id < body_.parameter_count; ++id)
 	{
 		const auto& param = program_.parameters_of(signature_)[id];
 		if (param.pass == ir_model::PPM_INDIRECT_RESULT)
+		{
+			free_x8 = false;
 			continue;
+		}
 		const auto arg = args.next(param.type, param.shape);
 		if ((arg.bank == Bank::General && !memory_value(param.type)) ||
 			(arg.bank == Bank::Simd && (param.type.kind() == TypeKind::V128 || !memory_value(param.type))))
@@ -255,13 +303,18 @@ void Selector::allocate()
 	std::vector<uint32_t> order;
 	if (exceeds_capacity(body_, ranges, segments, calls, slots, dynamic_stack_ ? 9 : 10))
 	{
-		const auto weight = spill_weights(program_, body_, cfg, aliases_);
+		const auto weight = spill_weights(program_, body_, cfg, aliases_, block_weights_);
 		order.resize(ranges.size());
 		for (uint32_t i = 0; i < order.size(); ++i)
 			order[i] = i;
 		std::stable_sort(order.begin(), order.end(),
 			[&](uint32_t a, uint32_t b) { return weight[ranges[a].id] > weight[ranges[b].id]; });
 	}
+	const bool split_calls = level_ >= 2 && !out_.exceptions && !named_.darwin && !dynamic_stack_ &&
+		body_.code_labels.empty() && calls.size() <= 64;
+	if (split_calls && calls.size() > 1 && block_weights_.empty() && !cfg.succ_first.empty())
+		block_frequencies(program_, body_, cfg, block_weights_);
+	const bool single = split_calls && calls.size() == 1 && guarded_call(body_, cfg, calls_.front().block);
 	RegisterBank general(segments, slots), simd(segments, slots);
 	uint32_t saved_fp = 0;
 	uint32_t saved = dynamic_stack_ ? 1u << 28 : 0;
@@ -271,13 +324,30 @@ void Selector::allocate()
 		if (range.first == kNoId)
 			continue;
 		bool at_call = false, across_call = false;
+		uint32_t kept = !out_.exceptions && !leaf_registers_.empty() ? (0xfcu | (7u << 12)) : 0;
 		if (!calls.empty())
 			each_interval(range, segments, [&](uint32_t a, uint32_t b) {
 				const auto call = std::lower_bound(calls.begin(), calls.end(), a);
 				at_call |= call != calls.end() && *call <= b;
 				across_call |= call != calls.end() && *call < b;
+				for (auto it = call; kept && it != calls.end() && *it <= b; ++it)
+					kept &= calls_[it - calls.begin()].preserved_callers;
 			});
 		const auto type = body_.temps[range.id].type;
+		// A fixed frame address is one add at the use. Computing it twice
+		// can cost less than saving a register across the call.
+		if (across_call && type.is_pointer() && uses_[range.id] <= 2 && body_.temps[range.id].def != kNoId)
+		{
+			const auto& def = body_.instructions[body_.temps[range.id].def];
+			if (def.op == Opcode::Addr && def.ops[0].is(ValueKind::Slot) && def.ops[0].index != result_slot_ &&
+				data_alignment(body_.slots[def.ops[0].index].type) <= 16)
+			{
+				if (remat_slots_.empty())
+					remat_slots_.resize(count, kNoId);
+				remat_slots_[range.id] = def.ops[0].index;
+				continue;
+			}
+		}
 		uint32_t arguments = at_call
 			? (!across_call && outgoing[range.id].preferred < 8 ? outgoing[range.id].allowed : 0)
 			: 0xff;
@@ -308,7 +378,33 @@ void Selector::allocate()
 				vectors_[range.id] = simd.assign(range, arguments | 0xfffc0000, kNoId);
 			continue;
 		}
-		const uint32_t caller = across_call ? 0 : arguments | (7u << 12);
+		if (range.first == 0)
+			kept &= ~0xffu | (range.id < incoming.size() && incoming[range.id] < 8 ? 1u << incoming[range.id] : 0);
+		uint32_t caller = across_call ? kept : arguments | (7u << 12) | (!at_call && free_x8 ? 1u << 8 : 0);
+		// Keep an incoming scalar in its ABI register when its live range
+		// crosses only cold calls. The saved slot belongs to this register.
+		uint64_t crossed = 0;
+		if (across_call && split_calls && (single || !block_weights_.empty()))
+		{
+			uint64_t cost = 0;
+			each_interval(range, segments, [&](uint32_t a, uint32_t b) {
+				for (auto it = std::lower_bound(calls.begin(), calls.end(), a); it != calls.end() && *it < b; ++it)
+				{
+					const auto k = static_cast<unsigned>(it - calls.begin());
+					crossed |= uint64_t(1) << k;
+					if (!block_weights_.empty())
+						cost += block_weights_[calls_[k].block];
+				}
+			});
+			if (single || cost <= block_weights_[body_.layout.front()] / 2)
+			{
+				caller |= 7u << 12;
+				if (range.id < incoming.size() && incoming[range.id] < 8)
+					caller |= outgoing[range.id].allowed & (1u << incoming[range.id]);
+				else if (range.first != 0)
+					caller |= outgoing[range.id].allowed & 0xffu;
+			}
+		}
 		const uint32_t preserved = (dynamic_stack_ ? 0x1ffu : 0x3ffu) << 19;
 		unsigned preferred = range.affinity == kNoId ? kNoId : registers_[range.affinity];
 		if (preferred == kNoId && at_call && !across_call && outgoing[range.id].preferred < 8)
@@ -316,6 +412,15 @@ void Selector::allocate()
 		const auto root = range.affinity == kNoId ? kNoId : webs.root(range.id);
 		const auto reg = general.assign(range, caller | preserved, preferred, root == kNoId ? kNoId : web_regs[root]);
 		registers_[range.id] = reg;
+		if (across_call && reg < 15 && !(kept & (1u << reg)))
+		{
+			if (argument_spills_.empty())
+				argument_spills_.resize(15, kNoId);
+			if (argument_spills_[reg] == kNoId)
+				argument_spills_[reg] = reserve(8, 8);
+			for (; crossed; crossed &= crossed - 1)
+				calls_[__builtin_ctzll(crossed)].saved_args |= 1u << reg;
+		}
 		if (reg != kNoId && reg >= 19)
 			saved |= 1u << reg;
 		if (root != kNoId && reg != kNoId && (web_regs[root] == kNoId || (reg >= 19 && web_regs[root] < 19)))
@@ -329,16 +434,32 @@ void Selector::allocate()
 		preserved_.push_back({ static_cast<unsigned>(__builtin_ctz(saved)), reserve(8, 8) });
 	for (; saved_fp; saved_fp &= saved_fp - 1)
 		preserved_fp_.push_back({ static_cast<unsigned>(__builtin_ctz(saved_fp)), reserve(8, 8) });
+	const uint32_t slot_base = frame_;
 	plan_slots();
 	parameter_homes(cfg);
+	register_objects();
+	if (!object_words_.empty())
+	{
+		// Reuse the tail of the slot area when all its remaining owners
+		// live in registers. The original slot offsets below it stay valid.
+		frame_ = slot_base;
+		for (SlotId i = 0; i < slots_.size(); ++i)
+			if (!object_words_[i] && slots_[i] != kNoId)
+			{
+				const Type type = body_.slots[i].type;
+				const uint64_t bytes = (storage_bytes(type) + 7) & ~uint64_t(7);
+				const unsigned align = data_alignment(type);
+				frame_ = std::max(frame_, static_cast<uint32_t>(slots_[i] + bytes + (align > 16 ? align - 16 : 0)));
+			}
+	}
 	call_result_homes();
 	machine::IntervalSlots scalar_spills, vector_spills;
 	for (const auto& range : ranges)
 	{
 		const auto id = range.id;
 		const auto reg = registers_[id];
-		if (range.first == kNoId || reg != kNoId || vectors_[id] != kNoId || homes_[id] != kNoId ||
-			(!call_result_slots_.empty() && call_result_slots_[id] != kNoId))
+		if (range.first == kNoId || rematerialized(id) || reg != kNoId || vectors_[id] != kNoId ||
+			homes_[id] != kNoId || (!call_result_slots_.empty() && call_result_slots_[id] != kNoId))
 			continue;
 		const auto type = body_.temps[id].type;
 		if (!memory_value(type))
@@ -351,6 +472,8 @@ void Selector::allocate()
 	for (TempId id = 0; id < aliases_.size(); ++id)
 		if (aliases_[id] != id)
 		{
+			if (!remat_slots_.empty())
+				remat_slots_[id] = remat_slots_[aliases_[id]];
 			registers_[id] = registers_[aliases_[id]];
 			homes_[id] = homes_[aliases_[id]];
 		}

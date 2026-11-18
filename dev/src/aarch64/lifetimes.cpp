@@ -157,10 +157,8 @@ struct FunctionLiveness
 };
 } // namespace
 
-std::vector<uint64_t> spill_weights(
-	const Program& program, const FunctionBody& body, opt::Cfg& cfg, const std::vector<uint32_t>& aliases)
+void block_frequencies(const Program& program, const FunctionBody& body, opt::Cfg& cfg, std::vector<uint64_t>& weights)
 {
-	std::vector<uint64_t> cost(body.temps.size(), 0);
 	opt::complete_cfg(cfg);
 	opt::LoopForest forest;
 	opt::find_loops(body, cfg, forest);
@@ -178,7 +176,6 @@ std::vector<uint64_t> spill_weights(
 			cold[b] = inst.op == Opcode::Throw || inst.op == Opcode::Resume || inst.op == Opcode::Unreachable ||
 				program.rare_call(inst);
 		}
-	std::vector<uint64_t> weights;
 	machine::block_frequencies(
 		body, body.layout.front(), cfg.succ_first, cfg.succs, cfg.pred_first, cfg.preds, cold, first, members,
 		[](BlockId b) { return b; }, [&](BlockId b) { return cfg.reachable(b); },
@@ -186,6 +183,13 @@ std::vector<uint64_t> spill_weights(
 			return false;
 		},
 		weights);
+}
+
+std::vector<uint64_t> spill_weights(const Program& program, const FunctionBody& body, opt::Cfg& cfg,
+	const std::vector<uint32_t>& aliases, std::vector<uint64_t>& weights)
+{
+	std::vector<uint64_t> cost(body.temps.size(), 0);
+	block_frequencies(program, body, cfg, weights);
 	for (BlockId b : body.layout)
 		for (InstId i = body.blocks[b].first; i != kNoId; i = body.instructions[i].next)
 		{

@@ -23,6 +23,7 @@ enum class Fixup : uint16_t
 	Block,
 	Resume,
 	Call = Call26,
+	Jump = Jump26,
 	Page = AdrPrelPage21,
 	PageOffset = AddLo12,
 	GotPage = aarch64::GotPage,
@@ -86,7 +87,9 @@ struct BitTest
 };
 void fold_bit_tests(Function& function, const std::vector<BitTest>& tests);
 void share_edge_moves(Function& function);
+void simplify_branches(Function& function);
 
+void place_short_loops(const Function& function, native::object::Section& text);
 void encode(const Function& function, const std::vector<uint32_t>& symbols, native::object::Section& text,
 	uint32_t resume = lowir::kNoId);
 

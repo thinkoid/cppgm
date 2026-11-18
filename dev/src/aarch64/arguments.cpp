@@ -3,6 +3,7 @@
 #include "aarch64/error.h"
 #include "machine/call_arguments.h"
 #include "machine/parallel_register_moves.h"
+#include "opt/function_ir.h"
 
 namespace aarch64 {
 
@@ -119,6 +120,12 @@ void Selector::parameter(TempId id, const Argument& arg)
 	if (!arg.pieces || (level_ && !uses_[id]))
 		return;
 	const Type type = body_.temps[id].type;
+	if (!parameter_words_.empty() && parameter_words_[id])
+	{
+		move(parameter_words_[id], arg.first);
+		move(parameter_words_[id] + 1, arg.first + 1);
+		return;
+	}
 	const unsigned offset = frame_ + arg.first;
 	if (type.kind() == TypeKind::V128)
 	{
@@ -292,14 +299,187 @@ void Selector::pass_parallel(const lowir::Instruction& inst, const CallLayout& l
 		}
 }
 
+// The sibling's return registers must already meet the caller's ABI promise.
+// A narrow result from external code can have unspecified high bits on Linux.
+bool Selector::tail_compatible(const lowir::Instruction& inst, const CallLayout& layout) const
+{
+	if (inst.next == kNoId || !inst.ops[0].is(ValueKind::Symbol) || layout.size || memory_value(inst.type) ||
+		inst.type != signature_.result || program_.call_boundary(inst)->boundary.arity == ir_model::CAM_VARIADIC)
+		return false;
+	const auto& ret = body_.instructions[inst.next];
+	if (ret.op != Opcode::Return || (!inst.type.is_void() && !(ret.ops[0] == Value::temp(inst.result))))
+		return false;
+	return !(inst.type.is_integer() && integer_bits(inst.type.kind()) <= 32 &&
+		program_.symbols[symbol_].metadata.binding == ir_model::SBM_INTERNAL &&
+		program_.symbols[inst.ops[0].index].metadata.binding != ir_model::SBM_INTERNAL);
+}
+
+InstId Selector::projected_call(const lowir::Instruction& inst)
+{
+	if (!inst.type.is_object() || storage_bytes(inst.type) > 16 || inst.next == kNoId || inst.result == kNoId ||
+		uses_[inst.result] != 1 || out_.exceptions || dynamic_stack_)
+		return kNoId;
+	const auto& address = body_.instructions[inst.next];
+	if (address.op != Opcode::Addr || !address.ops[0].is(ValueKind::Slot) || address.next == kNoId)
+		return kNoId;
+	const auto slot = address.ops[0].index;
+	const auto base = Value::temp(address.result);
+	const auto& copy = body_.instructions[address.next];
+	if (slot == result_slot_ || copy.op != Opcode::CopyObject || !(copy.ops[0] == Value::temp(inst.result)) ||
+		!(copy.ops[1] == base) || copy.immediate != static_cast<int64_t>(storage_bytes(inst.type)) ||
+		body_.slots[slot].type != inst.type ||
+		classify(inst.type, program_.call_boundary(inst)->boundary.result_shape).bank != Bank::General)
+		return kNoId;
+	struct Field
+	{
+		TempId result;
+		unsigned offset, bits;
+	};
+	Field fields[8];
+	unsigned count = 0, reads = 1;
+	InstId last = address.next;
+	while (body_.instructions[last].next != kNoId && count < 8)
+	{
+		auto i = body_.instructions[last].next;
+		const auto& index = body_.instructions[i];
+		Value ptr = base;
+		unsigned offset = 0;
+		if (index.op == Opcode::Index && index.ops[0] == base && index.ops[1].is(ValueKind::Integer) &&
+			uses_[index.result] == 1 && index.next != kNoId)
+		{
+			const auto step = body_.literals[index.ops[1].index];
+			const auto scale = storage_bytes(index.type);
+			if (step.high || step.low > 15 || !scale || scale > 16 || scale * step.low >= storage_bytes(inst.type))
+				break;
+			offset = scale * step.low;
+			ptr = Value::temp(index.result);
+			i = index.next;
+		}
+		const auto& load = body_.instructions[i];
+		const unsigned bits = load.type.is_pointer() ? 64 : integer_bits(load.type.kind());
+		if (load.op != Opcode::Load || (load.flags & IF_VOLATILE) || !(load.ops[0] == ptr) || !bits || bits > 64 ||
+			registers_[load.result] == kNoId || storage_bytes(load.type) > storage_bytes(inst.type) - offset ||
+			offset % 8 * 8 + bits > 64)
+			break;
+		++reads;
+		fields[count++] = { load.result, offset, bits };
+		last = i;
+	}
+	if (!count || reads != uses_[address.result])
+		return kNoId;
+	if (slot_mentions_.empty())
+	{
+		slot_mentions_.resize(body_.slots.size());
+		for (auto b : body_.layout)
+			for (auto i = body_.blocks[b].first; i != kNoId; i = body_.instructions[i].next)
+			{
+				const auto& use = body_.instructions[i];
+				if (use.op == Opcode::FrameAddress || use.op == Opcode::Asm)
+				{
+					std::fill(slot_mentions_.begin(), slot_mentions_.end(), 2);
+					return kNoId;
+				}
+				opt::for_each_operand(body_, use, [&](Value v) {
+					if (v.is(ValueKind::Slot))
+						++slot_mentions_[v.index];
+				});
+			}
+	}
+	if (slot_mentions_[slot] != 1)
+		return kNoId;
+	const auto& layout = calls_[call_indices_[&inst - body_.instructions.data()]];
+	if (layout.saved_args || layout.tail)
+		return kNoId;
+	emit_call(inst, layout, true);
+	unsigned src[] = { 0, 1 };
+	for (unsigned k = 0; k < count; ++k)
+	{
+		const auto field = fields[k];
+		const unsigned dest = registers_[field.result], piece = field.offset / 8, shift = (field.offset % 8) * 8;
+		if (dest < 2 && src[dest] == dest && !(piece == dest && field.bits == 64))
+			for (unsigned m = k + 1; m < count; ++m)
+				if (fields[m].offset / 8 == dest)
+				{
+					src[dest] = 10 + dest;
+					move(src[dest], dest);
+					break;
+				}
+		if (field.bits == 64)
+			move(dest, src[piece]);
+		else if (!shift && field.bits == 32)
+			out_.emit(Op::OrrW, dest, 31, src[piece]);
+		else
+			out_.emit(Op::Ubfm, dest, src[piece], 0, (shift << 16) | ((shift + field.bits - 1) << 10));
+	}
+	return last;
+}
+
+// Read a result in x0 directly through its first and only use. A mask
+// of one is independent of every unspecified high bit of a narrow result.
+InstId Selector::branch_on_result(const lowir::Instruction& inst, BlockId block)
+{
+	if (inst.result == kNoId || inst.next == kNoId || out_.exceptions || uses_[inst.result] != 1 ||
+		!(inst.type.is_integer() || inst.type.is_pointer()) || storage_bytes(inst.type) > 8)
+		return kNoId;
+	const auto& layout = calls_[call_indices_[&inst - body_.instructions.data()]];
+	if (layout.saved_args || layout.tail)
+		return kNoId;
+	const auto& next = body_.instructions[inst.next];
+	const bool masked = next.op == Opcode::Binary && next.sub == static_cast<unsigned>(BinaryOp::And) &&
+		next.type == inst.type && next.ops[0] == Value::temp(inst.result) && next.ops[1].is(ValueKind::Integer) &&
+		body_.literals[next.ops[1].index].low == 1 && uses_[next.result] == 1;
+	const InstId end = masked ? next.next : inst.next;
+	if (end == kNoId || body_.instructions[end].op != Opcode::Branch ||
+		!(body_.instructions[end].ops[0] == Value::temp(masked ? next.result : inst.result)))
+		return kNoId;
+	const unsigned bits = integer_bits(inst.type.kind());
+	emit_call(inst, layout, true);
+	if (masked || bits == 1)
+	{
+		const uint32_t pc = out_.code.size();
+		out_.emit(Op::AndImmW, 9, 0); // AND w9, w0, #1
+		conditional_edges(block, body_.instructions[end], Op::CbzW, 9);
+		bit_tests_.push_back({ pc, 0 });
+	}
+	else if (bits == 8 || bits == 16)
+	{
+		out_.emit(Op::Ubfm, 9, 0, 0, (bits - 1) << 10);
+		conditional_edges(block, body_.instructions[end], Op::CbzW, 9);
+	}
+	else
+		conditional_edges(block, body_.instructions[end], bits == 32 ? Op::CbzW : Op::Cbz, 0);
+	return end;
+}
+
 void Selector::call(const lowir::Instruction& inst)
 {
 	const auto& layout = calls_[call_indices_[&inst - body_.instructions.data()]];
+	for (unsigned mask = layout.saved_args; mask; mask &= mask - 1)
+	{
+		const unsigned reg = __builtin_ctz(mask);
+		access(true, reg, frame_base(), argument_spills_[reg], 8);
+	}
+	emit_call(inst, layout);
+	if (!layout.tail)
+		for (unsigned mask = layout.saved_args; mask; mask &= mask - 1)
+		{
+			const unsigned reg = __builtin_ctz(mask);
+			access(false, reg, frame_base(), argument_spills_[reg], 8);
+		}
+}
+
+void Selector::emit_call(const lowir::Instruction& inst, const CallLayout& layout, bool projected)
+{
 	if (layout.parallel)
 		pass_parallel(inst, layout);
 	else
 		for (uint32_t i = 0; i < layout.args.size(); ++i)
 			pass(layout.args[i], body_.operands[inst.extra_first + i], layout.types[i], layout.copies[i]);
+	if (layout.tail)
+	{
+		finish(inst.ops[0].index);
+		return;
+	}
 	const Argument ret = classify(inst.type, program_.call_boundary(inst)->boundary.result_shape);
 	if (ret.indirect)
 		home_address(8, inst.result);
@@ -310,7 +490,7 @@ void Selector::call(const lowir::Instruction& inst)
 		out_.emit(Op::Blr, 0, operand_register(inst.ops[0], program_.pointer_type(), 10));
 	}
 	record_call(inst);
-	if (inst.result == kNoId || ret.indirect || (level_ && !uses_[inst.result]))
+	if (projected || inst.result == kNoId || ret.indirect || (level_ && !uses_[inst.result]))
 		return;
 	if (inst.type.kind() == TypeKind::V128)
 		save_vector(0, inst.result);
@@ -352,6 +532,12 @@ void Selector::epilogue(const lowir::Instruction& inst)
 				copy_value(10, inst.ops[0], type);
 			}
 		}
+		else if (inst.ops[0].is(ValueKind::Slot) && !object_words_.empty() && object_words_[inst.ops[0].index])
+		{
+			const unsigned first = object_words_[inst.ops[0].index];
+			move(0, first);
+			move(1, first + 1);
+		}
 		else
 			transfer(true, result_, inst.ops[0], type);
 	}
@@ -363,6 +549,11 @@ void Selector::epilogue(const lowir::Instruction& inst)
 		if (named_.darwin && type.is_integer() && integer_bits(type.kind()) < 32)
 			extend(0, integer_bits(type.kind()), !is_unsigned(type.kind()) && type.kind() != TypeKind::I1);
 	}
+	finish();
+}
+
+void Selector::finish(SymbolId tail)
+{
 	if (frame_)
 		out_.frame_rule(FrameRule::RememberState);
 	if (dynamic_stack_)
@@ -378,7 +569,10 @@ void Selector::epilogue(const lowir::Instruction& inst)
 			out_.emit(Op::LdrD, v, 16, 0, v << 10);
 	}
 	stack_adjust(false);
-	out_.emit(Op::Ret, 0, 30);
+	if (tail == kNoId)
+		out_.emit(Op::Ret, 0, 30);
+	else
+		out_.reference(Op::B, Fixup::Jump, tail);
 	if (frame_)
 		out_.frame_rule(FrameRule::RestoreState);
 }
