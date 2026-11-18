@@ -1,6 +1,6 @@
 {
   "source": true,
-  "units": ["620-source-lto.t.1"],
+  "units": ["600-source-lto.t.1"],
   "levels": ["z"],
   "flags": ["-std=c++17"],
   "source_link_flags": ["-flto=full"],
