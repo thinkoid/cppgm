@@ -54,6 +54,7 @@ private:
 	void home_address(unsigned reg, lowir::TempId temp);
 	void stack_alloc(const lowir::Instruction& inst);
 	void copy_piece(unsigned dst, unsigned src, unsigned offset, unsigned bytes);
+	void copy_staged(unsigned dst, unsigned src, unsigned bytes);
 	void copy_run(unsigned dst, unsigned src, uint64_t bytes, bool backward);
 	void copy_bytes(unsigned dst, unsigned src, uint64_t size);
 	void copy_value(unsigned dst, lowir::Value src, lowir::Type type);

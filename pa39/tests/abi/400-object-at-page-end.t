@@ -7,6 +7,10 @@ extern "C" Triple from_boundary(const Triple* from) { return exchange(*from); }
 
 template<int N> struct Bytes { unsigned char data[N]; };
 extern "C" void copy31(Bytes<31>* to, const Bytes<31>* from) { *to = *from; }
+extern "C" void copy33(Bytes<33>* to, const Bytes<33>* from) { *to = *from; }
+extern "C" void copy40(Bytes<40>* to, const Bytes<40>* from) { *to = *from; }
+extern "C" void copy49(Bytes<49>* to, const Bytes<49>* from) { *to = *from; }
+extern "C" void copy64(Bytes<64>* to, const Bytes<64>* from) { *to = *from; }
 extern "C" void copy65(Bytes<65>* to, const Bytes<65>* from) { *to = *from; }
 extern "C" void copy149(Bytes<149>* to, const Bytes<149>* from) { *to = *from; }
 extern "C" void clear149(Bytes<149>* to) { *to = Bytes<149>(); }

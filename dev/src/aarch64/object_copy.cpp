@@ -74,6 +74,32 @@ void Selector::copy_run(unsigned dst, unsigned src, uint64_t bytes, bool backwar
 	copy_piece(backward ? dst : 16, backward || src == 31 ? src : 17, 0, tail);
 }
 
+// With 33 to 64 bytes, keep the first 32 in q16/q17 and the rest in the
+// four reserved integer scratch registers. Both pointers are allocated
+// registers or x10/x11. The last word may overlap the preceding transfer.
+void Selector::copy_staged(unsigned dst, unsigned src, unsigned bytes)
+{
+	const unsigned scratch[] = { 9, 15, 16, 17 };
+	const unsigned words = (bytes - 32 + 7) / 8;
+	for (bool store : { false, true })
+	{
+		const unsigned base = store ? dst : src;
+		out_.emit(store ? Op::StpQ : Op::LdpQ, 16, base, 0, 17u << 10);
+		for (unsigned i = 0; i < words; ++i)
+		{
+			const unsigned offset = std::min(32u + 8 * i, bytes - 8);
+			if (i + 1 < words && offset + 16 <= bytes)
+			{
+				out_.emit(
+					store ? Op::StpX : Op::LdpX, scratch[i], base, 0, ((offset / 8) << 15) | (scratch[i + 1] << 10));
+				++i;
+			}
+			else
+				out_.emit(store ? Op::SturX : Op::LdurX, scratch[i], base, 0, offset << 12);
+		}
+	}
+}
+
 void Selector::copy_bytes(unsigned dst, unsigned src, uint64_t size)
 {
 	if (!size || dst == src)
@@ -97,6 +123,11 @@ void Selector::copy_bytes(unsigned dst, unsigned src, uint64_t size)
 	if (src == 31)
 	{
 		copy_run(dst, src, size, false);
+		return;
+	}
+	if (level_ && size <= 64)
+	{
+		copy_staged(dst, src, static_cast<unsigned>(size));
 		return;
 	}
 	const uint32_t forward = out_.labels.size(), done = forward + 1;
