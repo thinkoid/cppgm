@@ -1055,6 +1055,8 @@ int link_mode(const Invocation& invocation)
 	check_output(invocation, output);
 	std::vector<native::object::ObjectFile> objects;
 	objects.reserve(invocation.inputs.size() + 2);
+	const auto eh_model = invocation.target == native::Target::AArch64MacOS ? native::EhModel::Host
+																			: native::EhModel::Course;
 	const SourceInputs sources = source_lto_inputs(invocation);
 	const Input* end = invocation.inputs.data() + invocation.inputs.size();
 	for (const Input* next = invocation.inputs.data(); next != end;)
@@ -1062,7 +1064,7 @@ int link_mode(const Invocation& invocation)
 		if (next == sources.begin)
 		{
 			objects.emplace_back();
-			if (!compile_native_sources(sources, invocation, native::EhModel::Course, objects.back()))
+			if (!compile_native_sources(sources, invocation, eh_model, objects.back()))
 				return EXIT_FAILURE;
 			next = sources.end;
 			continue;
@@ -1072,9 +1074,7 @@ int link_mode(const Invocation& invocation)
 			input.kind == Input::Kind::Assembly)
 		{
 			objects.emplace_back();
-			if (!compile_input(input, invocation,
-					invocation.target == native::Target::AArch64MacOS ? native::EhModel::Host : native::EhModel::Course,
-					objects.back()))
+			if (!compile_input(input, invocation, eh_model, objects.back()))
 				return EXIT_FAILURE;
 			continue;
 		}
