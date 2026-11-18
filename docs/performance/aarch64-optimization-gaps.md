@@ -565,6 +565,9 @@ The ratio is the median of the paired block ratios.
 | Trial with staged object copies through 64 bytes, additional register and narrow-value coalescing | 11.73 | 12.86 | 1.096× | 1.108× | 0.991× |
 | 718b1719d, short-circuit searches and staged object transfers | 11.81 | 12.99 | 1.100× | 1.121× | 1.001× |
 | 70b94df82, rotates and rotated logical operands | 12.21 | 13.43 | 1.100× | 1.121× | 0.997× |
+| 676da8cc8, preserved scalar FP registers | 11.76 | 12.95 | 1.102× | 1.120× | 0.989× |
+| ee0ba1b32, forward stored extensions to narrower loads | 11.96 | 13.25 | 1.108× | 1.121× | 0.979× |
+| a0bb0662a, parallel moves for outgoing integer arguments | 12.20 | 13.36 | 1.095× | 1.115× | 0.995× |
 
 The baseline's three comparison blocks ranged from 1.137× to 1.141×.
 At 62a178aa6 the two blocks were 1.110× and 1.115×. The emulated
@@ -589,6 +592,13 @@ a zero-extended byte to a 64-bit word in a local record, then reloaded the
 byte and six known-zero neighbors to compute its hash. Clang used the
 original byte. Samples in functions Clang inlined were charged to their
 callers, so per-symbol counts alone cannot measure those functions' cost.
+
+At a0bb0662a the paired wall ratios were 1.0955× and 1.0949×. A development
+build combining additional allocator, branch placement and instruction-selection
+changes took 12.62 s self-built and 11.78 s Clang-built. Its two blocks measured
+1.0706× and 1.0710×, with a 0.9828× A/A control and 1.0866× child CPU ratio.
+The combined changes in that experiment extend beyond the commits in the table.
+The native self-build PR threshold is 1.05×.
 
 At 29d97cc96 each application ran on one pinned Arm core, with eight
 executions per position, two control blocks and six comparison blocks.
@@ -655,6 +665,19 @@ the final storage for a returned object and for a call result with one
 whole-object consumer. The Arm ABI and address-escape checks determine
 which calls can use them.
 
+The application panel at a0bb0662a used the same pinned-core procedure.
+The four-kernel geometric mean was 0.959× Clang throughput and the
+five-public-program geometric mean was 1.180×. The individual results
+show how much the two means depend on the workload.
+
+| Workload | Throughput vs Clang | Workload | Throughput vs Clang |
+| --- | ---: | --- | ---: |
+| Calls | 0.984× | Primes | 1.038× |
+| Lookup | 0.853× | Bubblesort | 0.962× |
+| Memory | 1.008× | FloatMM | 2.394× |
+| Explicit NEON vectors | 1.000× | Puzzle | 0.982× |
+| | | Treesort | 0.974× |
+
 ### Native x86 compile performance against main
 
 The release comparison used `origin/main` at 90ebfa8f4 and the feature at
@@ -697,6 +720,11 @@ retired instructions changed by −0.024%, +0.111%, +0.117% and +0.117%.
 Peak RSS changed by +0.10%, +0.19%, +0.28% and +0.36%. Wall deltas were
 +0.88%, +1.89%, −5.23% and −0.46%, and A/A wall deltas were +0.54%,
 +0.47%, −2.14% and −0.05%.
+
+At a0bb0662a all 144 outputs matched main at 90ebfa8f4. Retired instructions
+changed by −0.024%, +0.028%, +0.037% and +0.035% at O0 through O3. Peak RSS
+stayed within 0.29%. The wall deltas were −2.60%, −0.78%, −2.02% and +0.37%.
+The corresponding A/A controls were +2.23%, −1.55%, −4.50% and −2.39%.
 
 ## Which decisions the targets share
 
