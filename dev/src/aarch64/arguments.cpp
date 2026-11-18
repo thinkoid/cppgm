@@ -95,7 +95,7 @@ void Selector::transfer(bool load, const Argument& arg, unsigned base, Type type
 
 void Selector::parameter(TempId id, const Argument& arg)
 {
-	if (!arg.pieces)
+	if (!arg.pieces || (level_ && !uses_[id]))
 		return;
 	const Type type = body_.temps[id].type;
 	const unsigned offset = frame_ + arg.first;
@@ -240,7 +240,7 @@ void Selector::call(const lowir::Instruction& inst)
 		out_.emit(Op::Blr, 0, operand_register(inst.ops[0], program_.pointer_type(), 10));
 	}
 	record_call(inst);
-	if (inst.result == kNoId || ret.indirect)
+	if (inst.result == kNoId || ret.indirect || (level_ && !uses_[inst.result]))
 		return;
 	if (inst.type.kind() == TypeKind::V128)
 		save_vector(0, inst.result);

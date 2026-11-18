@@ -277,6 +277,9 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 	if (body.layout.size() > 1 ||
 		(body.blocks[entry].first != kNoId && body.instructions[body.blocks[entry].first].op == Opcode::Phi))
 		plan.extend(program, body, exceptions, at, uses, segments, cfg);
+	for (TempId id = 0; id < body.parameter_count; ++id)
+		if (!uses[id])
+			plan.ranges[id].first = kNoId;
 	return std::move(plan.ranges);
 }
 
