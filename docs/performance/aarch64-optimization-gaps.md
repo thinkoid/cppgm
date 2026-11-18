@@ -563,12 +563,32 @@ The ratio is the median of the paired block ratios.
 | Same trial with signed byte displacements | 12.06 | 13.43 | 1.113× | 1.134× | 0.994× |
 | 681a31fd8, shared field addresses and guarded word groups | 11.78 | 13.00 | 1.103× | 1.123× | 0.983× |
 | Trial with staged object copies through 64 bytes, additional register and narrow-value coalescing | 11.73 | 12.86 | 1.096× | 1.108× | 0.991× |
+| 718b1719d, short-circuit searches and staged object transfers | 11.81 | 12.99 | 1.100× | 1.121× | 1.001× |
+| 70b94df82, rotates and rotated logical operands | 12.21 | 13.43 | 1.100× | 1.121× | 0.997× |
 
 The baseline's three comparison blocks ranged from 1.137× to 1.141×.
 At 62a178aa6 the two blocks were 1.110× and 1.115×. The emulated
 full-build comparison had measured 1.022× at c33a4bad2 and 1.217× at
 cb4ae379e. Their A/A ratios were 1.003× and 1.017×. Native hardware
 provides the release measurement.
+
+The two wall ratios at 718b1719d were 1.097× and 1.102×. At 70b94df82
+they were 1.101× and 1.100×. A separate experiment at 718b1719d built the
+self-hosted compiler at O2 and used it for the same timed O3 rebuild.
+It produced the original O3 bootstrap's objects and binary. Clang-built
+cppgm took 11.78 s and O2-built cppgm took 13.09 s (1.112× wall, 1.132×
+CPU). All other table rows use O3 for both compiler builds.
+
+A trial that scheduled outgoing general-register arguments with the shared
+parallel-move resolver measured 11.96 s and 12.98 s (1.085× wall, 1.103×
+CPU). Sampling a separate rebuild of that pair mapped 141,247 samples to
+the self-built compiler and 125,625 to the Clang-built compiler. Loads and
+stores outside the stack accounted for 38,214 and 30,424 samples respectively.
+The Arm instructions in `TypeTable::named` exposed one cause. cppgm stored
+a zero-extended byte to a 64-bit word in a local record, then reloaded the
+byte and six known-zero neighbors to compute its hash. Clang used the
+original byte. Samples in functions Clang inlined were charged to their
+callers, so per-symbol counts alone cannot measure those functions' cost.
 
 At 29d97cc96 each application ran on one pinned Arm core, with eight
 executions per position, two control blocks and six comparison blocks.
@@ -670,6 +690,14 @@ stayed within 0.12%. Wall deltas were +8.54%, +5.89%, +1.47% and −2.17%.
 The corresponding A/A wall deltas were +11.67%, +2.16%, −1.88% and +1.05%.
 Those controls leave the small wall-time differences unresolved.
 
+A repeat at 681a31fd8 on a different core measured +0.124% retired
+instructions and +1.48% wall time at O2, with +1.39% A/A wall time.
+At 70b94df82 all 144 x86 objects again matched main. At O0 through O3,
+retired instructions changed by −0.024%, +0.111%, +0.117% and +0.117%.
+Peak RSS changed by +0.10%, +0.19%, +0.28% and +0.36%. Wall deltas were
++0.88%, +1.89%, −5.23% and −0.46%, and A/A wall deltas were +0.54%,
++0.47%, −2.14% and −0.05%.
+
 ## Which decisions the targets share
 
 | Decision | Implementations using it |
@@ -680,7 +708,7 @@ Those controls leave the small wall-time differences unresolved.
 | Bounded SSA predecessor walk, per-block live segments, loop-backedge phi writes, exception predecessors and the interference tree | Arm and x86 use the same implementation. The x86 selector supplies early and late reads for two-address instructions. Arm supplies separate read and write slots, reserved scratches, both register banks and the AAPCS64/Darwin call rules. |
 | Reusing a storage location after its last use | Arm spills and Wasm locals use the same interval-slot pool, partitioned by compatible storage. The Wasm engine assigns physical host registers. |
 | Spill priority and edge transfers | x86 estimates execution frequency, can split a range around loops and schedules parallel register and memory moves. Both native targets weight uses at their blocks, including a phi input at its predecessor. Arm retains start order when the live segments fit the register set and uses the shared phi webs to prefer a register already assigned to related transfers. It transfers registers and scalar spill slots directly when independent. Small scalar cycles can use the shared resolver and one scratch register. Complex edges retain the memory snapshot. Arm still budgets snapshot space conservatively. |
-| Floating-point ABI | Linux and Darwin Arm use SIMD registers for scalar floating arguments and results. Arm keeps eligible scalar FP values in that bank through arithmetic. A value spanning a call can use a preserved GPR or a spill slot. Full-width vector preservation has different ABI rules. |
+| Floating-point ABI | Linux and Darwin Arm use SIMD registers for scalar floating arguments and results. Arm keeps eligible scalar FP values in that bank through arithmetic. Scalar values spanning calls can use d8–d15. Arm saves or restores two adjacent scalar registers with one instruction and describes each register separately in DWARF. Only the low 64 bits of each register are call-preserved. A 128-bit vector live across a call requires another home. |
 
 [Shared live segments](../../dev/src/machine/ssa_segments.h) ·
 [Shared block frequencies](../../dev/src/machine/block_frequency.h) ·
