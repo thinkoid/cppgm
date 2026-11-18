@@ -28,12 +28,12 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 {
 	const auto op = static_cast<BinaryOp>(inst.sub);
 	const unsigned bits = integer_bits(inst.type.kind());
-	if ((bits != 32 && bits != 64) ||
-		(op != BinaryOp::Add && op != BinaryOp::Sub && op != BinaryOp::Mul && op != BinaryOp::And &&
-			op != BinaryOp::Or && op != BinaryOp::Xor))
+	if (bits != 32 && bits != 64)
 		return false;
 	Value lhs = inst.ops[0], rhs = inst.ops[1];
-	if (op != BinaryOp::Sub && lhs.is(ValueKind::Integer))
+	if ((op == BinaryOp::Add || op == BinaryOp::Mul || op == BinaryOp::And || op == BinaryOp::Or ||
+			op == BinaryOp::Xor) &&
+		lhs.is(ValueKind::Integer))
 		std::swap(lhs, rhs);
 	const unsigned left = operand_register(lhs, inst.type, 10);
 	const unsigned dest = registers_[inst.result] == kNoId ? 9 : registers_[inst.result];
@@ -53,14 +53,39 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 			return true;
 		}
 	}
+	if (rhs.is(ValueKind::Integer))
+	{
+		const uint64_t raw = body_.literals[rhs.index].low;
+		if (op == BinaryOp::Shl || op == BinaryOp::Shr || op == BinaryOp::UShr)
+		{
+			const unsigned shift = raw & (bits - 1);
+			const unsigned r = op == BinaryOp::Shl ? (-shift & (bits - 1)) : shift;
+			const unsigned end = op == BinaryOp::Shl ? bits - 1 - shift : bits - 1;
+			out_.emit(op == BinaryOp::Shr ? (w ? Op::SbfmW : Op::Sbfm) : (w ? Op::UbfmW : Op::Ubfm), dest, left, 0,
+				(r << 16) | (end << 10));
+			save(dest, inst.result, true);
+			return true;
+		}
+		uint32_t field = 0;
+		if ((op == BinaryOp::And || op == BinaryOp::Or || op == BinaryOp::Xor) && logical_immediate(raw, bits, field))
+		{
+			const Op selected = op == BinaryOp::And ? (w ? Op::AndImmW : Op::AndImm)
+				: op == BinaryOp::Or                ? (w ? Op::OrrImmW : Op::OrrImm)
+													: (w ? Op::EorImmW : Op::EorImm);
+			out_.emit(selected, dest, left, 0, field);
+			save(dest, inst.result, true);
+			return true;
+		}
+	}
 	const unsigned right = operand_register(rhs, inst.type, 11);
-	const Op selected = op == BinaryOp::Add ? (w ? Op::AddW : Op::Add)
-		: op == BinaryOp::Sub               ? (w ? Op::SubW : Op::Sub)
-		: op == BinaryOp::Mul               ? (w ? Op::MulW : Op::Mul)
-		: op == BinaryOp::And               ? (w ? Op::AndW : Op::And)
-		: op == BinaryOp::Or                ? (w ? Op::OrrW : Op::Orr)
-											: (w ? Op::EorW : Op::Eor);
-	out_.emit(selected, dest, left, right);
+	static const Op narrow[] = { Op::AddW, Op::SubW, Op::MulW, Op::SDivW, Op::SDivW, Op::UDivW, Op::UDivW, Op::AndW,
+		Op::OrrW, Op::EorW, Op::LslW, Op::AsrW, Op::LsrW };
+	static const Op wide[] = { Op::Add, Op::Sub, Op::Mul, Op::SDiv, Op::SDiv, Op::UDiv, Op::UDiv, Op::And, Op::Orr,
+		Op::Eor, Op::Lsl, Op::Asr, Op::Lsr };
+	const bool remainder = op == BinaryOp::Mod || op == BinaryOp::UMod;
+	out_.emit(w ? narrow[inst.sub] : wide[inst.sub], remainder ? 9 : dest, left, right);
+	if (remainder)
+		out_.emit(w ? Op::MsubW : Op::Msub, dest, 9, right, left << 10);
 	save(dest, inst.result, true);
 	return true;
 }
@@ -110,14 +135,48 @@ void Selector::compare(const lowir::Instruction& inst)
 	save(dest, inst.result, true);
 }
 
-bool Selector::compare_branch(const lowir::Instruction& inst, BlockId block)
+void Selector::choose(const lowir::Instruction& inst, unsigned condition)
+{
+	const unsigned a = operand_register(inst.ops[1], inst.type, 10);
+	const unsigned b = operand_register(inst.ops[2], inst.type, 11);
+	const unsigned dest = registers_[inst.result] == kNoId ? 9 : registers_[inst.result];
+	const unsigned bits = integer_bits(inst.type.kind());
+	out_.emit(bits == 32 ? Op::CselW : Op::Csel, dest, a, b, condition << 12);
+	save(dest, inst.result, !bits || bits >= 32);
+}
+
+bool Selector::compare_consumer(const lowir::Instruction& inst, BlockId block)
 {
 	if (inst.next == kNoId || uses_[inst.result] != 1 ||
 		!(inst.type.is_pointer() || (inst.type.is_integer() && integer_bits(inst.type.kind()) <= 64)))
 		return false;
 	const auto& next = body_.instructions[inst.next];
-	if (next.op != Opcode::Branch || !(next.ops[0] == Value::temp(inst.result)))
+	if (!(next.ops[0] == Value::temp(inst.result)))
 		return false;
+	if (next.op == Opcode::Select && !memory_value(next.type) && !next.ops[1].is(ValueKind::Symbol) &&
+		!next.ops[2].is(ValueKind::Symbol))
+	{
+		compare_flags(inst);
+		choose(next, conditions[inst.sub]);
+		return true;
+	}
+	if (next.op != Opcode::Branch)
+		return false;
+	const bool eq = inst.sub == static_cast<unsigned>(ComparePredicate::Eq);
+	if ((eq || inst.sub == static_cast<unsigned>(ComparePredicate::Ne)) &&
+		(integer_bits(inst.type.kind()) == 32 || storage_bytes(inst.type) == 8))
+	{
+		Value a = inst.ops[0], b = inst.ops[1];
+		if (a.is(ValueKind::Integer))
+			std::swap(a, b);
+		if (b.is(ValueKind::Integer) && body_.literals[b.index].low == 0)
+		{
+			const bool w = integer_bits(inst.type.kind()) == 32;
+			conditional_edges(block, next, eq ? (w ? Op::CbnzW : Op::Cbnz) : (w ? Op::CbzW : Op::Cbz),
+				operand_register(a, inst.type, 10));
+			return true;
+		}
+	}
 	compare_flags(inst);
 	conditional_edges(block, next, Op::BCond, conditions[inst.sub] ^ 1);
 	return true;

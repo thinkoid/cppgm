@@ -10,6 +10,25 @@
 	M(MulW, 0x1b007c00) \
 	M(SDiv, 0x9ac00c00) \
 	M(UDiv, 0x9ac00800) \
+	M(SDivW, 0x1ac00c00) \
+	M(UDivW, 0x1ac00800) \
+	M(Msub, 0x9b008000) \
+	M(MsubW, 0x1b008000) \
+	M(LslW, 0x1ac02000) \
+	M(LsrW, 0x1ac02400) \
+	M(AsrW, 0x1ac02800) \
+	M(UbfmW, 0x53000000) \
+	M(SbfmW, 0x13000000) \
+	M(AndImm, 0x92000000) \
+	M(AndImmW, 0x12000000) \
+	M(OrrImm, 0xb2000000) \
+	M(OrrImmW, 0x32000000) \
+	M(EorImm, 0xd2000000) \
+	M(EorImmW, 0x52000000) \
+	M(MovN, 0x92800000) \
+	M(MovNW, 0x12800000) \
+	M(CbzW, 0x34000000) \
+	M(CbnzW, 0x35000000) \
 	M(AndI, 0x92400000) \
 	M(And, 0x8a000000) \
 	M(AndW, 0x0a000000) \
@@ -27,6 +46,7 @@
 	M(AddsIW, 0x31000000) \
 	M(AddsIX, 0xb1000000) \
 	M(Subs, 0xeb000000) \
+	M(CselW, 0x1a800000) \
 	M(Csel, 0x9a800000) \
 	M(Csinc, 0x9a800400) \
 	M(Sbfm, 0x93400000) \
@@ -37,6 +57,20 @@
 	M(SubIW, 0x51000000) \
 	M(MovZ, 0xd2800000) \
 	M(MovK, 0xf2800000) \
+	M(LdurB, 0x38400000) \
+	M(SturB, 0x38000000) \
+	M(LdurH, 0x78400000) \
+	M(SturH, 0x78000000) \
+	M(LdurW, 0xb8400000) \
+	M(SturW, 0xb8000000) \
+	M(LdurX, 0xf8400000) \
+	M(SturX, 0xf8000000) \
+	M(LdurQ, 0x3cc00000) \
+	M(SturQ, 0x3c800000) \
+	M(LdpQPost, 0xacc00000) \
+	M(StpQPost, 0xac800000) \
+	M(LdpQPre, 0xadc00000) \
+	M(StpQPre, 0xad800000) \
 	M(LdrBReg, 0x38600800) \
 	M(StrBReg, 0x38200800) \
 	M(LdrHReg, 0x78600800) \

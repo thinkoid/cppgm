@@ -82,13 +82,26 @@ void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch
 	const BlockId yes = branch.ops[1].index, no = branch.ops[2].index;
 	const auto direct = [&](BlockId to) {
 		const auto first = body_.blocks[to].first;
-		return (first == kNoId || body_.instructions[first].op != Opcode::Phi) &&
-			(!out_.exceptions || !out_.exceptions->entry_selectors[to]);
+		if (out_.exceptions && out_.exceptions->entry_selectors[to])
+			return false;
+		for (auto i = first; i != kNoId && body_.instructions[i].op == Opcode::Phi; i = body_.instructions[i].next)
+		{
+			const auto& phi = body_.instructions[i];
+			const auto source = phis_.incoming(body_, i, block);
+			if (!level_ || !source.is(ValueKind::Temp) || registers_[phi.result] == kNoId ||
+				registers_[phi.result] != registers_[source.index])
+				return false;
+		}
+		return true;
 	};
 	if (no == fallthrough_ && direct(yes))
 	{
-		out_.reference(
-			test == Op::Cbz ? Op::Cbnz : Op::BCond, Fixup::Block, yes, test == Op::Cbz ? operand : operand ^ 1);
+		const auto inverse = test == Op::Cbz ? Op::Cbnz
+			: test == Op::Cbnz               ? Op::Cbz
+			: test == Op::CbzW               ? Op::CbnzW
+			: test == Op::CbnzW              ? Op::CbzW
+											 : Op::BCond;
+		out_.reference(inverse, Fixup::Block, yes, test == Op::BCond ? operand ^ 1 : operand);
 		edge(block, no, true);
 		return;
 	}

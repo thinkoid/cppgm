@@ -3,7 +3,13 @@ extern "C" int store_if_less(const int*, int*);
 extern "C" bool unsigned_limit(unsigned);
 extern "C" unsigned indexed(const unsigned*, int, unsigned);
 extern "C" void replace_half(unsigned short*, long, unsigned short);
+extern "C" unsigned long mix_bits(unsigned long, unsigned, unsigned long);
+extern "C" int signed_remainder(int, int);
+extern "C" unsigned long widen_choice(bool, unsigned);
 int main() {
+    if (mix_bits(0xab09876543215678UL, 27, 139) != 39) return 7;
+    if (signed_remainder(-123456789, 97) != -39) return 8;
+    if (widen_choice(false, 0) != 0xffffffffUL || widen_choice(true, 0x80000001u) != 0x80000001UL) return 9;
     unsigned data[] = {3, 5, 8, 13, 21};
     if (indexed(data + 1, -1, 3) != 24) return 5;
     unsigned short halves[] = {7, 11, 17};

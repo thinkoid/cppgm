@@ -60,6 +60,13 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 			copy_value(10, inst.ops[0], inst.type);
 			return;
 		}
+		if (level_)
+		{
+			const unsigned dest = registers_[inst.result] == kNoId ? result_reg : registers_[inst.result];
+			value(dest, inst.ops[0], inst.type);
+			save(dest, inst.result, inst.ops[0].is(ValueKind::Temp));
+			return;
+		}
 		value(result_reg, inst.ops[0], inst.type);
 		break;
 	case Opcode::Addr:
@@ -160,7 +167,9 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 			const unsigned src = operand_register(inst.ops[0], from, left);
 			const unsigned dest = registers_[inst.result] == kNoId ? result_reg : registers_[inst.result];
 			const unsigned bits = integer_bits(op == ConvertOp::Trunc ? inst.type.kind() : from.kind());
-			if (bits == 32 && op != ConvertOp::SExt)
+			if (op == ConvertOp::ZExt && inst.ops[0].is(ValueKind::Temp) && !memory_value(from))
+				move(dest, src);
+			else if (bits == 32 && op != ConvertOp::SExt)
 				out_.emit(Op::OrrW, dest, 31, src);
 			else if (bits && bits < 64)
 				out_.emit(op == ConvertOp::SExt ? Op::Sbfm : Op::Ubfm, dest, src, 0, (bits - 1) << 10);
@@ -189,6 +198,14 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 		atomic(inst);
 		return;
 	case Opcode::Select:
+		if (level_ && !memory_value(inst.type) && !inst.ops[1].is(ValueKind::Symbol) &&
+			!inst.ops[2].is(ValueKind::Symbol))
+		{
+			const unsigned cond = condition_register(inst.ops[0], result_reg);
+			out_.emit(Op::Subs, 31, cond, 31);
+			choose(inst, 1);
+			return;
+		}
 		move(result_reg, condition_register(inst.ops[0], result_reg));
 		value(left, inst.ops[1], inst.type);
 		value(right, inst.ops[2], inst.type);
@@ -294,7 +311,11 @@ void Selector::run()
 	{
 		const BlockId block = body_.layout[index];
 		// A landing prologue can precede its LowIR block label.
-		fallthrough_ = level_ && !out_.exceptions && index + 1 < body_.layout.size() ? body_.layout[index + 1] : kNoId;
+		fallthrough_ = level_ && index + 1 < body_.layout.size() ? body_.layout[index + 1] : kNoId;
+		if (out_.exceptions && fallthrough_ != kNoId &&
+			(!out_.exceptions->analysis.blocks_[index + 1].reachable ||
+				out_.exceptions->analysis.eh_landing_index_[index + 1] != kNoId))
+			fallthrough_ = kNoId;
 		if (out_.exceptions)
 		{
 			const auto& plan = *out_.exceptions;
@@ -315,7 +336,7 @@ void Selector::run()
 					continue;
 				}
 			}
-			if (level_ && inst.op == Opcode::Compare && compare_branch(inst, block))
+			if (level_ && inst.op == Opcode::Compare && compare_consumer(inst, block))
 				i = inst.next;
 			else
 				select(inst, block);

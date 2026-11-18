@@ -13,3 +13,10 @@ extern "C" unsigned indexed(const unsigned* data, int left, unsigned right) {
     return data[left] + data[right];
 }
 extern "C" void replace_half(unsigned short* data, long i, unsigned short v) { data[i] = v; }
+
+extern "C" unsigned long mix_bits(unsigned long x, unsigned shift, unsigned long divisor) {
+    unsigned long v = (x << 17) ^ (x >> 13) ^ (x >> shift);
+    return ((v & 0xff00ff00ff00ff00UL) | 0x000f000f000f000fUL) % divisor;
+}
+extern "C" int signed_remainder(int x, int divisor) { return x % divisor; }
+extern "C" unsigned long widen_choice(bool a, unsigned x) { return a ? x : 0xffffffffu; }

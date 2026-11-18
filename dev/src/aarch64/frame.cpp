@@ -118,14 +118,66 @@ void Selector::move(unsigned to, unsigned from)
 		out_.emit(Op::Orr, to, 31, from);
 }
 
+// A logical immediate is a rotated run of ones repeated across the register.
+bool Selector::logical_immediate(uint64_t bits, unsigned width, uint32_t& field)
+{
+	if (width == 32)
+		bits = static_cast<uint32_t>(bits);
+	if (!bits || bits == (~uint64_t(0) >> (64 - width)))
+		return false;
+	unsigned size = width;
+	while (size > 2)
+	{
+		const uint64_t half = (uint64_t(1) << (size / 2)) - 1;
+		if ((bits & half) != (bits >> (size / 2)))
+			break;
+		bits &= half;
+		size /= 2;
+	}
+	const uint64_t starts = bits & ~((bits << 1) | (bits >> (size - 1)));
+	if (!starts || (starts & (starts - 1)))
+		return false;
+	const unsigned rotation = (size - __builtin_ctzll(starts)) & (size - 1);
+	const unsigned imms = ((-2u * size) & 63) | (__builtin_popcountll(bits) - 1);
+	field = ((size == 64) << 22) | (rotation << 16) | (imms << 10);
+	return true;
+}
+
 void Selector::constant(unsigned reg, uint64_t bits)
 {
-	out_.emit(Op::MovZ, reg, 0, 0, (bits & 65535) << 5);
-	for (unsigned shift = 16; shift < 64; shift += 16)
+	if (!level_ || bits < 65536)
+	{
+		out_.emit(Op::MovZ, reg, 0, 0, (bits & 65535) << 5);
+		for (unsigned shift = 16; shift < 64; shift += 16)
+			if (const unsigned half = (bits >> shift) & 65535)
+				out_.emit(Op::MovK, reg, 0, 0, ((shift / 16) << 21) | (half << 5));
+		return;
+	}
+	const unsigned width = bits >> 32 ? 64 : 32;
+	unsigned zeros = 0, ones = 0;
+	for (unsigned shift = 0; shift < width; shift += 16)
 	{
 		const unsigned half = (bits >> shift) & 65535;
-		if (half)
-			out_.emit(Op::MovK, reg, 0, 0, ((shift / 16) << 21) | (half << 5));
+		zeros += half == 0;
+		ones += half == 65535;
+	}
+	uint32_t mask = 0;
+	if (std::max(zeros, ones) + 1 < width / 16 && logical_immediate(bits, width, mask))
+	{
+		out_.emit(width == 64 ? Op::OrrImm : Op::OrrImmW, reg, 31, 0, mask);
+		return;
+	}
+	const bool invert = ones > zeros;
+	const unsigned fill = invert ? 65535 : 0;
+	bool first = true;
+	for (unsigned shift = 0; shift < width; shift += 16)
+	{
+		const unsigned half = (bits >> shift) & 65535;
+		if (half == fill && (!first || shift + 16 < width))
+			continue;
+		const Op op = !first ? Op::MovK : !invert ? Op::MovZ : width == 32 ? Op::MovNW : Op::MovN;
+		out_.emit(op, reg, 0, 0, ((shift / 16) << 21) | ((first ? half ^ fill : half) << 5));
+		first = false;
 	}
 }
 
@@ -310,10 +362,13 @@ void Selector::value(unsigned reg, Value operand, Type type)
 	switch (operand.kind)
 	{
 	case ValueKind::Integer:
-		constant(reg,
-			type.is_float() ? integer_as_float(type.kind(), body_.literals[operand.index]).low
-							: body_.literals[operand.index].low);
+	{
+		const auto& literal = body_.literals[operand.index];
+		const unsigned bits = integer_bits(type.kind());
+		const uint64_t mask = bits && bits < 64 ? (uint64_t(1) << bits) - 1 : UINT64_MAX;
+		constant(reg, type.is_float() ? integer_as_float(type.kind(), literal).low : literal.low & mask);
 		break;
+	}
 	case ValueKind::Float:
 		constant(reg, body_.literals[operand.index].low);
 		break;

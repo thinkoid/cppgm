@@ -162,9 +162,10 @@ void Selector::vector_instruction(const lowir::Instruction& inst)
 			const auto narrow = op < VectorOp::Packuswb ? Op::VSqxtn : Op::VSqxtun;
 			const unsigned size = op == VectorOp::Packssdw || op == VectorOp::Packusdw ? 1u << 22 : 0;
 			// Keep both inputs live until the upper half has been inserted.
-			out_.emit(narrow, 0, left, 0, size);
-			out_.emit(narrow, 0, right, 0, size | (1u << 30));
-			save_vector(0, inst.result);
+			const unsigned packed = dest == right ? 16 : dest;
+			out_.emit(narrow, packed, left, 0, size);
+			out_.emit(narrow, packed, right, 0, size | (1u << 30));
+			save_vector(packed, inst.result);
 			return;
 		}
 		for (const auto& p : patterns)

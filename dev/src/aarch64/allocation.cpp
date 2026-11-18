@@ -1,11 +1,70 @@
 #include "aarch64/selector.h"
 #include "aarch64/lifetimes.h"
 #include "machine/interval_slots.h"
+#include "machine/register_pressure.h"
 
 #include <algorithm>
 
 namespace aarch64 {
 using namespace lowir;
+
+namespace {
+using Segments = std::vector<std::pair<uint32_t, uint32_t>>;
+template<typename F>
+void each_interval(const LiveRange& range, const Segments& segments, F f)
+{
+	if (!range.count)
+		f(range.first, range.last);
+	else
+		for (uint32_t i = range.segments; i < range.segments + range.count; ++i)
+			f(segments[i].first, segments[i].second);
+}
+
+// A straight-line function only needs the end of each register's last use.
+// When a register has holes, query the same interference tree used on x86.
+class RegisterBank
+{
+public:
+	RegisterBank(const Segments& segments, uint32_t slots) : segments_(segments), slots_(slots) {}
+	unsigned assign(const LiveRange& range, uint32_t allowed, unsigned preferred)
+	{
+		if (!allowed)
+			return kNoId;
+		if (segments_.empty())
+		{
+			for (uint32_t regs = allowed; regs; regs &= regs - 1)
+			{
+				unsigned reg = __builtin_ctz(regs);
+				if (until_[reg] > range.first)
+					allowed &= ~(1u << reg);
+			}
+		}
+		else
+		{
+			if (!initialized_)
+			{
+				tree_.build(std::vector<int32_t>(slots_, 0));
+				initialized_ = true;
+			}
+			each_interval(range, segments_, [&](uint32_t a, uint32_t b) { allowed &= ~tree_.regs(a, b); });
+		}
+		if (!allowed)
+			return kNoId;
+		const unsigned reg = preferred != kNoId && (allowed & (1u << preferred)) ? preferred : __builtin_ctz(allowed);
+		if (segments_.empty())
+			until_[reg] = range.last + 1;
+		else
+			each_interval(range, segments_, [&](uint32_t a, uint32_t b) { tree_.add(a, b, 1, 1u << reg); });
+		return reg;
+	}
+
+private:
+	const Segments& segments_;
+	uint32_t slots_, until_[32] = {};
+	machine::PressureTree tree_;
+	bool initialized_ = false;
+};
+} // namespace
 
 void Selector::allocate()
 {
@@ -24,69 +83,63 @@ void Selector::allocate()
 		return;
 	}
 	std::vector<uint32_t> calls;
-	auto ranges = live_ranges(program_, body_, out_.exceptions != nullptr, uses_, calls);
+	Segments segments;
+	auto ranges = live_ranges(program_, body_, out_.exceptions.get(), uses_, calls, segments);
 	std::stable_sort(
 		ranges.begin(), ranges.end(), [](const LiveRange& a, const LiveRange& b) { return a.first < b.first; });
 	// x9-x11, x15-x17 and v16-v17 are selector scratch; x18 is platform-reserved.
 	std::vector<unsigned> incoming(body_.parameter_count, kNoId);
-	if (calls.empty())
+	Arguments args(named_.darwin);
+	for (TempId id = 0; id < body_.parameter_count; ++id)
 	{
-		Arguments args(named_.darwin);
-		for (TempId id = 0; id < body_.parameter_count; ++id)
-		{
-			const auto& param = program_.parameters_of(signature_)[id];
-			if (param.pass == ir_model::PPM_INDIRECT_RESULT)
-				continue;
-			const auto arg = args.next(param.type, param.shape);
-			if ((arg.bank == Bank::General && !memory_value(param.type)) ||
-				(arg.bank == Bank::Simd && param.type.kind() == TypeKind::V128))
-				incoming[id] = arg.first;
-		}
+		const auto& param = program_.parameters_of(signature_)[id];
+		if (param.pass == ir_model::PPM_INDIRECT_RESULT)
+			continue;
+		const auto arg = args.next(param.type, param.shape);
+		if ((arg.bank == Bank::General && !memory_value(param.type)) ||
+			(arg.bank == Bank::Simd && param.type.kind() == TypeKind::V128))
+			incoming[id] = arg.first;
 	}
-	const unsigned bank[] = { 0, 1, 2, 3, 4, 5, 6, 7, 12, 13, 14, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28 };
-	const unsigned vector_bank[] = { 0, 1, 2, 3, 4, 5, 6, 7, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31 };
-	uint32_t available[32] = {}, vector_available[32] = {};
+	const uint32_t slots = 2 * (body_.instructions.size() + body_.layout.size()) + 3;
+	RegisterBank general(segments, slots), simd(segments, slots);
+	uint32_t saved = 0;
 	machine::IntervalSlots scalar_spills, vector_spills;
 	for (const auto& range : ranges)
 	{
 		if (range.first == kNoId)
 			continue;
-		const auto call = std::lower_bound(calls.begin(), calls.end(), range.first);
-		const bool across_call = call != calls.end() && *call < range.last;
+		bool at_call = false, across_call = false;
+		if (!calls.empty())
+			each_interval(range, segments, [&](uint32_t a, uint32_t b) {
+				const auto call = std::lower_bound(calls.begin(), calls.end(), a);
+				at_call |= call != calls.end() && *call <= b;
+				across_call |= call != calls.end() && *call < b;
+			});
 		const auto type = body_.temps[range.id].type;
-		const auto usable_argument = [&](unsigned reg) {
-			return reg >= 8 ||
-				(calls.empty() && (range.first != 0 || (range.id < incoming.size() && incoming[range.id] == reg)));
-		};
+		uint32_t arguments = at_call ? 0 : 0xff;
+		if (range.first == 0)
+			arguments &= range.id < incoming.size() && incoming[range.id] != kNoId ? 1u << incoming[range.id] : 0;
 		if (memory_value(type))
 		{
-			// A leaf can keep its incoming NEON arguments in v0-v7. A quadword
+			// Argument registers are free between calls. A quadword
 			// that crosses a call must be spilled, including its high half.
 			if (type.kind() == TypeKind::V128 && !range.vector_address && !across_call)
-				for (unsigned reg : vector_bank)
-					if (usable_argument(reg) && vector_available[reg] <= range.first)
-					{
-						vector_available[reg] = range.last + 1;
-						vectors_[range.id] = reg;
-						break;
-					}
+				vectors_[range.id] = simd.assign(range, arguments | 0xfffc0000, kNoId);
 			if (vectors_[range.id] == kNoId)
 				homes_[range.id] = type.kind() == TypeKind::V128 && !range.vector_address
 					? vector_spills.assign(range.first, range.last, [&]() { return home(range.id); })
 					: home(range.id);
 			continue;
 		}
-		for (unsigned reg : bank)
+		const uint32_t caller = across_call ? 0 : arguments | (7u << 12);
+		const uint32_t preserved = (dynamic_stack_ ? 0x1ffu : 0x3ffu) << 19;
+		const unsigned preferred = range.affinity == kNoId ? kNoId : registers_[range.affinity];
+		unsigned reg = general.assign(range, caller | preserved, preferred);
+		registers_[range.id] = reg;
+		if (reg != kNoId && reg >= 19 && !(saved & (1u << reg)))
 		{
-			if (!usable_argument(reg))
-				continue;
-			if ((dynamic_stack_ && reg == 28) || available[reg] > range.first || (reg < 19 && across_call))
-				continue;
-			if (reg >= 19 && available[reg] == 0)
-				preserved_.push_back({ reg, reserve(8, 8) });
-			available[reg] = range.last + 1;
-			registers_[range.id] = reg;
-			break;
+			saved |= 1u << reg;
+			preserved_.push_back({ reg, reserve(8, 8) });
 		}
 		if (registers_[range.id] != kNoId)
 			continue;

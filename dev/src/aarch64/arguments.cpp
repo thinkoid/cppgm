@@ -33,46 +33,6 @@ void Selector::darwin_tls_address(unsigned reg, SymbolId symbol)
 		out_.frame_rule(FrameRule::Offset, 31, frame_);
 }
 
-// dst and src are address registers. A zero-register source fills with zero.
-void Selector::copy_bytes(unsigned dst, unsigned src, uint64_t size)
-{
-	// A loop keeps machine-code size bounded for large aggregates.
-	if (size >= 64)
-	{
-		move(16, dst);
-		if (src != 31)
-			move(17, src);
-		constant(9, size / 8);
-		const unsigned loop = out_.labels.size();
-		out_.labels.resize(loop + 2);
-		out_.bind(loop);
-		if (src != 31)
-		{
-			access(false, 15, 17, 0, 8);
-			out_.emit(Op::AddI, 17, 17, 0, 8 << 10);
-		}
-		access(true, src == 31 ? 31 : 15, 16, 0, 8);
-		out_.emit(Op::AddI, 16, 16, 0, 8 << 10);
-		out_.emit(Op::SubI, 9, 9, 0, 1 << 10);
-		out_.reference(Op::Cbz, Fixup::Block, loop + 1, 9);
-		out_.reference(Op::B, Fixup::Block, loop);
-		out_.bind(loop + 1);
-		dst = 16;
-		if (src != 31)
-			src = 17;
-		size %= 8;
-	}
-	unsigned offset = 0;
-	for (unsigned n : { 8u, 4u, 2u, 1u })
-		while (size - offset >= n)
-		{
-			if (src != 31)
-				access(false, 9, src, offset, n);
-			access(true, src == 31 ? 31 : 9, dst, offset, n);
-			offset += n;
-		}
-}
-
 void Selector::copy_value(unsigned dst, Value src, Type type)
 {
 	if (type.kind() == TypeKind::V128)
@@ -241,16 +201,19 @@ void Selector::pass(const Argument& arg, Value src, Type type, unsigned copy_off
 	}
 	else
 	{
-		value(10, src, type);
-		if (arg.bank == Bank::Stack)
-			access(true, 10, 31, arg.first, storage_bytes(type));
-		else if (arg.bank == Bank::Simd)
-			fp_move(true, arg.first, 10, type);
+		if (arg.bank == Bank::General)
+		{
+			value(arg.first, src, type);
+			if (named_.darwin && type.is_integer() && integer_bits(type.kind()) < 32)
+				extend(arg.first, integer_bits(type.kind()), !is_unsigned(type.kind()) && type.kind() != TypeKind::I1);
+		}
 		else
 		{
-			if (named_.darwin && type.is_integer() && integer_bits(type.kind()) < 32)
-				extend(10, integer_bits(type.kind()), !is_unsigned(type.kind()) && type.kind() != TypeKind::I1);
-			move(arg.first, 10);
+			const unsigned reg = operand_register(src, type, 10);
+			if (arg.bank == Bank::Stack)
+				access(true, reg, 31, arg.first, storage_bytes(type));
+			else
+				fp_move(true, arg.first, reg, type);
 		}
 	}
 }

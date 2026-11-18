@@ -42,6 +42,8 @@ private:
 	void frame_address(unsigned reg, uint32_t offset) { base_address(reg, frame_base(), offset); }
 	void home_address(unsigned reg, lowir::TempId temp);
 	void stack_alloc(const lowir::Instruction& inst);
+	void copy_piece(unsigned dst, unsigned src, unsigned offset, unsigned bytes);
+	void copy_run(unsigned dst, unsigned src, uint64_t bytes, bool backward);
 	void copy_bytes(unsigned dst, unsigned src, uint64_t size);
 	void copy_value(unsigned dst, lowir::Value src, lowir::Type type);
 	struct CallLayout
@@ -61,6 +63,7 @@ private:
 	uint32_t reserve(uint64_t size, uint32_t alignment);
 	void stack_adjust(bool subtract);
 	void saved_registers(bool store);
+	bool logical_immediate(uint64_t bits, unsigned width, uint32_t& field);
 	void constant(unsigned reg, uint64_t bits);
 	void move(unsigned to, unsigned from);
 	void extend(unsigned reg, unsigned bits, bool sign);
@@ -85,7 +88,8 @@ private:
 	void compare(const lowir::Instruction& inst);
 	void compare_flags(const lowir::Instruction& inst);
 	lowir::InstId address_sequence(lowir::InstId id);
-	bool compare_branch(const lowir::Instruction& inst, lowir::BlockId block);
+	void choose(const lowir::Instruction& inst, unsigned condition);
+	bool compare_consumer(const lowir::Instruction& inst, lowir::BlockId block);
 	void conditional_edges(lowir::BlockId block, const lowir::Instruction& branch, Op test, unsigned operand);
 	void call(const lowir::Instruction& inst);
 	void epilogue(const lowir::Instruction& inst);

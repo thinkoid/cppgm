@@ -1,7 +1,9 @@
 #include "aarch64/lifetimes.h"
 
 #include <algorithm>
-#include "machine/ssa_liveness.h"
+#include "machine/ssa_segments.h"
+#include "machine/exception_predecessors.h"
+#include "machine/exception_layout.h"
 #include "opt/function_ir.h"
 
 namespace aarch64 {
@@ -16,7 +18,7 @@ struct BlockSpan
 struct Reads
 {
 	BlockId definition = kNoId, block = kNoId;
-	uint32_t other = kNoId;
+	uint32_t other = kNoId, position = 0, written = 0;
 	bool phi = false, incoming = false;
 	bool local() const { return !phi && !incoming && (block == kNoId || (block == definition && other == kNoId)); }
 };
@@ -26,6 +28,12 @@ void include(LiveRange& value, uint32_t at)
 	value.first = std::min(value.first, at);
 	value.last = std::max(value.last, at);
 }
+
+struct BlockRead
+{
+	BlockId block;
+	uint32_t position, previous;
+};
 
 struct FunctionLiveness
 {
@@ -41,21 +49,38 @@ struct FunctionLiveness
 		include(ranges[id], at);
 		auto& use = reads[id];
 		if (use.block == block)
+		{
+			use.position = std::max(use.position, at);
 			return;
+		}
 		if (use.block != kNoId)
 		{
-			other_reads.emplace_back(use.block, use.other);
+			other_reads.push_back(BlockRead{ use.block, use.position, use.other });
 			use.other = other_reads.size() - 1;
 		}
 		use.block = block;
+		use.position = at;
 	}
 
-	void extend(const Program& program, const FunctionBody& body, bool exceptional, uint32_t end,
-		const std::vector<uint32_t>& uses)
+	void extend(const Program& program, const FunctionBody& body, const machine::ExceptionLayout* exceptions,
+		uint32_t end, const std::vector<uint32_t>& uses, std::vector<std::pair<uint32_t, uint32_t>>& segments)
 	{
 		if (std::all_of(reads.begin(), reads.end(), [](const Reads& use) { return use.local(); }))
 			return;
-		if (exceptional || !body.code_labels.empty())
+		std::vector<uint32_t> extra_first, extra_preds;
+		bool full_ranges = !body.code_labels.empty();
+		if (exceptions && !full_ranges)
+		{
+			extra_first.assign(body.blocks.size() + 1, 0);
+			auto number = [&](uint32_t b) { return body.layout[b]; };
+			auto has_phi = [&](uint32_t b) {
+				auto i = body.blocks[number(b)].first;
+				return i != kNoId && body.instructions[i].op == Opcode::Phi;
+			};
+			full_ranges = !machine::exception_predecessors(
+				body, exceptions->analysis, number, [](InstId) { return true; }, has_phi, extra_first, extra_preds);
+		}
+		if (full_ranges)
 		{
 			// An exceptional or nonlocal transfer can bypass the ordinary predecessors.
 			for (auto& range : ranges)
@@ -69,6 +94,9 @@ struct FunctionLiveness
 		opt::Cfg cfg;
 		opt::build_cfg_light(program, body, cfg, true);
 		machine::SsaLiveness walk(cfg.pred_first, cfg.preds, end / 2 + body.layout.size());
+		if (exceptions)
+			walk.exception_edges(extra_first, extra_preds);
+		machine::SsaSegments parts(body.blocks.size());
 		bool within_budget = true;
 		for (auto& range : ranges)
 		{
@@ -78,28 +106,41 @@ struct FunctionLiveness
 			if (within_budget && use.definition != kNoId)
 			{
 				walk.begin(uses[range.id]);
-				auto live_in = [&](BlockId b) {
-					if (b != use.definition)
-					{
-						include(range, spans[b].first);
+				parts.begin();
+				const auto definition = use.definition;
+				parts.define(definition);
+				auto read_block = [&](BlockId b, uint32_t at) {
+					parts.read(b, at);
+					if (b != definition)
 						walk.enter(b);
-					}
 				};
 				if (use.block != kNoId)
-					live_in(use.block);
-				for (uint32_t i = use.other; i != kNoId; i = other_reads[i].second)
-					live_in(other_reads[i].first);
-				// A phi's parallel transfer writes its destination on every incoming edge.
+					read_block(use.block, use.position);
+				for (uint32_t i = use.other; i != kNoId; i = other_reads[i].previous)
+					read_block(other_reads[i].block, other_reads[i].position);
 				if (use.phi)
-					for (uint32_t k = cfg.pred_first[use.definition]; k < cfg.pred_first[use.definition + 1]; ++k)
-						include(range, spans[cfg.preds[k]].last);
-				within_budget = walk.propagate(use.definition, [&](BlockId b) {
-					include(range, spans[b].last);
-					if (b != use.definition)
-						include(range, spans[b].first);
-				});
+				{
+					walk.mark_entry(definition);
+					for (uint32_t k = cfg.pred_first[definition]; k < cfg.pred_first[definition + 1]; ++k)
+						parts.transfer(cfg.preds[k]);
+				}
+				within_budget = walk.propagate(definition, [&](BlockId b) { parts.live_out(b); });
 				if (within_budget)
+				{
+					range.segments = segments.size();
+					auto bounds = [&](BlockId b) {
+						return machine::BlockSlots{ static_cast<int32_t>(spans[b].first),
+							static_cast<int32_t>(spans[b].last), cfg.succ_first[b + 1] - cfg.succ_first[b] > 1 };
+					};
+					parts.emit(
+						walk, definition, use.written, use.phi, bounds, [&](BlockId, int32_t first, int32_t last) {
+							segments.emplace_back(first, last);
+							include(range, first);
+							include(range, last);
+						});
+					range.count = segments.size() - range.segments;
 					continue;
+				}
 			}
 			range.first = 0;
 			range.last = end;
@@ -109,12 +150,13 @@ struct FunctionLiveness
 	std::vector<BlockSpan> spans;
 	std::vector<LiveRange> ranges;
 	std::vector<Reads> reads;
-	std::vector<std::pair<BlockId, uint32_t>> other_reads;
+	std::vector<BlockRead> other_reads;
 };
 } // namespace
 
-std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& body, bool exceptional,
-	std::vector<uint32_t>& uses, std::vector<uint32_t>& calls)
+std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& body,
+	const machine::ExceptionLayout* exceptions, std::vector<uint32_t>& uses, std::vector<uint32_t>& calls,
+	std::vector<std::pair<uint32_t, uint32_t>>& segments)
 {
 	FunctionLiveness plan(body);
 	uses.assign(body.temps.size(), 0);
@@ -139,7 +181,8 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 				auto& def = plan.reads[inst.result];
 				def.definition = b;
 				def.phi = inst.op == Opcode::Phi;
-				include(plan.ranges[inst.result], def.phi ? plan.spans[b].first : at + 1);
+				def.written = def.phi ? plan.spans[b].first : at + 1;
+				include(plan.ranges[inst.result], def.written);
 			}
 			if (inst.op == Opcode::Phi)
 				continue;
@@ -153,7 +196,8 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 				}
 			});
 		}
-		plan.spans[b].last = at - 1;
+		plan.spans[b].last = at + 1;
+		at += 2;
 	}
 	// Layout can put a phi before its backedge, so resolve edge positions after scanning.
 	for (BlockId b : body.layout)
@@ -168,7 +212,9 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 				if (v.is(ValueKind::Temp))
 				{
 					++uses[v.index];
-					plan.read(v.index, pred, plan.spans[pred].last);
+					plan.read(v.index, pred, plan.spans[pred].last - 1);
+					plan.ranges[v.index].affinity = phi.result;
+					plan.ranges[phi.result].affinity = v.index;
 					plan.reads[v.index].incoming = true;
 					plan.ranges[v.index].vector_address = true;
 				}
@@ -176,7 +222,7 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 		}
 	if (body.layout.size() > 1 ||
 		(body.blocks[entry].first != kNoId && body.instructions[body.blocks[entry].first].op == Opcode::Phi))
-		plan.extend(program, body, exceptional, at, uses);
+		plan.extend(program, body, exceptions, at, uses, segments);
 	return std::move(plan.ranges);
 }
 

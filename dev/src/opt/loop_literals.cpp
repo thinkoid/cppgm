@@ -31,12 +31,14 @@ private:
 	{
 		Value literal;
 		Value temp;
+		Type type;
 	};
 
+	bool held_literal(const Instruction& inst, Value v) const;
 	bool has_call(const Loop& loop) const;
 	bool reads_literal(const Loop& loop) const;
 	bool same_literal(Value a, Value b) const;
-	bool hold(uint32_t loop);
+	bool hold(uint32_t loop, BlockId pre);
 	bool hold_addresses(uint32_t loop);
 
 	FunctionContext& c_;
@@ -46,9 +48,23 @@ private:
 	std::vector<Held> held_;
 };
 
-bool held_kind(Value v)
+bool LoopLiterals::held_literal(const Instruction& inst, Value v) const
 {
-	return v.is(ValueKind::Float) && (v.float_kind == TypeKind::F32 || v.float_kind == TypeKind::F64);
+	if (v.is(ValueKind::Float))
+		return (v.float_kind == TypeKind::F32 || v.float_kind == TypeKind::F64) && body_.literals[v.index].low != 0;
+	if (!v.is(ValueKind::Integer) || !target_model::is_aarch64(c_.program.target) || inst.op != Opcode::Binary ||
+		inst.sub != static_cast<unsigned>(BinaryOp::Mul) || integer_bits(inst.type.kind()) != 64)
+		return false;
+	// A multiply needs its literal in a register. Several MOVKs in the
+	// loop cost more than using a register for the invariant multiplicand.
+	uint64_t bits = body_.literals[v.index].low;
+	unsigned nonzero = 0, nonones = 0;
+	for (unsigned i = 0; i < 4; ++i, bits >>= 16)
+	{
+		nonzero += (bits & 65535) != 0;
+		nonones += (bits & 65535) != 65535;
+	}
+	return nonzero >= 3 && nonones >= 3;
 }
 
 bool LoopLiterals::has_call(const Loop& loop) const
@@ -64,7 +80,7 @@ bool LoopLiterals::same_literal(Value a, Value b) const
 {
 	const Literal& x = body_.literals[a.index];
 	const Literal& y = body_.literals[b.index];
-	return x.low == y.low && x.high == y.high && a.float_kind == b.float_kind;
+	return a.kind == b.kind && x.low == y.low && x.high == y.high && a.float_kind == b.float_kind;
 }
 
 bool LoopLiterals::reads_literal(const Loop& loop) const
@@ -75,16 +91,14 @@ bool LoopLiterals::reads_literal(const Loop& loop) const
 		{
 			const Instruction& inst = body_.instructions[i];
 			if (inst.op != Opcode::Store)
-				for_each_operand(body_, inst,
-					[&](const Value& v) { found = found || (held_kind(v) && body_.literals[v.index].low != 0); });
+				for_each_operand(body_, inst, [&](const Value& v) { found = found || held_literal(inst, v); });
 		}
 	return found;
 }
 
-bool LoopLiterals::hold(uint32_t loop)
+bool LoopLiterals::hold(uint32_t loop, BlockId pre)
 {
 	const Loop& l = forest_.loops[loop];
-	const BlockId pre = l.preheader;
 	InstId tail = previous_in_block(body_, pre, body_.blocks[pre].last);
 	held_.clear();
 	bool changed = false;
@@ -99,21 +113,21 @@ bool LoopLiterals::hold(uint32_t loop)
 			{
 				const uint32_t first = body_.instructions[i].extra_first;
 				const Value v = k < 3 ? body_.instructions[i].ops[k] : body_.operands[first + k - 3];
-				if (!held_kind(v) || body_.literals[v.index].low == 0)
+				if (!held_literal(body_.instructions[i], v))
 					continue;
 				// (A phi's input from outside is read once.)
 				if (k >= 3 && body_.instructions[i].op == Opcode::Phi &&
 					!in_loop(forest_, loop, body_.operands[first + k - 4].index))
 					continue;
+				const Type type = v.is(ValueKind::Float) ? Type::scalar(v.float_kind) : body_.instructions[i].type;
 				Value temp = Value::none();
 				for (const Held& h : held_)
-					if (same_literal(h.literal, v))
+					if (h.type == type && same_literal(h.literal, v))
 						temp = h.temp;
 				if (temp.is(ValueKind::None))
 				{
 					if (held_.size() == kHeld)
 						continue;
-					const Type type = Type::scalar(v.float_kind);
 					Instruction copy = make_instruction(Opcode::Copy, type);
 					copy.ops[0] = v;
 					const InstId id = append_instruction(body_, copy);
@@ -122,7 +136,7 @@ bool LoopLiterals::hold(uint32_t loop)
 					insert_after(body_, pre, tail, id);
 					tail = id;
 					temp = Value::temp(result);
-					held_.push_back(Held{ v, temp });
+					held_.push_back(Held{ v, temp, type });
 				}
 				if (k < 3)
 					body_.instructions[i].ops[k] = temp;
@@ -170,7 +184,7 @@ bool LoopLiterals::hold_addresses(uint32_t loop)
 					insert_after(body_, pre, tail, id);
 					tail = id;
 					temp = Value::temp(result);
-					held_.push_back(Held{ v, temp });
+					held_.push_back(Held{ v, temp, type });
 				}
 				body_.instructions[i].ops[k] = temp;
 				changed = true;
@@ -197,8 +211,13 @@ bool LoopLiterals::run()
 		if (has_call(forest_.loops[loop]))
 			continue;
 		held[loop] = 1;
-		if (forest_.loops[loop].preheader != kNoId && reads_literal(forest_.loops[loop]))
-			changed = hold(loop) || changed;
+		const auto& l = forest_.loops[loop];
+		// On Arm even a guarded loop can materialize an expensive immediate
+		// once in its dominating test. A literal copy has no memory effects.
+		const BlockId pre = l.preheader == kNoId && target_model::is_aarch64(c_.program.target) ? cfg_.idom[l.header]
+																								: l.preheader;
+		if (pre != kNoId && reads_literal(l))
+			changed = hold(loop, pre) || changed;
 	}
 	std::vector<uint8_t> addressed(forest_.loops.size(), 0);
 	for (uint32_t loop = 0; loop < forest_.loops.size(); ++loop)
@@ -222,7 +241,7 @@ bool LoopLiterals::run()
 
 bool hold_loop_literals(FunctionContext& context)
 {
-	if (!context.costs.floating_literal_loads)
+	if (!context.costs.floating_literal_loads && !target_model::is_aarch64(context.program.target))
 		return false;
 	LoopLiterals pass(context);
 	return pass.run();

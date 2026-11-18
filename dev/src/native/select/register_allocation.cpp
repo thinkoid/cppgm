@@ -1,7 +1,8 @@
 #include "native/select/function_selector.h"
 #include "native/select/for_each_inst.h"
 
-#include "machine/ssa_liveness.h"
+#include "machine/ssa_segments.h"
+#include "machine/exception_predecessors.h"
 
 #include <algorithm>
 #include <iterator>
@@ -48,188 +49,6 @@
 // defined inside their intervals. Work: O((instructions + live blocks +
 // ranges) log) per function; no fixed point.
 namespace native {
-
-// PressureTree (allocation_structures.h): the counts and the registers
-// assigned over ranges.
-void PressureTree::build(const std::vector<int32_t>& base)
-{
-	size_ = 1;
-	while (size_ < base.size())
-		size_ <<= 1;
-	max_.assign(2 * size_, 0);
-	add_.assign(2 * size_, 0);
-	cover_.assign(2 * size_, 0);
-	below_.assign(2 * size_, 0);
-	for (size_t i = 0; i < base.size(); ++i)
-		max_[size_ + i] = base[i];
-	for (size_t i = size_; i-- > 1;)
-		max_[i] = max_[2 * i] > max_[2 * i + 1] ? max_[2 * i] : max_[2 * i + 1];
-}
-
-int32_t PressureTree::max(uint32_t first, uint32_t last) const
-{
-	if (first > last || last >= size_)
-		return query(1, 0, size_ - 1, first, last);
-	const int32_t none = INT32_MIN / 2;
-	int32_t left = none, right = none;
-	size_t l = first + size_, r = last + size_;
-	// Node zero represents an inactive boundary; shifting keeps it inactive.
-	size_t la = first == 0 ? 0 : first + size_ - 1;
-	size_t ra = last + 1 == size_ ? 0 : last + size_ + 1;
-	while (l <= r)
-	{
-		if (l & 1)
-		{
-			left = max_[l] > left ? max_[l] : left;
-			++l;
-		}
-		if (!(r & 1))
-		{
-			right = max_[r] > right ? max_[r] : right;
-			--r;
-		}
-		l >>= 1;
-		r >>= 1;
-		la >>= 1;
-		ra >>= 1;
-		if (la != 0 && left != none)
-			left += add_[la];
-		if (ra != 0 && right != none)
-			right += add_[ra];
-	}
-	// Above the last level both sides share their ancestors.
-	for (; la > 1 && left != none;)
-	{
-		la >>= 1;
-		left += add_[la];
-	}
-	for (; ra > 1 && right != none;)
-	{
-		ra >>= 1;
-		right += add_[ra];
-	}
-	return left > right ? left : right;
-}
-
-void PressureTree::add(uint32_t first, uint32_t last, int32_t delta, uint32_t regs)
-{
-	if (first > last || last >= size_)
-	{
-		update(1, 0, size_ - 1, first, last, delta, regs);
-		return;
-	}
-	size_t l = first + size_, r = last + size_;
-	const size_t l0 = l, r0 = r;
-	auto cover = [&](size_t node) {
-		max_[node] += delta;
-		add_[node] += delta;
-		cover_[node] |= regs;
-		below_[node] |= regs;
-	};
-	while (l <= r)
-	{
-		if (l & 1)
-			cover(l++);
-		if (!(r & 1))
-			cover(r--);
-		l >>= 1;
-		r >>= 1;
-	}
-	// Rebuild separate boundary paths up to their join, then their common path.
-	auto pull = [&](size_t node) {
-		max_[node] = (max_[2 * node] > max_[2 * node + 1] ? max_[2 * node] : max_[2 * node + 1]) + add_[node];
-		below_[node] = below_[2 * node] | below_[2 * node + 1] | cover_[node];
-	};
-	size_t left = l0 >> 1, right = r0 >> 1;
-	while (left != right)
-	{
-		pull(left);
-		pull(right);
-		left >>= 1;
-		right >>= 1;
-	}
-	for (; left != 0; left >>= 1)
-		pull(left);
-}
-
-uint32_t PressureTree::regs(uint32_t first, uint32_t last) const
-{
-	if (first > last || last >= size_)
-		return regs_of(1, 0, size_ - 1, first, last);
-	uint32_t mask = 0;
-	bool left = false, right = false;
-	size_t l = first + size_, r = last + size_;
-	// Node zero represents an inactive boundary; shifting keeps it inactive.
-	size_t la = first == 0 ? 0 : first + size_ - 1;
-	size_t ra = last + 1 == size_ ? 0 : last + size_ + 1;
-	while (l <= r)
-	{
-		if (l & 1)
-		{
-			mask |= below_[l++];
-			left = true;
-		}
-		if (!(r & 1))
-		{
-			mask |= below_[r--];
-			right = true;
-		}
-		l >>= 1;
-		r >>= 1;
-		la >>= 1;
-		ra >>= 1;
-		if (left && la != 0)
-			mask |= cover_[la];
-		if (right && ra != 0)
-			mask |= cover_[ra];
-	}
-	for (; la > 1 && left;)
-		mask |= cover_[la >>= 1];
-	for (; ra > 1 && right;)
-		mask |= cover_[ra >>= 1];
-	return mask;
-}
-
-int32_t PressureTree::query(size_t node, size_t lo, size_t hi, size_t first, size_t last) const
-{
-	if (last < lo || hi < first)
-		return INT32_MIN / 2;
-	if (first <= lo && hi <= last)
-		return max_[node];
-	const size_t mid = (lo + hi) / 2;
-	const int32_t a = query(2 * node, lo, mid, first, last);
-	const int32_t b = query(2 * node + 1, mid + 1, hi, first, last);
-	return (a > b ? a : b) + add_[node];
-}
-
-void PressureTree::update(size_t node, size_t lo, size_t hi, size_t first, size_t last, int32_t delta, uint32_t regs)
-{
-	if (last < lo || hi < first)
-		return;
-	if (first <= lo && hi <= last)
-	{
-		max_[node] += delta;
-		add_[node] += delta;
-		cover_[node] |= regs;
-		below_[node] |= regs;
-		return;
-	}
-	const size_t mid = (lo + hi) / 2;
-	update(2 * node, lo, mid, first, last, delta, regs);
-	update(2 * node + 1, mid + 1, hi, first, last, delta, regs);
-	max_[node] = (max_[2 * node] > max_[2 * node + 1] ? max_[2 * node] : max_[2 * node + 1]) + add_[node];
-	below_[node] = below_[2 * node] | below_[2 * node + 1] | cover_[node];
-}
-
-uint32_t PressureTree::regs_of(size_t node, size_t lo, size_t hi, size_t first, size_t last) const
-{
-	if (last < lo || hi < first)
-		return 0;
-	if (first <= lo && hi <= last)
-		return below_[node];
-	const size_t mid = (lo + hi) / 2;
-	return regs_of(2 * node, lo, mid, first, last) | regs_of(2 * node + 1, mid + 1, hi, first, last) | cover_[node];
-}
 
 using lowir::Instruction;
 using lowir::kNoId;
@@ -427,49 +246,9 @@ bool FunctionSelector::exceptional_edges()
 	ra_exc_preds_.clear();
 	if (eh_model_ != EhModel::Host || !has_eh_)
 		return true;
-	std::vector<uint32_t> landing_block;
-	for (uint32_t b = 0; b < n; ++b)
-	{
-		const uint32_t index = eh_.eh_landing_index_.empty() ? kNoId : eh_.eh_landing_index_[b];
-		if (index == kNoId)
-			continue;
-		if (landing_block.size() <= index)
-			landing_block.resize(index + 1, kNoId);
-		landing_block[index] = b;
-	}
-	std::vector<std::pair<uint32_t, uint32_t>> edges;
-	for (uint32_t b = 0; b < n; ++b)
-	{
-		if (!blocks_[b].reachable)
-			continue;
-		for (lowir::InstId i = body.blocks[blocks_[b].id].first; i != kNoId; i = body.instructions[i].next)
-		{
-			const uint32_t site = eh_.eh_sites_[i];
-			if (!live(i) || site == 0)
-				continue;
-			const Opcode op = body.instructions[i].op;
-			uint32_t to = kNoId;
-			if (op == Opcode::Call && site - 1 < landing_block.size())
-				to = landing_block[site - 1];
-			else if ((op == Opcode::Resume || op == Opcode::Jump) && site != kResumeTerminal)
-				to = site - 1;
-			if (to == kNoId)
-				continue;
-			if (blocks_[to].has_phi)
-				return false;
-			edges.push_back(std::make_pair(to, b));
-		}
-	}
-	std::sort(edges.begin(), edges.end());
-	edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
-	for (size_t k = 0; k < edges.size(); ++k)
-		++ra_exc_first_[edges[k].first + 1];
-	for (uint32_t b = 0; b < n; ++b)
-		ra_exc_first_[b + 1] += ra_exc_first_[b];
-	ra_exc_preds_.resize(edges.size());
-	for (size_t k = 0; k < edges.size(); ++k)
-		ra_exc_preds_[k] = edges[k].second;
-	return true;
+	return machine::exception_predecessors(
+		body, eh_, [](uint32_t b) { return b; }, [&](lowir::InstId i) { return live(i); },
+		[&](uint32_t b) { return blocks_[b].has_phi; }, ra_exc_first_, ra_exc_preds_);
 }
 
 // Loop nesting depth per block: natural loops of the back edges a depth-
@@ -943,9 +722,7 @@ void FunctionSelector::live_ranges()
 {
 	const lowir::FunctionBody& body = *body_;
 	const uint32_t n = static_cast<uint32_t>(blocks_.size());
-	std::vector<uint32_t> seen(n, 0), out(n, 0), transfer(n, 0);
-	std::vector<int32_t> last(n, -1);
-	std::vector<uint32_t> present;
+	machine::SsaSegments segments(n);
 	uint64_t items = 0;
 	for (uint32_t b = 0; b < n; ++b)
 		if (blocks_[b].reachable)
@@ -964,24 +741,14 @@ void FunctionSelector::live_ranges()
 		const bool param = (t.flags & TF_PARAM) != 0;
 		const bool phi = !param && body.instructions[body.temps[temp].def].op == Opcode::Phi;
 		const uint32_t def_block = param ? kNoId : t.block;
-		const uint32_t epoch = static_cast<uint32_t>(c + 1);
-		present.clear();
-		auto touch = [&](uint32_t b) {
-			if (seen[b] != epoch)
-			{
-				seen[b] = epoch;
-				last[b] = -1;
-				present.push_back(b);
-			}
-		};
+		segments.begin();
 		uint64_t freq = def_block == kNoId ? kWeightScale : loop_splitter_.weights[def_block];
 		bool looped = def_block != kNoId && ra_depth_[def_block] != 0;
 		walk.begin(ra_use_first_[c + 1] - ra_use_first_[c]);
 		for (uint32_t u = ra_use_first_[c]; u < ra_use_first_[c + 1]; ++u)
 		{
 			const uint32_t b = ra_uses_[u].first;
-			touch(b);
-			last[b] = std::max(last[b], ra_uses_[u].second);
+			segments.read(b, ra_uses_[u].second);
 			freq += loop_splitter_.weights[b];
 			looped = looped || ra_depth_[b] != 0;
 			if (b != def_block)
@@ -991,67 +758,28 @@ void FunctionSelector::live_ranges()
 		{
 			// Live into its block (not through it to the predecessors), and
 			// written by each predecessor's transfer.
-			touch(def_block);
 			walk.mark_entry(def_block);
 			for (uint32_t k = preds_first_[def_block]; k < preds_first_[def_block + 1]; ++k)
-			{
-				touch(preds_[k]);
-				transfer[preds_[k]] = epoch;
-			}
+				segments.transfer(preds_[k]);
 		}
 		if (def_block != kNoId)
-			touch(def_block);
-		if (!walk.propagate(def_block, [&](uint32_t q) {
-				touch(q);
-				out[q] = epoch;
-			}))
+			segments.define(def_block);
+		if (!walk.propagate(def_block, [&](uint32_t q) { segments.live_out(q); }))
 		{
 			stats_.hull_fallbacks += ra_candidates_.size() - c;
 			ra_candidates_.resize(c);
 			break;
 		}
-		std::sort(present.begin(), present.end());
-		for (size_t k = 0; k < present.size(); ++k)
-		{
-			const uint32_t b = present[k];
+		auto bounds = [&](uint32_t b) {
 			const int32_t base = ra_base_[b];
-			const int32_t count = static_cast<int32_t>(blocks_[b].count);
-			const bool live_out = out[b] == epoch;
-			const int32_t written = write_slot(base, count);
-			// A predecessor ending in a conditional terminator writes the
-			// phi in its edge block, where only the values live into the
-			// phi's block are (they meet the phi at that block's entry):
-			// no range at its transfer.
-			const bool edge_write = phi && transfer[b] == epoch && succ_first_[b + 1] - succ_first_[b] > 1;
-			if (edge_write && !live_out)
-			{
-				if (walk.live_in(b))
-				{
-					ra_ranges_.push_back(std::make_pair(base, std::max(base, last[b])));
-					ra_range_block_.push_back(b);
-				}
-				continue;
-			}
-			// A phi live into a predecessor that writes it by its transfer
-			// and leaves it otherwise dead: dead between its last use and
-			// the transfer (the next value can take its register).
-			if (transfer[b] == epoch && !live_out && walk.live_in(b))
-			{
-				ra_ranges_.push_back(std::make_pair(base, std::max(base, last[b])));
-				ra_range_block_.push_back(b);
-				ra_ranges_.push_back(std::make_pair(written, written));
-				ra_range_block_.push_back(b);
-				continue;
-			}
-			int32_t start = base;
-			if (!walk.live_in(b))
-				start = b == def_block && !phi ? write_slot(base, t.def) : written;
-			int32_t end = live_out || transfer[b] == epoch ? written : last[b];
-			if (end < start)
-				end = start;
-			ra_ranges_.push_back(std::make_pair(start, end));
+			return machine::BlockSlots{ base, write_slot(base, static_cast<int32_t>(blocks_[b].count)),
+				succ_first_[b + 1] - succ_first_[b] > 1 };
+		};
+		const int32_t definition = def_block == kNoId ? 0 : write_slot(ra_base_[def_block], t.def);
+		segments.emit(walk, def_block, definition, phi, bounds, [&](uint32_t b, int32_t first, int32_t last) {
+			ra_ranges_.emplace_back(first, last);
 			ra_range_block_.push_back(b);
-		}
+		});
 		ra_range_first_.push_back(static_cast<uint32_t>(ra_ranges_.size()));
 		ra_freq_[c] = freq;
 		ra_looped_[c] = looped ? 1 : 0;
