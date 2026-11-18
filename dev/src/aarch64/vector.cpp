@@ -62,6 +62,37 @@ void Selector::vector_shift(VectorOp op, unsigned dest, unsigned source, uint64_
 	}
 }
 
+// The vectorizer broadcasts an i32 by inserting lane zero then shuffling it
+// into every lane. DUP reads a general register directly; MOVI can encode
+// a single nonzero byte of an immediate at any byte position in each word.
+InstId Selector::scalar_splat(const lowir::Instruction& inst)
+{
+	if (inst.sub != static_cast<unsigned>(VectorOp::Fromi32) || inst.next == kNoId || uses_[inst.result] != 1)
+		return kNoId;
+	const auto& shuffle = body_.instructions[inst.next];
+	if (shuffle.op != Opcode::Vector || shuffle.sub != static_cast<unsigned>(VectorOp::Pshufd) ||
+		!(shuffle.ops[0] == Value::temp(inst.result)) || !shuffle.ops[2].is(ValueKind::Integer) ||
+		body_.literals[shuffle.ops[2].index].low != 0)
+		return kNoId;
+	const auto dest = vectors_[shuffle.result] == kNoId ? 16 : vectors_[shuffle.result];
+	if (inst.ops[0].is(ValueKind::Integer))
+	{
+		const auto bits = static_cast<uint32_t>(body_.literals[inst.ops[0].index].low);
+		for (unsigned byte = 0; byte != 4; ++byte)
+			if ((bits & ~(0xffu << (8 * byte))) == 0)
+			{
+				const unsigned imm = bits >> (8 * byte);
+				out_.emit(Op::VMovIS, dest, 0, 0, (1u << 30) | ((imm & 0xe0) << 11) | ((imm & 31) << 5) | (byte << 13));
+				save_vector(dest, shuffle.result);
+				return inst.next;
+			}
+	}
+	const unsigned reg = operand_register(inst.ops[0], Type::scalar(TypeKind::I32), 9);
+	out_.emit(Op::VDupWS, dest, reg);
+	save_vector(dest, shuffle.result);
+	return inst.next;
+}
+
 void Selector::vector_shuffle(const lowir::Instruction& inst, unsigned source)
 {
 	const unsigned mask = body_.literals[inst.ops[2].index].low;
@@ -80,7 +111,12 @@ void Selector::vector_shuffle(const lowir::Instruction& inst, unsigned source)
 		}
 	}
 	else if (((mask & 3) * 0x55) == mask)
-		out_.emit(Op::VDupS, 17, source, 0, (mask & 3) << 19);
+	{
+		const auto dest = vectors_[inst.result] == kNoId ? 17 : vectors_[inst.result];
+		out_.emit(Op::VDupS, dest, source, 0, (mask & 3) << 19);
+		save_vector(dest, inst.result);
+		return;
+	}
 	else
 		for (unsigned i = 0; i < 4; ++i)
 			out_.emit(Op::VInsS, 17, source, 0, (i << 19) | (((mask >> (2 * i)) & 3) << 13));

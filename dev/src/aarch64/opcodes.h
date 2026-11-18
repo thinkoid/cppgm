@@ -184,6 +184,8 @@
 	M(VShl, 0x4f005400) \
 	M(VSshr, 0x4f000400) \
 	M(VUshr, 0x6f000400) \
+	M(VMovIS, 0x0f000400) \
+	M(VDupWS, 0x4e040c00) \
 	M(VDupS, 0x4e040400) \
 	M(VInsH, 0x6e020400) \
 	M(VInsS, 0x6e040400) \

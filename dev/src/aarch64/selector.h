@@ -33,6 +33,7 @@ private:
 	void save_vector(unsigned reg, lowir::TempId result);
 	void vector_instruction(const lowir::Instruction& inst);
 	void vector_shift(lowir::VectorOp op, unsigned dest, unsigned source, uint64_t count);
+	lowir::InstId scalar_splat(const lowir::Instruction& inst);
 	void vector_shuffle(const lowir::Instruction& inst, unsigned source);
 	void vector_move(unsigned to, unsigned from);
 	void pair(lowir::Value src, unsigned lo, unsigned hi);
