@@ -69,12 +69,42 @@ void Selector::scalar_access(const lowir::Instruction& inst)
 	}
 }
 
+// STP writes exactly the two consecutive scalar accesses. Restrict the
+// combine to register sources so neither read can observe the first store.
+InstId Selector::paired_store(const lowir::Instruction& index)
+{
+	if (!index.ops[0].is(ValueKind::Temp) || !index.ops[1].is(ValueKind::Integer) ||
+		body_.literals[index.ops[1].index].low != 1 || uses_[index.result] != 1 || index.next == kNoId)
+		return kNoId;
+	const auto& low = body_.instructions[index.next];
+	if (low.op != Opcode::Store || low.next == kNoId || !(low.ops[1] == index.ops[0]) || !low.type.is_integer())
+		return kNoId;
+	const auto& high = body_.instructions[low.next];
+	const auto bytes = storage_bytes(low.type);
+	if (high.op != Opcode::Store || high.type != low.type || (bytes != 4 && bytes != 8) ||
+		storage_bytes(index.type) != bytes || !(high.ops[1] == Value::temp(index.result)) ||
+		((low.flags | high.flags) & IF_VOLATILE) || !low.ops[0].is(ValueKind::Temp) || !high.ops[0].is(ValueKind::Temp))
+		return kNoId;
+	const auto a = registers_[low.ops[0].index], b = registers_[high.ops[0].index],
+			   base = registers_[index.ops[0].index];
+	if (a == kNoId || b == kNoId || base == kNoId)
+		return kNoId;
+	out_.emit(bytes == 4 ? Op::StpW : Op::StpX, a, base, 0, b << 10);
+	return low.next;
+}
+
 // The shared address-sinking pass leaves typed index expressions beside their
 // users. Consume only adjacent, single-use producers: their inputs are still
 // in their allocated locations, and no memory operation moves past another.
 InstId Selector::address_sequence(InstId id)
 {
 	const lowir::Instruction& first = body_.instructions[id];
+	if (first.op == Opcode::Index)
+	{
+		const auto last = paired_store(first);
+		if (last != kNoId)
+			return last;
+	}
 	InstId index_id = id;
 	Value offset = first.ops[1];
 	uint64_t scale = storage_bytes(first.type);

@@ -281,14 +281,15 @@ bool Selector::empty_edge(BlockId block, BlockId to)
 void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch, Op test, unsigned operand)
 {
 	const BlockId yes = branch.ops[1].index, no = branch.ops[2].index;
+	const auto inverse = test == Op::Cbz ? Op::Cbnz
+		: test == Op::Cbnz               ? Op::Cbz
+		: test == Op::CbzW               ? Op::CbnzW
+		: test == Op::CbnzW              ? Op::CbzW
+										 : Op::BCond;
+	const auto inverse_operand = test == Op::BCond ? operand ^ 1 : operand;
 	if (no == fallthrough_ && empty_edge(block, yes))
 	{
-		const auto inverse = test == Op::Cbz ? Op::Cbnz
-			: test == Op::Cbnz               ? Op::Cbz
-			: test == Op::CbzW               ? Op::CbnzW
-			: test == Op::CbnzW              ? Op::CbzW
-											 : Op::BCond;
-		out_.reference(inverse, Fixup::Block, yes, test == Op::BCond ? operand ^ 1 : operand);
+		out_.reference(inverse, Fixup::Block, yes, inverse_operand);
 		edge(block, no, true);
 		return;
 	}
@@ -300,10 +301,11 @@ void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch
 	}
 	const uint32_t other = out_.labels.size();
 	out_.labels.push_back(kNoId);
-	out_.reference(test, Fixup::Block, other, operand);
-	edge(block, yes);
+	const bool yes_next = yes == fallthrough_;
+	out_.reference(yes_next ? inverse : test, Fixup::Block, other, yes_next ? inverse_operand : operand);
+	edge(block, yes_next ? no : yes);
 	out_.bind(other);
-	edge(block, no, true);
+	edge(block, yes_next ? yes : no, true);
 }
 
 void Selector::edge(BlockId from, BlockId to, bool last)

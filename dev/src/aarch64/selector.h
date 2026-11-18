@@ -99,6 +99,7 @@ private:
 	void compare_flags(const lowir::Instruction& inst);
 	lowir::InstId truncated_operand(const lowir::Instruction& trunc, lowir::BlockId block);
 	lowir::InstId shifted_operand(const lowir::Instruction& shift);
+	lowir::InstId paired_store(const lowir::Instruction& index);
 	lowir::InstId address_sequence(lowir::InstId id);
 	void choose(const lowir::Instruction& inst, unsigned condition);
 	bool compare_consumer(const lowir::Instruction& inst, lowir::BlockId block);
