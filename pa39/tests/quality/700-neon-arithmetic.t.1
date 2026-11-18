@@ -12,8 +12,9 @@ int main() {
     if (r[0]!=4 || r[1]!=16 || r[2]!=48 || r[3]!=128) return 2;
     int in[11], out[11];
     for (int i = 0; i != 11; ++i) in[i] = i-3;
+    volatile int* sentinels = out;
     for (int n = 0; n <= 11; ++n) {
-        for (int i = 0; i != 11; ++i) out[i] = 73;
+        for (int i = 0; i != 11; ++i) sentinels[i] = 73;
         transform(out, in, n);
         for (int i = 0; i != 11; ++i) if (out[i] != (i<n ? 3*(i-3)+1 : 73)) return 3;
     }
