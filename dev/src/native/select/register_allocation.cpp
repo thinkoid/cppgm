@@ -6,6 +6,7 @@
 #include "machine/exception_predecessors.h"
 
 #include <algorithm>
+#include "machine/phi_inputs.h"
 #include <iterator>
 #include <map>
 #include <stdexcept>
@@ -609,14 +610,8 @@ void FunctionSelector::assign_registers()
 	for (size_t c = 0; c < m; ++c)
 		cand[ra_candidates_[c]] = static_cast<int32_t>(c);
 	// Phi webs (union-find) and each result's tied first operand.
-	std::vector<uint32_t> group(m);
-	for (size_t c = 0; c < m; ++c)
-		group[c] = static_cast<uint32_t>(c);
-	auto find = [&](uint32_t c) {
-		while (group[c] != c)
-			c = group[c] = group[group[c]];
-		return c;
-	};
+	machine::PhiWebs webs;
+	webs.reset(m);
 	std::vector<int32_t> tie(m, -1);
 	// Per phi: the incoming register of a parameter it takes that is no
 	// candidate itself (read only in its block, from where it arrives).
@@ -633,7 +628,7 @@ void FunctionSelector::assign_registers()
 			{
 				const Value v = resolve(body.operands[def.extra_first + k]);
 				if (v.kind == ValueKind::Temp && cand[v.index] >= 0)
-					group[find(static_cast<uint32_t>(cand[v.index]))] = find(static_cast<uint32_t>(c));
+					webs.join(static_cast<uint32_t>(cand[v.index]), static_cast<uint32_t>(c));
 				else if (v.kind == ValueKind::Temp && arriving[c] == kNoReg && (temps_[v.index].flags & TF_PARAM))
 					arriving[c] = incoming_reg(v.index);
 			}
@@ -727,13 +722,13 @@ void FunctionSelector::assign_registers()
 	// Phi webs' members (CSR by root), for one register for a whole web.
 	std::vector<uint32_t> web_first(m + 1, 0), web_members(m);
 	for (size_t c = 0; c < m; ++c)
-		++web_first[find(static_cast<uint32_t>(c)) + 1];
+		++web_first[webs.root(static_cast<uint32_t>(c)) + 1];
 	for (size_t c = 0; c < m; ++c)
 		web_first[c + 1] += web_first[c];
 	{
 		std::vector<uint32_t> fill(web_first.begin(), web_first.end() - 1);
 		for (size_t c = 0; c < m; ++c)
-			web_members[fill[find(static_cast<uint32_t>(c))]++] = static_cast<uint32_t>(c);
+			web_members[fill[webs.root(static_cast<uint32_t>(c))]++] = static_cast<uint32_t>(c);
 	}
 	// The registers a split candidate may take (choose_register's, before
 	// interference): the class's, callee-saved ones past those saved only
@@ -756,8 +751,8 @@ void FunctionSelector::assign_registers()
 					1u << reg);
 		temps_[temp].greg = reg;
 		global_temps_.push_back(temp);
-		if (group_reg[find(c)] == kNoReg)
-			group_reg[find(c)] = reg;
+		if (group_reg[webs.root(c)] == kNoReg)
+			group_reg[webs.root(c)] = reg;
 		if ((kCalleeSavedGprs | (1u << RBP)) & (1u << reg))
 			used_callee_saved_ |= 1u << reg;
 		++stats_.global_registers;
@@ -778,7 +773,7 @@ void FunctionSelector::assign_registers()
 	std::vector<uint8_t> web_trials(m, 0);
 	std::vector<uint32_t> web_local(m, 0); // assign_web: a member's place among those considered, plus one
 	auto assign_web = [&](uint32_t c, Reg tied) {
-		const uint32_t root = find(c);
+		const uint32_t root = webs.root(c);
 		if (web_first[root + 1] - web_first[root] < 2 || web_trials[root] == kWebTrials)
 			return false;
 		++web_trials[root];
@@ -944,7 +939,7 @@ void FunctionSelector::assign_registers()
 	};
 	auto assign_alone = [&](uint32_t c, Reg tied) {
 		uint32_t first = ra_range_first_[c], past = ra_range_first_[c + 1];
-		Reg reg = choose_register(c, first, past, group_reg[find(c)], tied, arriving[c]);
+		Reg reg = choose_register(c, first, past, group_reg[webs.root(c)], tied, arriving[c]);
 		// Else one outside the loops it skips, or the blocks clobbering it (a phi: not in its block or predecessors).
 		const uint32_t temp = ra_candidates_[c];
 		const int32_t capacity = temps_[temp].cls != VClass::Gpr
@@ -967,7 +962,7 @@ void FunctionSelector::assign_registers()
 			ra_ranges_.insert(ra_ranges_.end(), loop_splitter_.ranges.begin(), loop_splitter_.ranges.end());
 			ra_range_block_.insert(ra_range_block_.end(), loop_splitter_.blocks.begin(), loop_splitter_.blocks.end());
 			past = static_cast<uint32_t>(ra_ranges_.size());
-			reg = choose_register(c, first, past, group_reg[find(c)], tied);
+			reg = choose_register(c, first, past, group_reg[webs.root(c)], tied);
 			if (reg == kNoReg)
 			{
 				ra_ranges_.resize(first);
@@ -1000,7 +995,7 @@ void FunctionSelector::assign_registers()
 			continue;
 		// A member that must be split around calls has the fewest registers
 		// to choose from: it picks first, and the web follows if it can.
-		const uint32_t root = find(c);
+		const uint32_t root = webs.root(c);
 		for (uint32_t w = web_first[root]; w < web_first[root + 1] && group_reg[root] == kNoReg; ++w)
 		{
 			const uint32_t member = web_members[w];

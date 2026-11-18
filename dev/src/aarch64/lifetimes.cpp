@@ -3,6 +3,7 @@
 #include "opt/loops.h"
 
 #include <algorithm>
+#include "machine/phi_inputs.h"
 #include "machine/ssa_segments.h"
 #include "machine/exception_predecessors.h"
 #include "machine/exception_layout.h"
@@ -210,7 +211,7 @@ std::vector<uint64_t> spill_weights(const Program& program, const FunctionBody& 
 
 std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& body,
 	const machine::ExceptionLayout* exceptions, std::vector<uint32_t>& uses, std::vector<uint32_t>& calls,
-	std::vector<std::pair<uint32_t, uint32_t>>& segments, opt::Cfg& cfg)
+	std::vector<std::pair<uint32_t, uint32_t>>& segments, opt::Cfg& cfg, machine::PhiWebs& webs)
 {
 	FunctionLiveness plan(body);
 	uses.assign(body.temps.size(), 0);
@@ -267,6 +268,9 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 				{
 					++uses[v.index];
 					plan.read(v.index, pred, plan.spans[pred].last - 1);
+					if (webs.empty())
+						webs.reset(body.temps.size());
+					webs.join(v.index, phi.result);
 					plan.ranges[v.index].affinity = phi.result;
 					plan.ranges[phi.result].affinity = v.index;
 					plan.reads[v.index].incoming = true;

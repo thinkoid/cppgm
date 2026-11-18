@@ -61,7 +61,7 @@ class RegisterBank
 {
 public:
 	RegisterBank(const Segments& segments, uint32_t slots) : segments_(segments), slots_(slots) {}
-	unsigned assign(const LiveRange& range, uint32_t allowed, unsigned preferred)
+	unsigned assign(const LiveRange& range, uint32_t allowed, unsigned preferred, unsigned alternate = kNoId)
 	{
 		if (!allowed)
 			return kNoId;
@@ -85,7 +85,9 @@ public:
 		}
 		if (!allowed)
 			return kNoId;
-		const unsigned reg = preferred != kNoId && (allowed & (1u << preferred)) ? preferred : __builtin_ctz(allowed);
+		const unsigned reg = preferred != kNoId && (allowed & (1u << preferred)) ? preferred
+			: alternate != kNoId && (allowed & (1u << alternate))                ? alternate
+																				 : __builtin_ctz(allowed);
 		if (segments_.empty())
 			until_[reg] = range.last + 1;
 		else
@@ -195,7 +197,9 @@ void Selector::allocate()
 	std::vector<uint32_t> calls;
 	Segments segments;
 	opt::Cfg cfg;
-	auto ranges = live_ranges(program_, body_, out_.exceptions.get(), uses_, calls, segments, cfg);
+	machine::PhiWebs webs;
+	auto ranges = live_ranges(program_, body_, out_.exceptions.get(), uses_, calls, segments, cfg, webs);
+	std::vector<uint32_t> web_regs(webs.empty() ? 0 : count, kNoId);
 	parameter_homes(cfg);
 	std::stable_sort(
 		ranges.begin(), ranges.end(), [](const LiveRange& a, const LiveRange& b) { return a.first < b.first; });
@@ -263,7 +267,11 @@ void Selector::allocate()
 		const uint32_t caller = across_call ? 0 : arguments | (7u << 12);
 		const uint32_t preserved = (dynamic_stack_ ? 0x1ffu : 0x3ffu) << 19;
 		const unsigned preferred = range.affinity == kNoId ? kNoId : registers_[range.affinity];
-		registers_[range.id] = general.assign(range, caller | preserved, preferred);
+		const auto root = range.affinity == kNoId ? kNoId : webs.root(range.id);
+		const auto reg = general.assign(range, caller | preserved, preferred, root == kNoId ? kNoId : web_regs[root]);
+		registers_[range.id] = reg;
+		if (root != kNoId && reg != kNoId && (web_regs[root] == kNoId || (reg >= 19 && web_regs[root] < 19)))
+			web_regs[root] = reg;
 	}
 	uint32_t saved = 0;
 	machine::IntervalSlots scalar_spills, vector_spills;
