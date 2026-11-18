@@ -46,3 +46,12 @@ extern "C" unsigned stacked_tails(long, long, long, long, long, long, long, long
                                   unsigned char lead, ThreeBytes a, unsigned char middle, ThirteenBytes b, unsigned char tail) {
     return lead + 2u * a.x[2] + 4u * middle + 8u * b.x[12] + 16u * tail;
 }
+
+extern "C" void mutate_large(Large*, long);
+extern "C" Large choose_large(long x, Large input) {
+    Large a = {x, -x, x + 7};
+    if (x == 0) return Large{};
+    if (x < 0) return input;
+    mutate_large(&a, x);
+    return a;
+}

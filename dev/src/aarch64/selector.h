@@ -49,6 +49,7 @@ private:
 	unsigned frame_base() const { return dynamic_stack_ ? 28 : 31; }
 	void base_address(unsigned reg, unsigned base, uint32_t offset, unsigned alignment = 1);
 	void frame_address(unsigned reg, uint32_t offset) { base_address(reg, frame_base(), offset); }
+	void result_address(unsigned reg);
 	void home_address(unsigned reg, lowir::TempId temp);
 	void stack_alloc(const lowir::Instruction& inst);
 	void copy_piece(unsigned dst, unsigned src, unsigned offset, unsigned bytes);
@@ -147,6 +148,7 @@ private:
 	uint32_t tls_vectors_ = lowir::kNoId;
 	uint32_t frame_pointer_ = lowir::kNoId;
 	uint32_t variadic_area_ = lowir::kNoId;
+	uint32_t result_slot_ = lowir::kNoId;
 	uint32_t result_pointer_ = lowir::kNoId;
 	uint32_t frame_ = 0, phi_area_ = 0;
 };

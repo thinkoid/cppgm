@@ -26,7 +26,13 @@ struct ThreeBytes { unsigned char x[3]; };
 struct ThirteenBytes { unsigned char x[13]; };
 extern "C" unsigned stacked_tails(long, long, long, long, long, long, long, long,
                                   unsigned char, ThreeBytes, unsigned char, ThirteenBytes, unsigned char);
+extern "C" Large choose_large(long, Large);
+extern "C" void mutate_large(Large* p, long x) { p->b += x * 3; }
 int main() {
+    Large in = {11, 12, 13};
+    Large a = choose_large(0, in), b = choose_large(-1, in), c = choose_large(7, in);
+    if (a.a || a.b || a.c || b.a != 11 || b.b != 12 || b.c != 13 ||
+        c.a != 7 || c.b != 14 || c.c != 14) return 6;
     if (stacked_tails(1,2,3,4,5,6,7,8, 17, ThreeBytes{{0,1,29}}, 43,
                       ThirteenBytes{{0,1,2,3,4,5,6,7,8,9,10,11,61}}, 79) != 1999) return 5;
     TwoWords words = stacked_words(1,2,3,4,5,6,7,8, 0x3a, TwoWords{0x81234567u, 0xfedcba00u},

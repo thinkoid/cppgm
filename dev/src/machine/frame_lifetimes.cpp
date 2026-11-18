@@ -61,6 +61,34 @@ uint32_t whole_object_slot(const lowir::FunctionBody& body, lowir::Value destina
 	return type.is_object() && storage_bytes(type) == bytes ? address.root.index : kNoId;
 }
 
+uint32_t returned_object_slot(const FunctionBody& body, Type type, const std::vector<uint32_t>& parameter_of)
+{
+	std::vector<uint32_t> counts;
+	uint32_t best = kNoId, maximum = 0;
+	for (BlockId b : body.layout)
+	{
+		const InstId last = body.blocks[b].last;
+		if (last == kNoId)
+			continue;
+		const auto& ret = body.instructions[last];
+		if (ret.op != Opcode::Return || !ret.ops[0].is(ValueKind::Slot))
+			continue;
+		const auto slot = ret.ops[0].index;
+		if ((!parameter_of.empty() && parameter_of[slot] != kNoId) || !body.slots[slot].type.is_object() ||
+			storage_bytes(body.slots[slot].type) != storage_bytes(type))
+			continue;
+		if (counts.empty())
+			counts.resize(body.slots.size());
+		const auto n = ++counts[slot];
+		if (n > maximum || (n == maximum && slot < best))
+		{
+			best = slot;
+			maximum = n;
+		}
+	}
+	return best;
+}
+
 uint32_t parameter_copy_slot(
 	const lowir::FunctionBody& body, const lowir::Instruction& inst, const std::vector<uint32_t>& reads)
 {

@@ -157,7 +157,7 @@ void Selector::parameter_homes(opt::Cfg& cfg)
 			break;
 		const auto id = inst.ops[0].index;
 		const Type type = body_.temps[id].type;
-		if (body_.slots[slot].type != type || data_alignment(type) > 16 ||
+		if (slot == result_slot_ || body_.slots[slot].type != type || data_alignment(type) > 16 ||
 			std::count(slots_.begin(), slots_.end(), slots_[slot]) != 1 ||
 			std::find(homes_.begin(), homes_.begin() + body_.parameter_count, slots_[slot]) !=
 				homes_.begin() + body_.parameter_count)

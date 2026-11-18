@@ -21,7 +21,6 @@ struct SlotUse
 	uint32_t calls = 0;
 	BlockId call_block = kNoId;
 	uint32_t call = 0;
-	uint32_t returns = 0;
 };
 
 class Planner
@@ -79,10 +78,7 @@ void Planner::touch(const lowir::Instruction& inst, Value value, uint32_t operan
 		(value.is(ValueKind::Slot) && (inst.op == Opcode::Copy || inst.op == Opcode::Store)))
 		use.read = true;
 	else if (inst.op == Opcode::Return && value.is(ValueKind::Slot))
-	{
 		use.read = true;
-		++use.returns;
-	}
 	else if (inst.op == Opcode::Call && operand >= 3)
 	{
 		const auto* signature = program_.call_boundary(inst);
@@ -125,14 +121,7 @@ void Planner::result(ObjectPlaces& places) const
 {
 	if (boundary_.result.passing != Passing::Indirect || !signature_.result.is_object())
 		return;
-	uint32_t returns = 0;
-	for (uint32_t s = 0; s < uses_.size(); ++s)
-		if (uses_[s].returns > returns && places.parameter_of[s] == kNoId &&
-			storage_bytes(body_.slots[s].type) == storage_bytes(signature_.result))
-		{
-			places.result = s;
-			returns = uses_[s].returns;
-		}
+	places.result = machine::returned_object_slot(body_, signature_.result, places.parameter_of);
 }
 
 // The result of a call that only a complete copy into a slot reads, with no

@@ -301,7 +301,7 @@ void Selector::run()
 		out_.emit(Op::AddI, 28, 31);
 		out_.frame_rule(FrameRule::Register, 28);
 	}
-	if (result_.indirect)
+	if (result_pointer_ != kNoId)
 		access(true, 8, frame_base(), result_pointer_, 8);
 	save_variadic_registers();
 	for (unsigned i = 0; i < body_.parameter_count; ++i)

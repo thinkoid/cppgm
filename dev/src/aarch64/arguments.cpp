@@ -300,8 +300,11 @@ void Selector::epilogue(const lowir::Instruction& inst)
 	{
 		if (result_.indirect)
 		{
-			access(false, 10, frame_base(), result_pointer_, 8);
-			copy_value(10, inst.ops[0], type);
+			if (!inst.ops[0].is(ValueKind::Slot) || inst.ops[0].index != result_slot_)
+			{
+				result_address(10);
+				copy_value(10, inst.ops[0], type);
+			}
 		}
 		else
 			transfer(true, result_, inst.ops[0], type);

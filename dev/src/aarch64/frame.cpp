@@ -4,6 +4,7 @@
 #include <algorithm>
 #include "lowir/literals.h"
 #include "machine/frame_lifetimes.h"
+#include "opt/function_ir.h"
 #include "aarch64/error.h"
 
 namespace aarch64 {
@@ -38,7 +39,9 @@ void Selector::plan_slots()
 	for (uint32_t i = 0; i < body_.slots.size(); ++i)
 	{
 		const Type type = body_.slots[i].type;
-		if (!owners.empty() && owners[i] < i)
+		if (i == result_slot_)
+			slots_.push_back(kNoId);
+		else if (!owners.empty() && owners[i] < i && owners[i] != result_slot_)
 			slots_.push_back(slots_[owners[i]]);
 		else
 			slots_.push_back(reserve((storage_bytes(type) + 7) & ~uint64_t(7), data_alignment(type)));
@@ -92,7 +95,16 @@ void Selector::plan()
 	if (starts_variadic && !named_.darwin)
 		variadic_area_ = reserve(64 + 128, 16);
 	if (result_.indirect)
-		result_pointer_ = reserve(8, 8);
+	{
+		if (!level_ || calls)
+			result_pointer_ = reserve(8, 8);
+		if (level_ && !eh && !body_.slots.empty())
+		{
+			const auto slot = machine::returned_object_slot(body_, signature_.result, {});
+			if (slot != kNoId && body_.slots[slot].type == signature_.result && !opt::escaped_slots(body_, true)[slot])
+				result_slot_ = slot;
+		}
+	}
 	if (calls || dynamic_stack_ || frame_pointer_ != kNoId)
 	{
 		if (named_.darwin || frame_pointer_ != kNoId)
@@ -237,6 +249,14 @@ void Selector::base_address(unsigned reg, unsigned base, uint32_t offset, unsign
 	}
 }
 
+void Selector::result_address(unsigned reg)
+{
+	if (result_pointer_ == kNoId)
+		move(reg, 8);
+	else
+		access(false, reg, frame_base(), result_pointer_, 8);
+}
+
 void Selector::home_address(unsigned reg, TempId temp)
 {
 	base_address(reg, frame_base(), homes_[temp], data_alignment(body_.temps[temp].type));
@@ -314,7 +334,9 @@ unsigned Selector::address_register(Value operand, unsigned scratch)
 
 void Selector::address(unsigned reg, Value operand)
 {
-	if (operand.kind == ValueKind::Slot)
+	if (operand.is(ValueKind::Slot) && operand.index == result_slot_)
+		result_address(reg);
+	else if (operand.kind == ValueKind::Slot)
 		base_address(reg, frame_base(), slots_[operand.index], data_alignment(body_.slots[operand.index].type));
 	else if (operand.kind == ValueKind::Temp && memory_value(body_.temps[operand.index].type))
 		home_address(reg, operand.index);
