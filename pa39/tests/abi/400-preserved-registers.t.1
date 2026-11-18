@@ -12,6 +12,8 @@ extern "C" __attribute__((noinline)) U combine(U a, U b, double c, double d) {
 extern "C" __attribute__((noinline)) U forward(U a, U b, double c, double d, Combiner fn) {
     return fn(b, a, d, c) + fn(a, a, c, c);
 }
+extern "C" U fp_kernel(U);
+extern "C" double sample_fp(U x) { return double(x & 255) + 0.25; }
 int main() {
     U seed = 0x243f6a8885a308d3ul;
     for (int n = 0; n < 64; ++n) {
@@ -19,6 +21,9 @@ int main() {
         for (U i = 0; i < 12; i += 2) expected ^= sample(seed+i) + sample(seed+i+1);
         if (forward(seed, n, 3.0, 5.0, combine) != 5 * seed + 3 * n + 38) return 2;
         if (!check_registers(seed, kernel, expected)) return 1;
+        U sum = 2;
+        for (U i = 0; i < 8; ++i) sum += (seed + i) & 255;
+        if (!check_registers(seed, fp_kernel, sum ^ sample(seed))) return 3;
         seed = seed * 6364136223846793005ul + 1442695040888963407ul;
     }
     return 39;

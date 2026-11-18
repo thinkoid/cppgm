@@ -77,6 +77,7 @@ private:
 	uint32_t reserve(uint64_t size, uint32_t alignment);
 	void stack_adjust(bool subtract);
 	void saved_registers(bool store);
+	void save_bank(bool store, bool simd, const std::vector<std::pair<unsigned, uint32_t>>& regs, size_t first);
 	void constant(unsigned reg, uint64_t bits);
 	void move(unsigned to, unsigned from);
 	void extend(unsigned reg, unsigned bits, bool sign);
@@ -138,7 +139,7 @@ private:
 	lowir::BlockId fallthrough_ = lowir::kNoId;
 	uint32_t outgoing_ = 0;
 	std::vector<uint32_t> slots_, homes_, registers_, vectors_, uses_, call_result_slots_;
-	std::vector<std::pair<unsigned, uint32_t>> preserved_;
+	std::vector<std::pair<unsigned, uint32_t>> preserved_, preserved_fp_;
 	machine::PhiInputs phis_;
 	std::vector<uint32_t> entry_regs_, aliases_;
 	std::vector<BitTest> bit_tests_;

@@ -118,11 +118,23 @@ void emit_unwind(const Function& function, uint32_t symbol, uint32_t shared_sect
 			bytes.uleb(event.offset);
 			break;
 		case FrameRule::Save:
-			rules.push_back(0x80 | event.reg);
+			if (event.reg < 64)
+				rules.push_back(0x80 | event.reg);
+			else
+			{
+				rules.push_back(0x05); // DW_CFA_offset_extended
+				bytes.uleb(event.reg);
+			}
 			bytes.uleb(event.offset / 8);
 			break;
 		case FrameRule::Restore:
-			rules.push_back(0xc0 | event.reg);
+			if (event.reg < 64)
+				rules.push_back(0xc0 | event.reg);
+			else
+			{
+				rules.push_back(0x06); // DW_CFA_restore_extended
+				bytes.uleb(event.reg);
+			}
 			break;
 		case FrameRule::RememberState:
 			rules.push_back(0x0a);

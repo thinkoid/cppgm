@@ -175,25 +175,38 @@ void Selector::constant(unsigned reg, uint64_t bits)
 	}
 }
 
-void Selector::saved_registers(bool store)
+void Selector::save_bank(bool store, bool simd, const std::vector<std::pair<unsigned, uint32_t>>& regs, size_t first)
 {
-	for (size_t i = stack_pair_ ? 2 : 0; i < preserved_.size(); ++i)
+	const auto rule = store ? FrameRule::Save : FrameRule::Restore;
+	const unsigned dwarf_base = simd ? 64 : 0;
+	for (size_t i = first; i < regs.size(); ++i)
 	{
-		const auto current = preserved_[i];
-		const bool pair = level_ && i + 1 < preserved_.size() && current.second <= 504 &&
-			preserved_[i + 1].second == current.second + 8;
-		const auto rule = store ? FrameRule::Save : FrameRule::Restore;
-		if (pair)
+		const auto current = regs[i];
+		const uint32_t offset = current.second;
+		if (level_ && i + 1 < regs.size() && offset <= 504 && regs[i + 1].second == offset + 8)
 		{
-			const auto next = preserved_[++i];
-			out_.emit(
-				store ? Op::StpX : Op::LdpX, current.first, 31, 0, (next.first << 10) | ((current.second / 8) << 15));
-			out_.frame_rule(rule, next.first, frame_ - next.second);
+			const auto next = regs[++i];
+			const Op pair = simd ? (store ? Op::StpD : Op::LdpD) : (store ? Op::StpX : Op::LdpX);
+			out_.emit(pair, current.first, 31, 0, (next.first << 10) | ((offset / 8) << 15));
+			out_.frame_rule(rule, dwarf_base + next.first, frame_ - next.second);
+		}
+		else if (simd)
+		{
+			const bool scaled = offset / 8 <= 4095;
+			if (!scaled)
+				base_address(16, 31, offset);
+			out_.emit(store ? Op::StrD : Op::LdrD, current.first, scaled ? 31 : 16, 0, scaled ? (offset / 8) << 10 : 0);
 		}
 		else
-			access(store, current.first, 31, current.second, 8);
-		out_.frame_rule(rule, current.first, frame_ - current.second);
+			access(store, current.first, 31, offset, 8);
+		out_.frame_rule(rule, dwarf_base + current.first, frame_ - offset);
 	}
+}
+
+void Selector::saved_registers(bool store)
+{
+	save_bank(store, false, preserved_, stack_pair_ ? 2 : 0);
+	save_bank(store, true, preserved_fp_, 0);
 }
 
 void Selector::stack_adjust(bool subtract)

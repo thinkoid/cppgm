@@ -259,6 +259,7 @@ void Selector::allocate()
 			[&](uint32_t a, uint32_t b) { return weight[ranges[a].id] > weight[ranges[b].id]; });
 	}
 	RegisterBank general(segments, slots), simd(segments, slots);
+	uint32_t saved_fp = 0;
 	uint32_t saved = dynamic_stack_ ? 1u << 28 : 0;
 	for (uint32_t i = 0; i < ranges.size(); ++i)
 	{
@@ -278,11 +279,17 @@ void Selector::allocate()
 			arguments &= range.id < incoming.size() && incoming[range.id] != kNoId ? 1u << incoming[range.id] : 0;
 		if (type.is_float() && !memory_value(type))
 		{
-			if (!across_call)
-				vectors_[range.id] = simd.assign(
-					range, arguments | 0xfffc0000, range.affinity == kNoId ? kNoId : vectors_[range.affinity]);
-			if (vectors_[range.id] != kNoId)
+			// Both Arm ABIs preserve the low 64 bits of v8 through v15.
+			const auto preferred = range.affinity == kNoId ? kNoId : vectors_[range.affinity];
+			const uint32_t allowed = across_call ? 0xffu << 8 : arguments | 0xfffc0000;
+			const auto reg = simd.assign(range, allowed, preferred);
+			if (reg != kNoId)
+			{
+				vectors_[range.id] = reg;
+				if (across_call)
+					saved_fp |= 1u << reg;
 				continue;
+			}
 			// The incoming SIMD argument does not own the corresponding GPR.
 			if (range.first == 0 || at_call)
 				arguments = 0;
@@ -312,6 +319,8 @@ void Selector::allocate()
 	// and the stack adjustment, independently of the number of local slots.
 	for (; saved; saved &= saved - 1)
 		preserved_.push_back({ static_cast<unsigned>(__builtin_ctz(saved)), reserve(8, 8) });
+	for (; saved_fp; saved_fp &= saved_fp - 1)
+		preserved_fp_.push_back({ static_cast<unsigned>(__builtin_ctz(saved_fp)), reserve(8, 8) });
 	plan_slots();
 	parameter_homes(cfg);
 	call_result_homes();

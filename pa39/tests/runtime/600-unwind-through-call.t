@@ -15,3 +15,9 @@ extern "C" long retained(long* p, bool fail) {
         return before + *p + error;
     }
 }
+
+extern "C" double fp_relay(double x, int code) {
+    double value = x * 3.0;
+    throw_remote(code);
+    return value + 1.0;
+}
