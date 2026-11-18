@@ -6,6 +6,73 @@ namespace opt {
 
 using namespace lowir;
 
+// Reassemble two adjacent unsigned halves with one little-endian load.
+// The combined read covers exactly the bytes of the original two reads.
+bool combine_adjacent_loads(FunctionBody& body, const std::vector<uint32_t>& uses, const std::vector<BlockId>& block_of,
+	BlockId block, InstId id)
+{
+	auto& combine = body.instructions[id];
+	const unsigned width = integer_bits(combine.type.kind());
+	if (width != 16 && width != 32 && width != 64)
+		return false;
+	const auto producer = [&](Value value) -> const Instruction* {
+		if (!value.is(ValueKind::Temp) || value.index >= uses.size() || uses[value.index] != 1)
+			return nullptr;
+		const auto def = body.temps[value.index].def;
+		return def < block_of.size() && block_of[def] == block ? &body.instructions[def] : nullptr;
+	};
+	const Instruction* high = producer(combine.ops[0]);
+	const Instruction* low = producer(combine.ops[1]);
+	if (!high || high->op != Opcode::Binary)
+		std::swap(high, low);
+	if (!high || high->op != Opcode::Binary || high->sub != static_cast<unsigned>(BinaryOp::Shl) ||
+		high->type != combine.type || !high->ops[1].is(ValueKind::Integer) ||
+		body.literals[high->ops[1].index].low != width / 2)
+		return false;
+	const auto half = [&](const Instruction* extend) -> const Instruction* {
+		if (!extend || extend->op != Opcode::Convert || extend->sub != static_cast<unsigned>(ConvertOp::ZExt) ||
+			extend->type != combine.type || integer_bits(convert_source_type(*extend).kind()) != width / 2)
+			return nullptr;
+		const auto* load = producer(extend->ops[0]);
+		return load && load->op == Opcode::Load && !(load->flags & IF_VOLATILE) ? load : nullptr;
+	};
+	high = half(producer(high->ops[0]));
+	low = half(low);
+	if (!high || !low)
+		return false;
+	const auto* step = producer(high->ops[0]);
+	if (!step || step->op != Opcode::Index || !(step->ops[0] == low->ops[0]) || !step->ops[1].is(ValueKind::Integer))
+		return false;
+	const unsigned bytes = width / 16;
+	const uint64_t stride = storage_bytes(step->type);
+	if (!stride || stride > bytes || bytes % stride || body.literals[step->ops[1].index].low != bytes / stride)
+		return false;
+	// Both loads must reach the consumer through pure operations, with no
+	// intervening store, atomic access, call, or change of exception region.
+	const auto clear = [&](const Instruction* read) {
+		auto next = read->next;
+		for (unsigned steps = 0; next != id; ++steps)
+		{
+			if (next == kNoId || steps == 16)
+				return false;
+			const auto& inst = body.instructions[next];
+			if (&inst != high && &inst != low && !is_pure(inst))
+				return false;
+			next = inst.next;
+		}
+		return true;
+	};
+	if (!clear(high) || !clear(low))
+		return false;
+	auto load = make_instruction(Opcode::Load, combine.type);
+	load.ops[0] = low->ops[0];
+	load.result = combine.result;
+	load.next = combine.next;
+	load.location = combine.location;
+	combine = load;
+	return true;
+}
+
 bool simplify_packed_load(FunctionBody& body, const std::vector<uint32_t>& uses, const std::vector<BlockId>& block_of,
 	BlockId block, InstId& previous, InstId id)
 {
