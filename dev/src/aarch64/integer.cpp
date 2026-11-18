@@ -280,19 +280,24 @@ void Selector::switch_edges(const lowir::Instruction& inst, BlockId from)
 	for (unsigned i = 0; i < inst.extra_count; i += 2)
 	{
 		const Value operand = body_.operands[inst.extra_first + i];
-		cases.push_back({ static_cast<int64_t>(body_.literals[operand.index].low & mask),
-			body_.operands[inst.extra_first + i + 1].index });
+		const uint64_t raw = body_.literals[operand.index].low & mask;
+		// A W subtraction wraps at 32 bits. Keeping signed cases in source
+		// order lets one bounds check cover a table that crosses zero.
+		const int64_t key = type.kind() == TypeKind::I32 ? static_cast<int32_t>(raw) : static_cast<int64_t>(raw);
+		cases.push_back({ key, body_.operands[inst.extra_first + i + 1].index });
 	}
 	std::vector<machine::CaseCluster> clusters;
 	std::vector<uint32_t> targets;
-	machine::cluster_switch_cases(cases, clusters, targets, 0);
+	machine::cluster_switch_cases(cases, clusters, targets, machine::kNativeSwitchTargets);
 	const unsigned source = operand_register(inst.ops[0], type, 15);
 	const bool narrow = bits <= 32;
 	auto subtract = [&](unsigned dest, unsigned input, uint64_t amount) {
-		const unsigned shift = (amount & 4095) == 0 ? 12 : 0;
-		if ((amount >> shift) <= 4095)
-			out_.emit(narrow ? Op::SubsIW : Op::SubsIX, dest, input, 0,
-				(shift ? 1u << 22 : 0) | (uint32_t(amount >> shift) << 10));
+		const bool negative = static_cast<int64_t>(amount) < 0;
+		const uint64_t magnitude = negative ? 0 - amount : amount;
+		const unsigned shift = (magnitude & 4095) == 0 ? 12 : 0;
+		if ((magnitude >> shift) <= 4095)
+			out_.emit(negative ? (narrow ? Op::AddsIW : Op::AddsIX) : (narrow ? Op::SubsIW : Op::SubsIX), dest, input,
+				0, (shift ? 1u << 22 : 0) | (uint32_t(magnitude >> shift) << 10));
 		else
 		{
 			constant(10, amount);
@@ -300,7 +305,7 @@ void Selector::switch_edges(const lowir::Instruction& inst, BlockId from)
 		}
 	};
 	const BlockId fallback = inst.ops[1].index;
-	if (level_ && clusters.size() >= 5 && machine::dense_switch(cases, 4096, 4, 5) && empty_edge(from, fallback) &&
+	if (level_ && machine::native_table(cases, clusters.size(), targets.size()) && empty_edge(from, fallback) &&
 		std::all_of(clusters.begin(), clusters.end(),
 			[&](const machine::CaseCluster& c) { return empty_edge(from, c.target); }))
 	{

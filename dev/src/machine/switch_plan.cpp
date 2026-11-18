@@ -54,4 +54,15 @@ bool dense_switch(const std::vector<std::pair<int64_t, uint32_t>>& cases, uint32
 	return span < maximum_entries && span + 1 <= uint64_t(spread) * cases.size();
 }
 
+bool native_table(const std::vector<std::pair<int64_t, uint32_t>>& cases, uint32_t clusters, uint32_t targets)
+{
+	if (cases.empty())
+		return false;
+	const uint64_t span = static_cast<uint64_t>(cases.back().first) - static_cast<uint64_t>(cases.front().first);
+	const bool many = targets > kNativeSwitchTargets ||
+		(clusters >= kNativeSwitchClusters && !(span < 64 && targets == 1));
+	// GCC's native speed ratio permits at most ten entries per case.
+	return many && dense_switch(cases, 4096, 10, 5);
+}
+
 } // namespace machine

@@ -12,6 +12,11 @@ struct CaseCluster
 	uint32_t target;
 };
 
+// Native case clusters compete with a bounded indirect branch table.
+constexpr uint32_t kNativeSwitchTargets = 5;
+constexpr uint32_t kNativeSwitchClusters = 6;
+bool native_table(const std::vector<std::pair<int64_t, uint32_t>>& cases, uint32_t clusters, uint32_t targets);
+
 // Canonical integer values and logical destinations; physical branches remain
 // the consumer's responsibility. Repeated values retain their first target.
 void cluster_switch_cases(std::vector<std::pair<int64_t, uint32_t>>& cases, std::vector<CaseCluster>& clusters,

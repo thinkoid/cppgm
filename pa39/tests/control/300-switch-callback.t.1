@@ -1,7 +1,16 @@
 extern "C" int dispatch(int, int (*)(int), int);
 int twice(int x) { return 2 * x; }
 extern "C" int dense(long, int (*)(int), int);
+extern "C" int classify_char(int, int (*)(int));
 int main() {
+    for (int c = -3; c < 70; ++c) {
+        int want = 7 + 2*(c & 1);
+        if (c == -1) want = 2;
+        if (c == 10) want = 6;
+        if (c == 9 || (c >= 11 && c <= 13) || c == 32 || c == 47) want = 5;
+        if (classify_char(c, twice) != want) return 3;
+    }
+    if (classify_char(-2147483647-1, twice) != 7 || classify_char(2147483647, twice) != 9) return 4;
     static const int expected[] = {27, 27, 21, 3, 27, 9, 9, 98, 19, 27, -7, 23, 27, 27};
     for (int i = 0; i < 14; ++i)
         if (dense(i - 7, twice, 7) != expected[i]) return 1;

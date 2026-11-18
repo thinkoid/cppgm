@@ -1243,22 +1243,12 @@ void FunctionSelector::emit_switch(const Instruction& inst)
 
 namespace {
 
-// Jump tables (O1+): at least this many cases, at most this many entries,
-// and at least one case per kJumpTableSpread entries (GCC's speed ratio).
-const uint32_t kJumpTableMinCases = 5;
-const uint64_t kJumpTableMaxEntries = 4096;
-const uint64_t kJumpTableSpread = 10;
 // A bit-test window: cases within 64 values for at most five targets,
 // worth it from three clusters. A switch of more targets may take a jump
 // table, whose indirect jump mispredicts more than a few predictable
 // compares for few targets (as GCC's lowering avoids).
-const uint32_t kBitTestTargets = 5;
+const uint32_t kBitTestTargets = machine::kNativeSwitchTargets;
 const uint32_t kBitTestMinClusters = 3;
-// A switch of few targets takes a jump table too from this many clusters
-// (a compare chain of that length costs more than the indirect jump),
-// unless one bit test of a window decides its only target.
-const uint32_t kJumpTableClusters = 6;
-
 // A run of consecutive case values with one target.
 using machine::CaseCluster;
 
@@ -1383,10 +1373,7 @@ bool FunctionSelector::emit_clustered_switch(
 	// so the 64-bit difference is the entry for every integer type.
 	const int64_t low = cases.front().first, high = cases.back().first;
 	const uint64_t span = static_cast<uint64_t>(high) - static_cast<uint64_t>(low);
-	const bool many = targets.size() > kBitTestTargets ||
-		(clusters.size() >= kJumpTableClusters && !(span < 64 && targets.size() == 1));
-	if (many && machine::dense_switch(cases, kJumpTableMaxEntries, kJumpTableSpread, kJumpTableMinCases) &&
-		fits_i32(low))
+	if (machine::native_table(cases, clusters.size(), targets.size()) && fits_i32(low))
 	{
 		canonicalize(false);
 		const uint32_t entries = static_cast<uint32_t>(span + 1);

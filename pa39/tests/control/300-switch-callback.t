@@ -21,3 +21,12 @@ extern "C" int dense(long tag, int (*f)(int), int x) {
     default: return f(x) + 13;
     }
 }
+
+extern "C" int classify_char(int c, int (*f)(int)) {
+    switch (c) {
+    case -1: return f(1);
+    case 10: return f(2) + 2;
+    case 9: case 11: case 12: case 13: case 32: case 47: return f(3) - 1;
+    default: return f(c & 1) + 7;
+    }
+}
