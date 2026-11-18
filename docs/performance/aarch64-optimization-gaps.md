@@ -4,8 +4,9 @@ This investigation compares Linux AArch64 executables under QEMU user mode
 10.2.1 on an x86-64 host, using the Cortex-A53 CPU model. The compiler workload
 compares two Arm executables of **cppgm** built from matching sources, one
 by Clang 22.1.2 and one by cppgm. The application workload compares programs
-built by the two different compilers. The previous full rebuild took **1.337×**
-as long in the self-built compiler as in the Clang-built compiler.
+built by the two different compilers. The initial full rebuild took **1.337×**
+as long in the self-built compiler as in the Clang-built compiler. After the
+core rebase, the 498-object rebuild took **1.022×** as long under QEMU.
 [Previous measurements and reproduction commands](aarch64-codegen-20261118.md)
 
 ## Attribution on the compiler itself
@@ -85,6 +86,10 @@ blocks. Concurrent host activity affects both.
 | Dense switch selection, 16bbf1f0d | 16 | 251.7 s | 301.7 s | 1.060×, 1.321× | 1.089×, 1.280× | 0.937× |
 | Paired stores and conditional phi fallthrough, 0f09ba077 | 16 | 222.1 s | 266.3 s | 1.178×, 1.220× | 1.162×, 1.221× | 1.090× |
 | Fused multiply-add addressing, 709d060ce | 16 | 265.9 s | 313.5 s | 1.234×, 1.128× | 1.196×, 1.167× | 1.078× |
+| Allocated object-copy addresses, a247c587b | 16 | 253.1 s | 285.9 s | 1.143×, 1.115× | 1.163×, 1.142× | 1.050× |
+| Paired callee saves, d68506fc0 | 16 | 230.7 s | 326.2 s | 1.345×, 1.514× | 1.189×, 1.400× | 0.991× |
+| Checked bit-test branches, 977a2ea57 | 16 | 223.1 s | 247.6 s | 1.046×, 1.178× | 1.058×, 1.210× | 1.093× |
+| Rebased backend, v0.9.7, c33a4bad2 | 16 | 208.6 s | 213.4 s | 0.953×, 1.091× | 0.971×, 1.108× | 1.003× |
 
 At 0b396b840, the paired ratios were **1.173× elapsed** and **1.203× aggregate
 CPU**. Both compilers rebuilt exactly the same 497 objects and the resulting
@@ -98,6 +103,14 @@ the self-built input executable in every build. At 0f09ba077 the paired ratios w
 matched rebuild at 709d060ce took 1.181× as long by the wall clock and
 1.182× by aggregate CPU. Both builders reproduced the same output hashes
 across four calibration builds and eight comparison builds.
+
+At c33a4bad2 the full compiler grew to 498 objects. Every object and the
+linked compiler matched in all 12 builds. Aggregate child CPU time was
+1.039× Clang-built cppgm's. The two elapsed blocks ranged from 0.953× to
+1.091×. The earlier callee-save revision was slower in both blocks at
+1.345× and 1.514×. That run started over after an interrupted calibration.
+Changes in elapsed time across these runs include host scheduling and QEMU
+translation costs.
 
 ### Instructions across all 497 translation units
 
@@ -508,6 +521,47 @@ block at 1.046× (1.033–1.066×). The four kernels averaged 1.069×, but
 the memory kernel's A/A ratio was 1.291× and the lookup kernel's was
 0.882×. The instruction counts and paired ranges give a firmer basis for
 iteration on those two workloads than their elapsed averages.
+
+### Scalar records and paired stores after the rebase
+
+An address calculation between two adjacent stores prevented Arm from
+selecting a store pair. Recognizing both instruction orders reduced
+Bubblesort from 101.6 to 95.2 million guest instructions, against Clang's
+88.6 million. The outputs of all nine public programs and kernels matched.
+
+Reusing the shared one-word aggregate pass for records with subword alignment
+let `Simplifier::resolve` read a field from the incoming register with
+`ubfx`. Its original prologue stored the register to a new stack frame
+and read the field back. The loop-vectorizer compile saved 78.7 million
+guest instructions. The vector-selector compile spent 2.6 million more and
+the host-environment compile saved 2.1 million. Checking both producers
+at each optimization level also exposed a Darwin stack ABI difference.
+After eight integer arguments and a byte, Clang passes an eight-byte
+general-class record at offset 8. cppgm had placed it at offset 4. Linux
+and Darwin now use the same eight-byte carrier for these records. Tests
+exercise one- and two-word stack records with partial tails in both caller
+directions. The Linux-hosted launcher ran the Mach-O program bytes.
+
+### Native x86 compile performance against main
+
+The release comparison used `origin/main` at 90ebfa8f4 and the feature at
+cb4ae379e. GCC built both compilers at the same path. Each compiled the
+frozen `semantic_overload.cpp` and headers on one pinned x86-64 Linux CPU.
+At each level there were three A/A and six paired comparison blocks.
+Every output digest matched, including across the calibration and comparison.
+
+| Level | Retired instructions | Peak RSS | Wall time | A/A wall time |
+| --- | ---: | ---: | ---: | ---: |
+| -O0 | -0.010% | +0.08% | -0.08% | +12.84% |
+| -O1 | +0.022% | +0.14% | -1.45% | -3.28% |
+| -O2 | +0.030% | +0.07% | +2.23% | +2.58% |
+| -O3 | +0.012% | +0.06% | +5.37% | +4.11% |
+
+The earlier feature build at a6d120637 ranged from −0.010% to +0.023% in
+retired instructions across the same four levels. On PA36's generated
+function workload, doubling from 800 to 1,600 functions multiplied retired
+instructions by 1.9933 on main and 1.9932 on that feature build. These are
+Linux `perf stat` counters. The wall-time samples came from a shared host.
 
 ## Which decisions the targets share
 
