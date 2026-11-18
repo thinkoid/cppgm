@@ -105,14 +105,11 @@ def render(path, caption, metadata, age):
         note = f"{cpu}; measured {metadata['revision']}; {detail}"
     attributes = (f' data-original-label="{escape(label, quote=True)}"'
                   f' data-original-message="{escape(message, quote=True)}"')
+    display = message + ('*' if stale else '')
     if hidden:
-        # An empty image of the badge's size. It keeps the measurement, and a page that stacks the
-        # hosts keeps each host's position.
-        title = escape(f'{label}{note}: not shown', quote=True)
-        return (f'<svg{attributes} data-original-color="{color}" xmlns="http://www.w3.org/2000/svg" width="120" '
-                f'height="24" viewBox="0 0 120 24" role="img" aria-label="{title}">\n  <title>{title}</title>\n</svg>\n')
-    data = dict(label=label + note, left_label=caption,
-                message=message + ('*' if stale else ''), color=color)
+        attributes += f' data-original-color="{escape(color, quote=True)}"'
+        display, color = 'stale', '475569'
+    data = dict(label=label + note, left_label=caption, message=display, color=color)
     return badge_svg(data).replace('<svg ', '<svg' + attributes + ' ', 1)
 
 
@@ -156,7 +153,7 @@ def refresh(target, main, repo, compare=comparison):
     lines = ['# Benchmark measurement age', '',
              f'Compared with main [`{main[:9]}`](https://github.com/{repo}/commit/{main}).', '',
              f'An asterisk marks a result at least {STALE_COMMITS} commits behind main, or outside its history. '
-             f'The badge of a result at least {HIDDEN_COMMITS} commits behind main is empty; this table keeps its row. '
+             f'A gray `stale` badge replaces the speedup at {HIDDEN_COMMITS} commits behind main. '
              'Commit distance includes documentation and workflow changes; it does not establish a performance change. '
              'Missing measurements remain `n/m`. The metric value and its performance color are retained.', '',
              '| Workload | Host | CPU | Measured commit | Commit date (UTC) | Age | Results |',
@@ -165,7 +162,7 @@ def refresh(target, main, repo, compare=comparison):
         count = row['commits_behind']
         age = f'{count} commits' if count is not None else 'outside main history'
         if count is not None and count >= HIDDEN_COMMITS:
-            age += ' (badge not shown)'
+            age += ' (stale badge)'
         revision = row['revision']
         cpu = row['cpu'].replace('|', '\\|').replace('\n', ' ')
         lines.append(f"| {row['workload']} | {CAPTIONS[row['host']]} | {cpu} | "

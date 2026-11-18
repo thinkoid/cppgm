@@ -38,6 +38,8 @@ jobs:
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
+      - name: Trust the mounted checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: ./.github/actions/benchmark-compiler
         with:
           build-run-id: ${{ inputs.build_run_id }}
@@ -69,6 +71,8 @@ jobs:
         with:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
+      - name: Trust the mounted checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - uses: actions/download-artifact@v7
         with:
           name: pa39-benchmarks
@@ -101,7 +105,11 @@ jobs:
             obj/arm-self-build/paired-*/*.stderr
 
   publish:
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main'
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+       github.ref == 'refs/heads/main')
     needs: native
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -114,7 +122,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ inputs.source_sha || github.sha }}
           path: tools
           sparse-checkout: |
             scripts
@@ -130,7 +138,7 @@ jobs:
           path: artifact
       - name: Publish the measured Arm revision
         env:
-          REVISION: ${{ inputs.source_sha }}
+          REVISION: ${{ inputs.source_sha || github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_TOKEN: ${{ github.token }}
         run: |

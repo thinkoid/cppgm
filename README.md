@@ -85,7 +85,8 @@ contains three badges, they show GitHub-hosted EPYC, GitHub-hosted Intel and
 dedicated Intel, in that order. Green through red indicates the speedup, with
 red at 0.50× or below. `n/m` means unmeasured and `n/a` means inapplicable.
 An asterisk marks a measurement at least 10 commits behind `main` or outside
-its history. Measurements at least 100 commits behind are hidden. [Measurement age](https://github.com/vishvananda/cppgm/blob/benchmark-badges/freshness.md)
+its history. At 100 commits behind, a gray `stale` badge replaces the speedup.
+[Measurement age](https://github.com/vishvananda/cppgm/blob/benchmark-badges/freshness.md)
 
 ### Application and library benchmarks on x86-64
 

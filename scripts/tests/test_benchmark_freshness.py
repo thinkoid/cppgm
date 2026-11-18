@@ -57,7 +57,7 @@ class FreshnessTests(unittest.TestCase):
             self.assertNotIn('n/m*', path.read_text())
             self.assertIn('>CI Intel</text>', path.read_text())
 
-    def test_very_old_number_has_an_empty_badge_until_it_is_measured_again(self):
+    def test_very_old_number_has_a_stale_badge_until_it_is_measured_again(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             path, metadata = self.make_group(root)
@@ -68,14 +68,17 @@ class FreshnessTests(unittest.TestCase):
             hidden = path.read_text()
             image = ET.fromstring(hidden)
             self.assertEqual((image.get('width'), image.get('height')), ('120', '24'))
-            self.assertEqual([child.tag for child in image], ['{http://www.w3.org/2000/svg}title'])
-            self.assertIn('100 commits behind main: not shown', image.get('aria-label'))
-            self.assertNotIn('4.41×*', hidden)
+            displayed = [child.text for child in image.findall(freshness.NS + 'text')]
+            self.assertEqual(displayed, ['Intel', 'stale'])
+            self.assertIn('100 commits behind main: stale', image.get('aria-label'))
+            self.assertEqual(image.get('data-original-message'), '4.41×')
+            self.assertEqual(image.get('data-original-color'), '14532d')
+            self.assertIn('fill="#475569"', hidden)
             self.assertEqual(metadata.read_bytes(), original)
             table = (root / 'freshness.md').read_text()
-            self.assertIn('| 100 commits (badge not shown) |', table)
+            self.assertIn('| 100 commits (stale badge) |', table)
             self.assertEqual(json.loads((root / 'freshness.json').read_text())['hidden_commits'], 100)
-            # A later refresh reads the empty badge; a new measurement shows its number again.
+            # Refresh the placeholder again, then restore the numeric badge.
             freshness.refresh(root, 'd' * 40, 'owner/repo', lambda *args: self.age(1))
             self.assertEqual(path.read_text().replace('101 commits', '100 commits'), hidden)
             metadata.write_text(json.dumps(dict(cpu='Intel test CPU', revision='d' * 40)))
