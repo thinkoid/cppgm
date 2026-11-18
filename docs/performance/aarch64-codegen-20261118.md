@@ -127,6 +127,23 @@ cmp w10, w14
 b.gt exit
 ```
 
+## Verification
+
+The strict report passed all 11,320 checks. PA39 passed all 22 controls and
+416 Linux guest replays. The self-built Arm compiler passed all 64 PA37 oracle
+cases in each of the four optimization and SIMD configurations. The Darwin
+cross-host checks packaged 265 objects, 52 course-linked executables and
+256 Apple SDK link cases. Native Apple SDK execution remains outstanding.
+
+The x86 inception build matched byte for byte. All 39 assignment placement
+checks passed, along with the architecture audits, debug checks and Wasm suite.
+The exported reference bundle installed and passed its 45 wrapper checks.
+
+All 17 PA36 release gates cleared their margins after a repeat of the speed
+group on fixed CPUs. In the initial run the compile-scaling measurements were
+2.42 and 2.70 for the course and student builds. Both cleared the 3.00 gate
+and missed its 25% release margin. The repeat measured 2.13 and 2.07.
+
 Reproduce the full comparison with the paired rebuild and guest profiling
 commands. The final ELF SHA-256 was `5ce319c4418711ac5cf01a301c27d04283cca9b8d9dedd3cae54634f323ff6c1`.
 [Reproduction commands](../../benchmarks/aarch64/README.md)
