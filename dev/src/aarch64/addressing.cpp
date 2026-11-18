@@ -228,8 +228,21 @@ InstId Selector::address_sequence(InstId id)
 		const auto& memory = body_.instructions[next];
 		const bool store = memory.op == Opcode::Store;
 		const Value pointer = memory.ops[store ? 1 : 0];
-		if ((store || memory.op == Opcode::Load) && pointer.is(ValueKind::Temp) &&
-			(aliases_.empty() ? pointer.index : aliases_[pointer.index]) == index.result && !memory_value(memory.type))
+		const bool consumes = (store || memory.op == Opcode::Load) && pointer.is(ValueKind::Temp) &&
+			(aliases_.empty() ? pointer.index : aliases_[pointer.index]) == index.result;
+		if (consumes && memory.type.kind() == TypeKind::V128 && literal && !(displacement % 16) &&
+			displacement / 16 < 4096 && index.ops[0].is(ValueKind::Temp) && registers_[index.ops[0].index] != kNoId)
+		{
+			const auto base = registers_[index.ops[0].index];
+			const auto reg = store                 ? vector_value(memory.ops[0], 16)
+				: vectors_[memory.result] == kNoId ? 16
+												   : vectors_[memory.result];
+			out_.emit(store ? Op::StrQ : Op::LdrQ, reg, base, 0, uint32_t(displacement / 16) << 10);
+			if (!store)
+				save_vector(reg, memory.result);
+			return next;
+		}
+		if (consumes && !memory_value(memory.type))
 		{
 			const unsigned bytes = storage_bytes(memory.type);
 			const bool fits = power_of_two(bytes) && bytes <= 8 &&
