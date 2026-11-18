@@ -13,18 +13,16 @@ bool word_object(Type t)
 {
 	return t.is_object() && (storage_bytes(t) >= 1 && storage_bytes(t) <= 16) && t.align_log2 <= 3;
 }
-bool word_boundary(target_model::Target target, Type t, uint8_t classes, ir_model::AggregateShape shape, bool result)
+bool word_boundary(target_model::Target target, Type t, uint8_t classes, ir_model::AggregateShape shape)
 {
 	if (target_model::is_aarch64(target))
 	{
-		// Eight bytes in the general bank always return in x0. Linux rounds
-		// stacked arguments up to eight-byte alignment. Darwin can pack an
-		// unaligned argument after a preceding subword on the stack.
+		// A general-bank record occupies one full x register or stack word
+		// on both Arm ABIs, including records with subword alignment.
 		using ir_model::AggregateElement;
 		const bool general = shape.element == AggregateElement::Mixed || shape.element == AggregateElement::Pointer ||
 			(shape.element >= AggregateElement::I1 && shape.element <= AggregateElement::I128);
-		return t.is_object() && storage_bytes(t) == 8 && t.align_log2 <= 3 && general &&
-			(result || !target_model::is_darwin(target) || t.align_log2 == 3);
+		return t.is_object() && storage_bytes(t) == 8 && t.align_log2 <= 3 && general;
 	}
 	return word_object(t) &&
 		(classes == 0 || classes == (OC_STATED | EB_INTEGER | (storage_bytes(t) > 8 ? (EB_INTEGER << 2) : 0)));
@@ -44,7 +42,7 @@ void scalarize_aggregate_boundaries(Program& program)
 	bool changed = false;
 	for (Signature& sig : program.signatures)
 	{
-		if (word_boundary(program.target, sig.result, sig.boundary.result_classes, sig.boundary.result_shape, true))
+		if (word_boundary(program.target, sig.result, sig.boundary.result_classes, sig.boundary.result_shape))
 		{
 			sig.result = word_type(sig.result);
 			sig.boundary.result_shape = ir_model::AggregateShape();
@@ -57,7 +55,7 @@ void scalarize_aggregate_boundaries(Program& program)
 		{
 			Parameter& param = program.parameters[sig.first_parameter + p];
 			if (param.pass == ir_model::PPM_DIRECT &&
-				word_boundary(program.target, param.type, param.classes, param.shape, false))
+				word_boundary(program.target, param.type, param.classes, param.shape))
 			{
 				param.type = word_type(param.type);
 				param.shape = ir_model::AggregateShape();

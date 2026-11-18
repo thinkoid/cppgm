@@ -39,3 +39,10 @@ extern "C" TwoWords stacked_words(long, long, long, long, long, long, long, long
     return TwoWords{words.first ^ (unsigned(lead) << 24) ^ bytes.bytes[7],
                     words.second + (unsigned(tail) << 8) + bytes.bytes[0]};
 }
+
+struct ThreeBytes { unsigned char x[3]; };
+struct ThirteenBytes { unsigned char x[13]; };
+extern "C" unsigned stacked_tails(long, long, long, long, long, long, long, long,
+                                  unsigned char lead, ThreeBytes a, unsigned char middle, ThirteenBytes b, unsigned char tail) {
+    return lead + 2u * a.x[2] + 4u * middle + 8u * b.x[12] + 16u * tail;
+}

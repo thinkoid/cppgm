@@ -26,7 +26,7 @@ lowir2native --target=aarch64-linux-gnu main.lowir -o main
 
 ### Build for Apple Silicon
 
-Use `--target=arm64-apple-macos11` for the macOS 11 deployment profile. Its LowIR spelling is `arm64_macos`. The compiler selects the Apple calling convention and emits 64-bit arm64 Mach-O objects directly. Darwin has signed plain char and wchar_t, 8-byte long double, packed fixed stack arguments and a pointer va_list. The caller extends narrow register arguments to 32 bits. The x18 register is reserved, and non-leaf functions maintain a frame record in x29. The target supports GOT-relative PIC and Darwin thread-local variable descriptors. [Apple ARM64 ABI](https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms)
+Use `--target=arm64-apple-macos11` for the macOS 11 deployment profile. Its LowIR spelling is `arm64_macos`. The compiler selects the Apple calling convention and emits 64-bit arm64 Mach-O objects directly. Darwin has signed plain char and wchar_t, 8-byte long double, packed fixed stack arguments and a pointer va_list. On the stack, fixed scalar arguments and homogeneous floating records keep their natural sizes. A direct record in the general register class takes one or two whole eight-byte slots. The caller extends narrow register arguments to 32 bits. The x18 register is reserved, and non-leaf functions maintain a frame record in x29. The target supports GOT-relative PIC and Darwin thread-local variable descriptors. [Apple ARM64 ABI](https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms)
 
 ```sh
 cppgm --target=arm64-apple-macos11 -O2 -c sum.cpp -o sum.o

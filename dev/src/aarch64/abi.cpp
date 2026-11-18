@@ -54,7 +54,10 @@ Argument Arguments::next(Type type, ir_model::AggregateShape shape, bool unnamed
 		return arg;
 	}
 	used = 8;
-	const bool packed = darwin && !unnamed;
+	// Darwin passes direct general-register records in whole x-register
+	// pieces even after that bank fills. Ordinary scalars and homogeneous
+	// floating records retain their natural size and alignment on the stack.
+	const bool packed = darwin && !unnamed && !(type.is_object() && arg.bank == Bank::General);
 	const unsigned align = packed ? alignment : std::max(8u, alignment);
 	stack = (stack + align - 1) & ~(align - 1);
 	arg.bank = Bank::Stack;
