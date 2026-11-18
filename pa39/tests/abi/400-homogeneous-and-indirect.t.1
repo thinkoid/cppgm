@@ -28,7 +28,21 @@ extern "C" unsigned stacked_tails(long, long, long, long, long, long, long, long
                                   unsigned char, ThreeBytes, unsigned char, ThirteenBytes, unsigned char);
 extern "C" Large choose_large(long, Large);
 extern "C" void mutate_large(Large* p, long x) { p->b += x * 3; }
+extern "C" Large forward_large(long);
+extern "C" Large replace_large(long);
+static Large* remembered;
+extern "C" void remember_large(Large* p) { remembered = p; }
+extern "C" Large read_remembered(long x) {
+    Large result;
+    result.a = x * 3;
+    result.b = remembered->a + 5;
+    result.c = remembered->b + remembered->c;
+    return result;
+}
 int main() {
+    Large local = forward_large(9), observed = replace_large(9);
+    if (local.a != 8 || local.b != 10 || local.c != 19 ||
+        observed.a != 27 || observed.b != 14 || observed.c != 21) return 7;
     Large in = {11, 12, 13};
     Large empty = choose_large(0, in), original = choose_large(-1, in), changed = choose_large(7, in);
     if (empty.a || empty.b || empty.c || original.a != 11 || original.b != 12 || original.c != 13 ||

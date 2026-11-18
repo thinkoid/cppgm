@@ -102,6 +102,23 @@ uint32_t parameter_copy_slot(
 	return whole_object_slot(body, inst.ops[1], storage_bytes(type));
 }
 
+uint32_t call_result_copy_slot(
+	const FunctionBody& body, const lowir::Instruction& call, const std::vector<uint32_t>& reads)
+{
+	if (call.op != Opcode::Call || call.result == kNoId || !call.type.is_object() || reads[call.result] != 1)
+		return kNoId;
+	InstId next = call.next;
+	while (next != kNoId && body.instructions[next].op == Opcode::Addr)
+		next = body.instructions[next].next;
+	if (next == kNoId)
+		return kNoId;
+	const auto& copy = body.instructions[next];
+	if (copy.op != Opcode::CopyObject || !(copy.ops[0] == Value::temp(call.result)) || copy.immediate < 0 ||
+		static_cast<uint64_t>(copy.immediate) != storage_bytes(call.type))
+		return kNoId;
+	return whole_object_slot(body, copy.ops[1], storage_bytes(call.type));
+}
+
 std::vector<uint32_t> sequential_copy_slots(const lowir::Program& program, const lowir::FunctionBody& body)
 {
 	std::vector<CopyLife> lives;

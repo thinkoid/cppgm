@@ -179,6 +179,31 @@ void Selector::parameter_homes(opt::Cfg& cfg)
 	}
 }
 
+// A callee can write to its final destination when only a whole-object
+// copy consumes the result and nothing exposes that slot to the callee.
+void Selector::call_result_homes()
+{
+	if (calls_.empty() || out_.exceptions || body_.slots.empty())
+		return;
+	std::vector<uint8_t> escaped;
+	for (BlockId block : body_.layout)
+		for (InstId i = body_.blocks[block].first; i != kNoId; i = body_.instructions[i].next)
+		{
+			const auto& call = body_.instructions[i];
+			const auto slot = machine::call_result_copy_slot(body_, call, uses_);
+			if (slot == kNoId || body_.slots[slot].type != call.type ||
+				!classify(call.type, program_.call_boundary(call)->boundary.result_shape).indirect)
+				continue;
+			if (escaped.empty())
+				escaped = opt::escaped_slots(body_, true);
+			if (escaped[slot])
+				continue;
+			if (call_result_slots_.empty())
+				call_result_slots_.resize(body_.temps.size(), kNoId);
+			call_result_slots_[call.result] = slot;
+		}
+}
+
 void Selector::allocate()
 {
 	const size_t count = body_.temps.size();
@@ -289,12 +314,14 @@ void Selector::allocate()
 		preserved_.push_back({ static_cast<unsigned>(__builtin_ctz(saved)), reserve(8, 8) });
 	plan_slots();
 	parameter_homes(cfg);
+	call_result_homes();
 	machine::IntervalSlots scalar_spills, vector_spills;
 	for (const auto& range : ranges)
 	{
 		const auto id = range.id;
 		const auto reg = registers_[id];
-		if (range.first == kNoId || reg != kNoId || vectors_[id] != kNoId || homes_[id] != kNoId)
+		if (range.first == kNoId || reg != kNoId || vectors_[id] != kNoId || homes_[id] != kNoId ||
+			(!call_result_slots_.empty() && call_result_slots_[id] != kNoId))
 			continue;
 		const auto type = body_.temps[id].type;
 		if (!memory_value(type))

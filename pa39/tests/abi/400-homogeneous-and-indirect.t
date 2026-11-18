@@ -55,3 +55,18 @@ extern "C" Large choose_large(long x, Large input) {
     mutate_large(&a, x);
     return a;
 }
+
+extern "C" void remember_large(Large*);
+extern "C" Large read_remembered(long);
+extern "C" Large forward_large(long x) {
+    Large local = peer_large(Large{x, x + 1, x + 2});
+    local.c += local.a;
+    return local;
+}
+extern "C" Large replace_large(long x) {
+    Large observed = {x, x + 1, x + 2};
+    remember_large(&observed);
+    observed = read_remembered(x);
+    remember_large(nullptr);
+    return observed;
+}

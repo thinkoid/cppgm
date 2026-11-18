@@ -85,6 +85,9 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 	}
 	case Opcode::CopyObject:
 	{
+		if (!call_result_slots_.empty() && inst.ops[0].is(ValueKind::Temp) &&
+			call_result_slots_[inst.ops[0].index] != kNoId)
+			return;
 		const unsigned dst = address_register(inst.ops[1], 10);
 		const unsigned src = address_register(inst.ops[0], 11);
 		copy_bytes(dst, src, inst.immediate);

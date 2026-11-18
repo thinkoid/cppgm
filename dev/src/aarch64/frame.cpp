@@ -259,7 +259,10 @@ void Selector::result_address(unsigned reg)
 
 void Selector::home_address(unsigned reg, TempId temp)
 {
-	base_address(reg, frame_base(), homes_[temp], data_alignment(body_.temps[temp].type));
+	if (!call_result_slots_.empty() && call_result_slots_[temp] != kNoId)
+		address(reg, Value::slot(call_result_slots_[temp]));
+	else
+		base_address(reg, frame_base(), homes_[temp], data_alignment(body_.temps[temp].type));
 }
 
 void Selector::stack_alloc(const lowir::Instruction& inst)

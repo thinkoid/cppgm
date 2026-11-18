@@ -28,6 +28,7 @@ private:
 	uint32_t site(const lowir::Instruction& inst) const;
 	std::vector<uint8_t> call_registers() const;
 	void allocate();
+	void call_result_homes();
 	void parameter_homes(opt::Cfg& cfg);
 	unsigned vector_value(lowir::Value value, unsigned scratch);
 	void save_vector(unsigned reg, lowir::TempId result);
@@ -134,7 +135,7 @@ private:
 	bool dynamic_stack_ = false, stack_pair_ = false;
 	lowir::BlockId fallthrough_ = lowir::kNoId;
 	uint32_t outgoing_ = 0;
-	std::vector<uint32_t> slots_, homes_, registers_, vectors_, uses_;
+	std::vector<uint32_t> slots_, homes_, registers_, vectors_, uses_, call_result_slots_;
 	std::vector<std::pair<unsigned, uint32_t>> preserved_;
 	machine::PhiInputs phis_;
 	std::vector<uint32_t> entry_regs_, aliases_;

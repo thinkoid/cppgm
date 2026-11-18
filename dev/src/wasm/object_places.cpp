@@ -133,19 +133,9 @@ void Planner::call_results(ObjectPlaces& places) const
 		for (InstId i = body_.blocks[block].first; i != kNoId; i = body_.instructions[i].next)
 		{
 			const auto& call = body_.instructions[i];
-			if (call.op != Opcode::Call || call.result == kNoId || !call.type.is_object() || reads_[call.result] != 1 ||
-				(eh_sites_ != nullptr && (*eh_sites_)[i] != 0))
+			if (eh_sites_ != nullptr && (*eh_sites_)[i] != 0)
 				continue;
-			InstId next = call.next;
-			while (next != kNoId && body_.instructions[next].op == Opcode::Addr)
-				next = body_.instructions[next].next;
-			if (next == kNoId)
-				continue;
-			const auto& copy = body_.instructions[next];
-			if (copy.op != Opcode::CopyObject || !(copy.ops[0] == Value::temp(call.result)) || copy.immediate < 0 ||
-				static_cast<uint64_t>(copy.immediate) != storage_bytes(call.type))
-				continue;
-			const uint32_t slot = machine::whole_object_slot(body_, copy.ops[1], storage_bytes(call.type));
+			const uint32_t slot = machine::call_result_copy_slot(body_, call, reads_);
 			if (slot == kNoId || uses_[slot].escaped)
 				continue;
 			places.slot_of[call.result] = slot;
