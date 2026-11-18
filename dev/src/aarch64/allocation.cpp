@@ -191,6 +191,9 @@ void Selector::allocate()
 	};
 	if (!level_)
 	{
+		plan_slots();
+		if (dynamic_stack_)
+			preserved_.push_back({ 28, reserve(8, 8) });
 		for (TempId id = 0; id < count; ++id)
 			homes_[id] = home(id);
 		return;
@@ -203,7 +206,6 @@ void Selector::allocate()
 	auto ranges = live_ranges(
 		program_, body_, out_.exceptions.get(), uses_, calls, segments, cfg, webs, entry_regs_, aliases_);
 	std::vector<uint32_t> web_regs(webs.empty() ? 0 : count, kNoId);
-	parameter_homes(cfg);
 	std::stable_sort(
 		ranges.begin(), ranges.end(), [](const LiveRange& a, const LiveRange& b) { return a.first < b.first; });
 	// x9-x11, x15-x17 and v16-v17 are selector scratch; x18 is platform-reserved.
@@ -232,6 +234,7 @@ void Selector::allocate()
 			[&](uint32_t a, uint32_t b) { return weight[ranges[a].id] > weight[ranges[b].id]; });
 	}
 	RegisterBank general(segments, slots), simd(segments, slots);
+	uint32_t saved = dynamic_stack_ ? 1u << 28 : 0;
 	for (uint32_t i = 0; i < ranges.size(); ++i)
 	{
 		const auto& range = ranges[order.empty() ? i : order[i]];
@@ -273,22 +276,24 @@ void Selector::allocate()
 		const auto root = range.affinity == kNoId ? kNoId : webs.root(range.id);
 		const auto reg = general.assign(range, caller | preserved, preferred, root == kNoId ? kNoId : web_regs[root]);
 		registers_[range.id] = reg;
+		if (reg != kNoId && reg >= 19)
+			saved |= 1u << reg;
 		if (root != kNoId && reg != kNoId && (web_regs[root] == kNoId || (reg >= 19 && web_regs[root] < 19)))
 			web_regs[root] = reg;
 	}
 	for (auto& entry : entry_regs_)
 		entry = general.live_at(entry);
-	uint32_t saved = 0;
+	// Keeping callee saves together lets STP and LDP share both the transfer
+	// and the stack adjustment, independently of the number of local slots.
+	for (; saved; saved &= saved - 1)
+		preserved_.push_back({ static_cast<unsigned>(__builtin_ctz(saved)), reserve(8, 8) });
+	plan_slots();
+	parameter_homes(cfg);
 	machine::IntervalSlots scalar_spills, vector_spills;
 	for (const auto& range : ranges)
 	{
 		const auto id = range.id;
 		const auto reg = registers_[id];
-		if (reg != kNoId && reg >= 19 && !(saved & (1u << reg)))
-		{
-			saved |= 1u << reg;
-			preserved_.push_back({ reg, reserve(8, 8) });
-		}
 		if (range.first == kNoId || reg != kNoId || vectors_[id] != kNoId || homes_[id] != kNoId)
 			continue;
 		const auto type = body_.temps[id].type;

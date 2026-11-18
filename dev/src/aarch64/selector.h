@@ -18,6 +18,7 @@ public:
 
 private:
 	void plan();
+	void plan_slots();
 	std::vector<lowir::BlockId> order_blocks() const;
 	void prepare_exceptions();
 	void landing(lowir::BlockId block);

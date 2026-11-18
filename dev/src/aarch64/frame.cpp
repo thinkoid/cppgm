@@ -32,6 +32,19 @@ uint32_t Selector::reserve(uint64_t size, uint32_t alignment)
 	return start;
 }
 
+void Selector::plan_slots()
+{
+	const auto owners = level_ ? machine::sequential_copy_slots(program_, body_) : std::vector<uint32_t>();
+	for (uint32_t i = 0; i < body_.slots.size(); ++i)
+	{
+		const Type type = body_.slots[i].type;
+		if (!owners.empty() && owners[i] < i)
+			slots_.push_back(slots_[owners[i]]);
+		else
+			slots_.push_back(reserve((storage_bytes(type) + 7) & ~uint64_t(7), data_alignment(type)));
+	}
+}
+
 void Selector::plan()
 {
 	out_.labels.resize(body_.blocks.size(), kNoId);
@@ -89,17 +102,6 @@ void Selector::plan()
 		}
 		preserved_.push_back({ 30, reserve(8, 8) });
 	}
-	const auto owners = level_ ? machine::sequential_copy_slots(program_, body_) : std::vector<uint32_t>();
-	for (uint32_t i = 0; i < body_.slots.size(); ++i)
-	{
-		const Type type = body_.slots[i].type;
-		if (!owners.empty() && owners[i] < i)
-			slots_.push_back(slots_[owners[i]]);
-		else
-			slots_.push_back(reserve((storage_bytes(type) + 7) & ~uint64_t(7), data_alignment(type)));
-	}
-	if (dynamic_stack_)
-		preserved_.push_back({ 28, reserve(8, 8) });
 	allocate();
 	if (named_.darwin && program_.symbols[symbol_].metadata.tls_for != kNoId)
 	{
