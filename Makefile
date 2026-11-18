@@ -314,6 +314,7 @@ HARNESS_TESTS = \
 	scripts/tests/test_wasm_checker.py \
 	scripts/tests/test_wasm_module.py \
 	scripts/tests/test_wasm_quality.py \
+	scripts/tests/test_native_source_lto.py \
 	scripts/tests/test_wasi_inception.py \
 	scripts/tests/test_wasm_generators.py \
 	scripts/tests/test_machine_boundary.py \

@@ -274,6 +274,10 @@ bool accepted_flag(const std::string& arg)
 void configure_target_runtime(Invocation& invocation, bool nostdinc)
 {
 	configure_target_environment(invocation.preprocessor, invocation.target);
+	invocation.optimizer.has_gnu_sincos = target_model::has_gnu_sincos(invocation.target);
+	// Darwin objects are position independent even without an explicit -fPIC.
+	if (invocation.target == native::Target::MacOS)
+		invocation.position_independent = true;
 	if (target_model::is_wasm(invocation.target))
 	{
 		if (invocation.wasm_atomics)
@@ -468,7 +472,7 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 		}
 		else if (arg == "-flto" || arg == "-flto=full" || arg == "-fno-lto")
 		{
-			invocation.wasm_link.fold_functions = arg != "-fno-lto";
+			invocation.wasm_link.fold_functions = arg == "-flto";
 			invocation.whole_source_lto = arg == "-flto=full";
 		}
 		else if (arg == "-fno-inline" || arg == "-finline")
@@ -576,14 +580,29 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 			gcc_install_dir, host_error))
 		throw InvocationError(host_error);
 	configure_target_runtime(invocation, nostdinc);
-	invocation.optimizer.has_gnu_sincos = target_model::has_gnu_sincos(invocation.target);
-	// Darwin objects are position independent even without an explicit -fPIC.
-	if (invocation.target == native::Target::MacOS)
-		invocation.position_independent = true;
 	prune_include_paths(invocation.preprocessor);
 	if (invocation.preprocess_only)
 		invocation.preprocessor.builtin_declarations.clear();
 	return invocation;
+}
+
+struct SourceInputs
+{
+	const Input* begin;
+	const Input* end;
+};
+
+SourceInputs source_lto_inputs(const Invocation& invocation)
+{
+	const Input* end = invocation.inputs.data() + invocation.inputs.size();
+	if (!invocation.whole_source_lto)
+		return { end, end };
+	const auto is_source = [](const Input& input) { return input.kind == Input::Kind::Source; };
+	const Input* first = std::find_if(invocation.inputs.data(), end, is_source);
+	const Input* after = std::find_if_not(first, end, is_source);
+	if (first == after || std::find_if(after, end, is_source) != end)
+		throw InvocationError("-flto=full needs consecutive source inputs");
+	return { first, after };
 }
 
 // The semantic graph's template and evaluation work for a unit's stats
@@ -681,17 +700,17 @@ bool lower_source(const std::string& path, const Invocation& invocation, lower::
 		try
 		{
 			analyzer.analyze(unit.tree());
-			front_ms = milliseconds_since(start);
+			front_ms += milliseconds_since(start);
 			if (invocation.syntax_only)
 				return true;
 			lowering.lower_unit(unit.tree(), graph, analyzer);
-			work.specializations = graph.specializations;
-			work.instantiated_classes = graph.instantiated_classes;
-			work.instantiated_functions = graph.instantiated_functions;
-			work.instantiated_variables = graph.instantiated_variables;
-			work.constant_evaluations = graph.constant_evaluations;
-			work.resolutions = graph.resolutions;
-			work.candidates = graph.candidates;
+			work.specializations += graph.specializations;
+			work.instantiated_classes += graph.instantiated_classes;
+			work.instantiated_functions += graph.instantiated_functions;
+			work.instantiated_variables += graph.instantiated_variables;
+			work.constant_evaluations += graph.constant_evaluations;
+			work.resolutions += graph.resolutions;
+			work.candidates += graph.candidates;
 		}
 		catch (const sema::SemanticError& e)
 		{
@@ -724,8 +743,8 @@ bool write_unit_lowir(const lowir::Program& program, lowir::DefinitionStream* de
 }
 
 // With `lowir_output`, -S -emit-lowir: the program is written there as text
-// instead of compiled.
-bool compile_unit(const std::string& path, const Invocation& invocation, native::EhModel eh_model,
+// instead of compiled. A source LTO group shares the program and the lowering.
+bool compile_native_sources(SourceInputs sources, const Invocation& invocation, native::EhModel eh_model,
 	native::object::ObjectFile& object, const std::string* lowir_output = nullptr)
 {
 	const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
@@ -753,19 +772,29 @@ bool compile_unit(const std::string& path, const Invocation& invocation, native:
 	lowering.set_strict_aliasing(invocation.strict_aliasing);
 	lowering.set_popcnt(invocation.preprocessor.popcnt);
 	lowering.set_exceptions(invocation.preprocessor.modes.exceptions);
+	if (invocation.whole_source_lto)
+		lowering.merge_inline_variables();
 	double front_ms = 0;
 	UnitWork work;
+	const Input* input = sources.begin;
 	try
 	{
-		if (!lower_source(path, invocation, lowering, work, front_ms, start))
-			return false;
+		auto unit_start = start;
+		for (const Input* source = sources.begin; source != sources.end; ++source)
+		{
+			input = source;
+			if (!lower_source(input->name, invocation, lowering, work, front_ms, unit_start))
+				return false;
+			if (source + 1 != sources.end)
+				unit_start = std::chrono::steady_clock::now();
+		}
 		if (invocation.syntax_only)
 			return true;
 		lowering.finish();
 		optimize_unit(program, invocation, eh_model);
 		if (lowir_output != nullptr)
 			return write_unit_lowir(program, streaming ? &definitions : nullptr, *lowir_output);
-		object.path = path;
+		object.path = sources.begin->name;
 		builder.finish(object);
 	}
 	// The unit's errors without a source position. An InternalError (a
@@ -773,31 +802,31 @@ bool compile_unit(const std::string& path, const Invocation& invocation, native:
 	// report.
 	catch (const PreprocessError& e)
 	{
-		std::cerr << "ERROR: " << path << ": " << e.what() << std::endl;
+		std::cerr << "ERROR: " << input->name << ": " << e.what() << std::endl;
 		return false;
 	}
 	catch (const lower::LoweringError& e)
 	{
-		std::cerr << "ERROR: " << path << ": " << e.what() << std::endl;
+		std::cerr << "ERROR: " << input->name << ": " << e.what() << std::endl;
 		return false;
 	}
 	catch (const native::BackendError& e)
 	{
-		std::cerr << "ERROR: " << path << ": " << e.what() << std::endl;
+		std::cerr << "ERROR: " << input->name << ": " << e.what() << std::endl;
 		return false;
 	}
 	catch (const abi_mangle::EncodingError& e)
 	{
-		std::cerr << "ERROR: " << path << ": " << e.what() << std::endl;
+		std::cerr << "ERROR: " << input->name << ": " << e.what() << std::endl;
 		return false;
 	}
 	catch (const LimitError& e)
 	{
-		std::cerr << "ERROR: " << path << ": " << e.what() << std::endl;
+		std::cerr << "ERROR: " << input->name << ": " << e.what() << std::endl;
 		return false;
 	}
 	if (invocation.stats)
-		report_unit(path, front_ms, milliseconds_since(start) - front_ms, stats, work, object);
+		report_unit(object.path, front_ms, milliseconds_since(start) - front_ms, stats, work, object);
 	report_census(stats);
 	return true;
 }
@@ -838,8 +867,9 @@ bool compile_input(const Input& input, const Invocation& invocation, native::EhM
 {
 	if (input.kind == Input::Kind::Assembly)
 		return compile_native_assembly(input.name, invocation.preprocessor, invocation.target, object);
-	return input.kind == Input::Kind::LowIR ? compile_lowir_unit(input.name, invocation, eh_model, object, lowir_output)
-											: compile_unit(input.name, invocation, eh_model, object, lowir_output);
+	return input.kind == Input::Kind::LowIR
+		? compile_lowir_unit(input.name, invocation, eh_model, object, lowir_output)
+		: compile_native_sources({ &input, &input + 1 }, invocation, eh_model, object, lowir_output);
 }
 
 bool regular_file(const std::string& path)
@@ -889,9 +919,29 @@ native::EhModel object_eh_model(const std::string& output)
 	return ends_with(output, ".obj") ? native::EhModel::Course : native::EhModel::Host;
 }
 
+int compile_lto_object(const Invocation& invocation)
+{
+	const SourceInputs sources = source_lto_inputs(invocation);
+	const std::string& output = invocation.output;
+	if (output.empty() || sources.begin != invocation.inputs.data() ||
+		sources.end != invocation.inputs.data() + invocation.inputs.size())
+		throw InvocationError("-flto=full -c requires source inputs and an explicit -o");
+	check_output(invocation, output);
+	native::object::ObjectFile object;
+	if (!compile_native_sources(sources, invocation, object_eh_model(output), object))
+		return EXIT_FAILURE;
+	std::string error;
+	if (native::object::write_elf_object(object, output, error))
+		return EXIT_SUCCESS;
+	std::cerr << "ERROR: " << error << std::endl;
+	return EXIT_FAILURE;
+}
+
 // Libraries are link inputs: -c compiles the sources and ignores them.
 int compile_mode(const Invocation& invocation)
 {
+	if (invocation.whole_source_lto)
+		return compile_lto_object(invocation);
 	size_t sources = 0;
 	for (const Input& input : invocation.inputs)
 		sources += input.kind != Input::Kind::Library ? 1 : 0;
@@ -949,10 +999,20 @@ int link_mode(const Invocation& invocation)
 	check_output(invocation, output);
 	std::vector<native::object::ObjectFile> objects;
 	objects.reserve(invocation.inputs.size() + 2);
-	for (const Input& input : invocation.inputs)
+	const SourceInputs sources = source_lto_inputs(invocation);
+	const Input* end = invocation.inputs.data() + invocation.inputs.size();
+	for (const Input* next = invocation.inputs.data(); next != end;)
 	{
-		objects.push_back(native::object::ObjectFile());
+		objects.emplace_back();
 		native::object::ObjectFile& object = objects.back();
+		if (next == sources.begin)
+		{
+			if (!compile_native_sources(sources, invocation, native::EhModel::Course, object))
+				return EXIT_FAILURE;
+			next = sources.end;
+			continue;
+		}
+		const Input& input = *next++;
 		if (input.kind == Input::Kind::Source || input.kind == Input::Kind::LowIR ||
 			input.kind == Input::Kind::Assembly)
 		{
@@ -1123,10 +1183,8 @@ bool wasm_input(const Input& input, const Invocation& invocation, const backend:
 	return add_wasm_object(program, options, inputs, error);
 }
 
-using InputIterator = std::vector<Input>::const_iterator;
-
-bool compile_wasm_sources(InputIterator begin, InputIterator end, const Invocation& invocation,
-	const backend::Options& options, wasm::LinkInputs& inputs, std::string& error)
+bool compile_wasm_sources(SourceInputs sources, const Invocation& invocation, const backend::Options& options,
+	wasm::LinkInputs& inputs, std::string& error)
 {
 	lowir::Program program;
 	program.target = invocation.target;
@@ -1134,8 +1192,8 @@ bool compile_wasm_sources(InputIterator begin, InputIterator end, const Invocati
 	lower::ProgramLowering lowering(program);
 	configure_wasm_lowering(lowering, invocation);
 	lowering.merge_inline_variables();
-	for (auto input = begin; input != end; ++input)
-		if (!lower_wasm_source(*input, invocation, lowering, input + 1 == end))
+	for (const Input* input = sources.begin; input != sources.end; ++input)
+		if (!lower_wasm_source(*input, invocation, lowering, input + 1 == sources.end))
 			return false;
 	return add_wasm_object(program, options, inputs, error);
 }
@@ -1158,6 +1216,7 @@ int wasm_mode(const Invocation& invocation)
 	options.no_startfiles = invocation.no_startfiles;
 	options.wasm_atomics = invocation.wasm_atomics;
 	options.wasm_link = invocation.wasm_link;
+	options.wasm_link.fold_functions |= invocation.whole_source_lto;
 	options.wasm_link.compact_relocations = invocation.optimizer.minimize_size;
 	if (invocation.wasm_stack_size != 0)
 		options.wasm_stack_size = invocation.wasm_stack_size;
@@ -1165,27 +1224,19 @@ int wasm_mode(const Invocation& invocation)
 	options.lowir_passes = invocation.lowir_passes;
 	std::string error;
 	wasm::LinkInputs objects;
-	const auto is_source = [](const Input& input) { return input.kind == Input::Kind::Source; };
-	auto sources = invocation.inputs.end(), after_sources = sources;
-	if (invocation.whole_source_lto)
+	const SourceInputs sources = source_lto_inputs(invocation);
+	const Input* end = invocation.inputs.data() + invocation.inputs.size();
+	for (const Input* next = invocation.inputs.data(); next != end;)
 	{
-		sources = std::find_if(invocation.inputs.begin(), invocation.inputs.end(), is_source);
-		after_sources = std::find_if_not(sources, invocation.inputs.end(), is_source);
-		if (sources == after_sources ||
-			std::find_if(after_sources, invocation.inputs.end(), is_source) != invocation.inputs.end())
-			throw InvocationError("-flto=full needs consecutive source inputs in one Wasm link command");
-	}
-	for (auto next = invocation.inputs.begin(); next != invocation.inputs.end();)
-	{
-		if (next == sources)
+		if (next == sources.begin)
 		{
-			if (!compile_wasm_sources(sources, after_sources, invocation, options, objects, error))
+			if (!compile_wasm_sources(sources, invocation, options, objects, error))
 			{
 				if (!error.empty())
 					std::cerr << "ERROR: " << error << std::endl;
 				return EXIT_FAILURE;
 			}
-			next = after_sources;
+			next = sources.end;
 			continue;
 		}
 		const Input& input = *next++;
@@ -1321,15 +1372,21 @@ int debug_type_request(const std::string& arg)
 int run_toolchain(const std::vector<std::string>& args, const PreprocessorOptions& base)
 {
 	const Invocation invocation = parse(args, base);
-	if (invocation.whole_source_lto &&
-		(invocation.compile_only || invocation.preprocess_only || invocation.syntax_only))
-		throw InvocationError("-flto=full requires a Wasm link command");
+	const bool wasm_target = target_model::is_wasm(invocation.target);
+	if (invocation.whole_source_lto)
+	{
+		if (!wasm_target && invocation.target != native::Target::Linux)
+			throw InvocationError("-flto=full requires x86-64 ELF or a Wasm target");
+		if (invocation.preprocess_only || invocation.syntax_only || invocation.emit_lowir ||
+			(wasm_target && invocation.compile_only))
+			throw InvocationError("-flto=full requires a link command or an x86-64 ELF object build");
+	}
 	for (const Input& input : invocation.inputs)
 		if (input.kind == Input::Kind::Assembly &&
 			(invocation.preprocess_only || invocation.syntax_only || invocation.emit_lowir))
 			throw InvocationError("assembly input requires a compile or link invocation");
 
-	if (!target_model::is_wasm(invocation.target) && !invocation.exports.empty())
+	if (!wasm_target && !invocation.exports.empty())
 		throw InvocationError("explicit function exports require a Wasm target");
 	if (invocation.preprocess_only)
 		return preprocess_mode(invocation);
@@ -1339,12 +1396,12 @@ int run_toolchain(const std::vector<std::string>& args, const PreprocessorOption
 		{
 			native::object::ObjectFile object;
 			if (input.kind == Input::Kind::Source &&
-				!compile_unit(input.name, invocation, native::EhModel::Host, object))
+				!compile_native_sources({ &input, &input + 1 }, invocation, native::EhModel::Host, object))
 				return EXIT_FAILURE;
 		}
 		return EXIT_SUCCESS;
 	}
-	if (target_model::is_wasm(invocation.target))
+	if (wasm_target)
 		return wasm_mode(invocation);
 	return invocation.compile_only ? compile_mode(invocation) : link_mode(invocation);
 }

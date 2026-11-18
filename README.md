@@ -182,6 +182,13 @@ Methods: [public programs](benchmarks/public/README.md) ([O0 and per-host result
 - The [required C++11/14/17 profile](LANGUAGE_PROFILE.md) covers selected features. It is not full conformance to each edition.
 - C++20 and C have partial support. The profile lists the selected C++20 features. The optional [PA38](pa38/README.md) compiles C sources in the `c17` and `gnu17` modes.
 - The targets are Linux x86-64, Intel macOS and wasm32 (`wasm32-unknown-unknown` and `wasm32-wasip1`, [PA37](pa37/README.md)).
+- `-Oz` and the LTO flags are experimental. `-Oz` optimizes for size.
+  `-flto` shares identical function bodies when linking Wasm.
+  `-flto=full` optimizes consecutive source inputs together on Wasm and
+  Linux x86-64. On Linux x86-64, use `-flto=full -c -o combined.o` to
+  produce one object for the host linker. Full LTO needs the source files
+  in the same command and can use more memory. Keep competing weak and
+  strong definitions in separate objects so the linker can select one.
 - [Integrated assembly](pa29/README.md) is complete for its documented x86-64 profile. It is not a general assembler.
 - The compiler has no C++ standard library of its own. Use the library that is installed on the host.
 - The compiler can contain bugs.

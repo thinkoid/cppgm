@@ -73,6 +73,8 @@ ProgramLowering::~ProgramLowering()
 void ProgramLowering::lower_unit(
 	const syntax::TranslationUnit& unit, sema::SemanticGraph& graph, sema::Analyzer& analyzer)
 {
+	// TLS initialization is tied to the translation unit that defined it.
+	define_unit_thread_local_init();
 	// Entity identities are addresses in this unit's arena: the maps keyed
 	// by them start empty for each unit.
 	char marker;
@@ -96,6 +98,8 @@ void ProgramLowering::lower_unit(
 	debug_file_.clear();
 	debug_file_name_ = 0;
 	symbols_.clear();
+	inline_copies_.clear();
+	predefined_symbols_.clear();
 	source_object_aliases_.clear();
 	compound_globals_.clear();
 	identities_.clear();

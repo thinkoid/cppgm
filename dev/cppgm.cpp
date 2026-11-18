@@ -675,6 +675,7 @@ DriverInvocation parse_driver_invocation(const vector<string>& args)
 	bool compile_only = false;
 	bool preprocess_only = false;
 	bool explicit_outfile = false;
+	bool whole_source_lto = false;
 	vector<string> inputs;
 
 	for (size_t i = 0; i < args.size(); ++i)
@@ -709,6 +710,11 @@ DriverInvocation parse_driver_invocation(const vector<string>& args)
 			explicit_outfile = true;
 			continue;
 		}
+		if (args[i] == "-flto=full" || args[i] == "-flto" || args[i] == "-fno-lto")
+		{
+			whole_source_lto = args[i] == "-flto=full";
+			continue;
+		}
 		if (consume_preprocess_option(args, i) || consume_search_option(args, i) ||
 			consume_dependency_option(args, i) || consume_toolchain_option(args, i) || is_benign_driver_flag(args[i]))
 		{
@@ -729,7 +735,7 @@ DriverInvocation parse_driver_invocation(const vector<string>& args)
 	{
 		throw InvocationError("invalid usage");
 	}
-	if ((compile_only || preprocess_only) && explicit_outfile && inputs.size() != 1)
+	if ((preprocess_only || (compile_only && !whole_source_lto)) && explicit_outfile && inputs.size() != 1)
 	{
 		throw InvocationError("cannot specify -o when generating multiple output files");
 	}
@@ -1318,7 +1324,8 @@ int run_cppgm(const vector<string>& raw_args)
 				"  -fno-lowir-passes   compile without the LowIR optimizer; the back end runs at the -O level\n"
 				"  -Oz                optimize for smaller code\n"
 				"  -flto              fold identical function bodies when linking Wasm objects\n"
-				"  -flto=full         optimize consecutive Wasm source inputs together in one link command\n";
+				"  -flto=full         optimize consecutive source inputs together when linking Wasm or x86-64 ELF\n"
+				"                      on x86-64 ELF, -c with -o writes one combined object\n";
 		return EXIT_SUCCESS;
 	}
 
