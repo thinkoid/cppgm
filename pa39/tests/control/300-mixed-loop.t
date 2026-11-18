@@ -20,3 +20,19 @@ extern "C" int pressure(volatile int* p, unsigned rounds) {
     }
     return x + 3*y + 7*z;
 }
+
+extern "C" unsigned rotate(unsigned rounds, unsigned a, unsigned b, unsigned c) {
+    unsigned short x = 0xabcd, y = 0x1234;
+    unsigned sum = 0;
+    while (rounds--) {
+        unsigned t = a;
+        a = b;
+        b = c;
+        c = t;
+        unsigned short u = x;
+        x = y;
+        y = u;
+        sum += a ^ x;
+    }
+    return a ^ (3*b) ^ (7*c) ^ (unsigned(x) << 16) ^ y ^ sum;
+}

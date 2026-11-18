@@ -4,6 +4,7 @@
 #include <functional>
 
 #include "lowir/literals.h"
+#include "machine/parallel_register_moves.h"
 #include "native/backend_error.h"
 #include "support/internal_error.h"
 
@@ -617,6 +618,36 @@ void FunctionSelector::emit_move(const Move& move)
 	}
 }
 
+bool FunctionSelector::small_register_moves(std::vector<Move>& moves)
+{
+	if (moves.size() > machine::kSmallTransfers)
+		return false;
+	machine::ScalarTransfer transfers[machine::kSmallTransfers];
+	for (unsigned i = 0; i < moves.size(); ++i)
+	{
+		const auto& m = moves[i];
+		if (m.address || m.extend_register || m.dst.kind != OperandKind::Reg || m.src.kind != OperandKind::Reg ||
+			!is_gpr(m.dst.reg) || !is_gpr(m.src.reg) || m.dst.reg == kSelectScratch || m.src.reg == kSelectScratch ||
+			m.type == TypeKind::F32 || m.type == TypeKind::F64 || m.type == TypeKind::V128)
+			return false;
+		transfers[i] = { m.dst.reg, m.src.reg };
+	}
+	return machine::parallel_scalar_transfers(
+		transfers, moves.size(),
+		[&](unsigned i) {
+			Move saving;
+			saving.dst = Operand::make_reg(kSelectScratch);
+			saving.src = moves[i].dst;
+			saving.type = moves[i].type;
+			emit_move(saving);
+		},
+		[&](unsigned i, uint32_t source) {
+			if (source == machine::kTransferSaved)
+				moves[i].src.reg = kSelectScratch;
+			emit_move(moves[i]);
+		});
+}
+
 // Moves are emitted in the order of the original quadratic resolver: the
 // first pending move (by index) whose destination no other pending move
 // reads, and when every pending destination is read, the first pending
@@ -636,6 +667,11 @@ void FunctionSelector::parallel_moves(std::vector<Move>& moves)
 	if (n == 1)
 	{
 		emit_move(moves[0]);
+		moves.clear();
+		return;
+	}
+	if (small_register_moves(moves))
+	{
 		moves.clear();
 		return;
 	}

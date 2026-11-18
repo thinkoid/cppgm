@@ -81,6 +81,7 @@ private:
 	bool needs_snapshot(lowir::BlockId from, lowir::BlockId to);
 	uint64_t plan_phis();
 	void register_edge(lowir::BlockId from, lowir::BlockId to);
+	bool small_scalar_edge(lowir::BlockId from, lowir::BlockId to);
 	void copy_edge(lowir::BlockId from, lowir::BlockId to);
 	void edge(lowir::BlockId from, lowir::BlockId to, bool last = false);
 	void select(const lowir::Instruction& inst, lowir::BlockId block);

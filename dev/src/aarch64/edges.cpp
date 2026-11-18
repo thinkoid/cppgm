@@ -1,11 +1,56 @@
 #include "aarch64/selector.h"
+#include "machine/parallel_register_moves.h"
 
 #include <algorithm>
 namespace aarch64 {
 using namespace lowir;
 
+bool Selector::small_scalar_edge(BlockId from, BlockId to)
+{
+	machine::ScalarTransfer moves[machine::kSmallTransfers];
+	Value sources[machine::kSmallTransfers];
+	Type types[machine::kSmallTransfers];
+	unsigned count = 0;
+	const auto location = [&](TempId t) { return registers_[t] == kNoId ? 32 + homes_[t] : registers_[t]; };
+	for (auto i = body_.blocks[to].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
+		i = body_.instructions[i].next)
+	{
+		const auto& phi = body_.instructions[i];
+		const auto source = phis_.incoming(body_, i, from);
+		if (same_home(phi.result, source))
+			continue;
+		if (count == machine::kSmallTransfers || !(phi.type.is_integer() || phi.type.is_pointer()) ||
+			memory_value(phi.type) || !(source.is(ValueKind::Temp) || source.is(ValueKind::Integer)))
+			return false;
+		sources[count] = source;
+		types[count] = phi.type;
+		moves[count++] = { location(phi.result),
+			source.is(ValueKind::Temp) ? location(source.index) : machine::kTransferLiteral };
+	}
+	const auto read = [&](unsigned reg, uint32_t loc) {
+		if (loc < 32)
+			move(reg, loc);
+		else
+			access(false, reg, frame_base(), loc - 32, 8);
+	};
+	return machine::parallel_scalar_transfers(
+		moves, count, [&](unsigned i) { read(15, moves[i].destination); },
+		[&](unsigned i, uint32_t src) {
+			const auto dst = moves[i].destination;
+			const auto reg = dst < 32 ? dst : (src < 32 ? src : src == machine::kTransferSaved ? 15u : 9u);
+			if (src == machine::kTransferLiteral)
+				value(reg, sources[i], types[i]);
+			else
+				read(reg, src == machine::kTransferSaved ? 15 : src);
+			if (dst >= 32)
+				access(true, reg, frame_base(), dst - 32, 8);
+		});
+}
+
 void Selector::copy_edge(BlockId from, BlockId to)
 {
+	if (level_ && small_scalar_edge(from, to))
+		return;
 	// Snapshot all sources before committing any destination of this parallel copy.
 	uint32_t offset = phi_area_;
 	const InstId first = body_.blocks[to].first;

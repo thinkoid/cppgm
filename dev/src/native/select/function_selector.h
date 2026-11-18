@@ -216,6 +216,7 @@ public:
 	bool fits_imm32(const Operand& op) const;
 	void load_into(Reg dst, const Operand& src, lowir::TypeKind type);
 	void materialize_address(Reg dst, const AddrExpr& expr, bool exclusive = false);
+	bool small_register_moves(std::vector<Move>& moves);
 	void parallel_moves(std::vector<Move>& moves);
 	void emit_move(const Move& move);
 
