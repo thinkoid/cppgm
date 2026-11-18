@@ -5,11 +5,19 @@ extern "C" U sample(U x) {
     x = (x ^ (x >> 31)) * 0x9e3779b97f4a7c15ul;
     return x & 1 ? x ^ (x << 17) : x + (x >> 23);
 }
+using Combiner = U (*)(U, U, double, double);
+extern "C" __attribute__((noinline)) U combine(U a, U b, double c, double d) {
+    return 3 * a + b + static_cast<U>(4 * c + d);
+}
+extern "C" __attribute__((noinline)) U forward(U a, U b, double c, double d, Combiner fn) {
+    return fn(b, a, d, c) + fn(a, a, c, c);
+}
 int main() {
     U seed = 0x243f6a8885a308d3ul;
     for (int n = 0; n < 64; ++n) {
         U expected = 0;
         for (U i = 0; i < 12; i += 2) expected ^= sample(seed+i) + sample(seed+i+1);
+        if (forward(seed, n, 3.0, 5.0, combine) != 5 * seed + 3 * n + 38) return 2;
         if (!check_registers(seed, kernel, expected)) return 1;
         seed = seed * 6364136223846793005ul + 1442695040888963407ul;
     }

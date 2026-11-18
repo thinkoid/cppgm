@@ -66,6 +66,40 @@ private:
 };
 } // namespace
 
+// A scalar dying at a call may already occupy its outgoing register. The
+// argument layout never reuses a register between parameters; intersect the
+// permitted registers over every occurrence, including indirect call targets.
+std::vector<uint8_t> Selector::call_registers() const
+{
+	std::vector<uint8_t> masks;
+	if (calls_.empty())
+		return masks;
+	masks.assign(body_.temps.size(), 0xff);
+	for (InstId i = 0; i < call_indices_.size(); ++i)
+	{
+		if (call_indices_[i] == kNoId)
+			continue;
+		const auto& inst = body_.instructions[i];
+		const auto& layout = calls_[call_indices_[i]];
+		if (inst.ops[0].is(ValueKind::Temp))
+			masks[inst.ops[0].index] = 0;
+		for (uint32_t n = 0; n < layout.args.size(); ++n)
+		{
+			const auto src = body_.operands[inst.extra_first + n];
+			if (!src.is(ValueKind::Temp))
+				continue;
+			const auto& arg = layout.args[n];
+			const auto type = layout.types[n];
+			const bool simd = type.is_float() || type.kind() == TypeKind::V128;
+			const bool matches = !arg.indirect && arg.pieces == 1 && arg.first < 8 &&
+				arg.bank == (simd ? Bank::Simd : Bank::General) &&
+				(!memory_value(type) || type.kind() == TypeKind::V128);
+			masks[src.index] &= matches ? 1u << arg.first : 0;
+		}
+	}
+	return masks;
+}
+
 void Selector::allocate()
 {
 	const size_t count = body_.temps.size();
@@ -102,6 +136,7 @@ void Selector::allocate()
 	}
 	const uint32_t slots = 2 * (body_.instructions.size() + body_.layout.size()) + 3;
 	RegisterBank general(segments, slots), simd(segments, slots);
+	const auto outgoing = call_registers();
 	uint32_t saved = 0;
 	machine::IntervalSlots scalar_spills, vector_spills;
 	for (const auto& range : ranges)
@@ -116,7 +151,7 @@ void Selector::allocate()
 				across_call |= call != calls.end() && *call < b;
 			});
 		const auto type = body_.temps[range.id].type;
-		uint32_t arguments = at_call ? 0 : 0xff;
+		uint32_t arguments = at_call ? (!across_call && outgoing[range.id] != 0xff ? outgoing[range.id] : 0) : 0xff;
 		if (range.first == 0)
 			arguments &= range.id < incoming.size() && incoming[range.id] != kNoId ? 1u << incoming[range.id] : 0;
 		if (type.is_float() && !memory_value(type))
@@ -127,7 +162,7 @@ void Selector::allocate()
 			if (vectors_[range.id] != kNoId)
 				continue;
 			// The incoming SIMD argument does not own the corresponding GPR.
-			if (range.first == 0)
+			if (range.first == 0 || at_call)
 				arguments = 0;
 		}
 		if (memory_value(type))

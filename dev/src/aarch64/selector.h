@@ -20,6 +20,7 @@ private:
 	void record_call(const lowir::Instruction& inst);
 	void exception_value(const lowir::Instruction& inst);
 	uint32_t site(const lowir::Instruction& inst) const;
+	std::vector<uint8_t> call_registers() const;
 	void allocate();
 	unsigned vector_value(lowir::Value value, unsigned scratch);
 	void save_vector(unsigned reg, lowir::TempId result);
