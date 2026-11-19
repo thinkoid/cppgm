@@ -36,7 +36,8 @@ FRONTEND_PHASE_BASENAMES_sema := sema/type_table sema/lookup sema/integral_arith
 # and the validator. The text reader and writer (lowir/text_*) are tool
 # adapters, listed only by the tools that read or write LowIR text; the
 # construction exercises only by lowir.
-FRONTEND_PHASE_BASENAMES_lowir := support/memory/arena lowir/name_table lowir/program lowir/startup_sections lowir/builder lowir/body_construction lowir/literals lowir/validator lowir/argument_facts lowir/debug_validation lowir/assembly_validation lowir/assembly_functions lowir/assembly_globals asm/registers
+# LowIR preserves x87 extended literals on hosts with other long double formats.
+FRONTEND_PHASE_BASENAMES_lowir := support/memory/arena lowir/name_table lowir/program lowir/startup_sections lowir/builder lowir/body_construction lowir/literals lowir/validator lowir/argument_facts lowir/debug_validation lowir/assembly_validation lowir/assembly_functions lowir/assembly_globals asm/registers lex/interchange_float preprocess/lexer/char_classes
 
 # PA9's ABI naming: the canonical ABI graph, the vocabulary tables and the
 # one Itanium encoder, which later stages link to name their symbols. The
@@ -99,9 +100,3 @@ FRONTEND_LIBRARY_SOURCE_IDS_lowir_library := $(FRONTEND_PHASE_BASENAMES_lowir) $
 # Explicit embedding link options shared by the source and LowIR drivers.
 FRONTEND_OBJ_BASENAMES_cppgm += driver/wasm_link_options
 FRONTEND_OBJ_BASENAMES_lowir2native += driver/wasm_link_options
-
-# Wasm-hosted LowIR preserves the x86 extended-float format through these
-# portable scanners and converters, independent of the host long double.
-FRONTEND_OBJ_BASENAMES_lowir += lex/interchange_float preprocess/lexer/char_classes
-FRONTEND_OBJ_BASENAMES_lowiropt += lex/interchange_float preprocess/lexer/char_classes
-FRONTEND_OBJ_BASENAMES_lowir2native += lex/interchange_float preprocess/lexer/char_classes
