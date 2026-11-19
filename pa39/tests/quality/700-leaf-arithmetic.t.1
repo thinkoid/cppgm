@@ -41,6 +41,9 @@ extern "C" unsigned narrow_join(bool, unsigned long, unsigned long);
 extern "C" unsigned narrow_join_full(bool, unsigned long, unsigned long);
 extern "C" unsigned long selected_field(const unsigned long*, unsigned);
 extern "C" unsigned scaled_with_bias(unsigned);
+extern "C" unsigned mask_shift_word(unsigned);
+extern "C" unsigned long mask_shift_long(long);
+extern "C" unsigned triangle_slots(const unsigned*);
 int main() {
     if (narrow_join(true, 0xa500000000000000UL, 0) != 0xa5a5 ||
         narrow_join(false, 0, 0x1234UL) != 0x3434) return 32;
@@ -55,6 +58,8 @@ int main() {
     }
     if (shift_fields(127UL << 41,-1) != 127 + 257*255 ||
         shift_fields(163UL << 41,0x70000000) != 163 + 257*7) return 26;
+    if (mask_shift_word(0xabcd0000u + (45u << 10) + 1023u) != 45 || mask_shift_word(~0u) != 63 ||
+        mask_shift_long(-1) != 511 || mask_shift_long((-9223372036854775807L - 1) + (389L << 41)) != 389) return 38;
     if (shift_cmp(-6,-160) != 7 || shift_cmp(-5,-160) != -3 || shift_cmp(5,159) != -3) return 27;
     if (!shift_eq(0x80000000u, 12) || shift_eq(1,8)) return 28;
     unsigned long carrier = ~0UL;
@@ -117,6 +122,7 @@ int main() {
     if (widen_choice(false, 0) != 0xffffffffUL || widen_choice(true, 0x80000001u) != 0x80000001UL) return 9;
     unsigned data[] = {3, 5, 8, 13, 21};
     if (indexed(data + 1, -1, 3) != 24) return 5;
+    if (triangle_slots(data) != 200) return 40;
     unsigned short halves[] = {7, 11, 17};
     replace_half(halves + 1, -1, 65534);
     if (halves[0] != 65534 || halves[1] != 11) return 6;

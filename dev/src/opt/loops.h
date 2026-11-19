@@ -38,6 +38,8 @@ void find_loops(const lowir::FunctionBody& body, const Cfg& cfg, LoopForest& for
 // Whether a loop's multiplication reads a table of row pointers with no
 // volatile accesses or explicit stores. Used to budget full unrolling.
 bool indirect_word_reduction(const lowir::FunctionBody& body, const Loop& loop);
+bool from_induction(const lowir::FunctionBody& body, const std::vector<lowir::BlockId>& block_of,
+	const std::vector<uint8_t>& member, lowir::TempId iv, lowir::Value value, unsigned depth);
 bool indexes_local_array(const lowir::FunctionBody& body, const Loop& loop, lowir::TempId iv);
 bool has_contiguous_float_work(const lowir::FunctionBody& body, const Loop& loop);
 bool loop_uses_vectors(const lowir::FunctionBody& body, const Loop& loop);
@@ -144,6 +146,20 @@ bool straighten_single_pass_loop(FunctionContext& context, const LoopForest& for
 // induction has no literal on some pass (opt/loop_unrolling.cpp).
 uint64_t unrolled_size(const FunctionContext& context, const Cfg& cfg, const Loop& loop,
 	const std::vector<uint8_t>& member, const std::vector<uint8_t>& owned, lowir::TempId iv, int64_t trips);
+
+// A second signed 32-bit bound in a counted loop. It tests a header phi
+// that steps by one, and both tests leave to `exit`. The fast copy can
+// bypass this second test when all its passes fit below `bound`.
+struct CountedUnrollGuard
+{
+	lowir::BlockId block = lowir::kNoId;
+	lowir::BlockId exit = lowir::kNoId;
+	lowir::Value start;
+	lowir::Value bound;
+};
+
+void clone_counted_loop(FunctionContext& context, const Loop& loop, int64_t trips, const std::vector<uint8_t>& member,
+	const std::vector<uint8_t>& owned, const CountedUnrollGuard& guard);
 
 // The test number (0-based) at which a counted loop leaves: the induction
 // starts at a literal and steps by a literal, the bound is a literal, and

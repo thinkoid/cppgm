@@ -116,6 +116,13 @@ InstId Selector::shifted_operand(const lowir::Instruction& shift, BlockId block)
 	const auto& next = body_.instructions[shift.next];
 	const unsigned count = body_.literals[shift.ops[1].index].low & (bits - 1);
 	const unsigned kind = op == BinaryOp::Shl ? 0 : op == BinaryOp::UShr ? 1 : 2;
+	const auto extract = [&](unsigned width, Op encoding) {
+		const unsigned src = operand_register(shift.ops[0], shift.type, 11);
+		const unsigned dest = registers_[next.result] == kNoId ? 9 : registers_[next.result];
+		out_.emit(encoding, dest, src, 0, (count << 16) | ((count + width - 1) << 10));
+		save(dest, next.result, true);
+		return shift.next;
+	};
 	// A shifted register comparison produces the same flags as SUBS. Keep
 	// those flags for its branch or select before materializing a boolean.
 	if (next.op == Opcode::Compare && next.type == shift.type && next.ops[1] == Value::temp(shift.result) &&
@@ -141,13 +148,7 @@ InstId Selector::shifted_operand(const lowir::Instruction& shift, BlockId block)
 			return shift.next;
 		}
 		if (op != BinaryOp::Shl && width && width < bits && count + width <= bits)
-		{
-			const unsigned src = operand_register(shift.ops[0], shift.type, 11);
-			const unsigned dest = registers_[next.result] == kNoId ? 9 : registers_[next.result];
-			out_.emit(Op::Ubfm, dest, src, 0, (count << 16) | ((count + width - 1) << 10));
-			save(dest, next.result, true);
-			return shift.next;
-		}
+			return extract(width, Op::Ubfm);
 	}
 	if (next.op != Opcode::Binary || next.type != shift.type)
 		return kNoId;
@@ -178,6 +179,19 @@ InstId Selector::shifted_operand(const lowir::Instruction& shift, BlockId block)
 	const auto other = next.ops[1] == result ? next.ops[0] : next.ops[1];
 	if (!(next.ops[1] == result) && (!(next.ops[0] == result) || combine == BinaryOp::Sub))
 		return kNoId;
+	// A mask of the low bits extracts a field directly from the unshifted
+	// value. Keep arithmetic shifts when a selected bit comes from sign fill.
+	if (combine == BinaryOp::And && op != BinaryOp::Shl && other.is(ValueKind::Integer))
+	{
+		const uint64_t literal = body_.literals[other.index].low;
+		const uint64_t mask = w ? static_cast<uint32_t>(literal) : literal;
+		if (mask != 0 && (mask & (mask + 1)) == 0)
+		{
+			const unsigned width = 64 - __builtin_clzll(mask);
+			if (count + width <= bits)
+				return extract(width, w ? Op::UbfmW : Op::Ubfm);
+		}
+	}
 	const unsigned a = operand_register(other, shift.type, 10), b = operand_register(shift.ops[0], shift.type, 11);
 	const unsigned dest = registers_[next.result] == kNoId ? 9 : registers_[next.result];
 	out_.emit(selected, dest, a, b, (kind << 22) | (count << 10));

@@ -88,11 +88,14 @@ const uint32_t kPartialRecursiveCap = 8;
 // sits behind an early return, and a copy would only lengthen the common
 // path's prologue); the deepest copies' calls get the partial copies. A
 // body with a loop and one call to itself, as tail recursion often leaves,
-// takes kRecursiveChainDepth levels: the copies are nested loops.
+// takes kRecursiveChainDepth levels: the copies are nested loops. AArch64
+// keeps fewer copies of read-only traversals at -O3 to limit values live
+// across calls in those loops.
 const uint32_t kRecursiveCap = 64;
 const uint32_t kRecursiveTotal = 320;
 const uint32_t kRecursiveDepth = 2;
 const uint32_t kRecursiveChainDepth = 8;
+const uint32_t kAArch64RecursiveChainDepth = 2;
 const uint32_t kRecursiveTreeCalls = 2;
 // A caller from this size is large: no site copies it into another caller
 // except as a single-call candidate.
@@ -2354,6 +2357,24 @@ std::vector<uint8_t> InlineWaveRunner::cold_paths(const FunctionBody& body, cons
 	return cold;
 }
 
+// A read-only traversal can keep each recursive call's live values in a
+// small frame. Deeper copies keep the enclosing traversals live together.
+bool read_only_recursive_chain(const Program& program, const FunctionBody& body, SymbolId caller)
+{
+	bool reads_memory = false;
+	for (BlockId block : body.layout)
+		for (InstId i = body.blocks[block].first; i != kNoId; i = body.instructions[i].next)
+		{
+			const Instruction& inst = body.instructions[i];
+			if (inst.op == Opcode::Call && inst.ops[0] == Value::symbol(caller))
+				continue;
+			if (may_write_memory(program, inst))
+				return false;
+			reads_memory = reads_memory || inst.op == Opcode::Load;
+		}
+	return reads_memory;
+}
+
 bool InlineWaveRunner::process(SymbolId caller)
 {
 	caller_ = graph_.index_of[caller];
@@ -2413,7 +2434,11 @@ bool InlineWaveRunner::process(SymbolId caller)
 		// (A loop's one self call, what is left of a tail-recursive function,
 		// is a chain: its copies nest loops.)
 		const bool chain = shapes_[caller_].loop && self_calls == 1;
-		const uint32_t depth_cap = chain ? kRecursiveChainDepth : kRecursiveDepth;
+		const uint32_t chain_depth = chain && options_.level >= 3 && target_model::is_aarch64(program_.target) &&
+				read_only_recursive_chain(program_, body, caller)
+			? kAArch64RecursiveChainDepth
+			: kRecursiveChainDepth;
+		const uint32_t depth_cap = chain ? chain_depth : kRecursiveDepth;
 		uint64_t copies = 0, level = 1;
 		for (uint32_t d = 1; d <= depth_cap && (chain || (self_calls >= kRecursiveTreeCalls && !shapes_[caller_].loop));
 			++d)

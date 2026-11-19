@@ -362,6 +362,11 @@ Coupled loop values can also bound each other. Meet the bounded-search and
 averaging fixtures' arithmetic bounds while preserving signed rounding,
 overflow, every entry seed and computations observed before a guard.
 
+When a short loop has a second bound, check whether it has room for every
+iteration before choosing a fully unrolled path. Use a comparison that also
+works near the signed limit. Check the empty range, the short tail and the
+values and stores that reach the exit from each path.
+
 Boolean conditions may pass through selected zero/one values and integer
 retypes. Meet their quality bounds while preserving actual narrowing of
 arbitrary integers; a nonzero value can become zero when narrowed.
@@ -395,6 +400,9 @@ scalar memory round trips; preserve observable writes and volatile accesses.
 If a loop transformation exposes fixed vector fields, check the aggregate
 again. A pointer stored into its own aggregate can become dead after its
 last reader disappears. Preserve self-references that can still be observed.
+Unrolling a short outer loop can expose constant indices in an inner loop.
+Check the cost of the resulting code and the values it keeps live across
+the remaining loops.
 Packed shifts whose count becomes constant may use immediate operations,
 with oversized logical counts producing zero and arithmetic counts retaining
 sign fill. Equivalent implementations satisfy the same behavior and bounds.

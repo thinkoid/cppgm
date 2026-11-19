@@ -116,6 +116,8 @@ extern "C" unsigned projected_bytes(unsigned long* word, unsigned char v, unsign
 extern "C" unsigned shift_fields(unsigned long v, int s) {
     return static_cast<unsigned char>(v >> 41) + 257u * static_cast<unsigned char>(s >> 28);
 }
+extern "C" unsigned mask_shift_word(unsigned value) { return (value >> 10) & 63u; }
+extern "C" unsigned long mask_shift_long(long value) { return (value >> 41) & 511UL; }
 extern "C" int shift_cmp(long limit, long value) {
     return limit < (value >> 5) ? 7 : -3;
 }
@@ -144,4 +146,14 @@ extern "C" unsigned long selected_field(const unsigned long* fields, unsigned se
 
 extern "C" unsigned scaled_with_bias(unsigned value) {
     return (value + 0xffff0007u) * 19u + 2027u;
+}
+
+extern "C" unsigned triangle_slots(const unsigned* values) {
+    unsigned pairs[5][5];
+    for (int i = 0; i < 5; ++i)
+        for (int j = i + 1; j < 5; ++j) pairs[i][j] = values[i] + values[j];
+    unsigned result = 0;
+    for (int i = 0; i < 5; ++i)
+        for (int j = i + 1; j < 5; ++j) result += pairs[i][j];
+    return result;
 }

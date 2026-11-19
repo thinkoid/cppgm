@@ -55,6 +55,7 @@ public:
 private:
 	bool try_unroll(uint32_t loop);
 	bool try_unroll_search(uint32_t loop);
+	CountedUnrollGuard unroll_guard(uint32_t loop) const;
 	int64_t unroll_bound(uint32_t loop, BlockId tested, TempId& iv_temp) const;
 	bool unroll_search_shape(uint32_t loop, int64_t trips, TempId iv, std::vector<uint8_t>& member,
 		std::vector<uint8_t>& owned, BlockId& through);
@@ -1942,44 +1943,32 @@ const uint32_t kUnrollBranchBody = 160;
 const uint32_t kUnrollArrayBody = 640;
 const int64_t kShortTrips = 8;
 
-// Whether `v` is computed inside the loop (`member` blocks) from the
-// induction `iv` and literals alone, within `depth` steps.
-bool from_induction(const FunctionBody& body, const std::vector<BlockId>& block_of, const std::vector<uint8_t>& member,
-	TempId iv, Value v, unsigned depth)
-{
-	if (v.is_literal())
-		return true;
-	if (!v.is(ValueKind::Temp) || depth == 0)
-		return false;
-	if (v.index == iv)
-		return true;
-	const InstId def = v.index >= body.parameter_count ? body.temps[v.index].def : kNoId;
-	if (def == kNoId || def >= block_of.size() || block_of[def] == kNoId || !member[block_of[def]])
-		return false;
-	const Instruction& d = body.instructions[def];
-	if (!(d.op == Opcode::Compare || d.op == Opcode::Binary || d.op == Opcode::Unary || d.op == Opcode::Convert ||
-			d.op == Opcode::Copy))
-		return false;
-	for (const Value& o : d.ops)
-		if (!o.is(ValueKind::None) && !from_induction(body, block_of, member, iv, o, depth - 1))
-			return false;
-	return true;
-}
-
-// The shape try_unroll_search copies: the loop's blocks (`member`: no
-// nested loop or handler, no handler successor) and its private exits
-// (`owned`), within the budget of its kind.
+// The shape try_unroll_search copies: the loop's blocks (`member`) and
+// private exits (`owned`), within the budget of its kind. A short outer
+// loop may also expose a constant start in a directly nested loop
+// when the nest only writes frame slots. Keep handlers out of the copies.
 bool LoopPass::unroll_search_shape(uint32_t loop, int64_t trips, TempId iv, std::vector<uint8_t>& member,
 	std::vector<uint8_t>& owned, BlockId& through)
 {
 	const Loop& l = forest_.loops[loop];
+	const bool short_nest = trips <= kShortTrips && c_.level >= 3 && target_model::is_aarch64(c_.program.target);
+	uint32_t child = kNoId;
 	member.assign(body_.blocks.size(), 0);
 	for (BlockId b : l.blocks)
 	{
-		if (forest_.innermost[b] != loop || (cfg_.flags[b] & BF_HANDLER) != 0)
+		if ((cfg_.flags[b] & BF_HANDLER) != 0)
 			return false;
+		const uint32_t inner = forest_.innermost[b];
+		if (inner != loop)
+		{
+			if (!short_nest || inner == kNoId || forest_.loops[inner].parent != loop ||
+				(child != kNoId && child != inner))
+				return false;
+			child = inner;
+		}
 		member[b] = 1;
 	}
+	const bool nested = child != kNoId;
 	bool table = false;
 	uint32_t size = 0;
 	std::vector<uint8_t> calling(body_.blocks.size(), 0);
@@ -2021,6 +2010,10 @@ bool LoopPass::unroll_search_shape(uint32_t loop, int64_t trips, TempId iv, std:
 		for (InstId i = body_.blocks[b].first; i != kNoId; i = body_.instructions[i].next)
 		{
 			const Instruction& inst = body_.instructions[i];
+			if (nested &&
+				(inst.op == Opcode::Store ? !slot_base(inst.ops[1])
+										  : inst.op == Opcode::Call || may_write_memory(c_.program, inst)))
+				return false;
 			if (is_eh_instruction(inst.op) || is_stack_instruction(inst.op) || inst.op == Opcode::VaStart)
 				return false;
 			slots = slots || (inst.op == Opcode::Load && slot_base(inst.ops[0])) ||
@@ -2070,6 +2063,25 @@ bool LoopPass::unroll_search_shape(uint32_t loop, int64_t trips, TempId iv, std:
 	bool call_free = !slots;
 	for (BlockId b : l.blocks)
 		call_free = call_free && !calling[b];
+	if (nested)
+	{
+		if (!slots)
+			return false;
+		// Copy a nest only if fixing its outer induction specializes a
+		// child induction. A child with a literal start is already visible
+		// to the ordinary loop passes.
+		bool specializes_child = false;
+		const BlockId header = forest_.loops[child].header;
+		for (InstId i = body_.blocks[header].first;
+			i != kNoId && body_.instructions[i].op == Opcode::Phi && !specializes_child; i = body_.instructions[i].next)
+		{
+			Induction inner;
+			specializes_child = induction(child, i, inner) && !inner.init.is_literal() &&
+				from_induction(body_, c_.block_of, member, iv, inner.init, 6);
+		}
+		if (!specializes_child)
+			return false;
+	}
 	const bool long_pass = table || call_free;
 	if (!table && (trips > (call_free ? kSearchTrips : kShortTrips) || !call_free_pass()))
 		return false;
@@ -2147,7 +2159,9 @@ bool LoopPass::unroll_search_shape(uint32_t loop, int64_t trips, TempId iv, std:
 	// Tests of the induction fold in each copy: what the copies keep counts.
 	if (table && cloned > kSearchBody && cloned <= kUnrollCopies)
 		cloned = std::min(cloned, unrolled_size(c_, cfg_, l, member, owned, iv, trips));
-	if (cloned > (indexes_local_array(body_, l, iv) ? kUnrollArrayBody : long_pass ? kSearchBody : kUnrollBranchBody))
+	if (cloned > ((nested || indexes_local_array(body_, l, iv)) ? kUnrollArrayBody
+						 : long_pass                            ? kSearchBody
+																: kUnrollBranchBody))
 		return false;
 	for (BlockId b : l.blocks)
 		for (uint32_t k = cfg_.succ_first[b]; k < cfg_.succ_first[b + 1]; ++k)
@@ -2298,6 +2312,39 @@ int64_t LoopPass::unroll_bound(uint32_t loop, BlockId tested, TempId& iv_temp) c
 	return -1;
 }
 
+// A pure secondary test immediately below the counted header can
+// decide the number of passes independently of the literal counter.
+CountedUnrollGuard LoopPass::unroll_guard(uint32_t loop) const
+{
+	const Loop& l = forest_.loops[loop];
+	const auto& head = body_.instructions[body_.blocks[l.header].last];
+	const bool first_inside = in_loop(forest_, loop, head.ops[1].index);
+	const BlockId check = head.ops[first_inside ? 1 : 2].index;
+	const BlockId exit = head.ops[first_inside ? 2 : 1].index;
+	if (check == l.header || cfg_.pred_count(check) != 1 || body_.blocks[check].first == kNoId)
+		return {};
+	const InstId test_id = body_.blocks[check].first;
+	const auto& test = body_.instructions[test_id];
+	const InstId end = body_.blocks[check].last;
+	const auto& branch = body_.instructions[end];
+	if (test.op != Opcode::Compare || test.next != end || test.type.kind() != TypeKind::I32 ||
+		static_cast<ComparePredicate>(test.sub) != ComparePredicate::Lt || branch.op != Opcode::Branch ||
+		!(branch.ops[0] == Value::temp(test.result)) || branch.ops[2].index != exit ||
+		!in_loop(forest_, loop, branch.ops[1].index) || !invariant(loop, test.ops[1]) ||
+		!test.ops[0].is(ValueKind::Temp))
+		return {};
+	const InstId counter = body_.temps[test.ops[0].index].def;
+	Induction iv;
+	if (counter == kNoId || c_.block_of[counter] != l.header || !induction(loop, counter, iv) || iv.step_bytes != 1)
+		return {};
+	CountedUnrollGuard result;
+	result.block = check;
+	result.exit = exit;
+	result.start = iv.init;
+	result.bound = test.ops[1];
+	return result;
+}
+
 bool LoopPass::try_unroll_search(uint32_t loop)
 {
 	const Loop& l = forest_.loops[loop];
@@ -2307,6 +2354,7 @@ bool LoopPass::try_unroll_search(uint32_t loop)
 	const bool several = l.latches.size() != 1;
 	TempId iv_temp = kNoId;
 	int64_t trips = unroll_bound(loop, l.header, iv_temp);
+	const bool header_counted = trips > 0;
 	if (trips < 0 && !several && l.latches[0] != l.header)
 		trips = unroll_bound(loop, l.latches[0], iv_temp);
 	if (trips < 1 || trips > kSearchTrips)
@@ -2328,179 +2376,14 @@ bool LoopPass::try_unroll_search(uint32_t loop)
 	// caller finds the loops again and comes back).
 	if (l.preheader == kNoId)
 		return make_preheader(loop);
+	CountedUnrollGuard guard;
+	if (c_.level >= 3 && target_model::is_aarch64(c_.program.target) && header_counted && l.parent != kNoId &&
+		trips >= 4 && trips <= kShortTrips &&
+		std::none_of(owned.begin(), owned.end(), [](uint8_t own) { return own != 0; }))
+		guard = unroll_guard(loop);
 	if (through != kNoId)
 		add_exit_phis(member, owned, through);
-	// The copies: blocks and temporaries per pass, in reverse postorder
-	// (a value's definition is copied before its uses: only the header
-	// is entered by a back edge).
-	std::vector<BlockId> order;
-	for (BlockId b : cfg_.rpo)
-		if (member[b] || owned[b])
-			order.push_back(b);
-	std::vector<std::vector<BlockId>> blocks(static_cast<size_t>(trips) + 1);
-	std::vector<Value> map(body_.temps.size(), Value::none());
-	std::vector<std::pair<TempId, Value>> phis; // header phi, latch input
-	for (InstId i = body_.blocks[l.header].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
-		i = body_.instructions[i].next)
-	{
-		const Instruction& phi = body_.instructions[i];
-		Value init = Value::none(), back = Value::none();
-		for (uint32_t k = 0; k < phi.extra_count; k += 2)
-			(body_.operands[phi.extra_first + k].index == l.latches[0] ? back : init) =
-				body_.operands[phi.extra_first + k + 1];
-		map[phi.result] = init;
-		phis.push_back(std::make_pair(phi.result, back));
-	}
-	auto mapped = [&](Value v) {
-		return v.is(ValueKind::Temp) && v.index < map.size() && !map[v.index].is(ValueKind::None) ? map[v.index] : v;
-	};
-	std::vector<BlockId> copied; // in layout order: pass by pass
-	for (int64_t pass = 0; pass <= trips; ++pass)
-	{
-		std::vector<BlockId>& mine = blocks[static_cast<size_t>(pass)];
-		mine.assign(body_.blocks.size(), kNoId);
-		// The last pass is the header's final test, and the private exits
-		// it may leave to.
-		for (BlockId b : body_.layout)
-			if ((member[b] || owned[b]) && (pass < trips || b == l.header || owned[b]))
-			{
-				mine[b] = append_block(
-					body_, body_.blocks[b].kind != BlockKind::Plain ? body_.blocks[b].kind : BlockKind::Unrolled);
-				copied.push_back(mine[b]);
-			}
-	}
-	const BlockId dead = append_block(body_, BlockKind::Dead);
-	insert_after(body_, dead, kNoId,
-		append_instruction(body_, make_instruction(Opcode::Unreachable, Type::scalar(TypeKind::Void))));
-	copied.push_back(dead);
-	// Exit phis' new pairs, per outside block (the loop's own pairs go).
-	std::vector<std::vector<Value>> exit_pairs(body_.blocks.size());
-	std::vector<BlockId> exit_blocks;
-	std::vector<InstId> late; // a pass's copied phis
-	for (int64_t pass = 0; pass <= trips; ++pass)
-	{
-		const std::vector<BlockId>& mine = blocks[static_cast<size_t>(pass)];
-		auto target = [&](BlockId t) {
-			if (t == l.header)
-				return pass < trips ? blocks[static_cast<size_t>(pass) + 1][l.header] : dead;
-			if (member[t] || owned[t])
-				return mine[t] != kNoId ? mine[t] : dead;
-			return t;
-		};
-		late.clear();
-		for (BlockId b : order)
-		{
-			if (mine[b] == kNoId)
-				continue;
-			for (InstId i = body_.blocks[b].first; i != kNoId; i = body_.instructions[i].next)
-			{
-				Instruction inst = body_.instructions[i];
-				if (inst.op == Opcode::Phi && b == l.header)
-					continue; // the header's phis read the previous pass (map)
-				const bool phi = inst.op == Opcode::Phi;
-				for (Value& v : inst.ops)
-					v = v.is(ValueKind::Block) ? Value::block(target(v.index)) : mapped(v);
-				std::vector<Value> extra;
-				for (uint32_t k = 0; k < inst.extra_count; ++k)
-				{
-					const Value v = body_.operands[inst.extra_first + k];
-					// A phi's predecessors are copies of this pass.
-					extra.push_back(v.is(ValueKind::Block) ? Value::block(phi ? mine[v.index] : target(v.index))
-							: phi                          ? v
-														   : mapped(v));
-				}
-				inst.extra_first = inst.extra_count != 0 ? append_operands(body_, extra.data(), inst.extra_count) : 0;
-				const TempId old_result = inst.result;
-				const InstId id = append_copy(body_, body_, i, inst);
-				if (phi)
-					late.push_back(id);
-				if (old_result != kNoId)
-				{
-					const TempId fresh = append_temp(body_, body_.temps[old_result].type, id);
-					body_.instructions[id].result = fresh;
-					map.resize(body_.temps.size(), Value::none());
-					map[old_result] = Value::temp(fresh);
-				}
-				insert_after(body_, mine[b], body_.blocks[mine[b]].last, id);
-			}
-			if (!member[b])
-				continue;
-			// Edges leaving the loop: the target's phis take this copy.
-			// A switch may name one exit several times. Its phi has one
-			// input per predecessor block, so use the CFG's unique edges.
-			for (uint32_t edge = cfg_.succ_first[b]; edge < cfg_.succ_first[b + 1]; ++edge)
-			{
-				const BlockId t = cfg_.succs[edge];
-				if (member[t] || owned[t])
-					continue;
-				for (InstId i = body_.blocks[t].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
-					i = body_.instructions[i].next)
-				{
-					if (exit_pairs[t].empty())
-						exit_blocks.push_back(t);
-					exit_pairs[t].push_back(Value::make(ValueKind::Integer, i)); // marks the phi (by instruction)
-					exit_pairs[t].push_back(Value::block(mine[b]));
-					exit_pairs[t].push_back(mapped(phi_incoming(body_, body_.instructions[i], b)));
-				}
-			}
-		}
-		// A phi's inputs are this pass's values, read once every block of
-		// the pass is copied: a cycle the header is not on (two entries, so
-		// no loop of the forest) brings a phi a value of a later block.
-		for (InstId id : late)
-		{
-			const Instruction& phi = body_.instructions[id];
-			for (uint32_t k = 1; k < phi.extra_count; k += 2)
-				body_.operands[phi.extra_first + k] = mapped(body_.operands[phi.extra_first + k]);
-		}
-		// The next pass's header phis read this pass's latch values.
-		std::vector<Value> next;
-		for (const std::pair<TempId, Value>& p : phis)
-			next.push_back(mapped(p.second));
-		if (pass < trips)
-			for (size_t k = 0; k < phis.size(); ++k)
-				map[phis[k].first] = next[k];
-	}
-	// Exit phis: the loop's pairs replaced by the copies'.
-	for (const BlockId t : exit_blocks)
-	{
-		const std::vector<Value>& add = exit_pairs[t];
-		for (InstId i = body_.blocks[t].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
-			i = body_.instructions[i].next)
-		{
-			Instruction& phi = body_.instructions[i];
-			std::vector<Value> pairs;
-			for (uint32_t k = 0; k < phi.extra_count; k += 2)
-				if (!member[body_.operands[phi.extra_first + k].index])
-				{
-					pairs.push_back(body_.operands[phi.extra_first + k]);
-					pairs.push_back(body_.operands[phi.extra_first + k + 1]);
-				}
-			for (size_t k = 0; k + 2 < add.size() + 1; k += 3)
-				if (add[k].index == i)
-				{
-					pairs.push_back(add[k + 1]);
-					pairs.push_back(add[k + 2]);
-				}
-			phi.extra_first = append_operands(body_, pairs.data(), static_cast<uint32_t>(pairs.size()));
-			phi.extra_count = static_cast<uint32_t>(pairs.size());
-		}
-	}
-	// Entry, and the layout: the copies where the loop was.
-	for_each_successor(body_, body_.instructions[body_.blocks[l.preheader].last], [&](BlockId& t) {
-		if (t == l.header)
-			t = blocks[0][l.header];
-	});
-	std::vector<BlockId> layout;
-	for (BlockId b : body_.layout)
-	{
-		if (b == l.header)
-			layout.insert(layout.end(), copied.begin(), copied.end());
-		if (!member[b] && !owned[b])
-			layout.push_back(b);
-	}
-	body_.layout.swap(layout);
-	++c_.stats.loops_unrolled;
+	clone_counted_loop(c_, l, trips, member, owned, guard);
 	return true;
 }
 
