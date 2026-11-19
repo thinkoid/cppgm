@@ -5,6 +5,7 @@ import benchmark_hosts
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shlex
 import shutil
@@ -100,7 +101,7 @@ def compile_inputs(source, directory, compilers, cpus, blocks, aa_blocks, counte
     executables, sizes = {}, {}
     for label, obj in objects.items():
         exe = directory / ('index-' + label)
-        command = [str(compilers['gcc']), str(obj), '-pthread', '-o', str(exe)]
+        command = [str(compilers['gcc']), str(obj), '-pthread', *metadata.get('link_flags', ()), '-o', str(exe)]
         with (directory / ('link-' + label + '.log')).open('w') as log:
             subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=True)
         text = subprocess.check_output(['size', '-A', str(exe)], text=True)
@@ -140,12 +141,13 @@ def run(args):
         cpus = args.cpus or ','.join(map(str, sorted(os.sched_getaffinity(0))))
         counters, reason = counter_support(directory)
         metadata = dict(**benchmark_hosts.source_metadata(getattr(args, 'repo_root', ROOT)),
-                        cpu=public_benchmarks.cpu_model(), cpus=cpus,
+                        cpu=public_benchmarks.cpu_model() or platform.machine(), machine=platform.machine(), cpus=cpus,
                         toolchains={label: subprocess.check_output([str(path), '--version'], text=True).strip()
                                     for label, path in compilers.items()},
                         compiler_hashes={label: timing.sha(path) for label, path in compilers.items()},
                         counters_available=counters, counter_unavailable_reason=reason,
-                        flags=['-std=c++17', '-O3', '-g0'], headers=headers(source, compilers))
+                        flags=['-std=c++17', '-O3', '-g0'], link_flags=getattr(args, 'link_flag', []),
+                        headers=headers(source, compilers))
         save(directory / 'metadata.json', metadata)
         binaries, sizes, compilation = compile_inputs(source, directory, compilers, cpus, args.blocks,
                                                        args.aa_blocks, counters, metadata)
@@ -263,6 +265,7 @@ def main():
     runner.add_argument('--output', type=Path, required=True)
     runner.add_argument('--gcc', default='g++')
     runner.add_argument('--clang', default='clang++')
+    runner.add_argument('--link-flag', action='append', default=[])
     runner.add_argument('--cpus')
     runner.add_argument('--blocks', type=int, default=3)
     runner.add_argument('--aa-blocks', type=int, default=1)

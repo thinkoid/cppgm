@@ -14,6 +14,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import index_cpp_benchmarks as bench
 import index_cpp_ci as ci
+import publish_backend_benchmarks as backend
 
 
 class IndexCppCITests(unittest.TestCase):
@@ -45,6 +46,39 @@ class IndexCppCITests(unittest.TestCase):
 
     def write_document(self):
         ci.save(self.artifact / 'results.json', self.document)
+
+    def test_arm_application_badges_require_both_complete_suites(self):
+        applications = self.root / 'applications'
+        public = applications / 'pa39-applications-public'
+        index = applications / 'pa39-applications-index-cpp'
+        public.mkdir(parents=True)
+        index.mkdir()
+        self.document['metadata']['machine'] = 'aarch64'
+        self.document['metadata']['compiler_hashes'] = {'cppgm': 'c' * 64}
+        ci.save(index / 'results.json', self.document)
+        program_run = dict(environment=dict(target='aarch64-linux-gnu', revision=self.revision, dirty=False,
+                                            cppgm_sha256='c' * 64),
+                           programs=[])
+        programs = program_run['programs']
+        for source in ci.public_benchmarks.load_manifest()['programs']:
+            programs.append(dict(name=source['name'], status='ok',
+                                 cppgm={'compile_cpu_O3': 1}, gcc={'compile_cpu_O3': 2},
+                                 clang={'compile_cpu_O3': 2},
+                                 timing=dict(pairs={ref: dict(ratio=.5, candidate_cpu=1, reference_cpu=2)
+                                                    for ref in ('gcc', 'clang')})))
+        ci.save(public / 'results.json', program_run)
+        badges, report = backend.application_results(applications, self.revision, 'https://example.org/run')
+        self.assertEqual({badge['message'] for badge in badges.values()}, {'2.00×'})
+        self.assertIn('All 81 public programs', '\n'.join(report))
+        program_run['environment']['cppgm_sha256'] = 'd' * 64
+        ci.save(public / 'results.json', program_run)
+        with self.assertRaisesRegex(ValueError, 'different cppgm builds'):
+            backend.application_results(applications, self.revision, 'https://example.org/run')
+        program_run['environment']['cppgm_sha256'] = 'c' * 64
+        program_run['programs'].pop()
+        ci.save(public / 'results.json', program_run)
+        with self.assertRaisesRegex(ValueError, 'pinned program inventory'):
+            backend.application_results(applications, self.revision, 'https://example.org/run')
 
     def test_container_trust_is_scoped_to_the_mounted_workspace(self):
         workspace = self.root / 'mounted'

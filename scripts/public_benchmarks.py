@@ -27,6 +27,7 @@ import threading
 import zipfile
 
 import benchmark_timing as timing
+from benchmark_hosts import source_metadata
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -519,6 +520,17 @@ def cpu_model():
 
 def run(arguments):
     manifest = load_manifest(arguments.manifest)
+    target = getattr(arguments, 'target', None)
+    metadata = None
+    if target == 'aarch64-linux-gnu':
+        require(platform.system() == 'Linux' and platform.machine() == 'aarch64',
+                'Arm benchmarks require a native AArch64 Linux host')
+        require(not arguments.no_clang and arguments.timing_rounds > 0,
+                'Arm benchmarks require paired timings with GCC and Clang')
+        manifest['levels'] = ['-O3']
+        manifest['common_flags'].append('-ffp-contract=off')
+        manifest['ldflags'] += ['-no-pie', '-fuse-ld=lld']
+        metadata = dict(**source_metadata(ROOT), target=target, cppgm_sha256=timing.sha(Path(arguments.cppgm)))
     tools = dict(gcc=arguments.gxx, cppgm=str(Path(arguments.cppgm).resolve()))
     if not arguments.no_clang:
         tools['clang'] = arguments.clang
@@ -546,8 +558,14 @@ def run(arguments):
                          clang=tool_version([tools.get('clang', 'false'), '--version']),
                          valgrind=tool_version(['valgrind', '--version'])),
         programs=results)
+    if metadata:
+        require(timing.sha(Path(arguments.cppgm)) == metadata['cppgm_sha256'],
+                'the Arm compiler changed during measurement')
+        require(source_metadata(ROOT) == {key: metadata[key] for key in ('revision', 'dirty')},
+                'the measured source checkout changed')
+        document['environment'].update(metadata)
     Path(arguments.output).write_text(json.dumps(document, indent=1) + '\n')
-    return 0
+    return int(bool(target and any(row['status'] != 'ok' or row.get('clang_error') for row in results)))
 
 
 def geomean(ratios):
@@ -1006,6 +1024,8 @@ def main():
     command.add_argument('--gcc', default='gcc')
     command.add_argument('--gxx', default='g++')
     command.add_argument('--clang', default='clang++')
+    command.add_argument('--target', choices=['aarch64-linux-gnu'],
+                         help='use the full native Arm -O3 benchmark profile')
     command.add_argument('--no-clang', action='store_true',
                          help='compare with g++ alone')
     command.add_argument('--only', help='a regular expression of program names')

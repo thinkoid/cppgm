@@ -29,10 +29,11 @@ python3 scripts/portable_public_benchmarks.py --target wasm32-wasip1 \
   --clang obj/wasm-tools/wasi-sdk/bin/clang++ --wasmtime obj/wasm-tools/bin/wasmtime --output obj/public-wasi
 ```
 
-The 81-program suite additionally uses host libraries such as GMP and pthreads.
-The index-cpp runner uses its original 50 checksums, threaded workloads and Linux
-CPU affinity. Both broader campaigns run on x86-64. The shared subset has its
-own results and raw observations on each backend.
+The full public and index-cpp suites also run natively on x86-64 and AArch64
+Linux. The public suite uses host libraries such as GMP and pthreads. The
+index-cpp runner uses its original 50 checksums, threaded workloads and Linux
+CPU affinity. WASI measurements cover the five shared programs.
+[Arm performance reports](https://github.com/vishvananda/cppgm/blob/benchmark-badges/backend/aarch64-linux-gnu/report.md)
 
 ## Files
 
@@ -53,6 +54,8 @@ python3 scripts/public_benchmarks.py report obj/public-benchmarks/results.json
 Options for `run`:
 
 - `--only REGEX`: run the programs that match.
+- `--target aarch64-linux-gnu`: run the native Arm profile at `-O3` with
+  GCC and Clang. Both references must agree with cppgm.
 - `--no-count`: do not run `cachegrind`.
 - `--no-clang`: do not run `clang++`.
 - `--timing-blocks N`: paired blocks for a short program (default: 2).

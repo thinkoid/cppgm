@@ -812,6 +812,8 @@ class BackendPublicationTests(unittest.TestCase):
             directory = root / 'backend/aarch64-linux-gnu'
             backend.seed(root)
             expected = {'public-runtime-clang', 'vectors-gcc', 'vectors-clang', *(row[2] for row in pb.BUILDS)}
+            expected.update(f'{suite}-{phase}-{ref}' for suite in ('public-81', 'index-cpp')
+                            for phase in ('compile', 'runtime') for ref in ('gcc', 'clang'))
             self.assertEqual({p.stem for p in directory.glob('*.svg')}, expected)
             self.assertIn('n/m', (directory / 'self-built.svg').read_text())
             cases = {p['name']: dict(stdout_sha256=p['portable_stdout_sha256'], AA={'ratio': 1}, AB={'ratio': .5})

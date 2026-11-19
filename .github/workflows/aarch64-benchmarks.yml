@@ -95,6 +95,11 @@ jobs:
         run: |
           python3 scripts/portable_public_benchmarks.py --target aarch64-linux-gnu --clang clang++-22 --output timings/portable
           cat timings/portable/report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: pa39-native-compiler
+          path: dev/cppgm
+          if-no-files-found: error
       - if: always()
         uses: actions/upload-artifact@v6
         with:
@@ -104,13 +109,98 @@ jobs:
             obj/arm-self-build/paired-*/*.jsonl
             obj/arm-self-build/paired-*/*.stderr
 
+  applications:
+    name: Arm64 ${{ matrix.suite }} benchmarks
+    needs: native
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [public, index-cpp]
+    runs-on: ubuntu-24.04-arm
+    container: ubuntu:26.04
+    timeout-minutes: 120
+    concurrency:
+      group: hosted-benchmark-suites
+      queue: max
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install native Arm dependencies
+        run: |
+          test "$(uname -m)" = aarch64
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            g++-14 clang-22 lld-22 binutils ca-certificates git libgmp-dev patch python3 time
+          echo /usr/lib/llvm-22/bin >> "$GITHUB_PATH"
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+      - name: Trust the mounted checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/download-artifact@v7
+        with:
+          name: pa39-native-compiler
+          path: dev
+      - name: Configure the benchmark compilers
+        run: |
+          chmod +x dev/cppgm
+          dev/cppgm --version
+          gcc_dir=$(dirname "$(g++-14 -print-libgcc-file-name)")
+          mkdir -p obj
+          printf '#!/bin/bash\nexec clang++-22 --gcc-install-dir=%q "$@"\n' "$gcc_dir" > obj/arm-clang
+          chmod +x obj/arm-clang
+      - name: Cache pinned public sources
+        if: matrix.suite == 'public'
+        uses: actions/cache@v4
+        with:
+          path: obj/public-benchmarks/src
+          key: arm64-public-${{ hashFiles('benchmarks/public/manifest.json', 'benchmarks/public/patches/**') }}
+      - name: Build, validate and time all 81 public programs
+        if: matrix.suite == 'public'
+        run: |
+          mkdir -p obj/arm-applications
+          python3 scripts/public_benchmarks.py fetch --gxx g++-14 --cache obj/public-benchmarks/src
+          python3 scripts/public_benchmarks.py run --target aarch64-linux-gnu \
+            --gxx g++-14 --gcc gcc-14 --clang "$PWD/obj/arm-clang" --no-count --jobs "$(nproc)" \
+            --cache obj/public-benchmarks/src --work obj/arm-applications/work \
+            --output obj/arm-applications/results.json
+          python3 scripts/public_benchmarks.py report obj/arm-applications/results.json \
+            --baseline /dev/null --summary "$GITHUB_STEP_SUMMARY" --details obj/arm-applications/details.md
+      - name: Build, validate and time all 50 index-cpp workloads
+        if: matrix.suite == 'index-cpp'
+        run: |
+          python3 scripts/index_cpp_ci.py run --gcc g++-14 --clang "$PWD/obj/arm-clang" \
+            --link-flag=-no-pie --link-flag=-fuse-ld=lld --blocks 2 --output obj/arm-applications
+          cat obj/arm-applications/details.md >> "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: pa39-applications-${{ matrix.suite }}
+          path: |
+            obj/arm-applications/*.json
+            obj/arm-applications/*.jsonl
+            obj/arm-applications/*.md
+            obj/arm-applications/*.log
+            obj/arm-applications/*.stderr
+            obj/arm-applications/runtime/*.json
+            obj/arm-applications/runtime/*.jsonl
+            obj/arm-applications/runtime/*.stdout
+            obj/arm-applications/runtime/*.stderr
+            obj/arm-applications/runtime/*.time
+            obj/arm-applications/work/**/observations.jsonl
+            obj/arm-applications/work/**/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
   publish:
     if: >-
       (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'main') ||
       ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
        github.ref == 'refs/heads/main')
-    needs: native
+    needs: [native, applications]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -136,6 +226,10 @@ jobs:
         with:
           name: pa39-native-observations
           path: artifact
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: pa39-applications-*
+          path: artifact/applications
       - name: Publish the measured Arm revision
         env:
           REVISION: ${{ inputs.source_sha || github.sha }}
@@ -143,7 +237,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 tools/scripts/publish_backend_benchmarks.py artifact/timings/portable aarch64-linux-gnu badge-branch \
-            --revision "$REVISION" --run-url "$RUN_URL"
+            --revision "$REVISION" --run-url "$RUN_URL" \
+            --applications artifact/applications
           revision=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
           python3 tools/scripts/benchmark_freshness.py badge-branch --repo "$GITHUB_REPOSITORY" --revision "$revision"
           python3 tools/scripts/benchmark_publication.py prepare badge-branch
