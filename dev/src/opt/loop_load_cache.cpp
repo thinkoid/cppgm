@@ -173,7 +173,9 @@ bool LoopLoadCache::adjacent_update(const Loop& loop, AdjacentLoads& pair) const
 
 bool LoopLoadCache::small_latch(const Loop& loop)
 {
-	if (!target_model::is_aarch64(c_.program.target))
+	// Keep a separate native backedge for each carried value. Joining them
+	// can put the x86 register transfer and an extra jump on the hot path.
+	if (target_model::is_wasm(c_.program.target))
 		return false;
 	const BlockId latch = loop.latches[0];
 	const auto& block = body_.blocks[latch];

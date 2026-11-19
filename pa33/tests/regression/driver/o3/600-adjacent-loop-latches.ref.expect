@@ -1,0 +1,4 @@
+# Allow the outer bound, inner cursor and carried element without a second
+# join for the carried element on the iteration path.
+count(phi) <= 3 in @sweep
+count(load) <= 2 in @sweep
