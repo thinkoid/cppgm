@@ -1,6 +1,6 @@
 #include "lowir/literals.h"
 #include "lex/extended_float.h"
-#if __LDBL_MANT_DIG__ == 113
+#if __LDBL_MANT_DIG__ != 64
 #include "lex/interchange_float.h"
 #endif
 
@@ -12,10 +12,6 @@
 #include <cstring>
 
 namespace lowir {
-
-#if __LDBL_MANT_DIG__ != 113
-static_assert(sizeof(long double) == 16 && LDBL_MANT_DIG == 64, "x87 extended long double");
-#endif
 
 namespace {
 
@@ -137,6 +133,7 @@ uint64_t nan_quiet_bit(TypeKind kind)
 	return kind == TypeKind::F32 ? 1ull << 22 : kind == TypeKind::F64 ? 1ull << 51 : kF80QuietBit;
 }
 
+#if __LDBL_MANT_DIG__ != 53
 // Whether decimal text reads back as the value in the type (an f32 also
 // through a double, as a reader rounding twice would read it).
 bool reads_back(TypeKind kind, const char* text, long double value)
@@ -152,6 +149,7 @@ bool reads_back(TypeKind kind, const char* text, long double value)
 	return std::strtold(text, nullptr) == value;
 #endif
 }
+#endif
 
 } // namespace
 
@@ -218,7 +216,7 @@ bool scan_float_literal(const char* text, uint32_t length, bool negative, TypeKi
 	}
 	kind = float_rank(context) != 0 ? context : written;
 	scratch.assign(text, digits);
-#if __LDBL_MANT_DIG__ == 113
+#if __LDBL_MANT_DIG__ != 64
 	if (kind == TypeKind::F80)
 	{
 		if (!ScanInterchangeValue(scratch.data(), scratch.size(), kExtended80, bits.low, bits.high))
@@ -285,8 +283,8 @@ Literal float_literal(TypeKind kind, long double value)
 		// A NaN keeps its sign, quiet bit and payload: the top fraction bits
 		// of its x87 significand (a hardware conversion would quiet a
 		// signaling one); one left with no fraction bit is quiet.
-		unsigned char bytes[sizeof(long double)];
-#if __LDBL_MANT_DIG__ == 113
+		unsigned char bytes[16];
+#if __LDBL_MANT_DIG__ != 64
 		StoreExtended80(value, bytes);
 #else
 		std::memcpy(bytes, &value, sizeof value);
@@ -318,8 +316,8 @@ Literal float_literal(TypeKind kind, long double value)
 	}
 	else
 	{
-		unsigned char bytes[sizeof(long double)];
-#if __LDBL_MANT_DIG__ == 113
+		unsigned char bytes[16];
+#if __LDBL_MANT_DIG__ != 64
 		StoreExtended80(value, bytes);
 #else
 		std::memcpy(bytes, &value, sizeof value);
@@ -347,11 +345,11 @@ long double float_value(TypeKind kind, const Literal& bits)
 		std::memcpy(&wide, &bits.low, sizeof wide);
 		return wide;
 	}
-	unsigned char bytes[sizeof(long double)] = {};
+	unsigned char bytes[16] = {};
 	std::memcpy(bytes, &bits.low, 8);
 	const uint16_t sign_exponent = static_cast<uint16_t>(bits.high);
 	std::memcpy(bytes + 8, &sign_exponent, 2);
-#if __LDBL_MANT_DIG__ == 113
+#if __LDBL_MANT_DIG__ != 64
 	return LoadExtended80(bytes);
 #else
 	long double value;
@@ -367,7 +365,18 @@ Literal integer_as_float(TypeKind kind, const Literal& bits, bool negative_zero)
 	const bool negative = (bits.high >> 63) != 0;
 	if (negative)
 		negate(magnitude);
-#if __LDBL_MANT_DIG__ == 113
+#if __LDBL_MANT_DIG__ == 53
+	if (kind == TypeKind::F80)
+	{
+		Literal result;
+		RoundInterchangeValue(negative || (negative_zero && magnitude.low == 0 && magnitude.high == 0), magnitude.low,
+			magnitude.high, 0, kExtended80, result.low, result.high);
+		return result;
+	}
+	long double value = kind == TypeKind::F32
+		? static_cast<float>((static_cast<unsigned __int128>(magnitude.high) << 64) | magnitude.low)
+		: static_cast<double>((static_cast<unsigned __int128>(magnitude.high) << 64) | magnitude.low);
+#elif __LDBL_MANT_DIG__ == 113
 	long double value = IntegerExtended80(magnitude.low, magnitude.high, false);
 #else
 	long double value = static_cast<long double>(magnitude.high) * 18446744073709551616.0L +
@@ -448,8 +457,21 @@ void append_float_literal(std::string& out, TypeKind kind, const Literal& bits, 
 		}
 		return;
 	}
-	const long double value = float_value(kind, bits);
 	char buffer[64];
+#if __LDBL_MANT_DIG__ == 53
+	// Print the target bits when the host floating type cannot hold them.
+	if (kind == TypeKind::F80)
+	{
+		const int biased = bits.high & 0x7fff;
+		const int exponent = bits.low == 0 ? 0 : (biased ? biased : 1) - 16383 - 3;
+		const int count = std::snprintf(buffer, sizeof buffer, "%s0x%llx.%015llxp%dL", negative ? "-" : "",
+			static_cast<unsigned long long>(bits.low >> 60),
+			static_cast<unsigned long long>(bits.low & ((uint64_t(1) << 60) - 1)), exponent);
+		out.append(buffer, static_cast<size_t>(count));
+		return;
+	}
+#endif
+	const long double value = float_value(kind, bits);
 	int length;
 	if (value != 0 && std::fabs(value) < (kind == TypeKind::F32 ? FLT_MIN : kind == TypeKind::F64 ? DBL_MIN : LDBL_MIN))
 	{
@@ -478,9 +500,13 @@ void append_float_literal(std::string& out, TypeKind kind, const Literal& bits, 
 		// The course's spelling: 20 significant digits of the value, trailing
 		// zeros dropped (`8`, `1.5`, `0.10000000000000000555`); an f80 that
 		// needs it, 21.
+#if __LDBL_MANT_DIG__ == 53
+		length = std::snprintf(buffer, sizeof buffer, "%.20g", static_cast<double>(value));
+#else
 		length = std::snprintf(buffer, sizeof buffer, "%.20Lg", value);
 		if (kind == TypeKind::F80 && !reads_back(kind, buffer, value))
 			length = std::snprintf(buffer, sizeof buffer, "%.21Lg", value);
+#endif
 	}
 	out.append(buffer, static_cast<size_t>(length));
 	if (suffix != '\0')

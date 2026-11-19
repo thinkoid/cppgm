@@ -352,6 +352,11 @@ bool fold_unary(UnaryOp op, Type type, const Constant& a, Constant& out)
 
 bool fold_binary(BinaryOp op, Type type, const Constant& a, const Constant& b, Constant& out)
 {
+#if __LDBL_MANT_DIG__ == 53
+	// Leave x87 arithmetic to the target when the host cannot do it exactly.
+	if (type.kind() == TypeKind::F80)
+		return false;
+#endif
 	if (type.is_float())
 		return fold_float_binary(op, type.kind(), float_of(a, type.kind()), float_of(b, type.kind()), out);
 	const unsigned width = width_of(type);
@@ -415,6 +420,11 @@ bool fold_binary(BinaryOp op, Type type, const Constant& a, const Constant& b, C
 
 bool fold_compare(ComparePredicate pred, Type type, const Constant& a, const Constant& b, Constant& out)
 {
+#if __LDBL_MANT_DIG__ == 53
+	// Leave x87 arithmetic to the target when the host cannot do it exactly.
+	if (type.kind() == TypeKind::F80)
+		return false;
+#endif
 	if (type.is_float())
 	{
 		const long double x = float_of(a, type.kind()), y = float_of(b, type.kind());
@@ -496,6 +506,10 @@ bool fold_compare(ComparePredicate pred, Type type, const Constant& a, const Con
 
 bool fold_convert(ConvertOp op, Type to, Type from, const Constant& a, Constant& out)
 {
+#if __LDBL_MANT_DIG__ == 53
+	if (from.kind() == TypeKind::F80 || to.kind() == TypeKind::F80)
+		return false;
+#endif
 	switch (op)
 	{
 	case ConvertOp::SExt:

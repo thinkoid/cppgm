@@ -217,7 +217,7 @@ Decoded DecodeExtended(long double value)
 {
 	// x87's format: an explicit integer bit in a 64-bit significand.
 	unsigned char bytes[16];
-#if __LDBL_MANT_DIG__ == 113
+#if __LDBL_MANT_DIG__ != 64
 	StoreExtended80(value, bytes);
 #else
 	std::memcpy(bytes, &value, sizeof bytes);
@@ -453,7 +453,7 @@ bool SoftStaticConverted(const StaticValue& value, SoftFloat source, const sema:
 	// every such value exactly.
 	out = StaticValue();
 	out.kind = StaticValue::Kind::Floating;
-	const FundamentalType representation = FloatingRepresentation(target->fundamental);
+	const FundamentalType representation = FloatingRepresentation(target->fundamental, target->target);
 	if (decoded.special)
 	{
 		// Infinity, or a quiet NaN of the payload's leading bits (x87's
@@ -461,12 +461,12 @@ bool SoftStaticConverted(const StaticValue& value, SoftFloat source, const sema:
 		long double special = std::numeric_limits<long double>::infinity();
 		if (decoded.nan)
 		{
-			unsigned char bytes[sizeof(long double)] = {};
+			unsigned char bytes[16] = {};
 			const uint64_t significand = 0xc000000000000000ull | (NanPayload(source, value.bits, value.high) >> 1);
 			std::memcpy(bytes, &significand, 8);
 			bytes[8] = 0xff;
 			bytes[9] = 0x7f;
-#if __LDBL_MANT_DIG__ == 113
+#if __LDBL_MANT_DIG__ != 64
 			special = LoadExtended80(bytes);
 #else
 			std::memcpy(&special, bytes, sizeof special);
@@ -500,9 +500,9 @@ bool IntegralStaticFloating(
 		magnitude = ~magnitude + 1;
 	out = StaticValue();
 	out.kind = StaticValue::Kind::Floating;
-	out.floating = magnitude == 0
-		? 0.0L
-		: StandardRounded(negative, magnitude, 0, FloatingRepresentation(target->unqualified->fundamental));
+	out.floating = magnitude == 0 ? 0.0L
+								  : StandardRounded(negative, magnitude, 0,
+										FloatingRepresentation(target->unqualified->fundamental, target->target));
 	return true;
 }
 

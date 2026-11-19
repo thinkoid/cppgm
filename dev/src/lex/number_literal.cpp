@@ -9,17 +9,18 @@
 #include "lex/ud_suffix.h"
 #include "preprocess/lexer/char_classes.h"
 
-// Float and double match both hosts. Extended literals retain the x86
-// representation explicitly when the compiler runs on a binary128 host.
+// The host's long double can differ from the target's extended format.
 static_assert(sizeof(float) == 4 && sizeof(double) == 8, "IEEE single and double");
-#if __LDBL_MANT_DIG__ != 113
-static_assert(sizeof(long double) == 16 && LDBL_MANT_DIG == 64, "x87 extended long double");
-#endif
+static_assert((LDBL_MANT_DIG == 53 && sizeof(long double) == 8) ||
+		((LDBL_MANT_DIG == 64 || LDBL_MANT_DIG == 113) && sizeof(long double) == 16),
+	"supported host long double representation");
 
 namespace {
 
+#if __LDBL_MANT_DIG__ == 64
 // The x87 extended format occupies the first 10 of its 16 bytes.
 const unsigned kLongDoubleValueBytes = 10;
+#endif
 
 // An integer-suffix ([lex.icon] 2.14.2): an optional unsigned-suffix and an
 // optional long-suffix or long-long-suffix, in either order.
@@ -412,7 +413,7 @@ bool ScanFloatingValue(const char* text, uint32_t length, FundamentalType type, 
 	}
 	case FundamentalType::LongDouble:
 	{
-#if __LDBL_MANT_DIG__ == 113
+#if __LDBL_MANT_DIG__ != 64
 		uint64_t low = 0, high = 0;
 		if (!ScanInterchangeValue(scratch.data(), scratch.size(), kExtended80, low, high))
 			return false;

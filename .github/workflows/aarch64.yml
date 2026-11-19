@@ -117,6 +117,12 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
+      - name: Build cppgm on Apple Silicon
+        run: make -C dev cppgm CXX=clang++ CPPGM_HOST_CXX=clang++
+      - name: Compile the Apple ABI fixture with the native build
+        run: |
+          dev/cppgm --target=arm64-apple-macos11 -nostdinc -x c++ -c \
+            pa39/tests/abi/400-apple-calling-convention.t -o "$RUNNER_TEMP/apple-abi.o"
       - uses: actions/download-artifact@v7
         with:
           name: pa39-macho

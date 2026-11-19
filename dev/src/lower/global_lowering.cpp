@@ -2130,6 +2130,10 @@ bool ProgramLowering::static_converted(
 	target = target->unqualified;
 	if (SoftFloatOf(target) != SoftFloat::None)
 		return SoftStaticValue(value, from, SoftFloatOf(target), out);
+#if __LDBL_MANT_DIG__ == 53
+	if (sema::IsFloating(target) && storage_type(target).kind() == lowir::TypeKind::F80)
+		return false;
+#endif
 	if (value.kind == StaticValue::Kind::Soft)
 		return from != nullptr && SoftFloatOf(from) != SoftFloat::None &&
 			SoftStaticConverted(value, SoftFloatOf(from), target, out);
@@ -2238,6 +2242,12 @@ bool ProgramLowering::static_value(const syntax::Expr& expr, StaticValue& out, b
 	if (facts == nullptr || facts->type == nullptr)
 		return false;
 	const sema::Type* type = facts->type;
+#if __LDBL_MANT_DIG__ == 53
+	// An x87 value must not be initialized from a rounded binary64 value.
+	// The regular target lowering can evaluate it at its own precision.
+	if (sema::IsFloating(type) && storage_type(type).kind() == lowir::TypeKind::F80)
+		return false;
+#endif
 	// An array or function designator stands for its address (4.2, 4.3).
 	if ((type->kind == sema::TypeKind::Array || type->kind == sema::TypeKind::Function) &&
 		facts->category != sema::ValueCategory::PRValue)
@@ -2442,7 +2452,8 @@ bool ProgramLowering::static_value(const syntax::Expr& expr, StaticValue& out, b
 			}
 			out.kind = StaticValue::Kind::Floating;
 			out.floating = which == sema::Intrinsic::Nan
-				? sema::BuiltinNan(type->unqualified->fundamental, *call->arguments[0])
+				? sema::BuiltinNan(
+					  FloatingRepresentation(type->unqualified->fundamental, type->target), *call->arguments[0])
 				: std::numeric_limits<long double>::infinity();
 			return true;
 		}

@@ -114,7 +114,9 @@ RValue FunctionLowering::intrinsic(const syntax::CallExpr& expr)
 		return floating(type,
 			lowir::float_literal(type.kind(),
 				kind == sema::Intrinsic::Nan
-					? sema::BuiltinNan(expr.facts->type->unqualified->fundamental, *expr.arguments[0])
+					? sema::BuiltinNan(
+						  FloatingRepresentation(expr.facts->type->unqualified->fundamental, expr.facts->type->target),
+						  *expr.arguments[0])
 					: std::numeric_limits<long double>::infinity()));
 	}
 	if (kind == sema::Intrinsic::NanSignaling)

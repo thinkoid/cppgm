@@ -4,10 +4,17 @@
 #include <cstdint>
 #include <cmath>
 #include <limits>
-// x87 target values represented exactly by the host's binary128 type.
-// These helpers do not change the native host's floating-point path.
+#endif
+
+#if __LDBL_MANT_DIG__ != 64
+// Convert between the x87 representation and the host floating type.
+// The encoded buffer is the target's 16-byte storage, independent of the host.
 long double LoadExtended80(const unsigned char* bytes);
 void StoreExtended80(long double value, unsigned char* bytes);
+#endif
+
+#if __LDBL_MANT_DIG__ == 113
+// The binary128 host can hold every x87 value exactly.
 long double RoundExtended80(long double value);
 long double IntegerExtended80(uint64_t low, uint64_t high, bool negative);
 long double CalculateExtended80(char operation, long double left, long double right);

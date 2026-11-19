@@ -139,7 +139,7 @@ namespace {
 bool SignalingNan(long double value)
 {
 	uint64_t significand = 0;
-#if __LDBL_MANT_DIG__ == 113
+#if __LDBL_MANT_DIG__ != 64
 	unsigned char bytes[16];
 	StoreExtended80(value, bytes);
 	std::memcpy(&significand, bytes, sizeof significand);

@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <vector>
 #include <utility>
-#if __LDBL_MANT_DIG__ == 113
+#if __LDBL_MANT_DIG__ != 64
 #include <cmath>
 #include <cstring>
 #endif
@@ -14,9 +14,7 @@
 const InterchangeFormat kBinary16 = { 11, 15 };
 const InterchangeFormat kBinary128 = { 113, 16383 };
 const InterchangeFormat kBFloat16 = { 8, 127 };
-#if __LDBL_MANT_DIG__ == 113
 const InterchangeFormat kExtended80 = { 64, 16383 };
-#endif
 
 namespace {
 
@@ -202,14 +200,12 @@ bool RoundToFormat(
 	// sign 0, the biased exponent, then the fraction (M without its
 	// hidden bit).
 	const unsigned fraction = static_cast<unsigned>(p - 1);
-#if __LDBL_MANT_DIG__ == 113
 	if (p == 64)
 	{
 		low = m.low;
 		high = static_cast<uint64_t>(biased);
 		return true;
 	}
-#endif
 	if (fraction < 64)
 	{
 		low = (m.low & ((uint64_t(1) << fraction) - 1)) | (static_cast<uint64_t>(biased) << fraction);
@@ -226,11 +222,10 @@ bool RoundToFormat(
 // Sets the format's sign bit.
 void Negate(const InterchangeFormat& format, uint64_t& low, uint64_t& high)
 {
-	const unsigned sign = format.precision == 113 ? 127
-#if __LDBL_MANT_DIG__ == 113
-		: format.precision == 64 ? 79
-#endif
-								 : 15;
+	unsigned exponent = static_cast<unsigned>(format.max_exponent), exponent_bits = 1;
+	for (; exponent; exponent >>= 1)
+		++exponent_bits;
+	const unsigned sign = format.precision == 64 ? 79 : format.precision - 1 + exponent_bits;
 	if (sign < 64)
 		low |= uint64_t(1) << sign;
 	else
@@ -390,6 +385,77 @@ bool ScanInterchangeValue(
 
 	return RoundToFormat(num, den, shift, format, low, high);
 }
+
+#if __LDBL_MANT_DIG__ == 53
+namespace {
+constexpr uint64_t kDoubleSign = uint64_t(1) << 63;
+constexpr uint64_t kDoubleInfinity = uint64_t(0x7ff) << 52;
+constexpr uint64_t kDoubleFraction = (uint64_t(1) << 52) - 1;
+constexpr uint64_t kExtendedInteger = uint64_t(1) << 63;
+constexpr int kExtendedBias = 16383;
+constexpr InterchangeFormat kBinary64 = { 53, 1023 };
+}
+
+long double LoadExtended80(const unsigned char* bytes)
+{
+	static_assert(sizeof(long double) == 8, "binary64 host");
+	uint64_t significand;
+	uint16_t sign_exponent;
+	std::memcpy(&significand, bytes, 8);
+	std::memcpy(&sign_exponent, bytes + 8, 2);
+	const bool negative = (sign_exponent & 0x8000) != 0;
+	const unsigned exponent = sign_exponent & 0x7fff;
+	const uint64_t sign = negative ? kDoubleSign : 0;
+	uint64_t result = sign;
+	if (exponent == 0x7fff)
+	{
+		const auto payload = significand & ~kExtendedInteger;
+		uint64_t fraction = payload >> 11;
+		if (payload != 0 && fraction == 0)
+			fraction = 1;
+		result |= kDoubleInfinity | fraction;
+	}
+	else if (significand != 0)
+	{
+		uint64_t high = 0;
+		const int scale = static_cast<int>(exponent ? exponent : 1) - kExtendedBias - 63;
+		if (!RoundInterchangeValue(negative, significand, 0, scale, kBinary64, result, high))
+			result = sign | kDoubleInfinity;
+	}
+	long double value;
+	std::memcpy(&value, &result, 8);
+	return value;
+}
+
+void StoreExtended80(long double value, unsigned char* bytes)
+{
+	uint64_t bits;
+	std::memcpy(&bits, &value, 8);
+	const unsigned exponent = (bits >> 52) & 0x7ff;
+	const uint64_t fraction = bits & kDoubleFraction;
+	uint16_t sign_exponent = bits & kDoubleSign ? 0x8000 : 0;
+	uint64_t significand = 0;
+	if (exponent == 0x7ff)
+	{
+		sign_exponent |= 0x7fff;
+		significand = kExtendedInteger | (fraction << 11);
+	}
+	else if (exponent != 0)
+	{
+		sign_exponent |= exponent + kExtendedBias - 1023;
+		significand = kExtendedInteger | (fraction << 11);
+	}
+	else if (fraction != 0)
+	{
+		const unsigned shift = static_cast<unsigned>(__builtin_clzll(fraction));
+		sign_exponent |= kExtendedBias - 1074 + 63 - shift;
+		significand = fraction << shift;
+	}
+	std::memset(bytes, 0, 16);
+	std::memcpy(bytes, &significand, 8);
+	std::memcpy(bytes + 8, &sign_exponent, 2);
+}
+#endif
 
 #if __LDBL_MANT_DIG__ == 113
 namespace {

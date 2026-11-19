@@ -104,11 +104,10 @@ long double BFloatRounded(long double value)
 	return rounded;
 }
 
-// A floating value in the precision of its floating type (4.8, 4.9: the
-// target's long double is the host's x87 format).
+// A floating value rounded to the precision of its target type (4.8, 4.9).
 long double InPrecision(long double value, const Type* type)
 {
-	switch (FloatingRepresentation(type->unqualified->fundamental))
+	switch (FloatingRepresentation(type->unqualified->fundamental, type->target))
 	{
 	case FundamentalType::Float:
 		return static_cast<float>(value);
@@ -154,7 +153,7 @@ long double WideFloating(WideBits bits, bool is_signed, const Type* target)
 	int shift = length - 64;
 	uint64_t top = static_cast<uint64_t>(magnitude >> shift);
 	const WideBits rest = magnitude & ((static_cast<WideBits>(1) << shift) - 1);
-	if (FloatingRepresentation(target->unqualified->fundamental) == FundamentalType::LongDouble)
+	if (FloatingRepresentation(target->unqualified->fundamental, target->target) == FundamentalType::LongDouble)
 	{
 		const WideBits half = static_cast<WideBits>(1) << (shift - 1);
 		if ((rest > half || (rest == half && (top & 1) != 0)) && ++top == 0)
@@ -169,14 +168,18 @@ long double WideFloating(WideBits bits, bool is_signed, const Type* target)
 	return negative ? -value : value;
 }
 
-// A floating type whose values a long double holds exactly (no binary16
-// or binary128: their constants are not evaluated; bfloat16's are, as
-// Clang evaluates them).
-bool ExactlyHeld(const Type* type)
+// Return a diagnostic when the floating representation needs a different evaluator.
+const char* UnsupportedFloatingConstant(const Type* type)
 {
-	const FundamentalType kind = FloatingRepresentation(type->unqualified->fundamental);
-	return kind == FundamentalType::Float || kind == FundamentalType::Double || kind == FundamentalType::LongDouble ||
-		kind == FundamentalType::BFloat16;
+	const FundamentalType kind = FloatingRepresentation(type->unqualified->fundamental, type->target);
+#if __LDBL_MANT_DIG__ == 53
+	if (kind == FundamentalType::LongDouble)
+		return "an x87 constant requires a wider host floating representation";
+#endif
+	if (kind == FundamentalType::Float || kind == FundamentalType::Double || kind == FundamentalType::LongDouble ||
+		kind == FundamentalType::BFloat16)
+		return nullptr;
+	return "a binary16 or binary128 constant is not supported";
 }
 
 template<typename T>
@@ -514,10 +517,10 @@ bool ConstantInterpreter::literal(const syntax::LiteralExpr& expr, ConstValue& o
 		out = Binary128Value(type, low, high);
 		return true;
 	}
-	if (!ExactlyHeld(type))
-		return fail(expr.location, "a binary16 or binary128 constant is not supported");
-	const FundamentalType representation = FloatingRepresentation(type->fundamental);
-	if (!ScanFloatingValue(expr.spelling.text, facts->value, representation, scratch, bytes))
+	if (const char* diagnostic = UnsupportedFloatingConstant(type))
+		return fail(expr.location, diagnostic);
+	const FundamentalType representation = FloatingRepresentation(type->fundamental, type->target);
+	if (!ScanFloatingValue(expr.spelling.text, facts->value, representation, scratch, bytes, type->target))
 		return fail(expr.location, "a floating literal outside constant evaluation");
 	long double value = 0;
 	if (representation == FundamentalType::Float)
@@ -533,7 +536,7 @@ bool ConstantInterpreter::literal(const syntax::LiteralExpr& expr, ConstValue& o
 		value = scanned;
 	}
 	else
-#if __LDBL_MANT_DIG__ == 113
+#if __LDBL_MANT_DIG__ != 64
 		value = LoadExtended80(bytes);
 #else
 		std::memcpy(&value, bytes, sizeof value);
@@ -654,8 +657,8 @@ bool ConstantInterpreter::convert_scalar(ConstValue& value, const Type* to, uint
 		return ConvertBinary128(value, to) || fail(location, "a binary128 conversion outside the target range");
 	if (IsFloating(to))
 	{
-		if (!ExactlyHeld(to))
-			return fail(location, "a binary16 or binary128 constant is not supported");
+		if (const char* diagnostic = UnsupportedFloatingConstant(to))
+			return fail(location, diagnostic);
 		long double source = 0;
 		if (value.kind == ValueKind::Integer && IsWideIntegral(value.type))
 			source = WideFloating(WideOf(value), KindOf(value.type).is_signed, to);
@@ -1233,7 +1236,7 @@ bool ConstantInterpreter::floating_operation(
 	// divisor or a result outside the type's range is undefined (5p4,
 	// 5.6p4).
 	bool defined = false;
-	switch (FloatingRepresentation(type->unqualified->fundamental))
+	switch (FloatingRepresentation(type->unqualified->fundamental, type->target))
 	{
 	case FundamentalType::Float:
 		defined = FloatingStep<float>(op, left, right, out);
@@ -1258,6 +1261,8 @@ bool ConstantInterpreter::floating_operation(
 														   : '/',
 			left, right);
 		defined = std::isfinite(out) && (op != TokenKind::OP_DIV || right != 0);
+#elif __LDBL_MANT_DIG__ == 53
+		return fail(location, "x87 arithmetic requires a wider host floating representation");
 #else
 		defined = FloatingStep<long double>(op, left, right, out);
 #endif
@@ -1846,7 +1851,7 @@ bool ConstantInterpreter::intrinsic_value(const syntax::CallExpr& call_expr, Con
 	if (which == Intrinsic::NanSignaling)
 	{
 		const FundamentalType fundamental = facts->type->unqualified->fundamental;
-		const FundamentalType representation = FloatingRepresentation(fundamental);
+		const FundamentalType representation = FloatingRepresentation(fundamental, facts->type->target);
 		if (representation != FundamentalType::Float && representation != FundamentalType::Double &&
 			representation != FundamentalType::LongDouble)
 			return fail(call_expr.location, "a signaling NaN of a binary16 or binary128 type");
@@ -1860,8 +1865,10 @@ bool ConstantInterpreter::intrinsic_value(const syntax::CallExpr& call_expr, Con
 	if (which == Intrinsic::Nan || which == Intrinsic::Inf)
 	{
 		out = FloatingValue(facts->type,
-			which == Intrinsic::Nan ? BuiltinNan(facts->type->unqualified->fundamental, *call_expr.arguments[0])
-									: std::numeric_limits<long double>::infinity());
+			which == Intrinsic::Nan
+				? BuiltinNan(FloatingRepresentation(facts->type->unqualified->fundamental, facts->type->target),
+					  *call_expr.arguments[0])
+				: std::numeric_limits<long double>::infinity());
 		return true;
 	}
 	if (which == Intrinsic::Launder)
@@ -1954,7 +1961,7 @@ bool ConstantInterpreter::intrinsic_value(const syntax::CallExpr& call_expr, Con
 	const bool encoded = x.kind == ValueKind::Binary128;
 	const binary128::Bits quad{ encoded ? x.bits : 0, encoded ? x.high : 0 };
 	const long double v = encoded ? 0 : x.floating;
-	const FundamentalType representation = FloatingRepresentation(x.type->fundamental);
+	const FundamentalType representation = FloatingRepresentation(x.type->fundamental, x.type->target);
 	// The least normal value of the operand's format, exactly: 2^(1 -
 	// bias) (a decimal approximation in long double is not the double's).
 	const long double least = std::ldexp(1.0L,
@@ -1983,8 +1990,8 @@ bool ConstantInterpreter::intrinsic_value(const syntax::CallExpr& call_expr, Con
 	{
 		// The x87 value's quiet bit (significand bit 62), which a
 		// signaling NaN constant keeps (BuiltinSignalingNan).
-		unsigned char bytes[sizeof(long double)] = {};
-#if __LDBL_MANT_DIG__ == 113
+		unsigned char bytes[16] = {};
+#if __LDBL_MANT_DIG__ != 64
 		StoreExtended80(v, bytes);
 #else
 		std::memcpy(bytes, &v, sizeof v);

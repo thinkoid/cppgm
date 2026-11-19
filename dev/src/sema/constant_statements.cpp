@@ -342,10 +342,21 @@ bool ConstantInterpreter::user_literal(const syntax::LiteralExpr& expr, Result& 
 			}
 			else
 			{
-#if __LDBL_MANT_DIG__ == 113
-				value = LoadExtended80(bytes);
+				if (FloatingRepresentation(FundamentalType::LongDouble, parameter->target) == FundamentalType::Double)
+				{
+					double narrow;
+					std::memcpy(&narrow, bytes, sizeof narrow);
+					value = narrow;
+				}
+#if __LDBL_MANT_DIG__ == 53
+				else
+					return fail(expr.location, "an x87 constant requires a wider host floating representation");
+#elif __LDBL_MANT_DIG__ == 113
+				else
+					value = LoadExtended80(bytes);
 #else
-				std::memcpy(&value, bytes, sizeof value);
+				else
+					std::memcpy(&value, bytes, sizeof value);
 #endif
 				argument.value = FloatingValue(parameter, value);
 			}

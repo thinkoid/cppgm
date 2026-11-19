@@ -83,6 +83,13 @@ void append_mir_float(std::string& out, TypeKind kind, uint64_t low, uint64_t hi
 	lowir::Literal bits;
 	bits.low = low;
 	bits.high = high;
+#if __LDBL_MANT_DIG__ == 53
+	if (kind == TypeKind::F80)
+	{
+		lowir::append_float_literal(out, kind, bits, false, false);
+		return;
+	}
+#endif
 	const long double value = lowir::float_value(kind, bits);
 	if (std::isnan(value))
 	{

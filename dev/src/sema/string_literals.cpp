@@ -106,11 +106,11 @@ long double BuiltinNan(FundamentalType type, const syntax::Expr& text)
 	// quiet bit, 51 below double's) end up on conversion.
 	const unsigned bits = type == FundamentalType::Float ? 22 : type == FundamentalType::Double ? 51 : 62;
 	const uint64_t significand = 0xC000000000000000ull | ((payload & ((uint64_t(1) << bits) - 1)) << (62 - bits));
-	unsigned char bytes[sizeof(long double)] = {};
+	unsigned char bytes[16] = {};
 	std::memcpy(bytes, &significand, 8);
 	const uint16_t sign_exponent = 0x7fff;
 	std::memcpy(bytes + 8, &sign_exponent, 2);
-#if __LDBL_MANT_DIG__ == 113
+#if __LDBL_MANT_DIG__ != 64
 	return LoadExtended80(bytes);
 #else
 	long double value;
@@ -124,11 +124,11 @@ long double BuiltinSignalingNan(FundamentalType type, const syntax::Expr& text)
 	const unsigned bits = type == FundamentalType::Float ? 22 : type == FundamentalType::Double ? 51 : 62;
 	const uint64_t payload = BuiltinNanPayload(text) & ((uint64_t(1) << bits) - 1);
 	const uint64_t significand = 0x8000000000000000ull | (payload != 0 ? payload << (62 - bits) : uint64_t(1) << 61);
-	unsigned char bytes[sizeof(long double)] = {};
+	unsigned char bytes[16] = {};
 	std::memcpy(bytes, &significand, 8);
 	const uint16_t sign_exponent = 0x7fff;
 	std::memcpy(bytes + 8, &sign_exponent, 2);
-#if __LDBL_MANT_DIG__ == 113
+#if __LDBL_MANT_DIG__ != 64
 	return LoadExtended80(bytes);
 #else
 	long double value;
