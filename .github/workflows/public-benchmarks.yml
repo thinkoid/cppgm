@@ -71,6 +71,9 @@ jobs:
           ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
 
+      - name: Trust the mounted checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Restore or build compiler
         uses: ./.github/actions/benchmark-compiler
         with:
