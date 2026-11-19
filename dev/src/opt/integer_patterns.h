@@ -31,6 +31,8 @@ bool simplify_field_step(lowir::FunctionBody& body, const std::vector<uint32_t>&
 	lowir::Instruction& instruction);
 bool simplify_pointer_distance(lowir::FunctionBody& body, IntegerPatternFacts& facts, lowir::BlockId block,
 	lowir::InstId& previous, lowir::InstId instruction);
+bool simplify_floor_correction(
+	FunctionContext& context, lowir::BlockId block, lowir::InstId& previous, lowir::InstId instruction);
 // Whether the test of a branch edge that every path into `block` takes shows
 // the signed value `v` at least zero: v itself above a literal of at least
 // -1, or the value v is one less than above a literal of at least zero (a

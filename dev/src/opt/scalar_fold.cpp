@@ -584,6 +584,31 @@ bool fold_copy(Type type, const Constant& a, Constant& out)
 	return false;
 }
 
+bool fold_identical_phi(const FunctionBody& body, const Instruction& phi, Value& out)
+{
+	Value same = Value::none();
+	for (uint32_t k = 1; k < phi.extra_count; k += 2)
+	{
+		const Value in = body.operands[phi.extra_first + k];
+		if (in.is(ValueKind::Temp) && in.index == phi.result)
+			continue;
+		if (same.is(ValueKind::None))
+		{
+			same = in;
+			continue;
+		}
+		if (in == same)
+			continue;
+		Constant a, b;
+		if (!literal_constant(body, in, a) || !literal_constant(body, same, b) || !same_constant(phi.type, a, b))
+			return false;
+	}
+	if (same.is(ValueKind::None))
+		return false;
+	out = same;
+	return true;
+}
+
 bool same_constant(Type type, const Constant& a, const Constant& b)
 {
 	if (type.is_float())
@@ -739,6 +764,24 @@ bool cheaper_float_arithmetic(FunctionBody& body, std::vector<uint32_t>& uses, I
 	const TypeKind kind = inst.type.kind();
 	return inst.op == Opcode::Binary && (kind == TypeKind::F32 || kind == TypeKind::F64) &&
 		(exact_reciprocal(body, inst) || doubled(body, uses, inst));
+}
+
+bool float_multiply_addend(
+	const FunctionBody& body, const std::vector<uint32_t>& uses, const Instruction& multiply, Value& addend)
+{
+	const TypeKind kind = multiply.type.kind();
+	if ((kind != TypeKind::F32 && kind != TypeKind::F64) || multiply.op != Opcode::Binary ||
+		multiply.sub != static_cast<unsigned>(BinaryOp::Mul) || multiply.next == kNoId || uses[multiply.result] != 1)
+		return false;
+	const auto& sum = body.instructions[multiply.next];
+	if (sum.op != Opcode::Binary || sum.type != multiply.type || sum.sub != static_cast<unsigned>(BinaryOp::Add))
+		return false;
+	const Value product = Value::temp(multiply.result);
+	const bool left = sum.ops[0] == product, right = sum.ops[1] == product;
+	if (left == right)
+		return false;
+	addend = sum.ops[left ? 1 : 0];
+	return true;
 }
 
 } // namespace opt

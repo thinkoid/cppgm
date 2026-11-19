@@ -12,11 +12,11 @@ namespace aarch64 {
 using namespace lowir;
 
 Selector::Selector(const Program& program, SymbolId symbol, Function& out, int level, bool pic,
-	const std::vector<uint32_t>& leaf_registers, bool minimize_size)
+	const std::vector<uint32_t>& leaf_registers, bool minimize_size, bool contract_float)
 	: program_(program), symbol_(symbol), body_(*program.functions[program.symbols[symbol].detail].body),
 	  signature_(program.signatures[program.functions[program.symbols[symbol].detail].signature]), out_(out),
-	  level_(level), pic_(pic), minimize_size_(minimize_size), leaf_registers_(leaf_registers),
-	  named_(target_model::is_darwin(program.target))
+	  level_(level), pic_(pic), minimize_size_(minimize_size), contract_float_(contract_float),
+	  leaf_registers_(leaf_registers), named_(target_model::is_darwin(program.target))
 {}
 
 uint32_t Selector::reserve(uint64_t size, uint32_t alignment)
@@ -421,11 +421,12 @@ void Selector::address(unsigned reg, Value operand)
 		home_address(reg, operand.index);
 	else if (operand.kind == ValueKind::Symbol)
 	{
-		if (program_.symbols[operand.index].metadata.storage == ir_model::GSM_THREAD_LOCAL)
+		const auto& symbol = program_.symbols[operand.index];
+		if (symbol.metadata.storage == ir_model::GSM_THREAD_LOCAL)
 		{
 			if (named_.darwin)
 				darwin_tls_address(reg, operand.index);
-			else if (pic_)
+			else if (pic_ || symbol.kind != SymbolKind::GlobalDefinition)
 			{
 				const unsigned tp = reg == 16 ? 17 : 16;
 				out_.reference(Op::Adrp, Fixup::TlsPage, operand.index, reg);
@@ -441,7 +442,11 @@ void Selector::address(unsigned reg, Value operand)
 			}
 			return;
 		}
-		const bool got = pic_ && program_.symbols[operand.index].metadata.binding != ir_model::SBM_INTERNAL;
+		// An absent weak ELF import must have address zero. A direct
+		// page-relative reference can instead resolve to the instruction's page.
+		const bool weak_import = !named_.darwin && symbol.metadata.binding == ir_model::SBM_WEAK &&
+			(symbol.kind == SymbolKind::FunctionDeclaration || symbol.kind == SymbolKind::GlobalDeclaration);
+		const bool got = weak_import || (pic_ && symbol.metadata.binding != ir_model::SBM_INTERNAL);
 		out_.reference(Op::Adrp, got ? Fixup::GotPage : Fixup::Page, operand.index, reg);
 		out_.reference(got ? Op::LdrX : Op::AddI, got ? Fixup::GotLoad : Fixup::PageOffset, operand.index, reg, reg);
 	}
@@ -500,6 +505,21 @@ void Selector::save(unsigned reg, TempId temp, bool normalized)
 	if ((!type.is_integer() && !type.is_pointer() && !type.is_float()) || storage_bytes(type) > 8)
 		throw AArch64Error("unsupported AArch64 result type");
 	const auto bits = integer_bits(type.kind());
+	// Like the x86 selector, leave the high bits alone if the only reader
+	// stores the result at its own width. Address sinking can put a pure
+	// index between the definition and that store.
+	if (!normalized && level_ && (bits == 8 || bits == 16) && uses_[temp] == 1)
+	{
+		const InstId definition = body_.temps[temp].def;
+		InstId consumer = definition == kNoId ? kNoId : body_.instructions[definition].next;
+		if (consumer != kNoId && body_.instructions[consumer].op == Opcode::Index)
+			consumer = body_.instructions[consumer].next;
+		if (consumer != kNoId)
+		{
+			const auto& store = body_.instructions[consumer];
+			normalized = store.op == Opcode::Store && store.type == type && store.ops[0] == Value::temp(temp);
+		}
+	}
 	if (!normalized && bits && bits < 64 && registers_[temp] != kNoId)
 	{
 		const auto dest = registers_[temp];

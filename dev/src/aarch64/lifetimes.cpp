@@ -390,7 +390,6 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 					plan.ranges[id].affinity = phi.result;
 					plan.ranges[phi.result].affinity = id;
 					plan.reads[id].incoming = true;
-					plan.ranges[id].vector_address = true;
 				}
 			}
 		}

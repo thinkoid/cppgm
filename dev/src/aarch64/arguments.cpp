@@ -68,14 +68,18 @@ void Selector::fp_move(bool to_fp, unsigned fp, unsigned gp, Type type)
 void Selector::transfer(bool load, const Argument& arg, Value object, Type type)
 {
 	unsigned base = 10, displacement = 0;
-	const bool pair = level_ && arg.bank == Bank::General && arg.pieces == 2 && storage_bytes(type) == 16;
+	const bool general = arg.bank == Bank::General;
+	const bool pair = level_ && general && arg.pieces == 2 && storage_bytes(type) == 16;
+	const bool simd_pair = level_ && arg.bank == Bank::Simd && arg.pieces >= 2;
+	const unsigned piece = general ? 8 : arg.piece_bytes;
 	const Type place = type_of(object, type);
-	if (level_ && arg.bank == Bank::General && data_alignment(place) <= 16)
+	if (level_ && (general || simd_pair) && data_alignment(place) <= 16)
 	{
 		const uint32_t offset = object.is(ValueKind::Slot)      ? slots_[object.index]
 			: object.is(ValueKind::Temp) && memory_value(place) ? homes_[object.index]
 																: kNoId;
-		if (offset % 8 == 0 && offset <= (pair ? 504u : 4080u))
+		const unsigned limit = pair || simd_pair ? (arg.pieces >= 4 ? 61 : 63) * piece : 4080;
+		if (offset <= limit && offset % piece == 0)
 		{
 			base = frame_base();
 			displacement = offset;
@@ -90,7 +94,7 @@ void Selector::transfer(bool load, const Argument& arg, Value object, Type type)
 	}
 	for (unsigned i = 0; i < arg.pieces; ++i)
 	{
-		if (arg.bank == Bank::General)
+		if (general)
 		{
 			const unsigned reg = arg.first + i;
 			unsigned offset = 0, bytes = std::min<uint64_t>(8, storage_bytes(type) - i * 8);
@@ -109,10 +113,22 @@ void Selector::transfer(bool load, const Argument& arg, Value object, Type type)
 		}
 		else
 		{
-			const Op op = arg.piece_bytes == 16 ? (load ? Op::LdrQ : Op::StrQ)
-				: arg.piece_bytes == 8          ? (load ? Op::LdrD : Op::StrD)
-												: (load ? Op::LdrS : Op::StrS);
-			out_.emit(op, arg.first + i, base, 0, i << 10);
+			const unsigned slot = displacement / piece + i;
+			if (simd_pair && i + 1 < arg.pieces)
+			{
+				const Op op = piece == 16 ? (load ? Op::LdpQ : Op::StpQ)
+					: piece == 8          ? (load ? Op::LdpD : Op::StpD)
+										  : (load ? Op::LdpS : Op::StpS);
+				out_.emit(op, arg.first + i, base, 0, ((arg.first + i + 1) << 10) | (slot << 15));
+				++i;
+			}
+			else
+			{
+				const Op op = piece == 16 ? (load ? Op::LdrQ : Op::StrQ)
+					: piece == 8          ? (load ? Op::LdrD : Op::StrD)
+										  : (load ? Op::LdrS : Op::StrS);
+				out_.emit(op, arg.first + i, base, 0, slot << 10);
+			}
 		}
 	}
 }
@@ -390,7 +406,7 @@ InstId Selector::projected_call(const lowir::Instruction& inst)
 	if (slot_mentions_[slot] != 1)
 		return kNoId;
 	const auto& layout = calls_[call_indices_[&inst - body_.instructions.data()]];
-	if (layout.saved_args || layout.tail)
+	if (layout.saved_args || layout.saved_simd || layout.tail)
 		return kNoId;
 	emit_call(inst, layout, true);
 	unsigned src[] = { 0, 1 };
@@ -424,7 +440,7 @@ InstId Selector::branch_on_result(const lowir::Instruction& inst, BlockId block)
 		!(inst.type.is_integer() || inst.type.is_pointer()) || storage_bytes(inst.type) > 8)
 		return kNoId;
 	const auto& layout = calls_[call_indices_[&inst - body_.instructions.data()]];
-	if (layout.saved_args || layout.tail)
+	if (layout.saved_args || layout.saved_simd || layout.tail)
 		return kNoId;
 	const auto& next = body_.instructions[inst.next];
 	const bool masked = next.op == Opcode::Binary && next.sub == static_cast<unsigned>(BinaryOp::And) &&
@@ -456,18 +472,28 @@ InstId Selector::branch_on_result(const lowir::Instruction& inst, BlockId block)
 void Selector::call(const lowir::Instruction& inst)
 {
 	const auto& layout = calls_[call_indices_[&inst - body_.instructions.data()]];
+	const auto simd_transfer = [&](bool store) {
+		for (unsigned mask = layout.saved_simd; mask; mask &= mask - 1)
+		{
+			const unsigned reg = __builtin_ctz(mask);
+			fp_stack_access(store, reg, simd_call_spills_[reg], false);
+		}
+	};
+	simd_transfer(true);
 	for (unsigned mask = layout.saved_args; mask; mask &= mask - 1)
 	{
 		const unsigned reg = __builtin_ctz(mask);
 		access(true, reg, frame_base(), argument_spills_[reg], 8);
 	}
 	emit_call(inst, layout);
-	if (!layout.tail)
-		for (unsigned mask = layout.saved_args; mask; mask &= mask - 1)
-		{
-			const unsigned reg = __builtin_ctz(mask);
-			access(false, reg, frame_base(), argument_spills_[reg], 8);
-		}
+	if (layout.tail)
+		return;
+	simd_transfer(false);
+	for (unsigned mask = layout.saved_args; mask; mask &= mask - 1)
+	{
+		const unsigned reg = __builtin_ctz(mask);
+		access(false, reg, frame_base(), argument_spills_[reg], 8);
+	}
 }
 
 void Selector::emit_call(const lowir::Instruction& inst, const CallLayout& layout, bool projected)
@@ -497,7 +523,10 @@ void Selector::emit_call(const lowir::Instruction& inst, const CallLayout& layou
 	if (inst.type.kind() == TypeKind::V128)
 		save_vector(0, inst.result);
 	else if (memory_value(inst.type))
-		transfer(false, ret, Value::temp(inst.result), inst.type);
+	{
+		const auto slot = call_result_slots_.empty() ? kNoId : call_result_slots_[inst.result];
+		transfer(false, ret, slot == kNoId ? Value::temp(inst.result) : Value::slot(slot), inst.type);
+	}
 	else if (ret.bank == Bank::Simd)
 		save_fp(0, inst.result);
 	else

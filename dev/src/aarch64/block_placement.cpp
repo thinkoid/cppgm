@@ -1,4 +1,5 @@
 #include "aarch64/selector.h"
+#include "opt/function_ir.h"
 
 #include <algorithm>
 
@@ -20,6 +21,64 @@ struct LayoutEdge
 	bool adjacent;
 };
 
+// A diamond that tests one bit and sets it only when it was clear. Keep
+// the work that can set the bit beside its test. The bypass remains cheap
+// when the bit has already been set.
+uint32_t bit_update_share(const FunctionBody& body, const lowir::Instruction& branch, BlockId from)
+{
+	const auto producer = [&](Value value) -> const lowir::Instruction* {
+		if (!value.is(ValueKind::Temp) || body.temps[value.index].def == kNoId)
+			return nullptr;
+		return &body.instructions[body.temps[value.index].def];
+	};
+	const auto* test = producer(branch.ops[0]);
+	bool zero_is_true = false;
+	if (test && test->op == Opcode::Compare && test->ops[1].is(ValueKind::Integer) &&
+		body.literals[test->ops[1].index].low == 0)
+	{
+		const auto predicate = static_cast<ComparePredicate>(test->sub);
+		if (predicate != ComparePredicate::Eq && predicate != ComparePredicate::Ne)
+			return 0;
+		zero_is_true = predicate == ComparePredicate::Eq;
+		test = producer(test->ops[0]);
+	}
+	if (!test || test->op != Opcode::Binary || test->sub != static_cast<unsigned>(BinaryOp::And) ||
+		!test->ops[1].is(ValueKind::Integer))
+		return 0;
+	const auto mask = body.literals[test->ops[1].index].low;
+	const BlockId clear = branch.ops[zero_is_true ? 1 : 2].index;
+	const BlockId join = branch.ops[zero_is_true ? 2 : 1].index;
+	const auto& jump = body.instructions[body.blocks[clear].last];
+	if (!mask || (mask & (mask - 1)) || jump.op != Opcode::Jump || !(jump.ops[0] == Value::block(join)))
+		return 0;
+	Value state = test->ops[0];
+	const auto* extension = producer(state);
+	if (extension && extension->op == Opcode::Convert && extension->sub == static_cast<unsigned>(ConvertOp::ZExt))
+		state = extension->ops[0];
+	for (InstId i = body.blocks[join].first; i != kNoId; i = body.instructions[i].next)
+	{
+		const auto& phi = body.instructions[i];
+		if (phi.op != Opcode::Phi)
+			break;
+		if (!phi.type.is_integer() || !(opt::phi_incoming(body, phi, from) == state))
+			continue;
+		Value update = opt::phi_incoming(body, phi, clear);
+		const auto* choice = producer(update);
+		if (choice && choice->op == Opcode::Select)
+		{
+			if (choice->ops[2] == state)
+				update = choice->ops[1];
+			else if (choice->ops[1] == state)
+				update = choice->ops[2];
+		}
+		const auto* set = producer(update);
+		if (set && set->op == Opcode::Binary && set->sub == static_cast<unsigned>(BinaryOp::Or) &&
+			set->ops[0] == state && set->ops[1].is(ValueKind::Integer) && body.literals[set->ops[1].index].low == mask)
+			return zero_is_true ? 704 : 296;
+	}
+	return 0;
+}
+
 // Shares are in thousandths of one execution. Prefer explicit expectations,
 // loop backedges and paths that avoid a rare call. The lowered branch commonly
 // puts an if body immediately after its guard and the continuation further on.
@@ -38,6 +97,9 @@ uint32_t true_share(
 		return 768;
 	if (no.position <= position)
 		return 232;
+	const auto share = !yes.calls && !no.calls ? bit_update_share(body, branch, from) : 0;
+	if (share)
+		return share;
 	if (yes.position == position + 1)
 		return no.calls && !yes.calls && no.terminator == Opcode::Jump ? 768 : 320;
 	if (yes.calls != no.calls)

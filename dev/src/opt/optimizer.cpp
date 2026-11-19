@@ -1,5 +1,6 @@
 #include "opt/optimizer.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -452,6 +453,63 @@ uint32_t addressed_slot(const FunctionBody& body, Value v)
 	return v.is(ValueKind::Slot) ? v.index : kNoId;
 }
 
+// Loop transforms can expose whole-vector fields that were still read
+// through variable indices when memory forwarding last saw the object.
+// A self pointer can then be dead, letting the existing splitter see the
+// fields. Only inspect small aggregates written through both views.
+bool has_local_vector_self_pointer(const FunctionBody& body)
+{
+	constexpr uint64_t kVectorAggregateBytes = 256;
+	constexpr uint8_t vector_store = 1, self_pointer_store = 2;
+	std::vector<uint8_t> stores;
+	for (BlockId b : body.layout)
+		for (InstId i = body.blocks[b].first; i != kNoId; i = body.instructions[i].next)
+		{
+			const auto& inst = body.instructions[i];
+			if (inst.op != Opcode::Store || (inst.flags & IF_VOLATILE) ||
+				(!inst.type.is_vector() && !inst.type.is_pointer()))
+				continue;
+			const SlotId slot = addressed_slot(body, inst.ops[1]);
+			if (slot == kNoId || !body.slots[slot].type.is_object() ||
+				storage_bytes(body.slots[slot].type) > kVectorAggregateBytes)
+				continue;
+			if (stores.empty())
+				stores.resize(body.slots.size(), 0);
+			if (inst.type.is_vector())
+				stores[slot] |= vector_store;
+			else if (addressed_slot(body, inst.ops[0]) == slot)
+				stores[slot] |= self_pointer_store;
+			if (stores[slot] == (vector_store | self_pointer_store))
+				return true;
+		}
+	return false;
+}
+
+bool promote_loop_fields(FunctionContext& context, bool loops_changed)
+{
+	const auto& slots = context.body.slots;
+	if (slots.empty())
+		return false;
+	const bool revisit = has_local_vector_self_pointer(context.body);
+	const bool scalar = loops_changed && std::any_of(slots.begin(), slots.end(), [](const Slot& slot) {
+		return slot.type.is_object() && storage_bytes(slot.type) <= 128;
+	});
+	if (!revisit && !scalar)
+		return false;
+	const bool forwarded = revisit && RUN_PASS(forward_memory);
+	if (forwarded)
+		RUN_PASS(remove_dead_code);
+	const auto first_new_field = static_cast<SlotId>(slots.size());
+	if (!RUN_PASS(split_aggregate_slots))
+		return forwarded;
+	RUN_PASS(remove_dead_code);
+	context.conditional_float_fields_from = first_new_field;
+	RUN_PASS(promote_slots);
+	context.conditional_float_fields_from = kNoId;
+	scalar_rounds(context);
+	return true;
+}
+
 // Whether a call's memory is now better known: its callee reads only, its
 // writes are bounded, or it is given a slot it does not keep that the
 // function reads as well.
@@ -593,6 +651,13 @@ bool finish_loops(FunctionContext& context, const OptimizerOptions& options)
 		RUN_PASS(simplify_values);
 		RUN_PASS(cleanup_cfg);
 		RUN_PASS(remove_dead_code);
+		if (target_model::is_aarch64(context.program.target))
+			for (unsigned round = 0; round < 2 && RUN_PASS(unroll_vector_loops); ++round)
+			{
+				RUN_PASS(simplify_values);
+				RUN_PASS(cleanup_cfg);
+				RUN_PASS(remove_dead_code);
+			}
 		RUN_PASS(hoist_loop_invariants);
 		changed = true;
 	}
@@ -700,12 +765,23 @@ void finish_function(Program& program, SymbolId symbol, OptimizerStats& stats, c
 		changed = true;
 	}
 	const bool had_loops = has_loop(context);
-	if (had_loops && finish_loops(context, options))
+	const bool loops_changed = had_loops && finish_loops(context, options);
+	if (had_loops && options.level >= 3 && target_model::is_aarch64(program.target))
+		changed = promote_loop_fields(context, loops_changed) || changed;
+	if (loops_changed)
 	{
 		// A load the loop passes took out of an arm leaves the arm to compute
 		// only: the branch to it may now be a choice of values.
 		for (unsigned round = 0; round < kSelectRounds && RUN_PASS(form_selects); ++round)
 			RUN_PASS(cleanup_cfg);
+		changed = true;
+	}
+	// Some fixed fields were split before unrolling. Give their remaining
+	// conditional updates the same register budget as newly split fields.
+	if (had_loops && options.level >= 3 && target_model::is_aarch64(program.target) &&
+		RUN_PASS(promote_late_float_fields))
+	{
+		scalar_rounds(context);
 		changed = true;
 	}
 	if (options.level >= 3 && RUN_PASS(fold_bit_recurrences))
@@ -738,6 +814,11 @@ void finish_function(Program& program, SymbolId symbol, OptimizerStats& stats, c
 	changed = RUN_PASS(hold_loop_literals) || changed;
 	changed = RUN_PASS(issue_long_latency) || changed;
 	changed = RUN_PASS(sink_addresses) || changed;
+	if (had_loops && options.level >= 3 && RUN_PASS(forward_adjacent_loop_loads))
+	{
+		RUN_PASS(remove_dead_code);
+		changed = true;
+	}
 	// (The literal lanes it read are dead, and the globals are new symbols.)
 	if (RUN_PASS(load_vector_literals))
 	{

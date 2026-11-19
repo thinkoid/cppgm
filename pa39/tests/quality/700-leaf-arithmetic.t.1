@@ -8,6 +8,8 @@ extern "C" int signed_remainder(int, int);
 extern "C" unsigned long widen_choice(bool, unsigned);
 extern "C" unsigned byte_offset(const unsigned*, signed char, unsigned char);
 extern "C" bool signed_order(short, short);
+extern "C" int signed_entries(const signed char*, const short*, long);
+extern "C" int signed_lookup(const signed char*, long, const int*, const int*);
 extern "C" unsigned adjacent(const unsigned*, long);
 extern "C" unsigned observed(const volatile unsigned*, unsigned*);
 extern "C" unsigned long widen_across_call(const unsigned*, unsigned char, bool);
@@ -37,6 +39,8 @@ extern "C" unsigned short place_nibbles(unsigned long, unsigned long);
 extern "C" unsigned clear_low_word(unsigned long);
 extern "C" unsigned narrow_join(bool, unsigned long, unsigned long);
 extern "C" unsigned narrow_join_full(bool, unsigned long, unsigned long);
+extern "C" unsigned long selected_field(const unsigned long*, unsigned);
+extern "C" unsigned scaled_with_bias(unsigned);
 int main() {
     if (narrow_join(true, 0xa500000000000000UL, 0) != 0xa5a5 ||
         narrow_join(false, 0, 0x1234UL) != 0x3434) return 32;
@@ -89,6 +93,25 @@ int main() {
     table[0]=7; table[260]=19;
     if (byte_offset(table+8, -8, 252) != 26 || byte_offset(table+8, -1, 252) != 0) return 10;
     if (!signed_order(-32768, 32767) || signed_order(-1, -1) || signed_order(1,-32768)) return 11;
+    const signed char signed_bytes[] = {-128, -1, 0, 127};
+    const short signed_words[] = {32767, -32768, 0, 1000};
+    const int negative = 19, nonnegative = 61;
+    for (long i = -1; i < 3; ++i) {
+        if (signed_entries(signed_bytes + 1, signed_words + 1, i) != signed_bytes[i + 1] + signed_words[i + 1]) return 34;
+        const bool below_zero = signed_bytes[i + 1] < 0;
+        if (signed_lookup(signed_bytes + 1, i, below_zero ? &negative : nullptr, below_zero ? nullptr : &nonnegative) !=
+            (below_zero ? negative : nonnegative)) return 35;
+    }
+    unsigned long choices[4];
+    choices[1] = 0x7654321012345678UL;
+    choices[3] = 0x89abcdefedcba987UL;
+    for (unsigned selector = 0; selector < 256; ++selector)
+        if (selected_field(choices, selector) != choices[(selector & 64) ? 3 : 1]) return 36;
+    for (unsigned i = 0; i < 8; ++i) {
+        unsigned value = 0xffffffffu - 0x2000u * i;
+        unsigned long expected = (static_cast<unsigned long>(value) + 0xffff0007UL) * 19 + 2027;
+        if (scaled_with_bias(value) != static_cast<unsigned>(expected)) return 37;
+    }
     if (mix_bits(0xab09876543215678UL, 27, 139) != 39) return 7;
     if (signed_remainder(-123456789, 97) != -39) return 8;
     if (widen_choice(false, 0) != 0xffffffffUL || widen_choice(true, 0x80000001u) != 0x80000001UL) return 9;

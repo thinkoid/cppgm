@@ -138,6 +138,9 @@ struct FunctionContext
 	// O3's final pass: form_selects may choose between floating values in a
 	// loop.
 	bool float_selects = false;
+	// The first field exposed by a late Arm aggregate split. Existing
+	// fields retain the ordinary promotion policy.
+	lowir::SlotId conditional_float_fields_from = lowir::kNoId;
 	// Scratch shared by passes (sized on demand).
 	std::vector<uint32_t> passed; // restore_definition_order's per-instruction stamps
 	uint32_t passed_stamp = 0;
@@ -263,6 +266,7 @@ bool hoist_loop_loads(FunctionContext& context);
 // O3: carry a typed pointer load and its constant boundary through a small
 // pointer-phi graph when loop stores cannot change it (loop_load_cache.cpp).
 bool cache_loop_loads(FunctionContext& context);
+bool forward_adjacent_loop_loads(FunctionContext& context);
 
 // Loop rotation (O3, last, opt/loop_rotation.cpp): a header that only tests
 // is copied into the latches and stays as the guard; its values go
@@ -422,12 +426,15 @@ bool specialize_phi_compares(FunctionContext& context);
 // O3 full unrolling of one counted loop per function: at most four
 // passes through a straight-line body, at most 64 cloned instructions.
 bool unroll_loops(FunctionContext& context);
+// Expand short loops that already operate on packed values.
+bool unroll_vector_loops(FunctionContext& context);
 
 // Promotes scalar slots accessed only by direct nonvolatile loads and
 // stores of their type to SSA values: phis at iterated dominance
 // frontiers (never in handler blocks), renaming over the dominator tree.
 // O(instructions + edges + inserted phis).
 bool promote_slots(FunctionContext& context);
+bool promote_late_float_fields(FunctionContext& context);
 
 // Scalar replacement of address-taken slots: a slot whose address only
 // reaches nonvolatile loads, stores, copyobj and zeroinit at constant

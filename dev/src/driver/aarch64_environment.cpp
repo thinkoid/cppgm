@@ -52,13 +52,18 @@ void configure_aarch64_environment(PreprocessorOptions& options)
 	}
 	else
 	{
+		// glibc keeps GNU attributes only when a compiler advertises GNU
+		// compatibility. Advertise the GCC 4.8 GNU C++11 header interface.
 		macros +=
 			"#define __ELF__ 1\n#define __gnu_linux__ 1\n#define __unix__ 1\n"
+			"#define __GNUC__ 4\n#define __GNUC_MINOR__ 8\n#define __GNUC_PATCHLEVEL__ 0\n"
+			"#define __USER_LABEL_PREFIX__\n"
 			"#define __WCHAR_TYPE__ unsigned int\n#define __WCHAR_UNSIGNED__ 1\n#define __WCHAR_MAX__ 4294967295U\n"
-			"#define __SIZEOF_LONG_DOUBLE__ 16\n";
+			"#define __SIZEOF_LONG_DOUBLE__ 16\n"
+			"#define __INT64_TYPE__ long int\n#define __UINT64_TYPE__ long unsigned int\n";
 		macros += kBinary128NumericPredefines;
 		if (options.language != SourceLanguage::C)
-			macros += "#define _GNU_SOURCE 1\n";
+			macros += "#define _GNU_SOURCE 1\n#define __GXX_WEAK__ 1\n";
 	}
 	options.command_line.insert(0, macros);
 }

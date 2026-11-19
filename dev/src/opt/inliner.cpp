@@ -55,6 +55,9 @@ const uint32_t kWrapperCap = 32;
 // callee's larger).
 const uint32_t kAllowance = 45;
 const uint32_t kHintAllowance = 65;
+// Late copies of short reference-forwarding helpers can expose the referenced
+// value to scalar promotion when their callers in turn go inline.
+const uint32_t kReferenceHintAllowance = 76;
 // On Wasm a callee without the hint may cost more: a call there costs more
 // than its instructions (the engine keeps no value in a register across a
 // call, so the caller saves each live value before it and reads it back
@@ -1768,6 +1771,7 @@ private:
 	bool arm_fast_return(SymbolId callee, const Shape& shape) const;
 	bool non_growing(const Shape& shape, const Instruction& call) const;
 	bool pins_slot(const FunctionBody& body, const Shape& shape, const Instruction& call) const;
+	bool forwards_small_reference(uint32_t callee, const FunctionBody& body, const Instruction& call) const;
 	// The charge of inlining `callee` here, or false when the policy keeps
 	// the call.
 	bool cleanup_welcome(const Shape& shape, bool handler_code, bool loop_site) const;
@@ -1859,6 +1863,34 @@ bool InlineWaveRunner::pins_slot(const FunctionBody& body, const Shape& shape, c
 			continue;
 		const Instruction& def = body.instructions[body.temps[v.index].def];
 		if (def.op == Opcode::Addr && def.ops[0].is(ValueKind::Slot))
+			return true;
+	}
+	return false;
+}
+
+// A forwarding wrapper passes one of its small by-address inputs straight
+// to a callee. Copies of that wrapper can then see the update through the
+// same reference.
+bool InlineWaveRunner::forwards_small_reference(
+	uint32_t callee, const FunctionBody& body, const Instruction& call) const
+{
+	const auto& from = program_.symbols[graph_.functions[caller_]];
+	const auto& to = program_.symbols[graph_.functions[callee]];
+	if (!(from.metadata.flags & SF_INLINE_HINT))
+		return false;
+	const auto& signature = program_.signatures[program_.functions[to.detail].signature];
+	const auto& caller = program_.signatures[program_.functions[from.detail].signature];
+	const auto args = program_.parameters_of(signature);
+	const auto inputs = program_.parameters_of(caller);
+	for (uint32_t i = 0; i < signature.parameter_count; ++i)
+	{
+		const auto& arg = args[i];
+		if (arg.pass != ir_model::PPM_BY_ADDRESS || !arg.object_bytes || arg.object_bytes > 8)
+			continue;
+		const Value source = body.operands[call.extra_first + i];
+		if (source.is(ValueKind::Temp) && source.index < caller.parameter_count &&
+			inputs[source.index].pass == ir_model::PPM_BY_ADDRESS &&
+			inputs[source.index].object_bytes == arg.object_bytes)
 			return true;
 	}
 	return false;
@@ -1989,16 +2021,20 @@ bool InlineWaveRunner::admit(
 		const bool hint = (m.flags & SF_INLINE_HINT) != 0;
 		// (-O3 admits a quarter more, as LLVM's -O3 threshold is to its -O2 one.)
 		// (The late wave's allowance for a hinted callee is a diagnostic control.)
+		const FunctionBody& caller_body = *program_.functions[program_.symbols[graph_.functions[caller_]].detail].body;
+		const bool forwards_reference = hint && !caller_loop_ && wave_ == InlineWave::Late && options_.level >= 3 &&
+			target_model::is_aarch64(program_.target) && !shape.loop && !shape.eh && shape.calls <= 1 &&
+			shape.size <= 128 && forwards_small_reference(g, caller_body, call);
 		const uint32_t hinted = wave_ == InlineWave::Late && options_.limits.hint_late_cap != 0
 			? options_.limits.hint_late_cap
-			: kHintAllowance;
+			: forwards_reference ? kReferenceHintAllowance
+								 : kHintAllowance;
 		const uint32_t plain = target_model::is_wasm(program_.target) ? kWasmAllowance : kAllowance;
 		const uint32_t allowance = (arm_fast_return(callee, shape) ? 2 * hinted
 										   : hint                  ? hinted
 																   : plain) *
 			(options_.level >= 3 ? 5 : 4) / 4;
 		uint32_t hot, unpriced;
-		const FunctionBody& caller_body = *program_.functions[program_.symbols[graph_.functions[caller_]].detail].body;
 		call_cost_after_constants(shape, caller_body, call, hot, unpriced);
 		charge = hot > removed ? hot - removed : 0;
 		// (From O2, a callee that adds no more than kSpentBudgetCharge goes

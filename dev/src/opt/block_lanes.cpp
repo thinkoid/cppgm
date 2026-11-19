@@ -514,14 +514,8 @@ Value BlockLanes::emit(Instruction inst, Type type)
 
 Value BlockLanes::vector(VectorOp op, Value a, Value b, int immediate)
 {
-	const Type type = vector_result_type(op);
-	Instruction inst = make_instruction(Opcode::Vector, type);
-	inst.sub = static_cast<uint8_t>(op);
-	inst.ops[0] = a;
-	inst.ops[1] = b;
-	if (immediate >= 0)
-		inst.ops[2] = integer_value(body_, integer_literal(immediate));
-	return emit(inst, type);
+	const Instruction inst = make_lane_instruction(body_, op, a, b, immediate);
+	return emit(inst, inst.type);
 }
 
 Value BlockLanes::lane_value(Value v)
@@ -949,12 +943,14 @@ bool BlockLanes::block(BlockId b)
 bool BlockLanes::run()
 {
 	// Avoid planning when there are neither packable stores nor integer sums.
-	unsigned stores = 0, adds = 0;
+	unsigned stores = 0, adds = 0, float_phis = 0;
+	const bool pack_recurrences = c_.costs.pack_loop_carried_f64;
 	for (const Instruction& inst : body_.instructions)
 	{
 		stores += inst.op == Opcode::Store && (inst.type.is_float() || lane_bytes(inst.type) == 4);
 		adds += inst.op == Opcode::Binary && static_cast<BinaryOp>(inst.sub) == BinaryOp::Add &&
 			(inst.type.kind() == TypeKind::I32 || inst.type.kind() == TypeKind::U32);
+		float_phis += pack_recurrences && inst.op == Opcode::Phi && inst.type.kind() == TypeKind::F64;
 	}
 	if (stores < 2 && adds < 4)
 		return false;
@@ -971,7 +967,7 @@ bool BlockLanes::run()
 		}
 	if (changed)
 		c_.invalidate_block_of();
-	return changed;
+	return (float_phis >= kMinLoopF64Phis && pack_loop_lanes(c_)) || changed;
 }
 
 } // namespace

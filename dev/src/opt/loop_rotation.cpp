@@ -12,8 +12,8 @@ namespace {
 
 // O3, last (finish_function): a loop whose header only tests -- its
 // phis, at most kRotateCopy plain instructions and a branch with one side
-// in the loop -- and whose latches jump to it is rotated: each latch ends
-// in its own copy of the header's instructions and branch, the header
+// in the loop -- can be rotated when its latches jump to it. Each latch
+// ends in its own copy of the header's instructions and branch, the header
 // stays as the entry's guard, and the side in the loop (the new header)
 // is entered from it through a preheader. What the body does every pass
 // then runs before every exit and once the preheader has run: a load
@@ -82,6 +82,7 @@ private:
 	};
 
 	bool select_loop(uint32_t loop);
+	bool conditional_latch(const Loop& loop, BlockId inside, BlockId outside, InstId test, InstId latch) const;
 	void read_uses();
 	void rotate(const Candidate& candidate);
 	void place_preheaders();
@@ -109,6 +110,28 @@ private:
 
 } // namespace
 
+// Rotating a short-circuit floating-point loop on Arm lets the recurrence
+// stay in its registers across the backedge. Only repeat the header's test
+// on the edge that passed the integral latch test.
+bool LoopRotation::conditional_latch(const Loop& loop, BlockId inside, BlockId outside, InstId test, InstId latch) const
+{
+	const auto& branch = body_.instructions[latch];
+	if (branch.op != Opcode::Branch || loop.blocks.size() != 2 || loop.latches.size() != 1 ||
+		loop.latches.front() != inside || (branch.ops[1].index != outside && branch.ops[2].index != outside) ||
+		!target_model::is_aarch64(c_.program.target))
+		return false;
+	auto comparison = [&](Value value) -> Type {
+		if (value.is(ValueKind::Temp) && body_.temps[value.index].def != kNoId)
+		{
+			const auto& inst = body_.instructions[body_.temps[value.index].def];
+			if (inst.op == Opcode::Compare)
+				return inst.type;
+		}
+		return Type::scalar(TypeKind::Void);
+	};
+	return comparison(body_.instructions[test].ops[0]).is_float() && comparison(branch.ops[0]).is_integer();
+}
+
 // Whether the loop can rotate, and is apart from those already chosen.
 bool LoopRotation::select_loop(uint32_t loop)
 {
@@ -128,7 +151,8 @@ bool LoopRotation::select_loop(uint32_t loop)
 	for (BlockId lt : l.latches)
 	{
 		const InstId last = body_.blocks[lt].last;
-		if (lt == h || last == kNoId || body_.instructions[last].op != Opcode::Jump)
+		if (lt == h || last == kNoId ||
+			(body_.instructions[last].op != Opcode::Jump && !conditional_latch(l, inside, outside, term, last)))
 			return false;
 	}
 	for (uint32_t k = cfg_.pred_first[h]; k < cfg_.pred_first[h + 1]; ++k)
@@ -314,8 +338,9 @@ void LoopRotation::rotate(const Candidate& candidate)
 		rename_phi_incoming(body_, inside, h, pre);
 	}
 	// Each latch tests again with a copy of the header.
-	for (BlockId lt : l.latches)
+	for (BlockId latch : l.latches)
 	{
+		const BlockId lt = entering(latch);
 		std::vector<std::pair<TempId, TempId>> renamed;
 		auto mapped = [&](Value v) {
 			for (const std::pair<TempId, TempId>& n : renamed)

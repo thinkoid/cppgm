@@ -16,6 +16,11 @@ namespace {
 // loop's vector form may wait on.
 const size_t kBodyInstructions = 128;
 const size_t kOverlapTests = 8;
+// Fully unrolling an inner reduction can leave a larger loop with many
+// independent reads. Use the larger budget only when four lanes amortize
+// the overlap checks over a known number of passes.
+const size_t kExpandedBodyInstructions = 256;
+const size_t kExpandedOverlapTests = 64;
 // The most registers a lane cell's elements fill, and its most elements.
 const int64_t kCellGroups = 4;
 const int64_t kCellModulus = 64;
@@ -23,6 +28,7 @@ const int64_t kCellModulus = 64;
 const unsigned kNarrowDepth = 6;
 // The most instructions of a loop whose rounds run the lanes' code twice.
 const size_t kPairedCode = 12;
+const size_t kPairedOrderedCode = 20;
 
 // Loop vectorization at O3: a loop of one block, whose count a counter and an
 // invariant bound give, runs in portable sixteen-byte vector steps. The
@@ -159,8 +165,8 @@ private:
 	bool read_accesses();
 	bool supported(const Instruction& inst) const;
 	bool choose_lanes();
-	bool same_group(const Access& a, const Access& b) const;
-	bool add_overlap_test(uint32_t a, uint32_t b);
+	bool same_group(const Access& a, const Group& group, int64_t high) const;
+	bool add_overlap_test(uint32_t a, uint32_t b, size_t limit);
 	bool read_dependences();
 	bool analyze(uint32_t loop);
 
@@ -208,12 +214,16 @@ private:
 	bool halves(const Instruction& inst, unsigned& shift) const;
 	void make_phi(BlockId block, Type type, std::initializer_list<Value> pairs, Value& out);
 	bool read_live_outs(BlockId after);
-	bool pairs_rounds() const;
+	int64_t round_copies() const;
+	bool literal_distance(uint64_t& distance) const;
 	bool literal_rounds(int64_t span, bool& whole) const;
 	void join_exits(
 		BlockId after, BlockId exit, const std::vector<Value>& finals, const std::vector<Value>& next_values);
 	BlockId place_block(BlockKind kind);
 	std::vector<Value> reduction_starts();
+	std::vector<int8_t> fixed_factors() const;
+	bool fixed_factor_pack(size_t start, const std::vector<int8_t>& factors) const;
+	std::vector<Value> load_fixed_reads();
 	std::vector<Value> counter_lanes();
 	void vectorize(uint32_t loop);
 
@@ -232,7 +242,7 @@ private:
 	int64_t copies_ = 1; // copies of the lanes' code a round of the vector loop runs
 	std::vector<InstId> code_;
 	std::vector<Access> accesses_;
-	std::vector<InstId> fixed_reads_; // loads of one address on every pass
+	std::vector<uint32_t> fixed_reads_; // indices in accesses_ of reads at fixed addresses
 	std::vector<Group> groups_;
 	std::vector<std::pair<uint32_t, uint32_t>> tests_;
 	std::vector<uint8_t> in_scalar_, in_wide_; // per temp
@@ -247,6 +257,7 @@ private:
 	BlockId block_ = kNoId, vector_pre_ = kNoId;
 	InstId tail_ = kNoId, pre_tail_ = kNoId;
 	std::vector<Value> scalars_, wides_; // per temp of the loop
+	std::vector<uint8_t> fixed_lanes_;   // one plus the packed lane of a fixed factor, or zero
 	std::vector<std::pair<std::pair<Value, TypeKind>, Value>> broadcasts_;
 	std::vector<TempId> live_outs_; // the loop's values code after it reads
 };
@@ -728,8 +739,15 @@ bool LoopVectorizer::read_code()
 		const Instruction& inst = body_.instructions[i];
 		if (inst.op == Opcode::Phi)
 			continue;
-		if (code_.size() == kBodyInstructions || inst.type.is_vector() || inst.type.is_object())
+		if (code_.size() == kExpandedBodyInstructions || inst.type.is_vector() || inst.type.is_object())
 			return false;
+		if (code_.size() == kBodyInstructions)
+		{
+			uint64_t distance;
+			if (!target_model::is_aarch64(c_.program.target) || inductions_[counter_].step != 1 ||
+				!literal_distance(distance) || distance < 16 || distance > 64)
+				return false;
+		}
 		switch (inst.op)
 		{
 		case Opcode::Load:
@@ -1323,7 +1341,7 @@ bool LoopVectorizer::read_accesses()
 		// lanes take that value.
 		if (!a.store && bytes != 0 && a.at.scale == 0 && fixed_address(inst.ops[0]))
 		{
-			fixed_reads_.push_back(id);
+			fixed_reads_.push_back(static_cast<uint32_t>(accesses_.size()));
 			accesses_.push_back(a);
 			continue;
 		}
@@ -1527,7 +1545,7 @@ bool LoopVectorizer::choose_lanes()
 	if (lane_bytes_ == 0 || (accesses_.empty() && reductions_.empty() && lane_cells_.empty()) || !lanes_pay_for_order())
 		return false;
 	lanes_ = 16 / lane_bytes_;
-	return lanes_pay_for_shifts();
+	return (code_.size() <= kBodyInstructions || lanes_ == 4) && lanes_pay_for_shifts();
 }
 
 // Per-lane variable shifts use scalar lane operations on the baseline targets.
@@ -1576,18 +1594,24 @@ bool LoopVectorizer::lanes_pay_for_order() const
 	return false;
 }
 
-bool LoopVectorizer::same_group(const Access& a, const Access& b) const
+bool LoopVectorizer::same_group(const Access& a, const Group& group, int64_t high) const
 {
-	return a.at.scale != 0 && b.at.scale != 0 && a.base == b.base && a.at.term == b.at.term &&
-		a.at.term_scale == b.at.term_scale;
+	const Access& b = accesses_[group.lowest];
+	if (!(a.base == b.base) || !(a.at.term == b.at.term) || a.at.term_scale != b.at.term_scale)
+		return false;
+	if (a.at.scale != 0 || b.at.scale != 0)
+		return a.at.scale != 0 && b.at.scale != 0;
+	// Adjacent fixed reads in an expanded body share one overlap test
+	// against a store, even when each load supplies a different splat.
+	return code_.size() > kBodyInstructions && !a.store && !b.store && a.at.offset <= group.high && high >= group.low;
 }
 
-bool LoopVectorizer::add_overlap_test(uint32_t a, uint32_t b)
+bool LoopVectorizer::add_overlap_test(uint32_t a, uint32_t b, size_t limit)
 {
 	const std::pair<uint32_t, uint32_t> test(std::min(a, b), std::max(a, b));
 	if (std::find(tests_.begin(), tests_.end(), test) == tests_.end())
 		tests_.push_back(test);
-	return tests_.size() <= kOverlapTests;
+	return tests_.size() <= limit;
 }
 
 // Whether the lanes keep every order of accesses that matters. Two accesses
@@ -1598,15 +1622,19 @@ bool LoopVectorizer::read_dependences()
 {
 	groups_.clear();
 	tests_.clear();
+	const size_t overlap_limit = code_.size() > kBodyInstructions ? kExpandedOverlapTests : kOverlapTests;
 	for (Access& a : accesses_)
 	{
+		const int64_t bytes = a.at.scale == 0 ? static_cast<int64_t>(lane_bytes(a.type)) : 0;
+		if (a.at.offset > INT64_MAX - bytes)
+			return false;
+		const int64_t high = a.at.offset + bytes;
 		uint32_t g = 0;
 		for (; g < groups_.size(); ++g)
-			if (same_group(a, accesses_[groups_[g].lowest]))
+			if (same_group(a, groups_[g], high))
 				break;
 		if (g == groups_.size())
-			groups_.push_back(Group{ static_cast<uint32_t>(&a - accesses_.data()), a.at.offset,
-				a.at.offset + (a.at.scale == 0 ? static_cast<int64_t>(lane_bytes(a.type)) : 0), a.at.scale });
+			groups_.push_back(Group{ static_cast<uint32_t>(&a - accesses_.data()), a.at.offset, high, a.at.scale });
 		else
 		{
 			if (a.at.offset < groups_[g].low)
@@ -1614,7 +1642,7 @@ bool LoopVectorizer::read_dependences()
 				groups_[g].low = a.at.offset;
 				groups_[g].lowest = static_cast<uint32_t>(&a - accesses_.data());
 			}
-			groups_[g].high = std::max(groups_[g].high, a.at.offset);
+			groups_[g].high = std::max(groups_[g].high, high);
 			groups_[g].scale = std::max(groups_[g].scale, a.at.scale);
 		}
 		a.group = g;
@@ -1643,7 +1671,7 @@ bool LoopVectorizer::read_dependences()
 				continue;
 			if (first.typed && later.typed && typed_types_apart(first.type, later.type))
 				continue;
-			if (!add_overlap_test(first.group, later.group))
+			if (!add_overlap_test(first.group, later.group, overlap_limit))
 				return false;
 		}
 	return true;
@@ -1810,7 +1838,11 @@ Value LoopVectorizer::broadcast(Value v, Type type)
 Value LoopVectorizer::wide(Value v, Type type)
 {
 	if (in_body(v))
+	{
+		if (!fixed_lanes_.empty() && fixed_lanes_[v.index])
+			return vector(VectorOp::Pshufd, wides_[v.index], Value::none(), 0x55 * (fixed_lanes_[v.index] - 1));
 		return wides_[v.index];
+	}
 	return broadcast(v, type);
 }
 
@@ -1903,7 +1935,12 @@ Value LoopVectorizer::narrow(Value v, unsigned from, unsigned to)
 			v = vector(VectorOp::Packssdw, kept, kept);
 		}
 		else
-			v = vector(VectorOp::Pshufd, v, Value::none(), 0x08);
+		{
+			// Only the low two lanes are live. Repeating those lanes lets
+			// Arm narrow both doublewords with a single UZP1.
+			const unsigned shuffle = target_model::is_aarch64(c_.program.target) && lanes_ == 2 ? 0x88 : 0x08;
+			v = vector(VectorOp::Pshufd, v, Value::none(), shuffle);
+		}
 	}
 	return v;
 }
@@ -2180,7 +2217,23 @@ void LoopVectorizer::widen_unary(const Instruction& inst)
 Value LoopVectorizer::lane_address(Value address, Type type)
 {
 	if (!backward_)
-		return address;
+	{
+		if (!target_model::is_aarch64(c_.program.target) || lanes_ * lane_bytes(type) != 16 ||
+			!address.is(ValueKind::Temp) || body_.temps[address.index].def == kNoId)
+			return address;
+		const Instruction index = body_.instructions[body_.temps[address.index].def];
+		const auto bytes = storage_bytes(index.type);
+		if (index.op != Opcode::Index || (bytes != 4 && bytes != 8) || !index.ops[1].is(ValueKind::Temp) ||
+			body_.temps[index.ops[1].index].type.kind() != TypeKind::I64)
+			return address;
+		// Q registers can be loaded with a byte offset, which multiple
+		// streams of the same loop can share.
+		const Type i64 = Type::scalar(TypeKind::I64);
+		Instruction by_byte = make_instruction(Opcode::Index, Type::scalar(TypeKind::I8));
+		by_byte.ops[0] = index.ops[0];
+		by_byte.ops[1] = binary(BinaryOp::Mul, i64, index.ops[1], literal(bytes), i64);
+		return emit(by_byte, body_.pointer_type());
+	}
 	Instruction low = make_instruction(Opcode::Index, Type::scalar(TypeKind::I8));
 	low.ops[0] = address;
 	low.ops[1] = literal(-static_cast<int64_t>((lanes_ - 1) * lane_bytes(type)));
@@ -2305,7 +2358,8 @@ void LoopVectorizer::widen(const Instruction& inst, InstId origin)
 	{
 	case Opcode::Load:
 		// (A fixed read's lanes are set before the loop; a pair sum loads its own.)
-		if (std::find(fixed_reads_.begin(), fixed_reads_.end(), origin) != fixed_reads_.end() ||
+		if (std::any_of(
+				fixed_reads_.begin(), fixed_reads_.end(), [&](uint32_t k) { return accesses_[k].inst == origin; }) ||
 			pair_sum(origin, role) != nullptr)
 			break;
 		wides_[inst.result] = widen_load(
@@ -2554,18 +2608,38 @@ bool LoopVectorizer::read_live_outs(BlockId after)
 	return live_outs_.empty() || cfg_.pred_count(after) == 1;
 }
 
-// Whether a round runs the lanes' code twice: a short vector body, between
-// bounds that are not both literals, in a loop the lanes may finish. One test
-// then serves two vectors (eight 32-bit elements on Arm) and leaves half as
-// many branches. (Between literals, and where the lanes leave a pass to the
-// scalar loop, the short loop unrolling groups the rounds. More lanes would
-// leave the scalar loop more passes than the rounds save.)
-bool LoopVectorizer::pairs_rounds() const
+// Group short rounds so one test serves two vectors. A short two-lane
+// round with a floating divide can overlap the work of four vectors on Arm.
+// The scalar remainder and the order of floating reductions are preserved.
+int64_t LoopVectorizer::round_copies() const
 {
-	const bool lanes_fit = lanes_ == 2 || (lanes_ == 4 && target_model::is_aarch64(c_.program.target));
-	if (copies_ != 1 || !lanes_fit || !lane_cells_.empty() || code_.size() > kPairedCode)
+	const bool arm = target_model::is_aarch64(c_.program.target);
+	if (copies_ != 1 || (lanes_ != 2 && !(lanes_ == 4 && arm)) || !lane_cells_.empty())
+		return copies_;
+	const bool ordered = std::any_of(
+		reductions_.begin(), reductions_.end(), [](const Reduction& r) { return r.ordered; });
+	if (ordered ? !arm || reductions_.size() != 1 || code_.size() > kPairedOrderedCode : code_.size() > kPairedCode)
+		return copies_;
+	if (arm && lanes_ == 2 && std::any_of(code_.begin(), code_.end(), [&](InstId id) {
+			const auto& inst = body_.instructions[id];
+			return inst.op == Opcode::Binary && inst.type.is_float() &&
+				inst.sub == static_cast<unsigned>(BinaryOp::Div);
+		}))
+		return 4;
+	return 2;
+}
+
+bool LoopVectorizer::literal_distance(uint64_t& distance) const
+{
+	const Induction& counter = inductions_[counter_];
+	if (counter.type.is_pointer() || !counter.start.is(ValueKind::Integer) || !bound_.is(ValueKind::Integer))
 		return false;
-	return std::none_of(reductions_.begin(), reductions_.end(), [](const Reduction& r) { return r.ordered; });
+	const uint64_t from = body_.literals[counter.start.index].low;
+	const uint64_t to = body_.literals[bound_.index].low + static_cast<uint64_t>(bound_add_);
+	distance = counter.step > 0 ? to - from : from - to;
+	if (lane_bytes(counter.type) < 8)
+		distance &= 0xffffffffu;
+	return true;
 }
 
 // Whether the counter runs between literals; `whole` is then whether that is
@@ -2573,14 +2647,9 @@ bool LoopVectorizer::pairs_rounds() const
 // the bound, or else leaves passes to the scalar loop.
 bool LoopVectorizer::literal_rounds(int64_t span, bool& whole) const
 {
-	const Induction& counter = inductions_[counter_];
-	if (counter.type.is_pointer() || !counter.start.is(ValueKind::Integer) || !bound_.is(ValueKind::Integer))
+	uint64_t distance;
+	if (!literal_distance(distance))
 		return false;
-	const uint64_t from = body_.literals[counter.start.index].low;
-	const uint64_t to = body_.literals[bound_.index].low + static_cast<uint64_t>(bound_add_);
-	uint64_t distance = counter.step > 0 ? to - from : from - to;
-	if (lane_bytes(counter.type) < 8)
-		distance &= 0xffffffffu;
 	whole = distance % static_cast<uint64_t>(span) == 0;
 	return true;
 }
@@ -2671,6 +2740,89 @@ std::vector<Value> LoopVectorizer::reduction_starts()
 }
 
 // Lanes of a counter that is data: its first value in each.
+// A fixed factor used in just one packed multiply can stay in its original
+// lane. Two fixed factors in the same multiply would need two broadcasts.
+std::vector<int8_t> LoopVectorizer::fixed_factors() const
+{
+	if (fixed_reads_.size() < 4 || code_.size() <= kBodyInstructions || lanes_ != 4 ||
+		!target_model::is_aarch64(c_.program.target))
+		return {};
+	std::vector<int8_t> uses(wides_.size(), -1);
+	for (uint32_t k : fixed_reads_)
+	{
+		const auto& load = body_.instructions[accesses_[k].inst];
+		if (load.type.is_integer() && lane_bytes(load.type) == 4 && in_wide_[load.result] && !in_scalar_[load.result])
+			uses[load.result] = 0;
+	}
+	const auto fixed = [&](Value v) { return v.is(ValueKind::Temp) && uses[v.index] >= 0; };
+	for (InstId id : code_)
+	{
+		const auto& inst = body_.instructions[id];
+		const bool multiply = inst.op == Opcode::Binary && inst.sub == static_cast<unsigned>(BinaryOp::Mul) &&
+			inst.type.is_integer() && lane_bytes(inst.type) == 4 && in_wide_[inst.result] &&
+			!(fixed(inst.ops[0]) && fixed(inst.ops[1]));
+		for_each_operand(body_, inst, [&](Value v) {
+			if (fixed(v))
+				uses[v.index] = multiply && uses[v.index] == 0 ? 1 : 2;
+		});
+	}
+	return uses;
+}
+
+bool LoopVectorizer::fixed_factor_pack(size_t start, const std::vector<int8_t>& factors) const
+{
+	if (factors.empty() || fixed_reads_.size() - start < 4)
+		return false;
+	const Access& first = accesses_[fixed_reads_[start]];
+	for (unsigned lane = 0; lane != 4; ++lane)
+	{
+		const Access& a = accesses_[fixed_reads_[start + lane]];
+		if (a.group != first.group || a.type != first.type || factors[body_.instructions[a.inst].result] != 1 ||
+			static_cast<uint64_t>(a.at.offset) - static_cast<uint64_t>(first.at.offset) != lane * 4)
+			return false;
+	}
+	return true;
+}
+
+std::vector<Value> LoopVectorizer::load_fixed_reads()
+{
+	const auto factors = fixed_factors();
+	std::vector<Value> loaded(fixed_reads_.size(), Value::none());
+	for (size_t k = 0; k < fixed_reads_.size(); ++k)
+	{
+		const InstId id = accesses_[fixed_reads_[k]].inst;
+		Instruction read = body_.instructions[id];
+		if (!in_wide_[read.result])
+			continue;
+		read.next = kNoId;
+		// Its address may be a field's, which the loop names on each pass.
+		if (in_body(read.ops[0]))
+		{
+			Instruction field = body_.instructions[body_.temps[read.ops[0].index].def];
+			field.next = kNoId;
+			read.ops[0] = emit(field, body_.temps[read.ops[0].index].type);
+		}
+		if (!fixed_factor_pack(k, factors))
+		{
+			loaded[k] = emit(read, read.type);
+			continue;
+		}
+		// These four reads cover exactly sixteen bytes in the same guarded
+		// range. Keep their values together until a packed multiply needs them.
+		const Value packed = widen_load(read.ops[0], 16, id);
+		if (fixed_lanes_.empty())
+			fixed_lanes_.resize(wides_.size());
+		for (unsigned lane = 0; lane != 4; ++lane)
+		{
+			const auto temp = body_.instructions[accesses_[fixed_reads_[k + lane]].inst].result;
+			wides_[temp] = packed;
+			fixed_lanes_[temp] = lane + 1;
+		}
+		k += 3;
+	}
+	return loaded;
+}
+
 std::vector<Value> LoopVectorizer::counter_lanes()
 {
 	std::vector<Value> wide_counter(inductions_.size(), Value::none());
@@ -2724,8 +2876,8 @@ void LoopVectorizer::vectorize(uint32_t loop)
 		: body_.instructions[body_.blocks[b_].last].ops[1].index;
 	bool whole = false;
 	const bool may_finish = read_live_outs(after);
-	if (may_finish && !literal_rounds(1, whole) && pairs_rounds())
-		copies_ = 2;
+	if (may_finish && !literal_rounds(1, whole))
+		copies_ = round_copies();
 	const int64_t span = static_cast<int64_t>(lanes_) * copies_ * (up ? counter.step : -counter.step);
 	// (Between literals the exit knows whether passes are left: with some,
 	// the scalar loop always runs; with none, never, when the lanes may
@@ -2739,6 +2891,7 @@ void LoopVectorizer::vectorize(uint32_t loop)
 	const BlockId scalar_pre = place_block(BlockKind::LoopPreheader);
 	scalars_.assign(body_.temps.size(), Value::none());
 	wides_.assign(body_.temps.size(), Value::none());
+	fixed_lanes_.clear();
 	broadcasts_.clear();
 
 	// Enough passes for the lanes and at least one more.
@@ -2784,30 +2937,12 @@ void LoopVectorizer::vectorize(uint32_t loop)
 			read.next = kNoId;
 			r.start = emit(read, r.type);
 		}
-	std::vector<Value> fixed_values;
-	for (InstId id : fixed_reads_)
-	{
-		Instruction read = body_.instructions[id];
-		read.next = kNoId;
-		if (!in_wide_[read.result])
-		{
-			fixed_values.push_back(Value::none());
-			continue;
-		}
-		// (Its address may be a field's, which the loop names on each pass.)
-		if (in_body(read.ops[0]))
-		{
-			Instruction field = body_.instructions[body_.temps[read.ops[0].index].def];
-			field.next = kNoId;
-			read.ops[0] = emit(field, body_.temps[read.ops[0].index].type);
-		}
-		fixed_values.push_back(emit(read, read.type));
-	}
+	const auto fixed_values = load_fixed_reads();
 	const std::vector<Value> wide_start = reduction_starts();
 	for (size_t k = 0; k < fixed_reads_.size(); ++k)
 		if (!fixed_values[k].is(ValueKind::None))
 		{
-			const Instruction& read = body_.instructions[fixed_reads_[k]];
+			const Instruction& read = body_.instructions[accesses_[fixed_reads_[k]].inst];
 			wides_[read.result] = broadcast(fixed_values[k], read.type);
 		}
 	const std::vector<Value> wide_counter = counter_lanes();

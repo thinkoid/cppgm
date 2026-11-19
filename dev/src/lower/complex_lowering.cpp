@@ -111,12 +111,16 @@ lowir::SymbolId ProgramLowering::complex_helper(bool divide, const sema::Type* p
 		parameter.name = argument_name(i);
 		parameter.type = storage;
 		parameter.classes = soft_float_classes(soft);
+		if (target_model::is_aarch64(program_.target) && soft == SoftFloat::Quad)
+			parameter.shape = aggregate_shape(bare);
 		program_.parameters.push_back(parameter);
 	}
 	signature.parameter_count = 4;
 	const sema::Type* complex = graph().types.complex(bare);
 	signature.result = storage_type(complex);
 	signature.boundary.result_classes = complex_classes(complex);
+	if (target_model::is_aarch64(program_.target))
+		signature.boundary.result_shape = aggregate_shape(complex);
 	signature.boundary.unwind = ir_model::CUM_NO;
 	// (The float and double forms return in registers: they touch no memory.)
 	if (mode == 's' || mode == 'd')

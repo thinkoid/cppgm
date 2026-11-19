@@ -11,6 +11,148 @@ void Selector::vector_move(unsigned to, unsigned from)
 		out_.emit(Op::VOrr, to, from, from);
 }
 
+InstId Selector::vector_combination(const lowir::Instruction& inst)
+{
+	switch (static_cast<VectorOp>(inst.sub))
+	{
+	case VectorOp::Fromi32:
+		return scalar_splat(inst);
+	case VectorOp::Tof32:
+	case VectorOp::Tof64:
+		return scalar_lane_binary(inst);
+	case VectorOp::Fromf32:
+	case VectorOp::Fromf64:
+	{
+		const InstId splat = scalar_splat(inst);
+		return splat == kNoId ? combine_float_pair(inst) : splat;
+	}
+	case VectorOp::Pmullw:
+	case VectorOp::Pmulld:
+		return packed_multiply_accumulate(inst);
+	case VectorOp::Pshufd:
+	{
+		const InstId pair = horizontal_double_sum(inst);
+		if (pair != kNoId)
+			return pair;
+		const InstId sum = horizontal_word_sum(inst);
+		return sum == kNoId ? packed_lane_multiply(inst) : sum;
+	}
+	default:
+		return kNoId;
+	}
+}
+
+// Keep the lane order of the scalar addition, including NaN propagation.
+InstId Selector::horizontal_double_sum(const lowir::Instruction& inst)
+{
+	if (!inst.ops[2].is(ValueKind::Integer) || body_.literals[inst.ops[2].index].low != 0x4e || inst.next == kNoId ||
+		uses_[inst.result] != 1)
+		return kNoId;
+	const auto& added = body_.instructions[inst.next];
+	if (added.op != Opcode::Vector || added.sub != static_cast<uint8_t>(VectorOp::Addpd) ||
+		!(added.ops[0] == inst.ops[0]) || !(added.ops[1] == Value::temp(inst.result)) || added.next == kNoId ||
+		uses_[added.result] != 1)
+		return kNoId;
+	const auto& result = body_.instructions[added.next];
+	if (result.op != Opcode::Vector || result.sub != static_cast<uint8_t>(VectorOp::Tof64) ||
+		!(result.ops[0] == Value::temp(added.result)))
+		return kNoId;
+	const unsigned source = vector_value(inst.ops[0], 16);
+	const unsigned dest = vectors_[result.result] == kNoId ? 16 : vectors_[result.result];
+	out_.emit(Op::VFaddpD, dest, source);
+	save_fp(dest, result.result);
+	return added.next;
+}
+
+// A shuffle/add tree that extracts its low word is an all-lane sum.
+InstId Selector::horizontal_word_sum(const lowir::Instruction& first)
+{
+	const auto matches = [](const lowir::Instruction& inst, VectorOp op) {
+		return inst.op == Opcode::Vector && inst.sub == static_cast<unsigned>(op);
+	};
+	const auto mask_is = [&](const lowir::Instruction& inst, unsigned mask) {
+		return inst.ops[2].is(ValueKind::Integer) && body_.literals[inst.ops[2].index].low == mask;
+	};
+	const auto added = [](const lowir::Instruction& inst, Value a, Value b) {
+		return (inst.ops[0] == a && inst.ops[1] == b) || (inst.ops[0] == b && inst.ops[1] == a);
+	};
+	if (!mask_is(first, 0x4e) || first.next == kNoId || uses_[first.result] != 1)
+		return kNoId;
+	const auto& pair = body_.instructions[first.next];
+	if (!matches(pair, VectorOp::Paddd) || !added(pair, first.ops[0], Value::temp(first.result)) ||
+		pair.next == kNoId || uses_[pair.result] != 2)
+		return kNoId;
+	const auto& swap = body_.instructions[pair.next];
+	if (!matches(swap, VectorOp::Pshufd) || !(swap.ops[0] == Value::temp(pair.result)) || !mask_is(swap, 0xb1) ||
+		swap.next == kNoId || uses_[swap.result] != 1)
+		return kNoId;
+	const auto& sum = body_.instructions[swap.next];
+	if (!matches(sum, VectorOp::Paddd) || !added(sum, Value::temp(pair.result), Value::temp(swap.result)) ||
+		sum.next == kNoId || uses_[sum.result] != 1)
+		return kNoId;
+	const auto& word = body_.instructions[sum.next];
+	if (!matches(word, VectorOp::Toi32) || !(word.ops[0] == Value::temp(sum.result)))
+		return kNoId;
+	const unsigned source = vector_value(first.ops[0], 16);
+	out_.emit(Op::VAddvS, 16, source);
+	out_.emit(Op::FmovWS, 9, 16);
+	save(9, word.result);
+	return sum.next;
+}
+
+// MLA overwrites the addend. Fuse the pair when allocation already placed
+// the addend and the result in the same register.
+InstId Selector::packed_multiply_accumulate(
+	const lowir::Instruction& inst, const lowir::Instruction* splat, unsigned lane_field)
+{
+	if (inst.next == kNoId || uses_[inst.result] != 1)
+		return kNoId;
+	const auto& next = body_.instructions[inst.next];
+	const bool words = static_cast<VectorOp>(inst.sub) == VectorOp::Pmullw;
+	if (next.op != Opcode::Vector || static_cast<VectorOp>(next.sub) != (words ? VectorOp::Paddw : VectorOp::Paddd))
+		return kNoId;
+	const Value product = Value::temp(inst.result);
+	const bool right = next.ops[1] == product;
+	if (!right && !(next.ops[0] == product))
+		return kNoId;
+	const Value acc = next.ops[right ? 0 : 1];
+	const unsigned dest = vectors_[next.result];
+	if (!acc.is(ValueKind::Temp) || dest == kNoId || vectors_[acc.index] != dest)
+		return kNoId;
+	const bool left_splat = splat && inst.ops[0] == Value::temp(splat->result);
+	const unsigned left = vector_value(inst.ops[left_splat ? 1 : 0], 16);
+	const unsigned factor = vector_value(splat ? splat->ops[0] : inst.ops[1], 17);
+	out_.emit(splat ? Op::VMlaLaneS : Op::VMla, dest, left, factor, splat ? lane_field : (words ? 1u : 2u) << 22);
+	return inst.next;
+}
+
+// Multiplying by a repeated i32 lane can read that lane from the original
+// vector. This also applies when the product immediately feeds an accumulation.
+InstId Selector::packed_lane_multiply(const lowir::Instruction& inst)
+{
+	if (inst.next == kNoId || uses_[inst.result] != 1 || !inst.ops[2].is(ValueKind::Integer))
+		return kNoId;
+	const uint64_t mask = body_.literals[inst.ops[2].index].low;
+	if (mask > 255 || mask % 0x55)
+		return kNoId;
+	const auto& mul = body_.instructions[inst.next];
+	const Value splat = Value::temp(inst.result);
+	const bool left = mul.ops[0] == splat;
+	if (mul.op != Opcode::Vector || mul.sub != static_cast<unsigned>(VectorOp::Pmulld) ||
+		(left == (mul.ops[1] == splat)))
+		return kNoId;
+	const unsigned lane = static_cast<unsigned>(mask) / 0x55;
+	const unsigned field = ((lane & 1) << 21) | ((lane & 2) << 10);
+	const InstId combined = packed_multiply_accumulate(mul, &inst, field);
+	if (combined != kNoId)
+		return combined;
+	const unsigned dest = vectors_[mul.result] == kNoId ? 16 : vectors_[mul.result];
+	const unsigned input = vector_value(mul.ops[left ? 1 : 0], 16), factor = vector_value(inst.ops[0], 17);
+	out_.emit(Op::VMulLaneS, dest, input, factor, field);
+	save_vector(dest, mul.result);
+	return inst.next;
+}
+
 unsigned Selector::vector_value(Value src, unsigned scratch)
 {
 	if (src.is(ValueKind::Temp) && vectors_[src.index] != kNoId)
@@ -26,6 +168,8 @@ unsigned Selector::vector_value(Value src, unsigned scratch)
 			out_.emit(Op::VInsHi, scratch, 16);
 		}
 	}
+	else if (src.is(ValueKind::Temp) && memory_value(body_.temps[src.index].type))
+		vector_home(false, scratch, src.index);
 	else
 	{
 		address(16, src);
@@ -39,9 +183,19 @@ void Selector::save_vector(unsigned reg, TempId id)
 	if (vectors_[id] != kNoId)
 		vector_move(vectors_[id], reg);
 	else
+		vector_home(true, reg, id);
+}
+
+void Selector::vector_home(bool store, unsigned reg, TempId id)
+{
+	const Op op = store ? Op::StrQ : Op::LdrQ;
+	const uint32_t offset = homes_[id];
+	if ((call_result_slots_.empty() || call_result_slots_[id] == kNoId) && offset % 16 == 0 && offset / 16 < 4096)
+		out_.emit(op, reg, frame_base(), 0, (offset / 16) << 10);
+	else
 	{
 		home_address(16, id);
-		out_.emit(Op::StrQ, reg, 16);
+		out_.emit(op, reg, 16);
 	}
 }
 
@@ -62,19 +216,27 @@ void Selector::vector_shift(VectorOp op, unsigned dest, unsigned source, uint64_
 	}
 }
 
-// The vectorizer broadcasts an i32 by inserting lane zero then shuffling it
-// into every lane. DUP reads a general register directly; MOVI can encode
-// a single nonzero byte of an immediate at any byte position in each word.
+// Broadcast a scalar directly. MOVI can also encode a single nonzero byte
+// at any byte position in each i32 lane.
 InstId Selector::scalar_splat(const lowir::Instruction& inst)
 {
-	if (inst.sub != static_cast<unsigned>(VectorOp::Fromi32) || inst.next == kNoId || uses_[inst.result] != 1)
+	if (inst.next == kNoId || uses_[inst.result] != 1)
 		return kNoId;
+	const auto op = static_cast<VectorOp>(inst.sub);
+	const bool wide = op == VectorOp::Fromf64;
 	const auto& shuffle = body_.instructions[inst.next];
 	if (shuffle.op != Opcode::Vector || shuffle.sub != static_cast<unsigned>(VectorOp::Pshufd) ||
 		!(shuffle.ops[0] == Value::temp(inst.result)) || !shuffle.ops[2].is(ValueKind::Integer) ||
-		body_.literals[shuffle.ops[2].index].low != 0)
+		body_.literals[shuffle.ops[2].index].low != (wide ? 0x44u : 0u))
 		return kNoId;
 	const auto dest = vectors_[shuffle.result] == kNoId ? 16 : vectors_[shuffle.result];
+	if (op != VectorOp::Fromi32)
+	{
+		const unsigned source = fp_operand(inst.ops[0], Type::scalar(wide ? TypeKind::F64 : TypeKind::F32), 16);
+		out_.emit(wide ? Op::VDupD : Op::VDupS, dest, source);
+		save_vector(dest, shuffle.result);
+		return inst.next;
+	}
 	if (inst.ops[0].is(ValueKind::Integer))
 	{
 		const auto bits = static_cast<uint32_t>(body_.literals[inst.ops[0].index].low);
@@ -110,10 +272,24 @@ void Selector::vector_shuffle(const lowir::Instruction& inst, unsigned source)
 				out_.emit(Op::VInsH, 17, source, 0, ((first + i) << 18) | ((first + lane) << 12));
 		}
 	}
-	else if (((mask & 3) * 0x55) == mask)
+	else if (((mask & 3) * 0x55) == mask || mask == 0x44 || mask == 0xee)
 	{
 		const auto dest = vectors_[inst.result] == kNoId ? 17 : vectors_[inst.result];
-		out_.emit(Op::VDupS, dest, source, 0, (mask & 3) << 19);
+		if (mask == 0x44 || mask == 0xee)
+			out_.emit(Op::VDupD, dest, source, 0, (mask == 0xee ? 1u : 0u) << 20);
+		else
+			out_.emit(Op::VDupS, dest, source, 0, (mask & 3) << 19);
+		save_vector(dest, inst.result);
+		return;
+	}
+	else if (mask == 0x08 || mask == 0x88)
+	{
+		// Keep the low word of each doubleword. The 0x08 form repeats
+		// word zero in the last lane, which is still the same after UZP1.
+		const unsigned dest = vectors_[inst.result] == kNoId ? 17 : vectors_[inst.result];
+		out_.emit(Op::VUzp1, dest, source, source, 2u << 22);
+		if (mask == 0x08)
+			out_.emit(Op::VInsS, dest, dest, 0, 3u << 19);
 		save_vector(dest, inst.result);
 		return;
 	}
@@ -158,6 +334,82 @@ const Pattern patterns[] = {
 };
 }
 
+// Two scalar values can feed a packed doubleword pair or a scalar bound
+// directly from their registers.
+InstId Selector::combine_float_pair(const lowir::Instruction& first)
+{
+	const auto from = static_cast<VectorOp>(first.sub);
+	const bool wide = from == VectorOp::Fromf64;
+	if ((from != VectorOp::Fromf32 && !wide) || first.next == kNoId || uses_[first.result] != 1)
+		return kNoId;
+	const auto& second = body_.instructions[first.next];
+	if (second.op != Opcode::Vector || second.sub != first.sub || second.next == kNoId || uses_[second.result] != 1)
+		return kNoId;
+	const auto& merge = body_.instructions[second.next];
+	if (merge.op != Opcode::Vector || !(merge.ops[0] == Value::temp(first.result)) ||
+		!(merge.ops[1] == Value::temp(second.result)))
+		return kNoId;
+	const auto op = static_cast<VectorOp>(merge.sub);
+	if (wide && op == VectorOp::Unpcklpd)
+	{
+		const Type type = Type::scalar(TypeKind::F64);
+		const unsigned lhs = fp_operand(first.ops[0], type, 16), rhs = fp_operand(second.ops[0], type, 17);
+		const unsigned dest = vectors_[merge.result] == kNoId ? 16 : vectors_[merge.result];
+		out_.emit(Op::VZip1, dest, lhs, rhs, 3u << 22);
+		save_vector(dest, merge.result);
+		return second.next;
+	}
+	if (merge.next == kNoId || uses_[merge.result] != 1)
+		return kNoId;
+	const bool maximum = op == (wide ? VectorOp::Maxpd : VectorOp::Maxps);
+	if (!maximum && op != (wide ? VectorOp::Minpd : VectorOp::Minps))
+		return kNoId;
+	const auto& extract = body_.instructions[merge.next];
+	if (extract.op != Opcode::Vector ||
+		static_cast<VectorOp>(extract.sub) != (wide ? VectorOp::Tof64 : VectorOp::Tof32) ||
+		!(extract.ops[0] == Value::temp(merge.result)))
+		return kNoId;
+	const Type type = extract.type;
+	const unsigned lhs = fp_operand(first.ops[0], type, 16), rhs = fp_operand(second.ops[0], type, 17);
+	const unsigned dest = vectors_[extract.result] == kNoId ? 16 : vectors_[extract.result];
+	const unsigned precision = wide ? 1u << 22 : 0;
+	out_.emit(Op::Fcmp, 0, lhs, rhs, precision);
+	out_.emit(Op::Fcsel, dest, lhs, rhs, precision | ((maximum ? 12u : 4u) << 12));
+	save_fp(dest, extract.result);
+	return merge.next;
+}
+
+// Ordered comparison selects the left operand only when strictly better.
+// Ties, signed zero and unordered inputs keep the second operand's bits.
+void Selector::vector_minmax(VectorOp op, unsigned dest, unsigned left, unsigned right)
+{
+	const bool maximum = op == VectorOp::Maxps || op == VectorOp::Maxpd;
+	const bool wide = op == VectorOp::Minpd || op == VectorOp::Maxpd;
+	unsigned mask = dest;
+	const auto available = [&](unsigned reg) { return reg != left && reg != right; };
+	if (!available(mask))
+		mask = available(16) ? 16 : available(17) ? 17 : 0;
+	// With two spilled operands and a spilled destination, borrow v0.
+	const bool borrowed = !available(dest) && mask == 0;
+	if (borrowed)
+	{
+		out_.emit(Op::FmovXD, 10, 0);
+		out_.emit(Op::VUmovDHi, 11, 0);
+	}
+	out_.emit(Op::VFcmgt, mask, maximum ? left : right, maximum ? right : left, unsigned(wide) << 22);
+	if (dest == right)
+		out_.emit(Op::VBit, dest, left, mask);
+	else if (dest == left)
+		out_.emit(Op::VBif, dest, right, mask);
+	else
+		out_.emit(Op::VBsl, dest, left, right);
+	if (borrowed)
+	{
+		out_.emit(Op::FmovDX, 0, 10);
+		out_.emit(Op::VInsHi, 0, 11);
+	}
+}
+
 void Selector::vector_instruction(const lowir::Instruction& inst)
 {
 	const auto op = static_cast<VectorOp>(inst.sub);
@@ -171,12 +423,27 @@ void Selector::vector_instruction(const lowir::Instruction& inst)
 		const bool narrow = storage_bytes(type) == 4;
 		if (shape == VectorShape::ToScalar)
 		{
-			out_.emit(narrow ? Op::FmovWS : Op::FmovXD, 9, vector_value(inst.ops[0], 16));
-			save(9, inst.result);
+			const unsigned source = vector_value(inst.ops[0], 16);
+			if (type.is_float())
+				save_fp(source, inst.result);
+			else
+			{
+				out_.emit(narrow ? Op::FmovWS : Op::FmovXD, 9, source);
+				save(9, inst.result);
+			}
 			return;
 		}
-		value(9, inst.ops[0], type);
-		out_.emit(narrow ? Op::FmovSW : Op::FmovDX, dest, 9);
+		if (type.is_float())
+		{
+			// The scalar write clears the other lanes of the new vector.
+			const unsigned source = fp_operand(inst.ops[0], type, 16);
+			out_.emit(Op::FmovFP, dest, source, 0, narrow ? 0 : 1u << 22);
+		}
+		else
+		{
+			value(9, inst.ops[0], type);
+			out_.emit(narrow ? Op::FmovSW : Op::FmovDX, dest, 9);
+		}
 	}
 	else
 	{
@@ -214,6 +481,42 @@ void Selector::vector_instruction(const lowir::Instruction& inst)
 			}
 		switch (op)
 		{
+		case VectorOp::Minps:
+		case VectorOp::Minpd:
+		case VectorOp::Maxps:
+		case VectorOp::Maxpd:
+			vector_minmax(op, dest, left, right);
+			break;
+		case VectorOp::Pmaddwd:
+		{
+			// Sign-extend both halves, then add adjacent pairs modulo 2^32.
+			const bool dest_is_input = dest == left || dest == right;
+			const unsigned low = dest_is_input ? dest : (dest == 16 ? 17 : 16);
+			unsigned high = dest;
+			if (dest_is_input)
+				high = left != 17 && right != 17 ? 17 : left != 16 && right != 16 ? 16 : 0;
+			if (high == 0 && dest_is_input)
+			{
+				out_.emit(Op::FmovXD, 10, 0);
+				out_.emit(Op::VUmovDHi, 11, 0);
+			}
+			out_.emit(Op::VSmullH, high, left, right, 1u << 30);
+			out_.emit(Op::VSmullH, low, left, right);
+			out_.emit(Op::VAddpS, dest, low, high);
+			if (high == 0 && dest_is_input)
+			{
+				out_.emit(Op::FmovDX, 0, 10);
+				out_.emit(Op::VInsHi, 0, 11);
+			}
+			break;
+		}
+		case VectorOp::Cvtdq2pd:
+			out_.emit(Op::VSxtl2d, dest, left);
+			out_.emit(Op::VScvtf, dest, dest, 0, 1u << 22);
+			break;
+		case VectorOp::Cvtdq2ps:
+			out_.emit(Op::VScvtf, dest, left);
+			break;
 		case VectorOp::Cvtps2pd:
 		case VectorOp::Cvtpd2ps:
 			out_.emit(op == VectorOp::Cvtps2pd ? Op::VFcvtl : Op::VFcvtn, dest, left);

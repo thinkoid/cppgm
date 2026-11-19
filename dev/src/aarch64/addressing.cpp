@@ -9,6 +9,27 @@ bool power_of_two(uint64_t n)
 	return n && !(n & (n - 1));
 }
 
+// A field projection may be indexed in bytes or in element units.
+bool following_field(const FunctionBody& body, const lowir::Instruction& step, uint64_t bytes)
+{
+	const uint64_t scale = storage_bytes(step.type);
+	return step.ops[1].is(ValueKind::Integer) && scale != 0 && bytes % scale == 0 &&
+		body.literals[step.ops[1].index].low == bytes / scale;
+}
+
+const lowir::Instruction* signed_word_extension(const FunctionBody& body, const lowir::Instruction& load, uint32_t uses)
+{
+	const unsigned bits = integer_bits(load.type.kind());
+	if ((bits != 8 && bits != 16) || uses != 1 || load.next == kNoId)
+		return nullptr;
+	const auto& next = body.instructions[load.next];
+	if (next.op != Opcode::Convert || next.sub != static_cast<unsigned>(ConvertOp::SExt) ||
+		!(next.ops[0] == Value::temp(load.result)) || convert_source_type(next) != load.type ||
+		integer_bits(next.type.kind()) != 32)
+		return nullptr;
+	return &next;
+}
+
 Op indexed_access(bool store, unsigned bytes)
 {
 	switch (bytes)
@@ -92,22 +113,23 @@ bool Selector::emit_scalar_pair(
 {
 	const bool store = low.op == Opcode::Store;
 	const auto bytes = storage_bytes(low.type);
+	const bool floating = low.type.is_float();
 	if (high.op != low.op || high.type != low.type || ((low.flags | high.flags) & IF_VOLATILE) ||
-		!(low.type.is_integer() || low.type.is_pointer()) || (bytes != 4 && bytes != 8) || offset % bytes ||
+		!(low.type.is_integer() || low.type.is_pointer() || floating) || (bytes != 4 && bytes != 8) || offset % bytes ||
 		offset / bytes > 63 || !base.is(ValueKind::Temp) || registers_[base.index] == kNoId)
 		return false;
 	const auto reg = [&](const lowir::Instruction& inst) {
-		if (!store)
-			return registers_[inst.result];
-		const Value v = inst.ops[0];
-		return v.is(ValueKind::Temp)                                   ? registers_[v.index]
-			: v.is(ValueKind::Integer) && !body_.literals[v.index].low ? 31u
-																	   : kNoId;
+		const Value v = store ? inst.ops[0] : Value::temp(inst.result);
+		if (v.is(ValueKind::Temp))
+			return floating ? vectors_[v.index] : registers_[v.index];
+		return !floating && v.is(ValueKind::Integer) && !body_.literals[v.index].low ? 31u : kNoId;
 	};
 	const auto lo = reg(low), hi = reg(high);
 	if (lo == kNoId || hi == kNoId || (!store && lo == hi))
 		return false;
-	const auto op = bytes == 4 ? (store ? Op::StpW : Op::LdpW) : (store ? Op::StpX : Op::LdpX);
+	const auto op = floating ? (bytes == 4 ? (store ? Op::StpS : Op::LdpS) : (store ? Op::StpD : Op::LdpD))
+		: bytes == 4         ? (store ? Op::StpW : Op::LdpW)
+							 : (store ? Op::StpX : Op::LdpX);
 	out_.emit(op, lo, registers_[base.index], 0, (uint32_t(offset / bytes) << 15) | (hi << 10));
 	return true;
 }
@@ -122,8 +144,7 @@ InstId Selector::paired_access(const lowir::Instruction& low)
 		return kNoId;
 	const auto& index = body_.instructions[low.next];
 	if (index.op != Opcode::Index || index.next == kNoId || !(index.ops[0] == base) ||
-		!index.ops[1].is(ValueKind::Integer) || body_.literals[index.ops[1].index].low != 1 ||
-		storage_bytes(index.type) != storage_bytes(low.type) || uses_[index.result] != 1)
+		!following_field(body_, index, storage_bytes(low.type)) || uses_[index.result] != 1)
 		return kNoId;
 	const auto& high = body_.instructions[index.next];
 	if (!(high.ops[store ? 1 : 0] == Value::temp(index.result)) || !emit_scalar_pair(low, high, base, 0))
@@ -176,14 +197,13 @@ InstId Selector::paired_fields(const lowir::Instruction& first)
 // combine to register sources so neither read can observe the first store.
 InstId Selector::paired_store(const lowir::Instruction& index)
 {
-	if (!index.ops[0].is(ValueKind::Temp) || !index.ops[1].is(ValueKind::Integer) ||
-		body_.literals[index.ops[1].index].low != 1 || uses_[index.result] != 1 || index.next == kNoId)
+	if (!index.ops[0].is(ValueKind::Temp) || uses_[index.result] != 1 || index.next == kNoId)
 		return kNoId;
 	const auto& low = body_.instructions[index.next];
-	if (low.op != Opcode::Store || low.next == kNoId || !(low.ops[1] == index.ops[0]) || !low.type.is_integer())
+	if (low.op != Opcode::Store || low.next == kNoId || !(low.ops[1] == index.ops[0]))
 		return kNoId;
 	const auto& high = body_.instructions[low.next];
-	if (storage_bytes(index.type) != storage_bytes(low.type) || !(high.ops[1] == Value::temp(index.result)) ||
+	if (!following_field(body_, index, storage_bytes(low.type)) || !(high.ops[1] == Value::temp(index.result)) ||
 		!emit_scalar_pair(low, high, index.ops[0], 0))
 		return kNoId;
 	return low.next;
@@ -261,15 +281,19 @@ InstId Selector::address_sequence(InstId id)
 		const Value pointer = memory.ops[store ? 1 : 0];
 		const bool consumes = (store || memory.op == Opcode::Load) && pointer.is(ValueKind::Temp) &&
 			(aliases_.empty() ? pointer.index : aliases_[pointer.index]) == index.result;
-		if (consumes && memory.type.kind() == TypeKind::V128 && literal &&
-			((!(displacement % 16) && displacement / 16 < 4096) || displacement + 256 < 512) &&
-			index.ops[0].is(ValueKind::Temp) && registers_[index.ops[0].index] != kNoId)
+		const bool vector_offset = literal
+			? (!(displacement % 16) && displacement / 16 < 4096) || displacement + 256 < 512
+			: bits == 64 && (scale == 1 || scale == 16);
+		if (consumes && memory.type.kind() == TypeKind::V128 && vector_offset && index.ops[0].is(ValueKind::Temp))
 		{
-			const auto base = registers_[index.ops[0].index];
+			const unsigned base = address_register(index.ops[0], 10);
 			const auto reg = store                 ? vector_value(memory.ops[0], 16)
 				: vectors_[memory.result] == kNoId ? 16
 												   : vectors_[memory.result];
-			if (!(displacement % 16) && displacement / 16 < 4096)
+			if (!literal)
+				out_.emit(store ? Op::StrQReg : Op::LdrQReg, reg, base, operand_register(offset, type, 11),
+					(3u << 13) | ((scale != 1) << 12));
+			else if (!(displacement % 16) && displacement / 16 < 4096)
 				out_.emit(store ? Op::StrQ : Op::LdrQ, reg, base, 0, uint32_t(displacement / 16) << 10);
 			else
 				out_.emit(store ? Op::SturQ : Op::LdurQ, reg, base, 0, (uint32_t(displacement) & 511) << 12);
@@ -292,15 +316,23 @@ InstId Selector::address_sequence(InstId id)
 					: !store                                ? vectors_[memory.result]
 					: data.is(ValueKind::Temp)              ? vectors_[data.index]
 															: kNoId;
-				const unsigned reg = fp != kNoId         ? fp
-					: store                              ? zero_or_register(data, memory.type, 9)
-					: registers_[memory.result] == kNoId ? 9
-														 : registers_[memory.result];
+
+				const auto* convert = !store && fp == kNoId ? signed_word_extension(body_, memory, uses_[memory.result])
+															: nullptr;
+				const TempId result = convert ? convert->result : memory.result;
+				const unsigned reg = fp != kNoId  ? fp
+					: store                       ? zero_or_register(data, memory.type, 9)
+					: registers_[result] == kNoId ? 9
+												  : registers_[result];
 				if (literal)
 				{
 					if (displacement % bytes || displacement / bytes >= 4096)
-						out_.emit(unscaled_access(store, bytes, fp != kNoId), reg, base, 0,
-							(uint32_t(displacement) & 511) << 12);
+						out_.emit(convert ? (bytes == 1 ? Op::LdurSBW : Op::LdurSHW)
+										  : unscaled_access(store, bytes, fp != kNoId),
+							reg, base, 0, (uint32_t(displacement) & 511) << 12);
+					else if (convert)
+						out_.emit(
+							bytes == 1 ? Op::LdrSBW : Op::LdrSHW, reg, base, 0, uint32_t(displacement / bytes) << 10);
 					else if (fp == kNoId)
 						access(store, reg, base, displacement, bytes);
 					else
@@ -316,14 +348,15 @@ InstId Selector::address_sequence(InstId id)
 						subscript = 11;
 					}
 					const unsigned index_extension = bits == 64 ? 3 : sign ? 6 : 2;
-					const Op op = fp == kNoId ? indexed_access(store, bytes)
-						: bytes == 4          ? (store ? Op::StrSReg : Op::LdrSReg)
-											  : (store ? Op::StrDReg : Op::LdrDReg);
+					const Op op = convert ? (bytes == 1 ? Op::LdrSBWReg : Op::LdrSHWReg)
+						: fp == kNoId     ? indexed_access(store, bytes)
+						: bytes == 4      ? (store ? Op::StrSReg : Op::LdrSReg)
+										  : (store ? Op::StrDReg : Op::LdrDReg);
 					out_.emit(op, reg, base, subscript, (index_extension << 13) | ((scale != 1) << 12));
 				}
 				if (!store && fp == kNoId)
-					save(reg, memory.result, memory.type.kind() != TypeKind::I1);
-				return next;
+					save(reg, result, memory.type.kind() != TypeKind::I1);
+				return convert ? memory.next : next;
 			}
 		}
 	}

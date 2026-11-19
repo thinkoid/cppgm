@@ -6,12 +6,15 @@
 #include "machine/register_pressure.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace aarch64 {
 using namespace lowir;
 
 namespace {
 using Segments = std::vector<std::pair<uint32_t, uint32_t>>;
+constexpr uint32_t kPreservedSimd = 0xffu << 8;
+
 template<typename F>
 void each_interval(const LiveRange& range, const Segments& segments, F f)
 {
@@ -22,19 +25,39 @@ void each_interval(const LiveRange& range, const Segments& segments, F f)
 			f(segments[i].first, segments[i].second);
 }
 
-// Count integer values that are definitely live simultaneously. Half-open
-// segments omit values dying at a call and its newly defined result. If
-// this lower bound fits, retain the cheap start-order assignment.
-bool exceeds_capacity(const lowir::FunctionBody& body, const std::vector<LiveRange>& ranges, const Segments& segments,
-	const std::vector<uint32_t>& calls, uint32_t slots, int preserved)
+enum class RegisterPressure
+{
+	Fits,
+	AcrossCalls,
+	Saturated
+};
+
+bool uses_simd(const FunctionBody& body, const LiveRange& range)
+{
+	const auto kind = body.temps[range.id].type.kind();
+	return kind == TypeKind::F32 || kind == TypeKind::F64 || (kind == TypeKind::V128 && !range.vector_address);
+}
+
+// Count values that are definitely live at the same time. Half-open
+// segments omit values dying at a call and its newly defined result.
+RegisterPressure register_pressure(const FunctionBody& body, const std::vector<LiveRange>& ranges,
+	const Segments& segments, const std::vector<uint32_t>& calls, uint32_t slots, int preserved, Bank bank)
 {
 	if (segments.empty() || ranges.size() <= static_cast<unsigned>(preserved))
-		return false;
+		return RegisterPressure::Fits;
+	const bool simd = bank == Bank::Simd;
+	const auto belongs = [&](const LiveRange& range) {
+		const auto type = body.temps[range.id].type;
+		return range.first != kNoId &&
+			(simd ? uses_simd(body, range)
+				  : type.is_pointer() || (type.is_integer() && integer_bits(type.kind()) <= 64));
+	};
+	if (simd && std::count_if(ranges.begin(), ranges.end(), belongs) <= preserved)
+		return RegisterPressure::Fits;
 	std::vector<int32_t> change(slots + 1);
 	for (const auto& range : ranges)
 	{
-		const auto type = body.temps[range.id].type;
-		if (range.first == kNoId || !(type.is_pointer() || (type.is_integer() && integer_bits(type.kind()) <= 64)))
+		if (!belongs(range))
 			continue;
 		each_interval(range, segments, [&](uint32_t first, uint32_t last) {
 			++change[first];
@@ -43,16 +66,105 @@ bool exceeds_capacity(const lowir::FunctionBody& body, const std::vector<LiveRan
 	}
 	uint32_t next = 0;
 	int live = 0;
+	bool across_calls = false;
+	const int capacity = preserved + (simd ? 22 : 11);
 	for (uint32_t slot = 0; slot < slots; ++slot)
 	{
 		live += change[slot];
-		const bool at_call = next < calls.size() && calls[next] == slot;
-		if (live > preserved + (at_call ? 0 : 11))
-			return true;
-		if (at_call)
+		if (live > capacity)
+			return RegisterPressure::Saturated;
+		if (next < calls.size() && calls[next] == slot)
+		{
+			if (live > preserved)
+			{
+				if (!simd)
+					return RegisterPressure::AcrossCalls;
+				across_calls = true;
+			}
 			++next;
+		}
 	}
-	return false;
+	return across_calls ? RegisterPressure::AcrossCalls : RegisterPressure::Fits;
+}
+
+// In a saturated SIMD bank, one long range can force many short arithmetic
+// results into integer registers. Discount long ranges while retaining
+// the block frequency and use counts in the ordinary spill weights.
+double simd_spill_priority(const FunctionBody& body, const LiveRange& range, const Segments& segments, uint64_t weight)
+{
+	if (range.first == kNoId || !uses_simd(body, range))
+		return static_cast<double>(weight);
+	uint32_t slots = 0;
+	each_interval(range, segments, [&](uint32_t first, uint32_t last) { slots += last - first; });
+	constexpr double reference_length = 1024; // Read/write slots in the reference range.
+	return static_cast<double>(weight) * std::sqrt(reference_length / std::max(1u, slots));
+}
+
+// Give each scalar phi web's call-crossing members first choice of homes.
+// Otherwise a hot join can reserve a caller register the other members
+// cannot use, leaving transfers on its incoming edges and backedge.
+void prioritize_call_webs(const FunctionBody& body, const std::vector<LiveRange>& ranges, const Segments& segments,
+	const std::vector<uint32_t>& calls, std::vector<uint32_t>& order)
+{
+	std::vector<uint8_t> constrained(ranges.size());
+	for (uint32_t index : order)
+	{
+		const auto& range = ranges[index];
+		const auto type = body.temps[range.id].type;
+		if (range.affinity == kNoId ||
+			!(type.kind() == TypeKind::F32 || type.kind() == TypeKind::F64 || type.is_pointer() ||
+				(type.is_integer() && integer_bits(type.kind()) <= 64)))
+			continue;
+		each_interval(range, segments, [&](uint32_t first, uint32_t last) {
+			const auto call = std::lower_bound(calls.begin(), calls.end(), first);
+			constrained[index] |= call != calls.end() && *call < last;
+		});
+	}
+	std::stable_partition(order.begin(), order.end(), [&](uint32_t index) { return constrained[index]; });
+}
+
+// Give scalar SIMD phis and their backedge values first choice over short
+// intermediates. Their shared web preference can then eliminate a transfer
+// cycle on each iteration.
+void prioritize_loop_webs(const FunctionBody& body, const opt::Cfg& cfg, const std::vector<LiveRange>& ranges,
+	const std::vector<uint32_t>& aliases, std::vector<uint32_t>& order)
+{
+	if (cfg.rpo_index.empty())
+		return;
+	std::vector<uint8_t> carried;
+	for (BlockId b : body.layout)
+	{
+		if (cfg.rpo_index[b] == kNoId)
+			continue;
+		for (InstId i = body.blocks[b].first; i != kNoId && body.instructions[i].op == Opcode::Phi;
+			i = body.instructions[i].next)
+		{
+			const auto& phi = body.instructions[i];
+			if (phi.type.kind() != TypeKind::F32 && phi.type.kind() != TypeKind::F64)
+				continue;
+			for (unsigned k = 0; k < phi.extra_count; k += 2)
+			{
+				const BlockId pred = body.operands[phi.extra_first + k].index;
+				const Value incoming = body.operands[phi.extra_first + k + 1];
+				const uint32_t from = cfg.rpo_index[pred];
+				if (!incoming.is(ValueKind::Temp) || from == kNoId || from < cfg.rpo_index[b])
+					continue;
+				if (carried.empty())
+					carried.assign(body.temps.size(), 0);
+				carried[phi.result] = 1;
+				carried[representative(aliases, incoming.index)] = 1;
+			}
+		}
+	}
+	if (carried.empty())
+		return;
+	if (order.empty())
+	{
+		order.resize(ranges.size());
+		for (uint32_t i = 0; i < order.size(); ++i)
+			order[i] = i;
+	}
+	std::stable_partition(order.begin(), order.end(), [&](uint32_t i) { return carried[ranges[i].id]; });
 }
 
 // A guarded call that cannot repeat has a path to a return on which
@@ -225,8 +337,9 @@ void Selector::parameter_homes(opt::Cfg& cfg)
 	}
 }
 
-// A callee can write to its final destination when only a whole-object
-// copy consumes the result and nothing exposes that slot to the callee.
+// A private destination can take the result directly. When the whole
+// copy immediately follows a register return, the store is at the same
+// point even if the callee could read the destination.
 void Selector::call_result_homes()
 {
 	if (calls_.empty() || body_.slots.empty())
@@ -239,17 +352,69 @@ void Selector::call_result_homes()
 			const auto slot = machine::call_result_copy_slot(body_, call, uses_);
 			if (slot != kNoId && out_.exceptions && site(call) && opt::may_unwind(program_, call))
 				continue;
-			if (slot == kNoId || body_.slots[slot].type != call.type ||
-				!classify(call.type, program_.call_boundary(call)->boundary.result_shape).indirect)
+			if (slot == kNoId || body_.slots[slot].type != call.type)
 				continue;
-			if (escaped.empty())
-				escaped = opt::escaped_slots(body_, true);
-			if (escaped[slot])
+			const Argument returned = classify(call.type, program_.call_boundary(call)->boundary.result_shape);
+			const bool simd = level_ && returned.bank == Bank::Simd &&
+				storage_bytes(call.type) == returned.pieces * returned.piece_bytes;
+			if (!returned.indirect && !simd)
 				continue;
+			if (!simd || body_.instructions[call.next].op != Opcode::CopyObject)
+			{
+				if (escaped.empty())
+					escaped = opt::escaped_slots(body_, true);
+				if (escaped[slot])
+					continue;
+			}
 			if (call_result_slots_.empty())
 				call_result_slots_.resize(body_.temps.size(), kNoId);
 			call_result_slots_[call.result] = slot;
 		}
+}
+
+void Selector::protect_simd_at_calls(unsigned reg, uint64_t calls)
+{
+	if (simd_call_spills_.empty())
+		simd_call_spills_.resize(32, kNoId);
+	if (simd_call_spills_[reg] == kNoId)
+		simd_call_spills_[reg] = reserve(8, 8);
+	for (; calls; calls &= calls - 1)
+		calls_[__builtin_ctzll(calls)].saved_simd |= 1u << reg;
+}
+
+uint64_t Selector::cold_crossings(
+	const LiveRange& range, const Segments& segments, const std::vector<uint32_t>& calls, bool guarded) const
+{
+	uint64_t crossed = 0, cost = 0;
+	each_interval(range, segments, [&](uint32_t a, uint32_t b) {
+		for (auto it = std::lower_bound(calls.begin(), calls.end(), a); it != calls.end() && *it < b; ++it)
+		{
+			const auto k = static_cast<unsigned>(it - calls.begin());
+			crossed |= uint64_t(1) << k;
+			if (!guarded)
+				cost += block_weights_[calls_[k].block];
+		}
+	});
+	return guarded || cost <= block_weights_[body_.layout.front()] / 2 ? crossed : 0;
+}
+
+// A fixed frame address is one add at the use. Computing it twice can
+// cost less than saving a register across a call.
+bool Selector::rematerialize_frame_address(TempId id)
+{
+	const InstId definition = body_.temps[id].def;
+	if (uses_[id] > 2 || definition == kNoId)
+		return false;
+	const auto& def = body_.instructions[definition];
+	if (def.op != Opcode::Addr || !def.ops[0].is(ValueKind::Slot))
+		return false;
+	const SlotId slot = def.ops[0].index;
+	if (slot == result_slot_ || data_alignment(body_.slots[slot].type) > 16)
+		return false;
+	if (remat_slots_.empty())
+		remat_slots_.resize(body_.temps.size(), kNoId);
+	remat_slots_[id] = slot;
+	return true;
 }
 
 void Selector::allocate()
@@ -301,21 +466,41 @@ void Selector::allocate()
 	const uint32_t slots = 2 * (body_.instructions.size() + body_.layout.size()) + 3;
 	const auto outgoing = call_registers();
 	std::vector<uint32_t> order;
-	if (exceeds_capacity(body_, ranges, segments, calls, slots, dynamic_stack_ ? 9 : 10))
+	const auto simd_pressure = register_pressure(body_, ranges, segments, calls, slots, 8, Bank::Simd);
+	if (simd_pressure != RegisterPressure::Fits ||
+		register_pressure(body_, ranges, segments, calls, slots, dynamic_stack_ ? 9 : 10, Bank::General) !=
+			RegisterPressure::Fits)
 	{
 		const auto weight = spill_weights(program_, body_, cfg, aliases_, block_weights_);
 		order.resize(ranges.size());
 		for (uint32_t i = 0; i < order.size(); ++i)
 			order[i] = i;
-		std::stable_sort(order.begin(), order.end(),
-			[&](uint32_t a, uint32_t b) { return weight[ranges[a].id] > weight[ranges[b].id]; });
+		if (simd_pressure == RegisterPressure::Saturated)
+		{
+			std::vector<double> priority;
+			priority.reserve(ranges.size());
+			for (const auto& range : ranges)
+				priority.push_back(simd_spill_priority(body_, range, segments, weight[range.id]));
+			std::stable_sort(
+				order.begin(), order.end(), [&](uint32_t a, uint32_t b) { return priority[a] > priority[b]; });
+		}
+		else
+			std::stable_sort(order.begin(), order.end(),
+				[&](uint32_t a, uint32_t b) { return weight[ranges[a].id] > weight[ranges[b].id]; });
 	}
+	if (level_ >= 3 && !segments.empty() && !webs.empty())
+		prioritize_loop_webs(body_, cfg, ranges, aliases_, order);
+	if (level_ >= 2 && !order.empty() && !calls.empty() && !webs.empty())
+		prioritize_call_webs(body_, ranges, segments, calls, order);
 	const bool split_calls = level_ >= 2 && !out_.exceptions && !named_.darwin && !dynamic_stack_ &&
 		body_.code_labels.empty() && calls.size() <= 64;
 	if (split_calls && calls.size() > 1 && block_weights_.empty() && !cfg.succ_first.empty())
 		block_frequencies(program_, body_, cfg, block_weights_);
 	const bool single = split_calls && calls.size() == 1 && guarded_call(body_, cfg, calls_.front().block);
+	const bool cold_calls = split_calls && (single || !block_weights_.empty());
+	constexpr uint32_t high_caller_simd = 0xfffc0000; // v18 through v31, clear of argument and scratch registers.
 	RegisterBank general(segments, slots), simd(segments, slots);
+	std::vector<uint32_t> simd_web_regs;
 	uint32_t saved_fp = 0;
 	uint32_t saved = dynamic_stack_ ? 1u << 28 : 0;
 	for (uint32_t i = 0; i < ranges.size(); ++i)
@@ -334,20 +519,8 @@ void Selector::allocate()
 					kept &= calls_[it - calls.begin()].preserved_callers;
 			});
 		const auto type = body_.temps[range.id].type;
-		// A fixed frame address is one add at the use. Computing it twice
-		// can cost less than saving a register across the call.
-		if (across_call && type.is_pointer() && uses_[range.id] <= 2 && body_.temps[range.id].def != kNoId)
-		{
-			const auto& def = body_.instructions[body_.temps[range.id].def];
-			if (def.op == Opcode::Addr && def.ops[0].is(ValueKind::Slot) && def.ops[0].index != result_slot_ &&
-				data_alignment(body_.slots[def.ops[0].index].type) <= 16)
-			{
-				if (remat_slots_.empty())
-					remat_slots_.resize(count, kNoId);
-				remat_slots_[range.id] = def.ops[0].index;
-				continue;
-			}
-		}
+		if (across_call && type.is_pointer() && rematerialize_frame_address(range.id))
+			continue;
 		uint32_t arguments = at_call
 			? (!across_call && outgoing[range.id].preferred < 8 ? outgoing[range.id].allowed : 0)
 			: 0xff;
@@ -357,13 +530,35 @@ void Selector::allocate()
 		{
 			// Both Arm ABIs preserve the low 64 bits of v8 through v15.
 			const auto preferred = range.affinity == kNoId ? kNoId : vectors_[range.affinity];
-			const uint32_t allowed = across_call ? 0xffu << 8 : arguments | 0xfffc0000;
-			const auto reg = simd.assign(range, allowed, preferred);
+			uint32_t allowed = across_call ? kPreservedSimd : arguments | high_caller_simd;
+			// Try a register from the phi web when the direct preference
+			// is unavailable, as in the general register bank.
+			const auto root = range.affinity == kNoId ? kNoId : webs.root(range.id);
+			if (root != kNoId && simd_web_regs.empty())
+				simd_web_regs.assign(count, kNoId);
+			const auto alternate = root == kNoId ? kNoId : simd_web_regs[root];
+			if (!across_call && range.first != 0)
+				allowed |= saved_fp & ((preferred < 32 ? 1u << preferred : 0) | (alternate < 32 ? 1u << alternate : 0));
+			auto reg = simd.assign(range, allowed, preferred, alternate);
+			if (reg == kNoId && !across_call)
+				reg = simd.assign(range, kPreservedSimd, preferred, alternate);
+			// Keep scalar arithmetic in its register bank. With only rare
+			// calls to cross, save the live scalar lanes on those paths.
+			if (reg == kNoId && across_call && cold_calls)
+			{
+				const uint64_t crossed = cold_crossings(range, segments, calls, single);
+				if (crossed)
+					reg = simd.assign(range, high_caller_simd, preferred, alternate);
+				if (reg != kNoId)
+					protect_simd_at_calls(reg, crossed);
+			}
 			if (reg != kNoId)
 			{
 				vectors_[range.id] = reg;
-				if (across_call)
-					saved_fp |= 1u << reg;
+				const uint32_t preserved = (1u << reg) & kPreservedSimd;
+				if (root != kNoId && (simd_web_regs[root] == kNoId || preserved))
+					simd_web_regs[root] = reg;
+				saved_fp |= preserved;
 				continue;
 			}
 			// The incoming SIMD argument does not own the corresponding GPR.
@@ -375,7 +570,17 @@ void Selector::allocate()
 			// Argument registers are free between calls. A quadword
 			// that crosses a call must be spilled, including its high half.
 			if (type.kind() == TypeKind::V128 && !range.vector_address && !across_call)
-				vectors_[range.id] = simd.assign(range, arguments | 0xfffc0000, kNoId);
+			{
+				const auto preferred = range.affinity == kNoId ? kNoId : vectors_[range.affinity];
+				auto reg = simd.assign(range, arguments | high_caller_simd, preferred);
+				if (reg == kNoId)
+				{
+					reg = simd.assign(range, kPreservedSimd, preferred);
+					if (reg != kNoId)
+						saved_fp |= 1u << reg;
+				}
+				vectors_[range.id] = reg;
+			}
 			continue;
 		}
 		if (range.first == 0)
@@ -383,27 +588,14 @@ void Selector::allocate()
 		uint32_t caller = across_call ? kept : arguments | (7u << 12) | (!at_call && free_x8 ? 1u << 8 : 0);
 		// Keep an incoming scalar in its ABI register when its live range
 		// crosses only cold calls. The saved slot belongs to this register.
-		uint64_t crossed = 0;
-		if (across_call && split_calls && (single || !block_weights_.empty()))
+		uint64_t crossed = across_call && cold_calls ? cold_crossings(range, segments, calls, single) : 0;
+		if (crossed)
 		{
-			uint64_t cost = 0;
-			each_interval(range, segments, [&](uint32_t a, uint32_t b) {
-				for (auto it = std::lower_bound(calls.begin(), calls.end(), a); it != calls.end() && *it < b; ++it)
-				{
-					const auto k = static_cast<unsigned>(it - calls.begin());
-					crossed |= uint64_t(1) << k;
-					if (!block_weights_.empty())
-						cost += block_weights_[calls_[k].block];
-				}
-			});
-			if (single || cost <= block_weights_[body_.layout.front()] / 2)
-			{
-				caller |= 7u << 12;
-				if (range.id < incoming.size() && incoming[range.id] < 8)
-					caller |= outgoing[range.id].allowed & (1u << incoming[range.id]);
-				else if (range.first != 0)
-					caller |= outgoing[range.id].allowed & 0xffu;
-			}
+			caller |= 7u << 12;
+			if (range.id < incoming.size() && incoming[range.id] < 8)
+				caller |= outgoing[range.id].allowed & (1u << incoming[range.id]);
+			else if (range.first != 0)
+				caller |= outgoing[range.id].allowed & 0xffu;
 		}
 		const uint32_t preserved = (dynamic_stack_ ? 0x1ffu : 0x3ffu) << 19;
 		unsigned preferred = range.affinity == kNoId ? kNoId : registers_[range.affinity];

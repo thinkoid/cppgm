@@ -232,6 +232,12 @@ your output. When a pass duplicates or unrolls a block, give the copies new
 names and leave the original name on the block that still runs one pass at a
 time.
 
+The adjacent array update fixture exercises reuse between iterations. If
+the loop writes either element, use the value the next iteration would
+actually load. Check reads and writes through other pointers before reusing
+a value, and keep the initial load on the path that enters the loop. Try
+the positive, zero-trip and aliasing cases with `make check`.
+
 A scope names a function by its LowIR name. Most driver-lane sidecars name
 `extern "C"` functions. The others name a C++ function that is not
 overloaded, as the supplied references spell it; `../pa8/lowir.md` does not
@@ -386,6 +392,9 @@ interpretation, Boolean conversions, true overlaps and observable accesses.
 Whole-vector values stored in private aggregates can remain whole through
 copies and zero initialization. Use typed access and escape facts to avoid
 scalar memory round trips; preserve observable writes and volatile accesses.
+If a loop transformation exposes fixed vector fields, check the aggregate
+again. A pointer stored into its own aggregate can become dead after its
+last reader disappears. Preserve self-references that can still be observed.
 Packed shifts whose count becomes constant may use immediate operations,
 with oversized logical counts producing zero and arithmetic counts retaining
 sign fill. Equivalent implementations satisfy the same behavior and bounds.
@@ -480,6 +489,12 @@ registers, simplifying library math, specializing calls, unrolling bounded
 searches, and computing independent values in vector lanes. These are useful
 directions for experiments; they add no named-pass requirement to this
 assignment. Vectorization and interchange remain optional.
+
+Independent scalar values carried around the same loop can also share
+vector lanes. Look for matching updates and account for packing at entry,
+extraction at exit, and any extra shuffles inside the loop. Keep the
+operation order within each lane and compare the cost with the scalar
+version for the selected target.
 
 Packed integers may contain fields a later reader never uses. Track the
 possible bits through masks, conversions and shifts before simplifying a

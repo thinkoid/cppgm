@@ -48,7 +48,7 @@ public:
 	explicit LoopPass(FunctionContext& context) : c_(context), body_(context.body), cfg_(context.cfg) {}
 
 	bool run(bool fresh);
-	bool unroll();
+	bool unroll(bool vector_loops_only);
 	bool hoist_loads();
 	bool version_fills();
 
@@ -56,7 +56,6 @@ private:
 	bool try_unroll(uint32_t loop);
 	bool try_unroll_search(uint32_t loop);
 	int64_t unroll_bound(uint32_t loop, BlockId tested, TempId& iv_temp) const;
-	bool indexes_local_array(uint32_t loop, TempId iv) const;
 	bool unroll_search_shape(uint32_t loop, int64_t trips, TempId iv, std::vector<uint8_t>& member,
 		std::vector<uint8_t>& owned, BlockId& through);
 	void add_exit_phis(const std::vector<uint8_t>& member, const std::vector<uint8_t>& owned, BlockId exit);
@@ -1782,8 +1781,10 @@ bool LoopPass::try_unroll(uint32_t loop)
 		return false;
 	ExitTest test;
 	std::vector<Induction> ivs;
-	if (!exit_test(loop, test, ivs, true) || test.trips < 0 || test.trips > kUnrollCallFreeTrips ||
-		test.exiting != l.header)
+	const int64_t call_free_trips = l.parent != kNoId && target_model::is_aarch64(c_.program.target)
+		? 32
+		: kUnrollCallFreeTrips;
+	if (!exit_test(loop, test, ivs, true) || test.trips < 0 || test.trips > call_free_trips || test.exiting != l.header)
 		return false;
 	// The body chain: header -> b1 -> ... -> latch -> header, jumps only.
 	std::vector<BlockId> chain;
@@ -1816,8 +1817,10 @@ bool LoopPass::try_unroll(uint32_t loop)
 			}
 			calls = calls || inst.op == Opcode::Call;
 		}
+	if (test.trips > kUnrollCallFreeTrips && !indirect_word_reduction(body_, l))
+		return false;
 	// Each pass copies the loop; only the header is copied for the final test.
-	if (test.trips > (calls ? kUnrollTrips : kUnrollCallFreeTrips) ||
+	if (test.trips > (calls ? kUnrollTrips : call_free_trips) ||
 		static_cast<uint64_t>(size) * static_cast<uint64_t>(test.trips) + header_size >
 			(calls ? kUnrollBody : kUnrollCallFreeBody))
 		return false;
@@ -1961,22 +1964,6 @@ bool from_induction(const FunctionBody& body, const std::vector<BlockId>& block_
 		if (!o.is(ValueKind::None) && !from_induction(body, block_of, member, iv, o, depth - 1))
 			return false;
 	return true;
-}
-
-bool LoopPass::indexes_local_array(uint32_t loop, TempId iv) const
-{
-	for (BlockId b : forest_.loops[loop].blocks)
-		for (InstId i = body_.blocks[b].first; i != kNoId; i = body_.instructions[i].next)
-		{
-			const Instruction& inst = body_.instructions[i];
-			if (inst.op != Opcode::Index || !(inst.ops[1] == Value::temp(iv)) || !inst.ops[0].is(ValueKind::Temp))
-				continue;
-			const InstId def = body_.temps[inst.ops[0].index].def;
-			if (def != kNoId && body_.instructions[def].op == Opcode::Addr &&
-				body_.instructions[def].ops[0].is(ValueKind::Slot))
-				return true;
-		}
-	return false;
 }
 
 // The shape try_unroll_search copies: the loop's blocks (`member`: no
@@ -2160,7 +2147,7 @@ bool LoopPass::unroll_search_shape(uint32_t loop, int64_t trips, TempId iv, std:
 	// Tests of the induction fold in each copy: what the copies keep counts.
 	if (table && cloned > kSearchBody && cloned <= kUnrollCopies)
 		cloned = std::min(cloned, unrolled_size(c_, cfg_, l, member, owned, iv, trips));
-	if (cloned > (indexes_local_array(loop, iv) ? kUnrollArrayBody : long_pass ? kSearchBody : kUnrollBranchBody))
+	if (cloned > (indexes_local_array(body_, l, iv) ? kUnrollArrayBody : long_pass ? kSearchBody : kUnrollBranchBody))
 		return false;
 	for (BlockId b : l.blocks)
 		for (uint32_t k = cfg_.succ_first[b]; k < cfg_.succ_first[b + 1]; ++k)
@@ -2517,11 +2504,12 @@ bool LoopPass::try_unroll_search(uint32_t loop)
 	return true;
 }
 
-bool LoopPass::unroll()
+bool LoopPass::unroll(bool vector_loops_only)
 {
 	c_.ensure_cfg();
 	find_loops(body_, cfg_, forest_);
-	c_.entry_block_of(unroll_loops);
+	c_.entry_block_of(vector_loops_only ? unroll_vector_loops : unroll_loops);
+	const bool defer_array_unroll = !vector_loops_only && c_.level >= 3 && target_model::is_aarch64(c_.program.target);
 	bool any = false;
 	// A loop around this run's copies waits for the next run: the copies
 	// fold first (optimizer.cpp, kUnrollNest).
@@ -2536,7 +2524,11 @@ bool LoopPass::unroll()
 				copies = copies ||
 					(b >= first_copy &&
 						std::find(latches_made_.begin(), latches_made_.end(), b) == latches_made_.end());
-			one = !copies && (try_unroll(k) || try_unroll_search(k));
+			const Loop& loop = forest_.loops[k];
+			if (copies || (vector_loops_only && !loop_uses_vectors(body_, loop)) ||
+				(defer_array_unroll && has_contiguous_float_work(body_, loop)))
+				continue;
+			one = try_unroll(k) || try_unroll_search(k);
 		}
 		if (!one)
 			break;
@@ -3380,7 +3372,16 @@ bool unroll_loops(FunctionContext& context)
 	// At most kUnrollRounds loops, one at a time, each found again after
 	// the previous change (LoopPass::unroll).
 	LoopPass pass(context);
-	const bool changed = pass.unroll();
+	const bool changed = pass.unroll(false);
+	if (changed)
+		context.invalidate_cfg();
+	return changed;
+}
+
+bool unroll_vector_loops(FunctionContext& context)
+{
+	LoopPass pass(context);
+	const bool changed = pass.unroll(true);
 	if (changed)
 		context.invalidate_cfg();
 	return changed;

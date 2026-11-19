@@ -242,32 +242,37 @@ void simplify_branches(Function& f)
 		remove_instructions(f, removed);
 }
 
-// Choose the start of a function so its short backward branches fetch from
-// fewer cache lines. At most three unused instruction words precede the
-// function. Nothing is inserted into the loop or its unwind program.
+// Favor backward paths that touch fewer 64-byte instruction-cache lines.
+// Keep the search and the amount of padding bounded.
 void place_short_loops(const Function& function, native::object::Section& text)
 {
-	unsigned contained[4] = {};
 	const unsigned base = text.bytes.size() / 4;
+	unsigned savings[4] = {};
+	bool planned = false;
 	for (unsigned end = 0; end < function.code.size(); ++end)
 	{
 		const auto& ins = function.code[end];
 		if (ins.fixup != Fixup::Block || ins.op == Op::Adr)
 			continue;
 		const auto start = function.labels[ins.target];
-		if (start >= end || end - start >= 16)
+		if (start >= end || end - start >= 96)
 			continue;
+		const unsigned distance = end - start;
+		const unsigned best = distance / 16;
+		const unsigned weight = distance < 16 ? 4 : distance < 48 ? 2 : 1;
 		for (unsigned pad = 0; pad < 4; ++pad)
-			if (((base + start + pad) & 15) + (end - start) < 16)
-				++contained[pad];
+			if ((((base + start + pad) & 15) + distance) / 16 == best)
+			{
+				savings[pad] += weight;
+				planned = true;
+			}
 	}
-	const unsigned pad = std::max_element(contained, contained + 4) - contained;
-	if (contained[pad])
-	{
-		text.align = std::max<uint64_t>(text.align, 64);
-		for (unsigned i = 0; i < pad; ++i)
-			native::object::put32(text.bytes, 0xd503201f);
-	}
+	if (!planned)
+		return;
+	const unsigned pad = std::max_element(savings, savings + 4) - savings;
+	text.align = std::max<uint64_t>(text.align, 64);
+	for (unsigned i = 0; i < pad; ++i)
+		native::object::put32(text.bytes, 0xd503201f);
 }
 
 void encode(

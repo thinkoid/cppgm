@@ -713,6 +713,7 @@ const struct
 	{ "__builtin_shuffle", { GnuBuiltin::VectorPermute, 0, nullptr, 0 } },
 	{ "__builtin_shufflevector", { GnuBuiltin::VectorPermute, 1, nullptr, 0 } },
 	{ "__builtin_signbit", { GnuBuiltin::FloatClassify, 5, nullptr, 0 } },
+	{ "__builtin_signbitl", { GnuBuiltin::FloatClassify, 5, "ie", 0 } },
 	{ "__builtin_strchr", { GnuBuiltin::Library, 0, "c*Cc*i", 0 } },
 	{ "__builtin_strcmp", { GnuBuiltin::Library, 0, "iCc*Cc*", 0 } },
 	{ "__builtin_strcpy", { GnuBuiltin::Library, 0, "c*c*Cc*", 0 } },

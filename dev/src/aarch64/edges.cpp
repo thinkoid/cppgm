@@ -5,52 +5,128 @@
 namespace aarch64 {
 using namespace lowir;
 
-bool Selector::small_scalar_edge(BlockId from, BlockId to)
+bool Selector::parallel_edge(BlockId from, BlockId to)
 {
-	machine::ScalarTransfer moves[machine::kSmallTransfers];
-	Value sources[machine::kSmallTransfers];
-	Type types[machine::kSmallTransfers];
+	// A scalar may move among either register bank and its frame home.
+	// Register locations name all their bits, even when a move uses fewer.
+	constexpr uint32_t simd_base = 32, frame_location = 64;
+	constexpr unsigned limit = 32;
+	machine::ScalarTransfer moves[limit];
+	Value sources[limit];
+	TempId results[limit];
 	unsigned count = 0;
-	const auto location = [&](TempId t) { return registers_[t] == kNoId ? 32 + homes_[t] : registers_[t]; };
-	for (auto i = body_.blocks[to].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
+	const auto simd = [&](uint32_t loc) { return loc >= simd_base && loc < frame_location; };
+	const auto location = [&](TempId t) {
+		return vectors_[t] != kNoId  ? simd_base + vectors_[t]
+			: registers_[t] != kNoId ? registers_[t]
+			: homes_[t] != kNoId     ? frame_location + homes_[t]
+									 : kNoId;
+	};
+	// The interval allocator gives full-width vector spills their own homes.
+	// Aliased call-result storage still uses the snapshot path.
+	const auto vector_home_known = [&](TempId t) {
+		return homes_[t] != kNoId && (call_result_slots_.empty() || call_result_slots_[t] == kNoId);
+	};
+	for (InstId i = body_.blocks[to].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
 		i = body_.instructions[i].next)
 	{
 		const auto& phi = body_.instructions[i];
-		const auto source = phis_.incoming(body_, i, from);
+		const Value source = phis_.incoming(body_, i, from);
 		if (same_home(phi.result, source))
 			continue;
-		if (count == machine::kSmallTransfers || !(phi.type.is_integer() || phi.type.is_pointer()) ||
-			memory_value(phi.type) || !(source.is(ValueKind::Temp) || source.is(ValueKind::Integer)))
+		if (count == limit ||
+			!(source.is(ValueKind::Temp) || source.is(ValueKind::Integer) || source.is(ValueKind::Float)))
+			return false;
+		const uint32_t dst = location(phi.result);
+		const bool literal = !source.is(ValueKind::Temp) || rematerialized(source.index);
+		const uint32_t src = literal ? machine::kTransferLiteral : location(source.index);
+		if (dst == kNoId || (!literal && src == kNoId))
+			return false;
+		if (memory_value(phi.type) &&
+			(phi.type.kind() != TypeKind::V128 || (!simd(dst) && !vector_home_known(phi.result)) ||
+				(src != machine::kTransferLiteral && !simd(src) && !vector_home_known(source.index))))
 			return false;
 		sources[count] = source;
-		types[count] = phi.type;
-		moves[count++] = { location(phi.result),
-			source.is(ValueKind::Temp) && !rematerialized(source.index) ? location(source.index)
-																		: machine::kTransferLiteral };
+		results[count] = phi.result;
+		moves[count++] = { dst, src };
 	}
-	const auto read = [&](unsigned reg, uint32_t loc) {
-		if (loc < 32)
-			move(reg, loc);
+	const auto read = [&](unsigned reg, uint32_t loc, unsigned bytes) {
+		if (loc >= frame_location)
+			access(false, reg, frame_base(), loc - frame_location, bytes);
+		else if (bytes == 4)
+			out_.emit(Op::OrrW, reg, 31, loc);
 		else
-			access(false, reg, frame_base(), loc - 32, 8);
+			move(reg, loc);
 	};
-	return machine::parallel_scalar_transfers(
-		moves, count, [&](unsigned i) { read(15, moves[i].destination); },
-		[&](unsigned i, uint32_t src) {
-			const auto dst = moves[i].destination;
-			const auto reg = dst < 32 ? dst : (src < 32 ? src : src == machine::kTransferSaved ? 15u : 9u);
-			if (src == machine::kTransferLiteral)
-				value(reg, sources[i], types[i]);
+	uint32_t scratch = 0;
+	return machine::parallel_scalar_transfers<limit>(
+		moves, count,
+		[&](unsigned i) {
+			const uint32_t dst = moves[i].destination;
+			const bool vector = simd(dst);
+			scratch = vector ? simd_base + 17 : 15;
+			if (vector)
+				vector_move(17, dst - simd_base);
+			else if (body_.temps[results[i]].type.kind() == TypeKind::V128)
+			{
+				vector_home(false, 17, results[i]);
+				scratch = simd_base + 17;
+			}
 			else
-				read(reg, src == machine::kTransferSaved ? 15 : src);
-			if (dst >= 32)
-				access(true, reg, frame_base(), dst - 32, 8);
+				read(15, dst, 8);
+		},
+		[&](unsigned i, uint32_t src) {
+			const uint32_t dst = moves[i].destination;
+			const Type type = body_.temps[results[i]].type;
+			if (src == machine::kTransferSaved)
+				src = scratch;
+			if (type.kind() == TypeKind::V128)
+			{
+				const unsigned target = simd(dst) ? dst - simd_base : 16;
+				save_vector(simd(src) ? src - simd_base : vector_value(sources[i], target), results[i]);
+				return;
+			}
+			if (simd(dst))
+			{
+				const unsigned target = dst - simd_base;
+				if (src == machine::kTransferLiteral)
+					vector_move(target,
+						type.is_vector() ? vector_value(sources[i], target) : fp_operand(sources[i], type, target));
+				else if (simd(src))
+					vector_move(target, src - simd_base);
+				else if (src < simd_base)
+					fp_move(true, target, src, type);
+				else
+					fp_home(false, target, sources[i].index);
+				return;
+			}
+			const unsigned reg = dst < simd_base ? dst : 9;
+			if (src == machine::kTransferLiteral)
+				value(reg, sources[i], type);
+			else if (simd(src))
+			{
+				if (dst >= frame_location)
+				{
+					fp_home(true, src - simd_base, results[i]);
+					return;
+				}
+				fp_move(false, src - simd_base, reg, type);
+			}
+			else if (dst >= frame_location && src < simd_base && src != 15)
+			{
+				access(true, src, frame_base(), dst - frame_location, 8);
+				return;
+			}
+			else
+				read(reg, src, type.kind() == TypeKind::F32 ? 4 : 8);
+			if (dst >= frame_location)
+				access(true, reg, frame_base(), dst - frame_location, 8);
 		});
 }
 
 void Selector::copy_edge(BlockId from, BlockId to)
 {
-	if (level_ && small_scalar_edge(from, to))
+	if (level_ && parallel_edge(from, to))
 		return;
 	// Snapshot all sources before committing any destination of this parallel copy.
 	uint32_t offset = phi_area_;
@@ -189,7 +265,7 @@ void Selector::register_edge(BlockId from, BlockId to)
 		if (phi.type.kind() == TypeKind::V128)
 			save_vector(vector_value(source, 16), phi.result);
 		else if (vectors_[phi.result] != kNoId)
-			vector_move(vectors_[phi.result], fp_operand(source, phi.type, 16));
+			vector_move(vectors_[phi.result], fp_operand(source, phi.type, vectors_[phi.result]));
 		else if (registers_[phi.result] != kNoId)
 			value(registers_[phi.result], source, phi.type);
 		else
@@ -215,14 +291,15 @@ bool Selector::empty_edge(BlockId block, BlockId to)
 	return true;
 }
 
-// Emit one ordinary GPR transfer before a backward branch if its written
-// register is dead on the fallthrough. The pressure tree includes any phi
-// result needed on that edge. MOV preserves the comparison flags.
-bool Selector::backedge_move(BlockId from, BlockId to, unsigned condition)
+// A short register-only backedge copy can run before its branch when the
+// destinations are all dead on the other edge. MOV preserves the flags.
+bool Selector::backedge_moves(BlockId from, BlockId to, BlockId other, unsigned condition)
 {
-	if (entry_regs_.empty() || out_.labels[to] == kNoId || !empty_edge(from, fallthrough_))
+	if (entry_regs_.empty() || out_.labels[to] == kNoId || !empty_edge(from, other) || condition == 15 ||
+		(out_.exceptions && out_.exceptions->entry_selectors[to]))
 		return false;
-	unsigned dst = kNoId, src = kNoId;
+	machine::ScalarTransfer moves[2];
+	unsigned count = 0;
 	for (InstId i = body_.blocks[to].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
 		i = body_.instructions[i].next)
 	{
@@ -230,17 +307,17 @@ bool Selector::backedge_move(BlockId from, BlockId to, unsigned condition)
 		const Value incoming = phis_.incoming(body_, i, from);
 		if (same_home(phi.result, incoming))
 			continue;
-		if (dst != kNoId || !incoming.is(ValueKind::Temp))
+		if (count == 2 || !incoming.is(ValueKind::Temp))
 			return false;
-		dst = registers_[phi.result];
-		src = registers_[incoming.index];
-		if (dst == kNoId || src == kNoId || dst == condition || (entry_regs_[fallthrough_] & (1u << dst)))
+		const auto dst = registers_[phi.result], src = registers_[incoming.index];
+		if (dst == kNoId || src == kNoId || dst == condition || (entry_regs_[other] & (1u << dst)))
 			return false;
+		moves[count++] = { dst, src };
 	}
-	if (dst == kNoId)
-		return false;
-	move(dst, src);
-	return true;
+	return count &&
+		machine::parallel_scalar_transfers(
+			moves, count, [&](unsigned i) { move(15, moves[i].destination); },
+			[&](unsigned i, uint32_t src) { move(moves[i].destination, src == machine::kTransferSaved ? 15 : src); });
 }
 
 void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch, Op test, unsigned operand)
@@ -256,9 +333,23 @@ void Selector::conditional_edges(BlockId block, const lowir::Instruction& branch
 	{
 		const bool taken = no == fallthrough_;
 		const BlockId target = taken ? yes : no;
-		if (backedge_move(block, target, test == Op::BCond ? kNoId : operand))
+		if (backedge_moves(block, target, fallthrough_, test == Op::BCond ? kNoId : operand))
 		{
 			out_.reference(taken ? inverse : test, Fixup::Block, target, taken ? inverse_operand : operand);
+			return;
+		}
+	}
+	else if (level_ >= 2 && !block_weights_.empty())
+	{
+		// When neither destination follows this block, send the conditional
+		// branch directly to a hot header and leave the extra jump on exit.
+		const bool taken = block_weights_[yes] > block_weights_[no];
+		const BlockId hot = taken ? yes : no, cold = taken ? no : yes;
+		if (out_.labels[hot] != kNoId && block_weights_[hot] / 2 > block_weights_[cold] &&
+			(empty_edge(block, hot) || backedge_moves(block, hot, cold, test == Op::BCond ? kNoId : operand)))
+		{
+			out_.reference(taken ? inverse : test, Fixup::Block, hot, taken ? inverse_operand : operand);
+			edge(block, cold, true);
 			return;
 		}
 	}

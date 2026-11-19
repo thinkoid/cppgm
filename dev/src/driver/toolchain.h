@@ -27,6 +27,7 @@
 // -stdlib=<the build's selection>, -f(no-)exceptions and -f(no-)rtti (the
 // hosted predefined macros and feature probes), -fPIC/-fpic (host objects),
 // -fno-PIC/-fno-pic (direct access to defined data),
+// -ffp-contract=fast/-ffp-contract=off (optional scalar Arm contraction),
 // -ffunction-sections/-fno-function-sections (a text section per function
 // in ELF objects), --stats,
 // -mpopcnt/-mno-popcnt (explicit population-count ISA and __POPCNT__),
@@ -51,6 +52,9 @@ void configure_source_language(const std::string& language, const std::string& s
 
 // Enable an SSE extension and its prerequisites, or disable it and dependents.
 bool sse_option(const std::string& option, uint8_t& level);
+
+// Recognize a floating contraction option and update the object policy if supplied.
+bool float_contract_option(const std::string& option, bool* enabled = nullptr);
 
 // A -g option's request: 0 disables debug information, 1 enables it,
 // -1 is a modifier that leaves the current request unchanged.

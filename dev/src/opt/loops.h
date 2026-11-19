@@ -35,6 +35,13 @@ struct LoopForest
 
 void find_loops(const lowir::FunctionBody& body, const Cfg& cfg, LoopForest& forest);
 
+// Whether a loop's multiplication reads a table of row pointers with no
+// volatile accesses or explicit stores. Used to budget full unrolling.
+bool indirect_word_reduction(const lowir::FunctionBody& body, const Loop& loop);
+bool indexes_local_array(const lowir::FunctionBody& body, const Loop& loop, lowir::TempId iv);
+bool has_contiguous_float_work(const lowir::FunctionBody& body, const Loop& loop);
+bool loop_uses_vectors(const lowir::FunctionBody& body, const Loop& loop);
+
 // Whether block `b` belongs to loop `l` (including nested loops). O(1).
 bool in_loop(const LoopForest& forest, uint32_t l, lowir::BlockId b);
 

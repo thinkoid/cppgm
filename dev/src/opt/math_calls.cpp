@@ -363,6 +363,8 @@ void SqrtGuards::guard(BlockId block, InstId before, InstId id, BlockId& rest)
 	below.ops[1] = phi_input(body_, type, integer_value(body_, integer_literal(0)));
 	const Value negative = emit(block, at, below, Type::scalar(TypeKind::I64));
 	Instruction branch = make_instruction(Opcode::Branch, Type::scalar(TypeKind::Void));
+	if (target_model::is_aarch64(c_.program.target))
+		branch.sub = static_cast<uint8_t>(BranchPrediction::Unlikely);
 	branch.ops[0] = negative;
 	branch.ops[1] = Value::block(slow);
 	branch.ops[2] = Value::block(rest);

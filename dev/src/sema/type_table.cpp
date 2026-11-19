@@ -58,7 +58,7 @@ void TypeTable::enable_char8()
 	fundamentals_[index] = intern(key);
 }
 
-uint32_t TypeTable::hash_of(const Type& type)
+__attribute__((always_inline)) inline uint32_t TypeTable::hash_of(const Type& type)
 {
 	// The byte fields nine bits apart: no byte-aligned layout, so no host
 	// compiler reads them as one wide load, which could not be forwarded
@@ -84,7 +84,7 @@ uint32_t TypeTable::hash_of(const Type& type)
 	return hash ^ (hash >> 16);
 }
 
-bool TypeTable::same(const Type& a, const Type& b)
+__attribute__((always_inline)) inline bool TypeTable::same(const Type& a, const Type& b)
 {
 	if (a.kind != b.kind || a.cv != b.cv || a.function_cv != b.function_cv || a.ref != b.ref ||
 		a.variadic != b.variadic || a.fundamental != b.fundamental || a.plain_char_unsigned != b.plain_char_unsigned ||
@@ -93,6 +93,8 @@ bool TypeTable::same(const Type& a, const Type& b)
 		return false;
 	if (a.kind == TypeKind::Array && a.runtime_bound != b.runtime_bound)
 		return false;
+	if (a.params == b.params)
+		return true;
 	for (uint32_t i = 0; i < a.param_count; ++i)
 	{
 		if (a.params[i] != b.params[i])

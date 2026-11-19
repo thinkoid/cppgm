@@ -59,7 +59,9 @@ bool movable(const Instruction& inst)
 class LongLatency
 {
 public:
-	explicit LongLatency(FunctionContext& context) : body_(context.body) {}
+	explicit LongLatency(FunctionContext& context)
+		: body_(context.body), arm_(target_model::is_aarch64(context.program.target))
+	{}
 
 	bool run();
 
@@ -69,13 +71,16 @@ private:
 	void emit(InstId i);
 	bool pull(InstId root);
 	bool order(BlockId b);
+	bool high_simd_pressure();
 
 	FunctionBody& body_;
+	const bool arm_;
 	std::vector<uint32_t> block_;   // per instruction: the epoch of the block it is in
 	std::vector<uint32_t> emitted_; // per instruction: placed in the new order
 	std::vector<uint32_t> unread_;  // per instruction: a long one placed, not yet read
 	std::vector<uint32_t> barrier_; // per position: the position of the next call
 	std::vector<uint32_t> position_;
+	std::vector<uint32_t> remaining_; // per SIMD value: remaining uses within this block
 	std::vector<InstId> seq_, out_, longs_, stack_, slice_;
 	uint32_t epoch_ = 0;
 	uint32_t in_flight_ = 0;
@@ -163,7 +168,7 @@ bool LongLatency::order(BlockId b)
 		if (long_latency(body_.instructions[i]))
 			longs_.push_back(i);
 	}
-	if (longs_.size() < 2)
+	if (longs_.size() < 2 || (arm_ && high_simd_pressure()))
 		return false;
 	barrier_.resize(seq_.size() + 1);
 	barrier_[seq_.size()] = static_cast<uint32_t>(seq_.size());
@@ -206,6 +211,43 @@ bool LongLatency::order(BlockId b)
 	body_.instructions[out_.back()].next = kNoId;
 	body_.blocks[b].last = out_.back();
 	return true;
+}
+
+// Pulling independent operations forward extends the lives of their results
+// and intermediate operands. Leave room for those ranges in Arm's SIMD bank.
+bool LongLatency::high_simd_pressure()
+{
+	constexpr unsigned limit = 24; // 30 allocatable registers, leaving six for pulled operands and results
+	if (seq_.size() < limit)
+		return false;
+	if (remaining_.empty())
+		remaining_.resize(body_.temps.size());
+	unsigned live = 0;
+	for (InstId i : seq_)
+		if (body_.instructions[i].op != Opcode::Phi)
+			for_each_operand(body_, body_.instructions[i], [&](Value v) {
+				if (!v.is(ValueKind::Temp))
+					return;
+				const auto kind = body_.temps[v.index].type.kind();
+				if (kind != TypeKind::F32 && kind != TypeKind::F64 && kind != TypeKind::V128)
+					return;
+				const InstId def = body_.temps[v.index].def;
+				if (remaining_[v.index]++ == 0 && (def == kNoId || !here(def)))
+					++live;
+			});
+	unsigned peak = live;
+	for (InstId i : seq_)
+	{
+		const auto& inst = body_.instructions[i];
+		if (inst.op != Opcode::Phi)
+			for_each_operand(body_, inst, [&](Value v) {
+				if (v.is(ValueKind::Temp) && remaining_[v.index] && --remaining_[v.index] == 0)
+					--live;
+			});
+		if (inst.result != kNoId && remaining_[inst.result])
+			peak = std::max(peak, ++live);
+	}
+	return peak >= limit;
 }
 
 bool LongLatency::run()

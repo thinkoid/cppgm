@@ -416,6 +416,15 @@ bool fold_index_scales(FunctionContext& context)
 			const auto scale = op == BinaryOp::Mul ? literal : literal < 31 ? uint64_t(1) << literal : 0;
 			if (scale < 2 || scale > (uint64_t(1) << 30) || (scale & (scale - 1)))
 				continue;
+			if (scale != 16 && index.next != kNoId)
+			{
+				const Instruction& use = body.instructions[index.next];
+				const bool store = use.op == Opcode::Store;
+				// Q accesses encode a byte offset or a shift by four only.
+				if ((store || use.op == Opcode::Load) && use.type.kind() == TypeKind::V128 &&
+					use.ops[store ? 1 : 0] == Value::temp(index.result))
+					continue;
+			}
 			index.type = Type::object(scale, 0);
 			index.ops[1] = element;
 			// The original product could wrap before the inbounds byte index.
@@ -446,7 +455,8 @@ bool encodable_access(const FunctionBody& body, const Instruction& field, const 
 		const auto offset = body.literals[field.ops[1].index].low * scale;
 		return (offset % bytes == 0 && offset / bytes < 4096) || offset + 256 < 512;
 	}
-	return field.ops[1].is(ValueKind::Temp) && bytes <= 8 && (scale == 1 || scale == bytes);
+	return field.ops[1].is(ValueKind::Temp) && (scale == 1 || scale == bytes) &&
+		(bytes <= 8 || integer_bits(body.temps[field.ops[1].index].type.kind()) == 64);
 }
 
 bool place_memory_addresses(FunctionContext& context)
@@ -518,6 +528,97 @@ bool place_memory_addresses(FunctionContext& context)
 	return changed;
 }
 
+// When a block needs several nearby elements, one explicit scaled base
+// replaces two or more separate additions to the subscript.
+bool share_index_bases(FunctionContext& context)
+{
+	auto& body = context.body;
+	const auto& uses = context.entry_uses(sink_addresses);
+	bool changed = false;
+	for (BlockId block : body.layout)
+	{
+		constexpr unsigned kGroups = 8, kOffsets = 4, kDistance = 32;
+		struct Group
+		{
+			Value base, counter;
+			Type type;
+			InstId anchor;
+			unsigned first;
+			InstId fields[kOffsets];
+			uint64_t offsets[kOffsets];
+			unsigned count;
+		};
+		Group groups[kGroups];
+		unsigned group_count = 0, position = 0;
+		for (InstId id = body.blocks[block].first; id != kNoId; id = body.instructions[id].next, ++position)
+		{
+			const Instruction& index = body.instructions[id];
+			if (index.op != Opcode::Index || !index.ops[0].is(ValueKind::Temp) || !index.ops[1].is(ValueKind::Temp) ||
+				index.next == kNoId || uses[index.result] != 1)
+				continue;
+			const uint64_t scale = storage_bytes(index.type);
+			if ((scale != 1 && scale != 2 && scale != 4 && scale != 8) ||
+				!encodable_access(body, index, body.instructions[index.next]))
+				continue;
+			Value counter = index.ops[1];
+			if (integer_bits(body.temps[counter.index].type.kind()) != 64)
+				continue;
+			uint64_t offset = 0;
+			const InstId def = body.temps[counter.index].def;
+			if (def != kNoId)
+			{
+				const auto& add = body.instructions[def];
+				if (add.op == Opcode::Binary && add.sub == static_cast<unsigned>(BinaryOp::Add) &&
+					add.ops[0].is(ValueKind::Temp) && add.ops[1].is(ValueKind::Integer) && uses[counter.index] == 1)
+				{
+					offset = body.literals[add.ops[1].index].low;
+					counter = add.ops[0];
+				}
+			}
+			unsigned first = 0;
+			for (; first < group_count; ++first)
+			{
+				Group& g = groups[first];
+				if (g.base == index.ops[0] && g.counter == counter && g.type == index.type &&
+					position - g.first <= kDistance && (offset * scale + 256) < 512)
+				{
+					if (g.count < kOffsets && offset)
+					{
+						g.fields[g.count] = id;
+						g.offsets[g.count++] = offset;
+					}
+					break;
+				}
+			}
+			if (first == group_count && first < kGroups && offset == 0)
+				groups[group_count++] = Group{ index.ops[0], counter, index.type, id, position, {}, {}, 0 };
+		}
+		for (unsigned k = 0; k < group_count; ++k)
+		{
+			const auto& g = groups[k];
+			if (g.count < 2)
+				continue;
+			for (unsigned j = 0; j < g.count; ++j)
+			{
+				const auto bytes = static_cast<int64_t>(g.offsets[j] * storage_bytes(g.type));
+				const auto displacement = integer_value(body, integer_literal(bytes));
+				Instruction& index = body.instructions[g.fields[j]];
+				index.type = Type::scalar(TypeKind::I8);
+				index.ops[0] = Value::temp(body.instructions[g.anchor].result);
+				index.ops[1] = displacement;
+				index.set_index_bounds(IndexBounds::None);
+			}
+			changed = true;
+		}
+	}
+	if (changed)
+	{
+		context.invalidate_uses();
+		remove_dead_code(context);
+	}
+	return changed;
+}
+
 } // namespace
 
 bool sink_addresses(FunctionContext& context)
@@ -531,7 +632,8 @@ bool sink_addresses(FunctionContext& context)
 	if (!target_model::is_aarch64(context.program.target))
 		return changed;
 	const bool scaled = fold_index_scales(context);
-	return place_memory_addresses(context) || scaled || changed;
+	const bool placed = place_memory_addresses(context);
+	return share_index_bases(context) || placed || scaled || changed;
 }
 
 } // namespace opt

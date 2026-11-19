@@ -25,6 +25,13 @@ extern "C" unsigned byte_offset(const unsigned* data, signed char i, unsigned ch
     return i < -4 && j >= 250 ? data[i] + data[j] : 0;
 }
 extern "C" bool signed_order(short left, short right) { return left < right; }
+extern "C" int signed_entries(const signed char* bytes, const short* words, long i) {
+    return bytes[i] + words[i];
+}
+extern "C" int signed_lookup(const signed char* bytes, long i, const int* negative, const int* other) {
+    if (bytes[i] < 0) return *negative;
+    return *other;
+}
 
 extern "C" unsigned adjacent(const unsigned* a, long i) {
     const unsigned* p = a + i;
@@ -129,4 +136,12 @@ extern "C" unsigned narrow_join(bool select, unsigned long a, unsigned long b) {
 extern "C" unsigned narrow_join_full(bool select, unsigned long a, unsigned long b) {
     unsigned long either = select ? (a >> 55) : b;
     return static_cast<unsigned char>(either) * 257u;
+}
+
+extern "C" unsigned long selected_field(const unsigned long* fields, unsigned selector) {
+    return (selector & 64) ? fields[3] : fields[1];
+}
+
+extern "C" unsigned scaled_with_bias(unsigned value) {
+    return (value + 0xffff0007u) * 19u + 2027u;
 }

@@ -3,6 +3,9 @@
 #include "opt/loops.h"
 #include "opt/passes.h"
 #include "opt/scalar_fold.h"
+#include "target/target.h"
+
+#include <algorithm>
 
 namespace opt {
 
@@ -14,6 +17,9 @@ namespace {
 // repeated spill transfers. Keep those fields addressable; ordinary scalars
 // and loop-header-only states retain their normal promotion policy.
 const uint32_t kConditionalFloatFieldCap = 4;
+// Arm's larger SIMD bank can carry more conditionally updated fields.
+// Reserve registers for loop invariants and intermediate arithmetic.
+const uint32_t kArmConditionalFloatFieldCap = 12;
 
 bool phi_type(Type type)
 {
@@ -169,7 +175,12 @@ private:
 	std::vector<uint8_t> remove_;              // per instruction
 	uint64_t phi_inputs_ = 0, phi_budget_ = 0; // place_phis' work budget
 	std::vector<uint8_t> accessed_;            // per slot: some instruction names it
+	std::vector<uint8_t> keep_handler_slot_, reached_from_handler_;
 	bool kept_body_ = false;
+	bool handler_load(SlotId slot, BlockId block) const
+	{
+		return !keep_handler_slot_.empty() && keep_handler_slot_[slot] && reached_from_handler_[block];
+	}
 	// Whether any candidate still promoted is accessed.
 	bool any_accessed() const
 	{
@@ -274,14 +285,25 @@ void SlotPromotion::exclude_handler_state(std::vector<uint8_t>& ok)
 		fallback = fallback || ((cfg_.flags[b] & BF_HANDLER) != 0 && depth[b] != kNoId);
 	// Handler code: blocks no ordinary path from the entry reaches.
 	std::vector<uint8_t> loaded(slots, 0);
+	std::vector<uint8_t> normal_loads;
+	if (!fallback && c_.level >= 3 && target_model::is_aarch64(c_.program.target))
+		normal_loads.assign(slots, 0);
 	for (BlockId b : body_.layout)
 		for (InstId i = body_.blocks[b].first; i != kNoId; i = body_.instructions[i].next)
 		{
 			const Instruction& inst = body_.instructions[i];
 			if (inst.op == Opcode::Store && inst.ops[1].is(ValueKind::Slot) && depth[b] == kNoId)
 				unseen[inst.ops[1].index] = 1;
-			if (inst.op == Opcode::Load && inst.ops[0].is(ValueKind::Slot) && reached[b])
-				loaded[inst.ops[0].index] = 1;
+			if (inst.op == Opcode::FrameAddress)
+				normal_loads.clear();
+			if (inst.op == Opcode::Load && inst.ops[0].is(ValueKind::Slot))
+			{
+				const SlotId slot = inst.ops[0].index;
+				if (reached[b])
+					loaded[slot] = 1;
+				else if (!normal_loads.empty() && depth[b] != kNoId && normal_loads[slot] < 2)
+					++normal_loads[slot];
+			}
 		}
 	// The slots at stake: read where a handler reaches and stored where
 	// its entry cannot see. Each is excluded when live at a handler's
@@ -301,7 +323,22 @@ void SlotPromotion::exclude_handler_state(std::vector<uint8_t>& ok)
 		live.assign(at_stake.size(), 1);
 	for (uint32_t r = 0; r < at_stake.size(); ++r)
 		if (live[r])
-			ok[at_stake[r]] = 0;
+		{
+			const SlotId slot = at_stake[r];
+			if (normal_loads.empty() || normal_loads[slot] < 2 || !body_.slots[slot].type.is_pointer())
+			{
+				ok[slot] = 0;
+				continue;
+			}
+			// Keep stores and every read a handler can reach in memory.
+			// The remaining reads have only ordinary predecessors and can
+			// use the value computed by the existing SSA renaming.
+			if (keep_handler_slot_.empty())
+				keep_handler_slot_.assign(slots, 0);
+			keep_handler_slot_[slot] = 1;
+		}
+	if (!keep_handler_slot_.empty())
+		reached_from_handler_.swap(reached);
 }
 
 // Liveness of the slots at stake (relevant: slot -> dense index) at the
@@ -541,7 +578,7 @@ void SlotPromotion::place_phis()
 		{
 			const Instruction& inst = body_.instructions[i];
 			if (inst.op == Opcode::Load && inst.ops[0].is(ValueKind::Slot) && candidate_[inst.ops[0].index] != kNoId &&
-				stored_in[candidate_[inst.ops[0].index]] != b)
+				stored_in[candidate_[inst.ops[0].index]] != b && !handler_load(inst.ops[0].index, b))
 			{
 				const uint32_t c = candidate_[inst.ops[0].index];
 				exposed[c] = 1;
@@ -615,9 +652,22 @@ void SlotPromotion::place_phis()
 	for (SlotId slot : slots_)
 		floating_fields += accessed_[slot] && body_.slots[slot].kind == SlotKind::Field &&
 			body_.slots[slot].type.is_float();
+	const SlotId first_new_field = c_.conditional_float_fields_from;
 	LoopForest pressure_loops;
 	if (c_.level >= 2 && floating_fields > kConditionalFloatFieldCap)
 		find_loops(body_, cfg_, pressure_loops);
+	std::vector<uint32_t> room(
+		first_new_field != kNoId ? pressure_loops.loops.size() : 0, kArmConditionalFloatFieldCap);
+	// Credit loop-carried values left by earlier promotion rounds.
+	for (uint32_t loop = 0; loop < room.size(); ++loop)
+	{
+		const auto header = pressure_loops.loops[loop].header;
+		for (InstId i = body_.blocks[header].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
+			i = body_.instructions[i].next)
+			if (body_.instructions[i].type.is_float() && room[loop])
+				--room[loop];
+	}
+	std::vector<uint32_t> conditional;
 	placements.clear();
 	placed.assign(n, kNoId);
 	queued.assign(n, kNoId);
@@ -660,13 +710,21 @@ void SlotPromotion::place_phis()
 		// a multiple of its size (a deep loop nest whose counters each get
 		// a dead phi at every enclosing header would place depth^2); past
 		// it the remaining candidates keep their memory.
-		if (c_.level >= 2 && floating_fields > kConditionalFloatFieldCap &&
-			body_.slots[slots_[c]].kind == SlotKind::Field && body_.slots[slots_[c]].type.is_float())
+		conditional.clear();
+		if (!pressure_loops.innermost.empty() && body_.slots[slots_[c]].kind == SlotKind::Field &&
+			body_.slots[slots_[c]].type.is_float())
 			for (const auto& w : wanted)
 			{
 				const uint32_t loop = pressure_loops.innermost[w.first];
-				if (loop != kNoId && pressure_loops.loops[loop].header != w.first)
+				if (loop == kNoId || pressure_loops.loops[loop].header == w.first)
+					continue;
+				if (slots_[c] < first_new_field || room[loop] == 0)
+				{
 					rejected = true;
+					break;
+				}
+				if (std::find(conditional.begin(), conditional.end(), loop) == conditional.end())
+					conditional.push_back(loop);
 			}
 		uint64_t inputs = 0;
 		for (const std::pair<BlockId, uint32_t>& w : wanted)
@@ -676,6 +734,8 @@ void SlotPromotion::place_phis()
 			candidate_[slots_[c]] = kNoId;
 			continue;
 		}
+		for (uint32_t loop : conditional)
+			--room[loop];
 		phi_inputs_ += inputs;
 		const Type type = body_.slots[slots_[c]].type;
 		for (const std::pair<BlockId, uint32_t>& w : wanted)
@@ -723,7 +783,8 @@ void SlotPromotion::rename_block(BlockId block)
 	for (InstId i = body_.blocks[block].first; i != kNoId; i = body_.instructions[i].next)
 	{
 		const Instruction inst = body_.instructions[i];
-		if (inst.op == Opcode::Load && inst.ops[0].is(ValueKind::Slot) && candidate_[inst.ops[0].index] != kNoId)
+		if (inst.op == Opcode::Load && inst.ops[0].is(ValueKind::Slot) && candidate_[inst.ops[0].index] != kNoId &&
+			!handler_load(inst.ops[0].index, block))
 		{
 			const uint32_t c = candidate_[inst.ops[0].index];
 			if (current_[c].is(ValueKind::None))
@@ -803,7 +864,8 @@ void SlotPromotion::rename_block(BlockId block)
 				}
 				current_[c] = value;
 			}
-			remove_[i] = 1;
+			if (keep_handler_slot_.empty() || !keep_handler_slot_[inst.ops[1].index])
+				remove_[i] = 1;
 		}
 		prev = i;
 	}
@@ -977,9 +1039,7 @@ bool SlotPromotion::run()
 	return true;
 }
 
-} // namespace
-
-bool promote_slots(FunctionContext& context)
+bool promote_with_policy(FunctionContext& context, bool (*pass)(FunctionContext&))
 {
 	static SlotPromotion::Pool pool;
 	SlotPromotion promotion(context);
@@ -990,21 +1050,42 @@ bool promote_slots(FunctionContext& context)
 		return false;
 	// A run the driver made that left the body as it was: the version
 	// still names the body, which may be known to be in order.
-	const bool settled = promotion.kept_body() && context.running == promote_slots;
+	const bool settled = promotion.kept_body() && context.running == pass;
 	if (settled && context.ordered_version == context.version)
 	{
-		context.kept_body = promote_slots;
+		context.kept_body = pass;
 		return true;
 	}
 	// A promoted value may now be used before its definition in layout
 	// (input whose layout is not in dominance order: a jump into a loop).
 	if (!restore_definition_order(context) && promotion.kept_body())
 	{
-		context.kept_body = promote_slots;
+		context.kept_body = pass;
 		if (settled)
 			context.ordered_version = context.version;
 	}
 	return true;
+}
+
+} // namespace
+
+bool promote_slots(FunctionContext& context)
+{
+	return promote_with_policy(context, promote_slots);
+}
+
+bool promote_late_float_fields(FunctionContext& context)
+{
+	unsigned fields = 0;
+	for (const auto& slot : context.body.slots)
+		fields += slot.kind == lowir::SlotKind::Field && slot.type.is_float();
+	if (fields <= kConditionalFloatFieldCap)
+		return false;
+	const lowir::SlotId saved = context.conditional_float_fields_from;
+	context.conditional_float_fields_from = 0;
+	const bool changed = promote_with_policy(context, promote_late_float_fields);
+	context.conditional_float_fields_from = saved;
+	return changed;
 }
 
 } // namespace opt

@@ -680,6 +680,7 @@ bool CopyCoalescing::uniform_slots()
 // (forward_copies). One block scan each.
 bool CopyCoalescing::run()
 {
+	const bool arm = target_model::is_aarch64(c_.program.target);
 	uses_ = c_.entry_uses(coalesce_copies);
 	escaped_ = escaped_slots(body_);
 	dead_.assign(body_.instructions.size(), 0);
@@ -721,12 +722,14 @@ bool CopyCoalescing::run()
 				const Instruction& load = body_.instructions[loads[k]];
 				const Instruction* store = next != kNoId ? &body_.instructions[next] : nullptr;
 				Pair pair;
+				const auto kind = load.type.kind();
+				const bool scalar = load.type.is_integer() || load.type.is_pointer() ||
+					(arm && (kind == TypeKind::F32 || kind == TypeKind::F64));
 				const bool ok = store != nullptr && store->op == Opcode::Store && (load.flags & IF_VOLATILE) == 0 &&
-					(store->flags & IF_VOLATILE) == 0 && store->type == load.type &&
-					(load.type.is_integer() || load.type.is_pointer()) && store->ops[0].is(ValueKind::Temp) &&
-					store->ops[0].index == load.result && uses_[load.result] >= 1 &&
-					rooted(body_, load.ops[0], pair.from) && rooted(body_, store->ops[1], pair.to) &&
-					disjoint(pair.from, pair.to, storage_bytes(load.type));
+					(store->flags & IF_VOLATILE) == 0 && store->type == load.type && scalar &&
+					store->ops[0].is(ValueKind::Temp) && store->ops[0].index == load.result &&
+					uses_[load.result] >= 1 && rooted(body_, load.ops[0], pair.from) &&
+					rooted(body_, store->ops[1], pair.to) && disjoint(pair.from, pair.to, storage_bytes(load.type));
 				if (!ok)
 					break;
 				pair.load = loads[k];

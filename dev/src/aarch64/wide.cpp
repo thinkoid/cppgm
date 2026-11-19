@@ -94,6 +94,63 @@ void Selector::wide_binary(const lowir::Instruction& inst)
 	save_pair(inst.result, 9, 10);
 }
 
+// Like the x86 selector's high-product combine, use the high half directly.
+// Adjacent whole producers keep both scalar inputs in their assigned homes.
+// A plain low-half product of the same inputs can be emitted alongside it.
+InstId Selector::wide_high_product(const lowir::Instruction& first)
+{
+	const auto following = [&](const lowir::Instruction& inst) -> const lowir::Instruction* {
+		return inst.next == kNoId ? nullptr : &body_.instructions[inst.next];
+	};
+	const auto widened = [&](const lowir::Instruction* inst) {
+		return inst && inst->op == Opcode::Convert && inst->type.kind() == TypeKind::I128 &&
+			inst->sub == static_cast<unsigned>(ConvertOp::ZExt) && uses_[inst->result] == 1 &&
+			integer_bits(convert_source_type(*inst).kind()) == 64 && inst->ops[0].is(ValueKind::Temp);
+	};
+	const auto operation = [](const lowir::Instruction* inst, BinaryOp op, unsigned bits) {
+		return inst && inst->op == Opcode::Binary && inst->sub == static_cast<unsigned>(op) &&
+			integer_bits(inst->type.kind()) == bits;
+	};
+	const auto same_pair = [](const lowir::Instruction& inst, Value a, Value b) {
+		return (inst.ops[0] == a && inst.ops[1] == b) || (inst.ops[1] == a && inst.ops[0] == b);
+	};
+	const auto* second = following(first);
+	if (!widened(&first) || !widened(second))
+		return kNoId;
+	const auto* product = following(*second);
+	if (!operation(product, BinaryOp::Mul, 128) || uses_[product->result] != 1 ||
+		!same_pair(*product, Value::temp(first.result), Value::temp(second->result)))
+		return kNoId;
+	const Value left = first.ops[0], right = second->ops[0];
+	const auto* shift = following(*product);
+	const lowir::Instruction* low = nullptr;
+	if (operation(shift, BinaryOp::Mul, 64) && same_pair(*shift, left, right))
+	{
+		low = shift;
+		shift = following(*low);
+	}
+	if (!operation(shift, BinaryOp::UShr, 128) || uses_[shift->result] != 1 ||
+		!(shift->ops[0] == Value::temp(product->result)) || !shift->ops[1].is(ValueKind::Integer) ||
+		body_.literals[shift->ops[1].index].low != 64 || body_.literals[shift->ops[1].index].high != 0)
+		return kNoId;
+	const auto* high = following(*shift);
+	if (!high || high->op != Opcode::Convert || high->sub != static_cast<unsigned>(ConvertOp::Trunc) ||
+		integer_bits(high->type.kind()) != 64 || !(high->ops[0] == Value::temp(shift->result)) ||
+		convert_source_type(*high).kind() != TypeKind::I128)
+		return kNoId;
+	const auto a = operand_register(left, convert_source_type(first), 10);
+	const auto b = operand_register(right, convert_source_type(*second), 11);
+	out_.emit(Op::Umulh, 15, a, b);
+	if (low)
+	{
+		const auto dest = registers_[low->result] == kNoId ? 9 : registers_[low->result];
+		out_.emit(Op::Mul, dest, a, b);
+		save(dest, low->result, true);
+	}
+	save(15, high->result, true);
+	return shift->next;
+}
+
 bool Selector::wide(const lowir::Instruction& inst)
 {
 	switch (inst.op)

@@ -95,6 +95,7 @@ private:
 	const std::vector<uint32_t>& uses_;
 	IntegerPatternFacts& facts_;
 };
+
 // A bounded proof over typed SSA alternatives. Cycles, unknown values and
 // zero all fail; no runtime assertion is introduced.
 bool IntegerPatterns::power_of_two(Value value, Type type, unsigned& budget, unsigned width)
@@ -1106,6 +1107,132 @@ bool simplify_integer_arithmetic(FunctionBody& body, const std::vector<uint32_t>
 		? patterns.round_power_alignment(block, previous, instruction)
 		: patterns.variable_power_division(block, previous, instruction);
 }
+
+// C++ signed division truncates toward zero. Some callers correct both the
+// quotient and the remainder to give a nonnegative remainder. For a positive
+// power of two, arithmetic shift and low-bit extraction give that pair
+// directly, even when the dividend is negative.
+bool simplify_floor_correction(FunctionContext& context, BlockId block, InstId& prev, InstId id)
+{
+	if (!target_model::is_aarch64(context.program.target))
+		return false;
+	FunctionBody& body = context.body;
+	const Instruction select = body.instructions[id];
+	const auto producer = [&](Value v) -> const Instruction* {
+		return v.is(ValueKind::Temp) && v.index >= body.parameter_count && body.temps[v.index].def != kNoId
+			? &body.instructions[body.temps[v.index].def]
+			: nullptr;
+	};
+	const Instruction* test = producer(select.ops[0]);
+	if (test == nullptr || test->op != Opcode::Compare ||
+		(test->type.kind() != TypeKind::I64 && test->type.kind() != TypeKind::I32))
+		return false;
+	const Type type = test->type;
+	const auto pred = static_cast<ComparePredicate>(test->sub);
+	Constant zero;
+	if ((pred != ComparePredicate::Lt && pred != ComparePredicate::Ge) || !literal_constant(body, test->ops[1], zero) ||
+		!is_integer(type, zero, 0))
+		return false;
+	const Value rem_value = test->ops[0];
+	const Instruction* rem = producer(rem_value);
+	if (rem == nullptr || rem->op != Opcode::Binary || rem->type != type)
+		return false;
+	const Value input = rem->ops[0];
+	const Value normal = select.ops[pred == ComparePredicate::Lt ? 2 : 1];
+	const Value adjusted = select.ops[pred == ComparePredicate::Lt ? 1 : 2];
+	const Instruction* amount = nullptr;
+	if (rem->sub == static_cast<unsigned>(BinaryOp::Sub))
+	{
+		const auto* product = producer(rem->ops[1]);
+		if (product == nullptr || product->op != Opcode::Binary ||
+			product->sub != static_cast<unsigned>(BinaryOp::Mul) || product->type != type)
+			return false;
+		amount = producer(product->ops[0]);
+		Constant factor, divisor;
+		if (amount == nullptr || amount->op != Opcode::Binary || amount->type != type ||
+			amount->sub != static_cast<unsigned>(BinaryOp::Div) || !(amount->ops[0] == input) ||
+			!literal_constant(body, product->ops[1], factor) || !literal_constant(body, amount->ops[1], divisor) ||
+			!same_constant(type, factor, divisor))
+			return false;
+	}
+	else if (rem->sub != static_cast<unsigned>(BinaryOp::Mod))
+		return false;
+	Constant divisor;
+	Literal scale;
+	if (!literal_constant(body, (amount ? amount : rem)->ops[1], divisor) || !integer_bits(type, divisor, scale) ||
+		scale.high || scale.low < 2 || (scale.low & (scale.low - 1)) != 0)
+		return false;
+	const auto* corrected = producer(adjusted);
+	if (corrected == nullptr)
+		return false;
+	Instruction replacement;
+	if (select.type == type && normal == rem_value)
+	{
+		Constant bias;
+		if (corrected->op != Opcode::Binary || corrected->sub != static_cast<unsigned>(BinaryOp::Add) ||
+			corrected->type != type || !(corrected->ops[0] == rem_value) ||
+			!literal_constant(body, corrected->ops[1], bias) || !same_constant(type, bias, divisor))
+			return false;
+		replacement = make_instruction(Opcode::Binary, type);
+		replacement.sub = static_cast<uint8_t>(BinaryOp::And);
+		replacement.ops[0] = input;
+		replacement.ops[1] = integer_value(body, Literal{ scale.low - 1, 0 });
+	}
+	else
+	{
+		const auto* address = producer(normal);
+		if (!select.type.is_pointer() || corrected->op != Opcode::Index || address == nullptr ||
+			address->op != Opcode::Index || !(corrected->ops[0] == normal))
+			return false;
+		Type element = address->type;
+		uint64_t bytes = storage_bytes(element);
+		const uint64_t unit = storage_bytes(corrected->type);
+		const auto* quotient = producer(address->ops[1]);
+		// Before index-scale folding, lowering often indexes bytes using a
+		// separately scaled quotient. An i64 product preserves the same
+		// 64-bit address arithmetic as the typed index.
+		if (quotient != nullptr && quotient->op == Opcode::Binary && quotient->type.kind() == TypeKind::I64 &&
+			quotient->sub == static_cast<unsigned>(BinaryOp::Mul))
+		{
+			Constant factor;
+			Literal multiplier;
+			const uint64_t max_element_bytes = (uint64_t(1) << 48) - 1;
+			if (bytes == 0 || !literal_constant(body, quotient->ops[1], factor) ||
+				!integer_bits(quotient->type, factor, multiplier) || multiplier.high != 0 || multiplier.low == 0 ||
+				multiplier.low > max_element_bytes / bytes)
+				return false;
+			bytes *= multiplier.low;
+			element = Type::object(bytes, 0);
+			quotient = producer(quotient->ops[0]);
+		}
+		Constant step, by;
+		if (unit == 0 || bytes == 0 || bytes > INT64_MAX || bytes % unit || quotient == nullptr ||
+			quotient->op != Opcode::Binary || quotient->sub != static_cast<unsigned>(BinaryOp::Div) ||
+			quotient->type != type || !(quotient->ops[0] == input) || !literal_constant(body, quotient->ops[1], by) ||
+			!same_constant(type, by, divisor) || !literal_constant(body, corrected->ops[1], step) ||
+			!is_integer(Type::scalar(TypeKind::I64), step, -static_cast<int64_t>(bytes / unit)))
+			return false;
+		replacement = make_instruction(Opcode::Index, element);
+		replacement.ops[0] = address->ops[0];
+		Instruction shift = make_instruction(Opcode::Binary, type);
+		shift.location = select.location;
+		shift.sub = static_cast<uint8_t>(BinaryOp::Shr);
+		shift.ops[0] = input;
+		shift.ops[1] = integer_value(body, Literal{ static_cast<uint64_t>(__builtin_ctzll(scale.low)), 0 });
+		const InstId made = append_instruction(body, shift);
+		const TempId value = append_temp(body, type, made);
+		body.instructions[made].result = value;
+		insert_after(body, block, prev, made);
+		prev = made;
+		replacement.ops[1] = Value::temp(value);
+	}
+	replacement.location = select.location;
+	replacement.result = select.result;
+	replacement.next = select.next;
+	body.instructions[id] = replacement;
+	return true;
+}
+
 // A scalar extraction from an ABI two-word pack needs only its half.
 bool simplify_packed_wide_part(FunctionBody& body, Instruction& inst, bool truncation)
 {

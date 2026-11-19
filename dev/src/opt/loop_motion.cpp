@@ -136,7 +136,21 @@ bool LoopMotion::worth_moving(const Instruction& inst, bool calls) const
 	case Opcode::Unary:
 	case Opcode::Select:
 	case Opcode::Convert:
+		return !calls;
 	case Opcode::Vector:
+		// Arm can multiply by a repeated lane without materializing the
+		// broadcast. Leave it beside the multiply to keep that opportunity.
+		if (!calls && inst.sub == static_cast<unsigned>(VectorOp::Pshufd) && inst.next != kNoId &&
+			inst.ops[2].is(ValueKind::Integer) && target_model::is_aarch64(c_.program.target))
+		{
+			const auto& next = body_.instructions[inst.next];
+			const uint64_t mask = body_.literals[inst.ops[2].index].low;
+			const Value shuffled = Value::temp(inst.result);
+			if (mask <= 255 && mask % 0x55 == 0 && next.op == Opcode::Vector &&
+				next.sub == static_cast<unsigned>(VectorOp::Pmulld) &&
+				((next.ops[0] == shuffled) != (next.ops[1] == shuffled)))
+				return false;
+		}
 		return !calls;
 	default:
 		return false;

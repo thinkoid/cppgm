@@ -188,6 +188,8 @@ InstId Selector::shifted_operand(const lowir::Instruction& shift, BlockId block)
 // producer's inputs may share the consumer's destination after allocation.
 InstId Selector::arithmetic_operand(const lowir::Instruction& inst)
 {
+	if (contract_float_ && inst.type.is_float())
+		return contracted_float_sum(inst);
 	const unsigned bits = integer_bits(inst.type.kind());
 	if ((bits != 32 && bits != 64) || inst.next == kNoId || uses_[inst.result] != 1)
 		return kNoId;

@@ -245,7 +245,7 @@ ExprFacts* Analyzer::builtin_operation(const syntax::CallExpr& expr, const Funct
 	case GnuBuiltin::FloatClassify:
 	case GnuBuiltin::FloatCompare:
 	case GnuBuiltin::FloatConstant:
-		return floating_builtin(expr, builtin->gnu_builtin, variant, scope);
+		return floating_builtin(expr, *builtin, scope);
 	case GnuBuiltin::Overflow:
 		return overflow_builtin(expr, variant, scope);
 	case GnuBuiltin::VectorLanes:
@@ -375,11 +375,12 @@ ExprFacts* Analyzer::object_size_call(const syntax::CallExpr& expr, Scope* scope
 	return facts;
 }
 
-ExprFacts* Analyzer::floating_builtin(const syntax::CallExpr& expr, GnuBuiltin builtin, uint8_t variant, Scope* scope)
+ExprFacts* Analyzer::floating_builtin(const syntax::CallExpr& expr, const FunctionEntity& builtin, Scope* scope)
 {
+	const uint8_t variant = builtin.builtin_variant;
 	const uint32_t count = expr.arguments.size;
 	const Type* integer = types_.fundamental(FundamentalType::Int);
-	if (builtin == GnuBuiltin::FloatConstant)
+	if (builtin.gnu_builtin == GnuBuiltin::FloatConstant)
 	{
 		// GCC's __builtin_nan[f|l] and __builtin_nans[f|l] (const char*: a
 		// quiet or signaling NaN with the payload a string literal spells,
@@ -418,7 +419,7 @@ ExprFacts* Analyzer::floating_builtin(const syntax::CallExpr& expr, GnuBuiltin b
 													   : Intrinsic::Inf);
 		return facts;
 	}
-	if (builtin == GnuBuiltin::FloatCompare)
+	if (builtin.gnu_builtin == GnuBuiltin::FloatCompare)
 	{
 		// GCC's quiet comparisons (C99 7.12.14): two arithmetic operands of
 		// a floating common type (5p10), an int.
@@ -440,12 +441,11 @@ ExprFacts* Analyzer::floating_builtin(const syntax::CallExpr& expr, GnuBuiltin b
 		facts->value = static_cast<uint64_t>(Intrinsic::IsGreater) + variant;
 		return facts;
 	}
-	// GCC's type-generic floating classification: __builtin_isfinite,
+	// GCC's floating classification builtins return int. __builtin_signbitl
+	// takes long double. The generic forms take any floating type: __builtin_isfinite,
 	// __builtin_isinf, __builtin_isnan, __builtin_isnormal,
-	// __builtin_signbit, __builtin_isinf_sign and __builtin_issignaling
-	// (x), and
-	// __builtin_fpclassify(nan, infinite, normal, subnormal, zero, x), each
-	// an int; the classified operand of floating type, the others int.
+	// __builtin_signbit, __builtin_isinf_sign and __builtin_issignaling (x),
+	// and __builtin_fpclassify(nan, infinite, normal, subnormal, zero, x).
 	static const Intrinsic kClassifications[] = { Intrinsic::IsFinite, Intrinsic::IsInf, Intrinsic::IsNan,
 		Intrinsic::IsNormal, Intrinsic::FpClassify, Intrinsic::SignBit, Intrinsic::IsInfSign, Intrinsic::IsSignaling };
 	const Intrinsic kind = kClassifications[variant];
@@ -456,7 +456,12 @@ ExprFacts* Analyzer::floating_builtin(const syntax::CallExpr& expr, GnuBuiltin b
 		ExprFacts* facts = typed_value(*expr.arguments[i], scope);
 		if (facts == nullptr)
 			return nullptr;
-		if (i + 1 < count)
+		if (builtin.type->param_count != 0)
+		{
+			if (convert(*expr.arguments[i], builtin.type->params[i], false) == nullptr)
+				return nullptr;
+		}
+		else if (i + 1 < count)
 			convert(*expr.arguments[i], integer, false);
 		else if (!IsFloating(facts->type))
 			error(expr.arguments[i]->location, "a floating classification of a non-floating operand");

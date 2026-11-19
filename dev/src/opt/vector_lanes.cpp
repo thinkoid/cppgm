@@ -1,5 +1,8 @@
 #include "opt/vector_lanes.h"
 
+#include "lowir/builder.h"
+#include "opt/function_ir.h"
+
 namespace opt {
 
 using namespace lowir;
@@ -80,6 +83,17 @@ bool lane_operation(BinaryOp op, Type type, VectorOp& out)
 	default:
 		return false;
 	}
+}
+
+Instruction make_lane_instruction(FunctionBody& body, VectorOp op, Value a, Value b, int immediate)
+{
+	Instruction inst = make_instruction(Opcode::Vector, vector_result_type(op));
+	inst.sub = static_cast<uint8_t>(op);
+	inst.ops[0] = a;
+	inst.ops[1] = b;
+	if (immediate >= 0)
+		inst.ops[2] = integer_value(body, integer_literal(immediate));
+	return inst;
 }
 
 } // namespace opt

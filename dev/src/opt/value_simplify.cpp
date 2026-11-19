@@ -162,8 +162,8 @@ private:
 	bool narrow_truncation(Instruction& inst);
 	bool vector_identity(Instruction& inst, Value& out);
 	Value low_lane_source(Value v, unsigned bytes);
-	bool reassociate(Instruction& inst);
 	bool affine_constant(BlockId block, InstId& prev, InstId id);
+	bool reassociate(Instruction& inst);
 	bool shifted_truth_mask(BlockId block, InstId& prev, InstId id);
 	uint64_t possible_bits(Value v, Type type, unsigned depth = 0) override;
 	bool function_address(Value v) const;
@@ -196,7 +196,7 @@ private:
 	bool same_value(Value a, Value b, Type type, unsigned depth);
 	bool equality_memcmp(BlockId block, InstId& prev, InstId id);
 	void simplify_branch(Instruction& term);
-	bool phi_value(const Instruction& phi, Value& out);
+	void process_phis(BlockId block);
 	void process_block(BlockId block);
 	PhiComparison phi_comparison_;
 	void finish(bool full);
@@ -801,7 +801,7 @@ bool Simplifier::identity(Instruction& inst, Value& out)
 	case Opcode::Vector:
 		return vector_identity(inst, out);
 	case Opcode::Phi:
-		return phi_value(inst, out) || select_identity(inst, current_block_, out);
+		return fold_identical_phi(body_, inst, out) || select_identity(inst, current_block_, out);
 	default:
 		return false;
 	}
@@ -1773,31 +1773,6 @@ bool Simplifier::narrow_truncation(Instruction& inst)
 	return inst.op == Opcode::Convert && c_.level >= 1 && simplify_integer_conversion(body_, uses_, *this, inst);
 }
 
-bool Simplifier::phi_value(const Instruction& phi, Value& out)
-{
-	Value same = Value::none();
-	for (uint32_t k = 1; k < phi.extra_count; k += 2)
-	{
-		const Value in = body_.operands[phi.extra_first + k];
-		if (in.is(ValueKind::Temp) && in.index == phi.result)
-			continue;
-		if (same.is(ValueKind::None))
-		{
-			same = in;
-			continue;
-		}
-		if (in == same)
-			continue;
-		Constant a, b;
-		if (!literal_constant(body_, in, a) || !literal_constant(body_, same, b) || !same_constant(phi.type, a, b))
-			return false;
-	}
-	if (same.is(ValueKind::None))
-		return false;
-	out = same;
-	return true;
-}
-
 // (x op c1) op c2 -> x op (c1 op c2) for add, mul, and, or, xor; also sub
 // of a constant as an add.
 // Whether `v` is the address of a function, through pointer copies, on a
@@ -2109,14 +2084,12 @@ bool Simplifier::project_or(BlockId block, InstId& prev, InstId id)
 	result.ops[0] = value;
 	result.ops[1] = Value::none();
 	result.flags = 0;
-	grow_facts();
 	return true;
 }
 
-// ((x * a) +/- b) * c = x * (a * c) +/- (b * c), at the
-// integer type's width. Only consume single-use intermediates: one multiply
-// disappears without duplicating shared work. Floating arithmetic stays
-// ordered.
+// Distribute a constant multiplier over a constant bias at the integer
+// type's width. This removes an inner multiply or exposes a bias that
+// can fold into the next addition. Only consume single-use intermediates.
 bool Simplifier::affine_constant(BlockId block, InstId& prev, InstId id)
 {
 	const Instruction& seen = body_.instructions[id];
@@ -2132,15 +2105,32 @@ bool Simplifier::affine_constant(BlockId block, InstId& prev, InstId id)
 	const BinaryOp operation = static_cast<BinaryOp>(sum->sub);
 	if (operation != BinaryOp::Add && operation != BinaryOp::Sub)
 		return false;
-	const Instruction* product = producer(resolve(sum->ops[0]));
-	if (product == nullptr || product->op != Opcode::Binary || product->type != seen.type ||
-		static_cast<BinaryOp>(product->sub) != BinaryOp::Mul || product->result >= uses_.size() ||
-		uses_[product->result] != 1)
-		return false;
+	Value base = resolve(sum->ops[0]);
+	const Instruction* product = producer(base);
 	Constant a, b, coefficient, offset;
-	if (!constant(product->ops[1], seen.type, a) || !constant(sum->ops[1], seen.type, b) ||
-		!fold_binary(BinaryOp::Mul, seen.type, a, scale, coefficient) ||
-		!fold_binary(BinaryOp::Mul, seen.type, b, scale, offset))
+	const bool combine_product = product != nullptr && product->op == Opcode::Binary && product->type == seen.type &&
+		static_cast<BinaryOp>(product->sub) == BinaryOp::Mul && product->result < uses_.size() &&
+		uses_[product->result] == 1 && constant(product->ops[1], seen.type, a);
+	if (combine_product)
+	{
+		if (!fold_binary(BinaryOp::Mul, seen.type, a, scale, coefficient))
+			return false;
+		base = resolve(product->ops[0]);
+	}
+	else
+	{
+		if (c_.level < 3 || !target_model::is_aarch64(c_.program.target) || seen.next == kNoId ||
+			seen.result >= uses_.size() || uses_[seen.result] != 1)
+			return false;
+		const auto& following = body_.instructions[seen.next];
+		Constant trailing_bias;
+		if (following.op != Opcode::Binary || following.type != seen.type ||
+			static_cast<BinaryOp>(following.sub) != BinaryOp::Add || !(following.ops[0] == Value::temp(seen.result)) ||
+			!constant(following.ops[1], seen.type, trailing_bias))
+			return false;
+		coefficient = scale;
+	}
+	if (!constant(sum->ops[1], seen.type, b) || !fold_binary(BinaryOp::Mul, seen.type, b, scale, offset))
 		return false;
 	// The native baseline forms powers of two and scaled sums with
 	// shifts/LEAs. Do not turn two such factors into a general multiply.
@@ -2155,11 +2145,12 @@ bool Simplifier::affine_constant(BlockId block, InstId& prev, InstId id)
 			magnitude >>= 1;
 		return magnitude == 1 || magnitude == 3 || magnitude == 5 || magnitude == 9;
 	};
-	if (seen.type.kind() != TypeKind::I128 && cheap_factor(a) && cheap_factor(scale) && !cheap_factor(coefficient))
+	if (combine_product && seen.type.kind() != TypeKind::I128 && cheap_factor(a) && cheap_factor(scale) &&
+		!cheap_factor(coefficient))
 		return false;
 	Instruction multiply = make_instruction(Opcode::Binary, seen.type);
 	multiply.sub = static_cast<uint8_t>(BinaryOp::Mul);
-	multiply.ops[0] = resolve(product->ops[0]);
+	multiply.ops[0] = base;
 	multiply.ops[1] = literal(coefficient);
 	multiply.location = seen.location;
 	const Value bias = literal(offset);
@@ -2974,10 +2965,8 @@ bool Simplifier::shifted_truth_mask(BlockId block, InstId& prev, InstId id)
 	return false;
 }
 
-void Simplifier::process_block(BlockId block)
+void Simplifier::process_phis(BlockId block)
 {
-	current_block_ = block;
-	walked_[block] = 1;
 	// Duplicate phis first (their inputs from back edges are not yet
 	// resolved here; resolve() follows the same chains). Earlier phis are
 	// found by an order-independent signature of their (block, input)
@@ -2988,13 +2977,9 @@ void Simplifier::process_block(BlockId block)
 		grow_facts();
 		changed_ = true;
 	}
-	// (Only a block that starts with a phi has one to convert.)
-	const InstId head = body_.blocks[block].first;
-	if (c_.level >= 1 && head != kNoId && body_.instructions[head].op == Opcode::Phi &&
-		convert_matching_phis(c_, block, repl_, uses_))
+	if (c_.level >= 1 && convert_matching_phis(c_, block, repl_, uses_))
 		changed_ = true;
-	if (c_.level >= 1 && head != kNoId && body_.instructions[head].op == Opcode::Phi &&
-		derive_matching_phis(c_, block, repl_, uses_))
+	if (c_.level >= 1 && derive_matching_phis(c_, block, repl_, uses_))
 	{
 		grow_facts();
 		changed_ = true;
@@ -3007,12 +2992,14 @@ void Simplifier::process_block(BlockId block)
 		phi_heads_.clear(phis);
 		phi_chain_.clear();
 	}
-	for (InstId i = body_.blocks[block].first; i != kNoId && body_.instructions[i].op == Opcode::Phi && phis > 1;
+	for (InstId i = body_.blocks[block].first; i != kNoId && body_.instructions[i].op == Opcode::Phi;
 		i = body_.instructions[i].next)
 	{
 		Instruction& phi = body_.instructions[i];
 		for (uint32_t k = 1; k < phi.extra_count; k += 2)
 			body_.operands[phi.extra_first + k] = resolve(body_.operands[phi.extra_first + k]);
+		if (phis == 1)
+			break;
 		const uint64_t signature = phi_signature(body_, c_.block_of, phi);
 		Chain* chain = phi_heads_.find(signature);
 		bool merged = false;
@@ -3037,12 +3024,15 @@ void Simplifier::process_block(BlockId block)
 			chain->last = node;
 		}
 	}
-	if (phis == 1)
-	{
-		Instruction& phi = body_.instructions[body_.blocks[block].first];
-		for (uint32_t k = 1; k < phi.extra_count; k += 2)
-			body_.operands[phi.extra_first + k] = resolve(body_.operands[phi.extra_first + k]);
-	}
+}
+
+void Simplifier::process_block(BlockId block)
+{
+	current_block_ = block;
+	walked_[block] = 1;
+	const InstId head = body_.blocks[block].first;
+	if (head != kNoId && body_.instructions[head].op == Opcode::Phi)
+		process_phis(block);
 	InstId prev = kNoId;
 	for (InstId id = body_.blocks[block].first; id != kNoId;)
 	{
@@ -3112,9 +3102,11 @@ void Simplifier::process_block(BlockId block)
 			continue;
 		}
 		if (affine_constant(block, prev, id) ||
+			(inst.op == Opcode::Select && simplify_floor_correction(c_, block, prev, id)) ||
 			(inst.op == Opcode::Binary && static_cast<BinaryOp>(inst.sub) == BinaryOp::UShr &&
 				project_or(block, prev, id)))
 		{
+			grow_facts();
 			changed_ = true;
 			continue;
 		}

@@ -46,6 +46,9 @@ bool fold_convert(
 // A copy retypes the bits (same width) or keeps a literal's value.
 bool fold_copy(lowir::Type type, const lowir::Constant& a, lowir::Constant& out);
 
+// Every input other than the phi's own value is the same.
+bool fold_identical_phi(const lowir::FunctionBody& body, const lowir::Instruction& phi, lowir::Value& out);
+
 // Whether two constants are the same value of `type`.
 bool same_constant(lowir::Type type, const lowir::Constant& a, const lowir::Constant& b);
 
@@ -74,5 +77,10 @@ bool magnitude_below_zero(const lowir::FunctionBody& body, const lowir::Instruct
 // multiplication by it, and a product with two as the value added to itself
 // (`uses`, per temp, counts the read this adds).
 bool cheaper_float_arithmetic(lowir::FunctionBody& body, std::vector<uint32_t>& uses, lowir::Instruction& inst);
+
+// A following sum whose only use of the product is one of its operands.
+// The caller supplies any permission needed to contract the operations.
+bool float_multiply_addend(const lowir::FunctionBody& body, const std::vector<uint32_t>& uses,
+	const lowir::Instruction& multiply, lowir::Value& addend);
 
 } // namespace opt

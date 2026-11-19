@@ -113,8 +113,8 @@ uint32_t call_result_copy_slot(
 	if (next == kNoId)
 		return kNoId;
 	const auto& copy = body.instructions[next];
-	if (copy.op != Opcode::CopyObject || !(copy.ops[0] == Value::temp(call.result)) || copy.immediate < 0 ||
-		static_cast<uint64_t>(copy.immediate) != storage_bytes(call.type))
+	if (copy.op != Opcode::CopyObject || (copy.flags & IF_VOLATILE) || !(copy.ops[0] == Value::temp(call.result)) ||
+		copy.immediate < 0 || static_cast<uint64_t>(copy.immediate) != storage_bytes(call.type))
 		return kNoId;
 	return whole_object_slot(body, copy.ops[1], storage_bytes(call.type));
 }

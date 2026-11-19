@@ -10,11 +10,13 @@ struct Cfg;
 
 namespace aarch64 {
 
+struct LiveRange;
+
 class Selector
 {
 public:
 	Selector(const lowir::Program& program, lowir::SymbolId symbol, Function& out, int level, bool pic,
-		const std::vector<uint32_t>& leaf_registers, bool minimize_size);
+		const std::vector<uint32_t>& leaf_registers, bool minimize_size, bool contract_float);
 	void run();
 
 private:
@@ -54,15 +56,26 @@ private:
 	std::vector<uint8_t> object_words_, parameter_words_, word_accesses_;
 	unsigned vector_value(lowir::Value value, unsigned scratch);
 	void save_vector(unsigned reg, lowir::TempId result);
+	void vector_home(bool store, unsigned reg, lowir::TempId temp);
 	void vector_instruction(const lowir::Instruction& inst);
+	void vector_minmax(lowir::VectorOp op, unsigned dest, unsigned left, unsigned right);
 	void vector_shift(lowir::VectorOp op, unsigned dest, unsigned source, uint64_t count);
+	lowir::InstId vector_combination(const lowir::Instruction& inst);
 	lowir::InstId scalar_splat(const lowir::Instruction& inst);
+	lowir::InstId combine_float_pair(const lowir::Instruction& inst);
+	lowir::InstId scalar_lane_binary(const lowir::Instruction& inst);
+	lowir::InstId packed_multiply_accumulate(
+		const lowir::Instruction& inst, const lowir::Instruction* splat = nullptr, unsigned lane_field = 0);
+	lowir::InstId packed_lane_multiply(const lowir::Instruction& inst);
+	lowir::InstId horizontal_double_sum(const lowir::Instruction& inst);
+	lowir::InstId horizontal_word_sum(const lowir::Instruction& inst);
 	void vector_shuffle(const lowir::Instruction& inst, unsigned source);
 	void vector_move(unsigned to, unsigned from);
 	void pair(lowir::Value src, unsigned lo, unsigned hi);
 	void save_pair(lowir::TempId dest, unsigned lo, unsigned hi);
 	void wide_binary(const lowir::Instruction& inst);
 	void wide_shift(lowir::BinaryOp op);
+	lowir::InstId wide_high_product(const lowir::Instruction& first);
 	bool wide(const lowir::Instruction& inst);
 	void save_variadic_registers();
 	void emit_va_start(const lowir::Instruction& inst);
@@ -91,6 +104,7 @@ private:
 		lowir::BlockId block = lowir::kNoId;
 		uint16_t saved_args = 0;
 		uint32_t preserved_callers = 0;
+		uint32_t saved_simd = 0;
 	};
 	void pass_parallel(const lowir::Instruction& inst, const CallLayout& layout);
 	bool tail_compatible(const lowir::Instruction& inst, const CallLayout& layout) const;
@@ -99,7 +113,14 @@ private:
 	void pass(const Argument& arg, lowir::Value src, lowir::Type type, unsigned copy_offset);
 	void transfer(bool load, const Argument& arg, lowir::Value object, lowir::Type type);
 	void float_instruction(const lowir::Instruction& inst);
+	void float_compare(const lowir::Instruction& inst);
+	bool float_consumer(const lowir::Instruction& inst, lowir::BlockId block);
+	lowir::InstId conditional_float_increment(const lowir::Instruction& inst);
+	lowir::InstId contracted_float_sum(const lowir::Instruction& inst);
+	void float_choice(const lowir::Instruction& inst, unsigned condition);
 	unsigned fp_operand(lowir::Value operand, lowir::Type type, unsigned scratch);
+	void fp_home(bool store, unsigned reg, lowir::TempId temp);
+	void fp_stack_access(bool store, unsigned reg, uint32_t offset, bool single);
 	void save_fp(unsigned reg, lowir::TempId temp);
 	void fp_move(bool to_fp, unsigned fp, unsigned gp, lowir::Type type);
 	bool floating(const lowir::Instruction& inst) const;
@@ -123,7 +144,7 @@ private:
 	bool needs_snapshot(lowir::BlockId from, lowir::BlockId to);
 	uint64_t plan_phis();
 	void register_edge(lowir::BlockId from, lowir::BlockId to);
-	bool small_scalar_edge(lowir::BlockId from, lowir::BlockId to);
+	bool parallel_edge(lowir::BlockId from, lowir::BlockId to);
 	void copy_edge(lowir::BlockId from, lowir::BlockId to);
 	void edge(lowir::BlockId from, lowir::BlockId to, bool last = false);
 	void select(const lowir::Instruction& inst, lowir::BlockId block);
@@ -156,12 +177,18 @@ private:
 	void set_condition(lowir::TempId result, unsigned condition);
 	lowir::InstId compare_pair(const lowir::Instruction& first, lowir::BlockId block);
 	bool compare_consumer(const lowir::Instruction& inst, lowir::BlockId block, bool flags_ready = false);
-	bool backedge_move(lowir::BlockId from, lowir::BlockId to, unsigned condition);
+	bool backedge_moves(lowir::BlockId from, lowir::BlockId to, lowir::BlockId other, unsigned condition);
 	bool empty_edge(lowir::BlockId block, lowir::BlockId to);
 	void conditional_edges(lowir::BlockId block, const lowir::Instruction& branch, Op test, unsigned operand);
+	void conditional_bit_edges(
+		lowir::BlockId block, const lowir::Instruction& branch, Op test, unsigned source, unsigned bit, unsigned width);
 	void call(const lowir::Instruction& inst);
 	void emit_call(const lowir::Instruction& inst, const CallLayout& layout, bool projected = false);
-	std::vector<uint32_t> argument_spills_, remat_slots_;
+	std::vector<uint32_t> argument_spills_, simd_call_spills_, remat_slots_;
+	void protect_simd_at_calls(unsigned reg, uint64_t calls);
+	uint64_t cold_crossings(const LiveRange& range, const std::vector<std::pair<uint32_t, uint32_t>>& segments,
+		const std::vector<uint32_t>& calls, bool guarded) const;
+	bool rematerialize_frame_address(lowir::TempId id);
 	bool rematerialized(lowir::TempId id) const { return !remat_slots_.empty() && remat_slots_[id] != lowir::kNoId; }
 	void epilogue(const lowir::Instruction& inst);
 	void finish(lowir::SymbolId tail = lowir::kNoId);
@@ -174,7 +201,7 @@ private:
 	const lowir::Signature& signature_;
 	Function& out_;
 	int level_;
-	bool pic_, minimize_size_;
+	bool pic_, minimize_size_, contract_float_;
 	const std::vector<uint32_t>& leaf_registers_;
 	bool dynamic_stack_ = false, stack_pair_ = false;
 	lowir::BlockId fallthrough_ = lowir::kNoId;

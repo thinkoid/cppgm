@@ -1333,6 +1333,95 @@ uint64_t unrolled_size(const FunctionContext& c, const Cfg& cfg, const Loop& l, 
 	return size;
 }
 
+// An indexed load through a row pointer benefits from independent copies
+// of the address chain, even when the trip count exceeds the usual budget.
+static bool indirect_word_load(const FunctionBody& body, const Instruction& inst)
+{
+	if (inst.op != Opcode::Load || inst.type.kind() != TypeKind::I32 || !inst.ops[0].is(ValueKind::Temp))
+		return false;
+	const auto address = body.temps[inst.ops[0].index].def;
+	if (address == kNoId || body.instructions[address].op != Opcode::Index)
+		return false;
+	const auto base = body.instructions[address].ops[0];
+	if (!base.is(ValueKind::Temp))
+		return false;
+	const auto entry = body.temps[base.index].def;
+	return entry != kNoId && body.instructions[entry].op == Opcode::Load;
+}
+
+bool indexes_local_array(const FunctionBody& body, const Loop& loop, TempId iv)
+{
+	for (BlockId b : loop.blocks)
+		for (InstId i = body.blocks[b].first; i != kNoId; i = body.instructions[i].next)
+		{
+			const Instruction& inst = body.instructions[i];
+			if (inst.op != Opcode::Index || !(inst.ops[1] == Value::temp(iv)) || !inst.ops[0].is(ValueKind::Temp))
+				continue;
+			const InstId def = body.temps[inst.ops[0].index].def;
+			if (def != kNoId && body.instructions[def].op == Opcode::Addr &&
+				body.instructions[def].ops[0].is(ValueKind::Slot))
+				return true;
+		}
+	return false;
+}
+
+// Leave short loops with floating-point array work available for vectorization.
+// The vectorizer still checks dependences before it widens their accesses.
+bool has_contiguous_float_work(const FunctionBody& body, const Loop& loop)
+{
+	if (loop.blocks.size() > 3)
+		return false;
+	unsigned loads = 0, stores = 0, arithmetic = 0, size = 0;
+	for (BlockId block : loop.blocks)
+		for (InstId id = body.blocks[block].first; id != kNoId; id = body.instructions[id].next)
+		{
+			const Instruction& inst = body.instructions[id];
+			if (++size > 80 || inst.op == Opcode::Call)
+				return false;
+			if (inst.type.kind() != TypeKind::F64)
+				continue;
+			arithmetic += inst.op == Opcode::Binary;
+			const bool store = inst.op == Opcode::Store;
+			if ((!store && inst.op != Opcode::Load) || (inst.flags & IF_VOLATILE))
+				continue;
+			const Value address = inst.ops[store ? 1 : 0];
+			if (!address.is(ValueKind::Temp) || body.temps[address.index].def == kNoId)
+				continue;
+			const auto& index = body.instructions[body.temps[address.index].def];
+			if (index.op != Opcode::Index || storage_bytes(index.type) != 8 || !index.ops[1].is(ValueKind::Temp))
+				continue;
+			loads += !store;
+			stores += store;
+		}
+	return loads >= 2 && stores >= 2 && arithmetic >= 3;
+}
+
+bool loop_uses_vectors(const FunctionBody& body, const Loop& loop)
+{
+	for (BlockId block : loop.blocks)
+		for (InstId id = body.blocks[block].first; id != kNoId; id = body.instructions[id].next)
+			if (body.instructions[id].op == Opcode::Vector && body.instructions[id].type.kind() == TypeKind::V128)
+				return true;
+	return false;
+}
+
+bool indirect_word_reduction(const FunctionBody& body, const Loop& loop)
+{
+	bool multiply = false, indirect_load = false;
+	for (BlockId b : loop.blocks)
+		for (InstId id = body.blocks[b].first; id != kNoId; id = body.instructions[id].next)
+		{
+			const auto& inst = body.instructions[id];
+			if ((inst.flags & IF_VOLATILE) || inst.op == Opcode::Store || inst.op == Opcode::CopyObject ||
+				inst.op == Opcode::ZeroInit)
+				return false;
+			multiply |= inst.op == Opcode::Binary && inst.type.kind() == TypeKind::I32 &&
+				static_cast<BinaryOp>(inst.sub) == BinaryOp::Mul;
+			indirect_load |= indirect_word_load(body, inst);
+		}
+	return multiply && indirect_load;
+}
+
 bool unroll_short_loops(FunctionContext& context)
 {
 	return ShortLoopUnrolling(context).run();

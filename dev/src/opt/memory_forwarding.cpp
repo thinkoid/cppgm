@@ -178,11 +178,12 @@ private:
 		zeros_.clear();
 	}
 	bool known_zero(Value address, uint64_t bytes) const;
+	bool known_zero(const AddressFacts& at, uint64_t bytes) const;
 	Value previous_field(const Instruction& cut);
-	Value float_bits(const Instruction& load);
+	Value float_bits(const Instruction& load, const AddressFacts& at);
 	void note_zero(Value address, uint64_t bytes, uint32_t offset = 0);
 	void remember_extension(const Instruction& store);
-	Value packed_literal(const Instruction& load);
+	Value packed_literal(const Instruction& load, const AddressFacts& at);
 	void remember(Value address, Type type, Value value, bool typed);
 	void remember_at(const AddressFacts& f, const Key& key, Type type, Value value, bool typed);
 	void copy_facts(const Instruction& copy);
@@ -578,7 +579,11 @@ void MemoryForwarding::invalidate(Value address, uint64_t bytes, const Instructi
 
 bool MemoryForwarding::known_zero(Value address, uint64_t bytes) const
 {
-	const AddressFacts f = facts_of(address);
+	return !zeros_.empty() && known_zero(facts_of(address), bytes);
+}
+
+bool MemoryForwarding::known_zero(const AddressFacts& f, uint64_t bytes) const
+{
 	if (f.base == ValueKind::None)
 		return false;
 	for (const ZeroRange& r : zeros_)
@@ -591,12 +596,11 @@ bool MemoryForwarding::known_zero(Value address, uint64_t bytes) const
 // Small records can be constructed with byte fields and read through
 // an integer ABI carrier. Fold a load only when live store facts cover
 // every requested byte of the private record.
-Value MemoryForwarding::packed_literal(const Instruction& load)
+Value MemoryForwarding::packed_literal(const Instruction& load, const AddressFacts& at)
 {
 	const uint64_t width = storage_bytes(load.type);
 	if (width < 2 || width > 8 || !load.type.is_integer() || live_.empty() || live_.size() > 24)
 		return Value::none();
-	const auto at = facts_of(load.ops[0]);
 	if (at.base != ValueKind::Slot || escaped_[at.index] || at.offset < 0 || at.offset > 16)
 		return Value::none();
 	const auto size = storage_bytes(body_.slots[at.index].type);
@@ -630,15 +634,15 @@ Value MemoryForwarding::packed_literal(const Instruction& load)
 // or as zero: the float literal of those bits (a constant built as
 // eightbytes and read back as a double, the copy of static data split
 // into words); None otherwise.
-Value MemoryForwarding::float_bits(const Instruction& load)
+Value MemoryForwarding::float_bits(const Instruction& load, const AddressFacts& at)
 {
 	const bool wide = load.type.kind() == TypeKind::F64;
-	if (known_zero(load.ops[0], wide ? 8 : 4))
+	if (known_zero(at, wide ? 8 : 4))
 		return literal_value(body_, ValueKind::Float, load.type.kind(), Literal());
 	const TypeKind twins[2] = { wide ? TypeKind::I64 : TypeKind::I32, wide ? TypeKind::I64 : TypeKind::U32 };
 	for (TypeKind twin : twins)
 	{
-		const Known* other = find(key_of(load.ops[0], Type::scalar(twin)));
+		const Known* other = find(key_of(at, load.ops[0], Type::scalar(twin)));
 		if (other != nullptr && other->generation == generation_ && other->value.is(ValueKind::Integer))
 		{
 			Literal bits = body_.literals[other->value.index];
@@ -1048,6 +1052,7 @@ Value MemoryForwarding::previous_field(const Instruction& cut)
 
 void MemoryForwarding::process(BlockId block)
 {
+	const bool arm = target_model::is_aarch64(c_.program.target);
 	unsigned stores = 0;
 	call_count_ = call_next_ = 0;
 	call_epoch_ = 1;
@@ -1062,7 +1067,7 @@ void MemoryForwarding::process(BlockId block)
 				while (v.is(ValueKind::Temp) && v.index < repl_.size() && !repl_[v.index].is(ValueKind::None))
 					v = repl_[v.index];
 			});
-		if (inst.op == Opcode::Convert && target_model::is_aarch64(c_.program.target))
+		if (inst.op == Opcode::Convert && arm)
 		{
 			const auto field = previous_field(inst);
 			if (!field.is(ValueKind::None))
@@ -1092,37 +1097,37 @@ void MemoryForwarding::process(BlockId block)
 			call_count_ = call_next_ = 0;
 		if (inst.op == Opcode::Load && (inst.flags & IF_VOLATILE) == 0)
 		{
-			const Key key = key_of(inst.ops[0], inst.type);
+			const auto at = facts_of(inst.ops[0]);
+			const Key key = key_of(at, inst.ops[0], inst.type);
 			const Known* found = find(key);
 			const bool integral = inst.type.is_pointer() ||
 				(inst.type.is_integer() && inst.type.kind() != TypeKind::I128);
 			if (found != nullptr && found->generation == generation_ && !found->value.is(ValueKind::None))
 				repl_[inst.result] = found->value;
-			else if (integral && known_zero(inst.ops[0], storage_bytes(inst.type)))
+			else if (integral && known_zero(at, storage_bytes(inst.type)))
 				repl_[inst.result] = integer_value(body_, Literal());
 			else if (inst.type.kind() == TypeKind::F32 || inst.type.kind() == TypeKind::F64)
-				repl_[inst.result] = float_bits(inst);
+				repl_[inst.result] = float_bits(inst, at);
 			else if (integral)
 			{
 				// A same-width access of the other integer (or pointer)
 				// type read or wrote the same bits: the load becomes a copy
 				// retyping that value.
-				const Known* other = find(key_of(inst.ops[0], same_width_twin(inst.type, body_.pointer_type())));
+				const Known* other = find(key_of(at, inst.ops[0], same_width_twin(inst.type, body_.pointer_type())));
 				if (other != nullptr && other->generation == generation_ && !other->value.is(ValueKind::None) &&
 					!(other->value.is_literal() && (inst.type.is_pointer() || other->type.is_pointer())))
 				{
-					const Value address = inst.ops[0];
 					inst.op = Opcode::Copy;
 					inst.ops[0] = other->value;
-					remember(address, inst.type, Value::temp(inst.result), (inst.flags & IF_TYPED) != 0);
+					remember_at(at, key, inst.type, Value::temp(inst.result), (inst.flags & IF_TYPED) != 0);
 					++c_.stats.loads_reused;
 					changed_ = true;
 					prev = i;
 					i = next;
 					continue;
 				}
-				if (target_model::is_aarch64(c_.program.target))
-					repl_[inst.result] = packed_literal(inst);
+				if (arm)
+					repl_[inst.result] = packed_literal(inst, at);
 			}
 			if (!repl_[inst.result].is(ValueKind::None))
 			{
@@ -1133,7 +1138,7 @@ void MemoryForwarding::process(BlockId block)
 				i = next;
 				continue;
 			}
-			remember(inst.ops[0], inst.type, Value::temp(inst.result), (inst.flags & IF_TYPED) != 0);
+			remember_at(at, key, inst.type, Value::temp(inst.result), (inst.flags & IF_TYPED) != 0);
 		}
 		else if (inst.op == Opcode::Store)
 		{
@@ -1984,7 +1989,8 @@ bool MemoryForwarding::may_clobber(
 
 Value MemoryForwarding::value_at_end(BlockId block, Value address, Type type, bool typed)
 {
-	return value_at_end(block, key_of(address, type), facts_of(address), type, typed);
+	const auto at = facts_of(address);
+	return value_at_end(block, key_of(at, address, type), at, type, typed);
 }
 
 Value MemoryForwarding::value_at_end(BlockId block, const Key& key, const AddressFacts& want, Type type, bool typed)

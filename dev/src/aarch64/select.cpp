@@ -9,6 +9,18 @@ using namespace lowir;
 namespace {
 const unsigned result_reg = 9, left = 10, right = 11;
 const Type word = Type::scalar(TypeKind::I64);
+
+bool zero_extended_from_narrower(const FunctionBody& body, Value value, Type type)
+{
+	if (!value.is(ValueKind::Temp) || body.temps[value.index].type != type)
+		return false;
+	const InstId id = body.temps[value.index].def;
+	if (id == kNoId)
+		return false;
+	const auto& def = body.instructions[id];
+	return def.op == Opcode::Convert && def.type == type && static_cast<ConvertOp>(def.sub) == ConvertOp::ZExt &&
+		integer_bits(convert_source_type(def).kind()) < integer_bits(type.kind());
+}
 }
 
 void Selector::binary(const lowir::Instruction& inst)
@@ -190,7 +202,9 @@ void Selector::select(const lowir::Instruction& inst, BlockId block)
 			const unsigned src = operand_register(inst.ops[0], from, left);
 			const unsigned dest = registers_[inst.result] == kNoId ? result_reg : registers_[inst.result];
 			const unsigned bits = integer_bits(op == ConvertOp::Trunc ? inst.type.kind() : from.kind());
-			if (op == ConvertOp::ZExt && inst.ops[0].is(ValueKind::Temp) && !memory_value(from))
+			const bool zero_extend = op == ConvertOp::ZExt ||
+				(op == ConvertOp::SExt && zero_extended_from_narrower(body_, inst.ops[0], from));
+			if (zero_extend && inst.ops[0].is(ValueKind::Temp) && !memory_value(from))
 				move(dest, src);
 			else if (bits == 32 && op != ConvertOp::SExt)
 				out_.emit(Op::OrrW, dest, 31, src);
@@ -513,6 +527,10 @@ void Selector::run()
 			const auto& inst = body_.instructions[i];
 			if (!word_accesses_.empty() && word_accesses_[i] && register_access(inst))
 				continue;
+			// Late address rewriting can leave integer arithmetic with no
+			// remaining readers.
+			if (level_ && inst.op == Opcode::Binary && inst.type.is_integer() && uses_[inst.result] == 0)
+				continue;
 			if (inst.op == Opcode::Call && calls_[call_indices_[i]].tail)
 			{
 				call(inst);
@@ -541,11 +559,14 @@ void Selector::run()
 			}
 			if (level_ && (inst.op == Opcode::Index || inst.op == Opcode::Binary || inst.op == Opcode::Convert))
 			{
-				InstId last = inst.op == Opcode::Convert ? truncated_operand(inst, block) : address_sequence(i);
+				InstId last = inst.op != Opcode::Convert ? address_sequence(i)
+					: inst.type.kind() == TypeKind::I128 ? wide_high_product(inst)
+														 : truncated_operand(inst, block);
 				if (last == kNoId && inst.op == Opcode::Binary)
 				{
 					const auto op = static_cast<BinaryOp>(inst.sub);
-					last = op == BinaryOp::And ? bit_branch(inst, block)
+					last = op == BinaryOp::Add ? conditional_float_increment(inst)
+						: op == BinaryOp::And  ? bit_branch(inst, block)
 						: op == BinaryOp::Sub  ? narrow_range_branch(inst, block)
 											   : shifted_operand(inst, block);
 				}
@@ -557,7 +578,7 @@ void Selector::run()
 			}
 			if (level_ && (inst.op == Opcode::Load || inst.op == Opcode::Store || inst.op == Opcode::Vector))
 			{
-				const auto last = inst.op == Opcode::Vector ? scalar_splat(inst) : paired_access(inst);
+				const auto last = inst.op == Opcode::Vector ? vector_combination(inst) : paired_access(inst);
 				if (last != kNoId)
 				{
 					i = last;
@@ -566,8 +587,9 @@ void Selector::run()
 			}
 			if (level_ && inst.op == Opcode::Compare)
 			{
-				const auto last = compare_pair(inst, block);
-				if (last != kNoId || compare_consumer(inst, block))
+				const bool fp = inst.type.is_float();
+				const auto last = fp ? kNoId : compare_pair(inst, block);
+				if (last != kNoId || (fp ? float_consumer(inst, block) : compare_consumer(inst, block)))
 				{
 					i = last == kNoId ? inst.next : last;
 					continue;

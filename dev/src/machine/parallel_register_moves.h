@@ -16,16 +16,17 @@ constexpr unsigned kSmallTransfers = 8;
 constexpr uint32_t kTransferLiteral = UINT32_MAX;
 constexpr uint32_t kTransferSaved = UINT32_MAX - 1;
 
-template<typename Save, typename Emit>
+template<unsigned Limit = kSmallTransfers, typename Save, typename Emit>
 bool parallel_scalar_transfers(ScalarTransfer* moves, unsigned count, Save save, Emit emit)
 {
-	if (count > kSmallTransfers)
+	static_assert(Limit <= 32, "parallel transfer mask has 32 bits");
+	if (count > Limit)
 		return false;
 	for (unsigned i = 0; i < count; ++i)
 		for (unsigned j = 0; j < i; ++j)
 			if (moves[i].destination == moves[j].destination)
 				return false;
-	unsigned pending = (1u << count) - 1;
+	uint32_t pending = count == 32 ? UINT32_MAX : (1u << count) - 1;
 	while (pending)
 	{
 		unsigned ready = pending;

@@ -74,6 +74,8 @@
 	M(MovZ, 0xd2800000) \
 	M(MovK, 0xf2800000) \
 	M(LdurB, 0x38400000) \
+	M(LdurSBW, 0x38c00000) \
+	M(LdurSHW, 0x78c00000) \
 	M(SturB, 0x38000000) \
 	M(LdurH, 0x78400000) \
 	M(SturH, 0x78000000) \
@@ -97,7 +99,11 @@
 	M(StrSReg, 0xbc200800) \
 	M(LdrDReg, 0xfc600800) \
 	M(StrDReg, 0xfc200800) \
+	M(LdrQReg, 0x3ce00800) \
+	M(StrQReg, 0x3ca00800) \
 	M(LdrBReg, 0x38600800) \
+	M(LdrSBWReg, 0x38e00800) \
+	M(LdrSHWReg, 0x78e00800) \
 	M(StrBReg, 0x38200800) \
 	M(LdrHReg, 0x78600800) \
 	M(StrHReg, 0x78200800) \
@@ -106,6 +112,8 @@
 	M(LdrXReg, 0xf8600800) \
 	M(StrXReg, 0xf8200800) \
 	M(LdrB, 0x39400000) \
+	M(LdrSBW, 0x39c00000) \
+	M(LdrSHW, 0x79c00000) \
 	M(StrB, 0x39000000) \
 	M(LdrH, 0x79400000) \
 	M(StrH, 0x79000000) \
@@ -117,6 +125,8 @@
 	M(LdpX, 0xa9400000) \
 	M(LdpW, 0x29400000) \
 	M(StpW, 0x29000000) \
+	M(LdpS, 0x2d400000) \
+	M(StpS, 0x2d000000) \
 	M(StpD, 0x6d000000) \
 	M(LdpD, 0x6d400000) \
 	M(StpX, 0xa9000000) \
@@ -145,6 +155,8 @@
 	M(Ret, 0xd65f0000) \
 	M(FmovWS, 0x1e260000) \
 	M(FmovSW, 0x1e270000) \
+	M(FmovI, 0x1e201000) \
+	M(FmovFP, 0x1e204000) \
 	M(FmovXD, 0x9e660000) \
 	M(FmovDX, 0x9e670000) \
 	M(Fadd, 0x1e202800) \
@@ -152,12 +164,16 @@
 	M(Fmul, 0x1e200800) \
 	M(Fdiv, 0x1e201800) \
 	M(Fcmp, 0x1e202000) \
+	M(FcmpZero, 0x1e202008) \
+	M(Fcsel, 0x1e200c00) \
 	M(Fneg, 0x1e214000) \
 	M(Fsqrt, 0x1e21c000) \
 	M(FcvtDS, 0x1e22c000) \
 	M(FcvtSD, 0x1e624000) \
 	M(Scvtf, 0x9e220000) \
 	M(Ucvtf, 0x9e230000) \
+	M(ScvtfW, 0x1e220000) \
+	M(UcvtfW, 0x1e230000) \
 	M(Fcvtzs, 0x9e380000) \
 	M(Fcvtzu, 0x9e390000) \
 	M(LdrS, 0xbd400000) \
@@ -177,10 +193,15 @@
 	M(VAdd, 0x4e208400) \
 	M(VSub, 0x6e208400) \
 	M(VMul, 0x4e209c00) \
+	M(VSmullH, 0x0e60c000) \
+	M(VAddpS, 0x4ea0bc00) \
+	M(VAddvS, 0x4eb1b800) \
 	M(VAnd, 0x4e201c00) \
 	M(VOrr, 0x4ea01c00) \
 	M(VFcvtl, 0x0e617800) \
 	M(VFcvtn, 0x0e616800) \
+	M(VSxtl2d, 0x0f20a400) \
+	M(VScvtf, 0x4e21d800) \
 	M(VEor, 0x6e201c00) \
 	M(VBic, 0x4e601c00) \
 	M(VCmeq, 0x6e208c00) \
@@ -189,6 +210,11 @@
 	M(VFsub, 0x4ea0d400) \
 	M(VFmul, 0x6e20dc00) \
 	M(VFdiv, 0x6e20fc00) \
+	M(VFcmgt, 0x6ea0e400) \
+	M(VBsl, 0x6e601c00) \
+	M(VBit, 0x6ea01c00) \
+	M(VBif, 0x6ee01c00) \
+	M(VUmovDHi, 0x4e183c00) \
 	M(VFsqrt, 0x6ea1f800) \
 	M(VSmax, 0x4e206400) \
 	M(VUmax, 0x6e206400) \
@@ -207,10 +233,17 @@
 	M(VMovIS, 0x0f000400) \
 	M(VDupWS, 0x4e040c00) \
 	M(VDupS, 0x4e040400) \
+	M(VDupD, 0x4e080400) \
 	M(VInsH, 0x6e020400) \
 	M(VInsS, 0x6e040400) \
 	M(VInsHi, 0x4e181c00) \
 	M(VZip1, 0x4e003800) \
 	M(VZip2, 0x4e007800) \
+	M(VUzp1, 0x4e001800) \
+	M(VMla, 0x4e209400) \
+	M(VMulLaneS, 0x4f808000) \
+	M(VMlaLaneS, 0x6f800000) \
 	M(ReadThreadPointer, 0xd53bd040) \
-	M(AddPageI, 0x91400000)
+	M(VFaddpD, 0x7e70d800) \
+	M(AddPageI, 0x91400000) \
+	M(Fmadd, 0x1f000000)

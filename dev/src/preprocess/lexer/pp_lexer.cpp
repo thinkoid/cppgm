@@ -486,16 +486,23 @@ bool PPLexer::take_identifier_bytes()
 	if (__builtin_expect(dirty_ || cur_.begin != clean_end_, 0))
 		return false;
 	const unsigned char* const text = bytes();
-	uint32_t end = clean_end_;
-	while ((kByteClasses[text[end]] & kIdentifierByte) != 0)
-		++end;
+	const unsigned char* cursor = text + clean_end_;
+	unsigned char byte, classification;
+	do
+	{
+		byte = *cursor++;
+		classification = kByteClasses[byte];
+	} while ((classification & kIdentifierByte) != 0);
+	const auto end = static_cast<uint32_t>(cursor - text - 1);
 	if (end != clean_end_)
 	{
 		clean_end_ = end;
 		token_end_ = end;
-		cur_ = reader_.logical(end);
+		// The byte table identifies characters unaffected by phases 1 and 2.
+		// A zero byte may be the terminator, which the reader handles.
+		cur_ = classification && byte ? SourceChar{ byte, end, end + 1 } : reader_.logical(end);
 	}
-	return kByteClasses[text[end]] != 0 && !(text[end] == '$' && dollar_identifiers_);
+	return classification != 0 && (byte != '$' || !dollar_identifiers_);
 }
 
 const PPToken& PPLexer::lex_identifier_or_prefixed_literal()

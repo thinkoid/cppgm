@@ -81,6 +81,18 @@ void configure_source_language(const std::string& language, const std::string& s
 		throw InvocationError("language standard does not match -x " + language);
 }
 
+bool float_contract_option(const std::string& option, bool* enabled)
+{
+	const bool fast = option == "-ffast-math" || option == "-ffp-contract=fast";
+	if (!fast && option != "-fno-fast-math" && option.compare(0, 14, "-ffp-contract=") != 0 &&
+		option != "-frounding-math" && option != "-ftrapping-math" && option != "-ffp-exception-behavior=strict" &&
+		option != "-ffp-exception-behavior=maytrap" && option != "-ffp-model=strict" && option != "-ffp-model=precise")
+		return false;
+	if (enabled != nullptr)
+		*enabled = fast;
+	return true;
+}
+
 bool sse_option(const std::string& option, uint8_t& level)
 {
 	const bool disable = option.compare(0, 5, "-mno-") == 0;
@@ -132,6 +144,7 @@ struct Invocation
 	bool lowir_passes = true;
 	bool position_independent = false;
 	bool red_zone = true;
+	bool contract_float = false;
 	// -ffunction-sections: each function in a section of its own.
 	bool function_sections = false;
 	bool preprocess_only = false;
@@ -389,6 +402,8 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 			invocation.emit_lowir = true;
 		else if (arg == "-flowir-passes" || arg == "-fno-lowir-passes")
 			invocation.lowir_passes = arg == "-flowir-passes";
+		else if (float_contract_option(arg, &invocation.contract_float))
+			continue;
 		else if (arg == "-fPIC" || arg == "-fpic" || arg == "-fPIE" || arg == "-fpie")
 		{
 			invocation.position_independent = true;
@@ -826,7 +841,7 @@ bool compile_native_sources(SourceInputs sources, const Invocation& invocation, 
 		if (arm)
 			aarch64::compile_object(program, object, invocation.optimizer.level, invocation.position_independent,
 				nullptr, invocation.function_sections, eh_model == native::EhModel::Host,
-				invocation.optimizer.minimize_size);
+				invocation.optimizer.minimize_size, invocation.contract_float);
 		else
 			builder->finish(object);
 	}
@@ -895,7 +910,7 @@ bool compile_lowir_unit(const std::string& path, const Invocation& invocation, n
 		{
 			aarch64::compile_object(program, object, invocation.optimizer.level, invocation.position_independent,
 				nullptr, invocation.function_sections, eh_model == native::EhModel::Host,
-				invocation.optimizer.minimize_size);
+				invocation.optimizer.minimize_size, invocation.contract_float);
 		}
 		catch (const native::BackendError& e)
 		{

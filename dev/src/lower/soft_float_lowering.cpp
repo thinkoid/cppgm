@@ -35,8 +35,8 @@ namespace {
 
 // Operand and result kinds of a routine: h binary16, b bfloat16, q
 // binary128, f float, d double, x long double, i int, u unsigned int, l
-// long (and unsigned long; libgcc's comparisons return their word-mode
-// CMPtype), c target-word comparison result, t __int128 (and unsigned).
+// long (and unsigned long), c the runtime's CMPtype comparison result,
+// t __int128 (and unsigned).
 struct SoftFloatSpec
 {
 	const char* name;
@@ -122,8 +122,11 @@ lowir::Type SpecType(char code, target_model::Target target)
 	case 't':
 		return lowir::Type::scalar(lowir::TypeKind::I128);
 	case 'c':
+		// AArch64's __libgcc_cmp_return__ is int even under LP64.
 		return lowir::Type::scalar(
-			target_model::data_layout(target).pointer_bytes == 4 ? lowir::TypeKind::I32 : lowir::TypeKind::I64);
+			target_model::is_aarch64(target) || target_model::data_layout(target).pointer_bytes == 4
+				? lowir::TypeKind::I32
+				: lowir::TypeKind::I64);
 	default:
 		return lowir::Type::scalar(lowir::TypeKind::I64);
 	}

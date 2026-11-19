@@ -4,6 +4,7 @@
 #include "lowir/builder.h"
 #include "opt/loops.h"
 #include "opt/passes.h"
+#include "opt/integer_patterns.h"
 #include "opt/scalar_fold.h"
 
 namespace opt {
@@ -103,15 +104,19 @@ struct MinMax
 class SelectFormation
 {
 public:
-	explicit SelectFormation(FunctionContext& context) : c_(context), body_(context.body) {}
+	explicit SelectFormation(FunctionContext& context)
+		: c_(context), body_(context.body), arm_(target_model::is_aarch64(context.program.target))
+	{}
 	bool run();
 
 private:
 	const Instruction* producer(Value v) const;
 	Value pointer_source(Value v) const;
+	Value emit_select(BlockId block, InstId& at, const Instruction& select);
 	bool bit_choice(Value cond, BitChoice& choice) const;
 	bool match_indexed_choice(Value cond, Value a, Value b, IndexedChoice& choice) const;
-	Value emit_indexed(BlockId e, InstId& at, const IndexedChoice& choice, uint32_t location);
+	Value emit_indexed(
+		BlockId e, InstId& at, const IndexedChoice& choice, uint32_t location, uint64_t access_bytes = 0);
 	bool indexed_choice(BlockId e, InstId& at, Value cond, Value a, Value b, uint32_t location, Value& out);
 	bool arm(BlockId a, BlockId from, BlockId& to) const;
 	bool loads_through_merge(Value cond, BlockId join) const;
@@ -143,9 +148,24 @@ private:
 	std::vector<uint8_t> touched_;
 	const std::vector<uint32_t>* uses_ = nullptr;
 	LoopForest loops_;
+	const bool arm_;
+	bool floor_formed_ = false;
 	bool loops_ready_ = false;
 	bool float_arms_ = false; // the branch form() reads tests floating values in a loop
 };
+
+Value SelectFormation::emit_select(BlockId block, InstId& at, const Instruction& select)
+{
+	const InstId id = append_instruction(body_, select);
+	const TempId result = append_temp(body_, select.type, id);
+	body_.instructions[id].result = result;
+	if (arm_ &&
+		(select.type.is_pointer() || select.type.kind() == TypeKind::I32 || select.type.kind() == TypeKind::I64))
+		floor_formed_ = simplify_floor_correction(c_, block, at, id) || floor_formed_;
+	insert_after(body_, block, at, id);
+	at = id;
+	return Value::temp(result);
+}
 
 const Instruction* SelectFormation::producer(Value v) const
 {
@@ -277,7 +297,8 @@ bool SelectFormation::indexed_choice(BlockId e, InstId& at, Value cond, Value a,
 	return true;
 }
 
-Value SelectFormation::emit_indexed(BlockId e, InstId& at, const IndexedChoice& choice, uint32_t location)
+Value SelectFormation::emit_indexed(
+	BlockId e, InstId& at, const IndexedChoice& choice, uint32_t location, uint64_t access_bytes)
 {
 	const Value base = choice.base;
 	const BitChoice bit = choice.bit;
@@ -319,6 +340,32 @@ Value SelectFormation::emit_indexed(BlockId e, InstId& at, const IndexedChoice& 
 		set_convert_source_type(extend, bit.type);
 		extend.ops[0] = source;
 		source = emit(extend, word);
+	}
+	// For a single load, keep the fixed displacement separate when it can
+	// be encoded there. A scaled index then only needs the original bit.
+	if (arm_ && !invert && access_bytes && choice.bias > 0 && choice.delta <= 16 &&
+		static_cast<uint64_t>(choice.bias) % access_bytes == 0 &&
+		static_cast<uint64_t>(choice.bias) / access_bytes < 4096 && base.is(ValueKind::Temp))
+	{
+		if (bit.bit != 0)
+			source = binary(BinaryOp::UShr, source, bit.bit);
+		const Type boolean = Type::scalar(TypeKind::I1);
+		Instruction truncate = make_instruction(Opcode::Convert, boolean);
+		truncate.sub = static_cast<uint8_t>(ConvertOp::Trunc);
+		truncate.ops[0] = source;
+		set_convert_source_type(truncate, word);
+		Instruction widen = make_instruction(Opcode::Convert, word);
+		widen.sub = static_cast<uint8_t>(ConvertOp::ZExt);
+		widen.ops[0] = emit(truncate, boolean);
+		set_convert_source_type(widen, boolean);
+
+		Instruction index = make_instruction(Opcode::Index, Type::object(choice.delta, 0));
+		index.ops[0] = base;
+		index.ops[1] = emit(widen, word);
+		Instruction field = make_instruction(Opcode::Index, Type::scalar(TypeKind::I8));
+		field.ops[0] = emit(index, body_.pointer_type());
+		field.ops[1] = integer_value(body_, integer_literal(choice.bias));
+		return emit(field, body_.pointer_type());
 	}
 	if (bit.bit > output_bit)
 		source = binary(BinaryOp::UShr, source, bit.bit - output_bit);
@@ -632,11 +679,7 @@ bool SelectFormation::form(BlockId e)
 			sel.ops[1] = a;
 			sel.ops[2] = b;
 			sel.location = body_.instructions[term].location;
-			const InstId s = append_instruction(body_, sel);
-			body_.instructions[s].result = append_temp(body_, body_.instructions[i].type, s);
-			insert_after(body_, e, at, s);
-			at = s;
-			merged = Value::temp(body_.instructions[s].result);
+			merged = emit_select(e, at, sel);
 		}
 		// e's input to the merge.
 		Instruction& phi = body_.instructions[i];
@@ -740,7 +783,7 @@ bool SelectFormation::form_load(BlockId e)
 		(*uses_)[right.result] != 1)
 		return false;
 	InstId at = previous_in_block(body_, e, term);
-	const Value address = emit_indexed(e, at, choice, location);
+	const Value address = emit_indexed(e, at, choice, location, storage_bytes(left.type));
 	Instruction load = left;
 	load.result = body_.instructions[phi].result;
 	load.next = body_.instructions[phi].next;
@@ -869,10 +912,7 @@ bool SelectFormation::form_return(BlockId e)
 		sel.ops[1] = rt.ops[0];
 		sel.ops[2] = rf.ops[0];
 		sel.location = br.location;
-		const InstId s = append_instruction(body_, sel);
-		body_.instructions[s].result = append_temp(body_, rt.type, s);
-		insert_after(body_, e, at, s);
-		merged = Value::temp(body_.instructions[s].result);
+		merged = emit_select(e, at, sel);
 	}
 	// The emptied arm ends unreachable (the cleanup drops it); a block that
 	// only returns stays for its other predecessors.
@@ -1336,11 +1376,7 @@ bool SelectFormation::form_store(BlockId e)
 		select.ops[1] = a;
 		select.ops[2] = b;
 		select.location = branch.location;
-		const InstId id = append_instruction(body_, select);
-		body_.instructions[id].result = append_temp(body_, type, id);
-		insert_after(body_, e, at, id);
-		at = id;
-		return Value::temp(body_.instructions[id].result);
+		return emit_select(e, at, select);
 	};
 	const Value stored = choose(left.type, left.ops[0], right.ops[0]);
 	for (InstId id : phis)
@@ -1393,6 +1429,8 @@ bool SelectFormation::run()
 	}
 	if (changed)
 		c_.invalidate_cfg();
+	if (floor_formed_)
+		remove_dead_code(c_);
 	return changed;
 }
 

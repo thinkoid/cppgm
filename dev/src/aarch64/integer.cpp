@@ -264,6 +264,11 @@ void Selector::set_condition(TempId result, unsigned condition)
 
 void Selector::choose(const lowir::Instruction& inst, unsigned condition)
 {
+	if (inst.type.is_float())
+	{
+		float_choice(inst, condition);
+		return;
+	}
 	Value yes = inst.ops[1], no = inst.ops[2];
 	const unsigned dest = registers_[inst.result] == kNoId ? 9 : registers_[inst.result];
 	const unsigned bits = integer_bits(inst.type.kind());
@@ -286,8 +291,19 @@ void Selector::choose(const lowir::Instruction& inst, unsigned condition)
 	save(dest, inst.result, !bits || bits >= 32 || (normalized(yes) && normalized(no)));
 }
 
-// Record the two-instruction form. Exact instruction placement determines
-// whether the bit-test branch can reach its destination.
+// Record the two-instruction form until block placement establishes whether
+// the bit-test branch can reach its destination.
+void Selector::conditional_bit_edges(
+	BlockId block, const lowir::Instruction& branch, Op test, unsigned source, unsigned bit, unsigned width)
+{
+	uint32_t field = 0;
+	logical_immediate(uint64_t(1) << bit, width <= 32 ? 32 : 64, field);
+	const uint32_t pc = out_.code.size();
+	out_.emit(width <= 32 ? Op::AndImmW : Op::AndImm, 9, source, 0, field);
+	conditional_edges(block, branch, test, 9);
+	bit_tests_.push_back({ pc, bit });
+}
+
 InstId Selector::bit_branch(const lowir::Instruction& inst, BlockId block, const lowir::Instruction* shift)
 {
 	const unsigned width = integer_bits(inst.type.kind());
@@ -338,12 +354,7 @@ InstId Selector::bit_branch(const lowir::Instruction& inst, BlockId block, const
 		bit = __builtin_ctzll(value);
 		src = operand_register(operand, inst.type, 10);
 	}
-	uint32_t field = 0;
-	logical_immediate(uint64_t(1) << bit, width <= 32 ? 32 : 64, field);
-	const uint32_t pc = out_.code.size();
-	out_.emit(width <= 32 ? Op::AndImmW : Op::AndImm, 9, src, 0, field);
-	conditional_edges(block, branch, test_zero, 9);
-	bit_tests_.push_back({ pc, bit });
+	conditional_bit_edges(block, branch, test_zero, src, bit, width);
 	return edge;
 }
 
@@ -514,6 +525,17 @@ bool Selector::compare_consumer(const lowir::Instruction& inst, BlockId block, b
 	}
 	if (next.op != Opcode::Branch)
 		return false;
+	const unsigned narrow = integer_bits(inst.type.kind());
+	const auto pred = static_cast<ComparePredicate>(inst.sub);
+	if (!flags_ready && (narrow == 8 || narrow == 16) &&
+		(pred == ComparePredicate::Lt || pred == ComparePredicate::Ge) && inst.ops[1].is(ValueKind::Integer) &&
+		body_.literals[inst.ops[1].index].low == 0)
+	{
+		const unsigned source = operand_register(inst.ops[0], inst.type, 10);
+		conditional_bit_edges(
+			block, next, pred == ComparePredicate::Lt ? Op::CbzW : Op::CbnzW, source, narrow - 1, narrow);
+		return true;
+	}
 	const bool eq = inst.sub == static_cast<unsigned>(ComparePredicate::Eq);
 	if (!flags_ready && (eq || inst.sub == static_cast<unsigned>(ComparePredicate::Ne)))
 	{
@@ -584,7 +606,7 @@ void Selector::integer_unary(const lowir::Instruction& inst)
 void Selector::switch_edges(const lowir::Instruction& inst, BlockId from)
 {
 	const Type type = type_of(inst.ops[0], Type::scalar(TypeKind::I64));
-	const unsigned bits = integer_bits(type.kind());
+	const unsigned bits = type.is_pointer() ? 64 : integer_bits(type.kind());
 	const uint64_t mask = bits < 64 ? (uint64_t(1) << bits) - 1 : ~uint64_t(0);
 	std::vector<std::pair<int64_t, uint32_t>> cases;
 	for (unsigned i = 0; i < inst.extra_count; i += 2)
@@ -619,7 +641,9 @@ void Selector::switch_edges(const lowir::Instruction& inst, BlockId from)
 	const uint64_t span = cases.empty() ? 0 : static_cast<uint64_t>(cases.back().first) - first;
 	const bool masks = !cases.empty() && span < 64 && !targets.empty() && targets.size() <= 2 &&
 		clusters.size() >= 2 * targets.size() + 1;
-	if (level_ && (masks || machine::native_table(cases, clusters.size(), targets.size())))
+	// A64 table entries are executable branch instructions. A sparse table
+	// adds an indirect branch as well as the selected entry's direct branch.
+	if (level_ && (masks || (span < 4 * cases.size() && machine::native_table(cases, clusters.size(), targets.size()))))
 	{
 		// Several entries may share the same phi transfer. Give each
 		// nonempty edge one stub, including the out-of-range default.
