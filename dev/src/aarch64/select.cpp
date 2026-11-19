@@ -588,7 +588,9 @@ void Selector::run()
 			if (level_ && inst.op == Opcode::Compare)
 			{
 				const bool fp = inst.type.is_float();
-				auto last = fp ? kNoId : compare_pair(inst, block);
+				auto last = !fp && level_ >= 3 ? compare_select_pair(inst) : kNoId;
+				if (!fp && last == kNoId)
+					last = compare_pair(inst, block);
 				if (!fp && last == kNoId && level_ >= 3)
 					last = compare_before_increment(inst, block);
 				if (last != kNoId || (fp ? float_consumer(inst, block) : compare_consumer(inst, block)))

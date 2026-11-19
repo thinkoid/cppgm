@@ -27,6 +27,20 @@ extern "C" double narrow_lane_counter(const double* data, long count, long start
         sum += data[j] * static_cast<double>(static_cast<int>(i));
     return sum;
 }
+extern "C" unsigned long step_bit_cursor(const unsigned char* data, long count, unsigned long mask) {
+    const unsigned char* cursor = data;
+    unsigned long sum = 0;
+    for (long i = 0; i < count; ++i) {
+        sum += *cursor & mask;
+        if (mask > 1) {
+            mask >>= 1;
+        } else {
+            mask = 128;
+            ++cursor;
+        }
+    }
+    return (sum << 12) | (static_cast<unsigned long>(cursor - data) << 8) | mask;
+}
 extern "C" unsigned long widen_choice(bool a, unsigned x) { return a ? x : 0xffffffffu; }
 
 extern "C" unsigned byte_offset(const unsigned* data, signed char i, unsigned char j) {

@@ -4,6 +4,7 @@
 #include "aarch64/logical_immediate.h"
 
 #include "machine/switch_plan.h"
+#include "opt/scalar_fold.h"
 #include <algorithm>
 
 namespace aarch64 {
@@ -539,23 +540,56 @@ InstId Selector::finish_condition(InstId id, unsigned condition, BlockId block)
 	return id;
 }
 
+namespace {
+
+bool direct_select(const lowir::Instruction& select, TempId test)
+{
+	return select.op == Opcode::Select && select.ops[0] == Value::temp(test) && !memory_value(select.type) &&
+		!select.ops[1].is(ValueKind::Symbol) && !select.ops[2].is(ValueKind::Symbol);
+}
+
+} // namespace
+
+// LowIR gives each select its own comparison so it can be emitted beside
+// its use. Here both selects can use the same flags.
+InstId Selector::compare_select_pair(const lowir::Instruction& inst)
+{
+	if (inst.next == kNoId || uses_[inst.result] != 1 ||
+		!(inst.type.is_pointer() || (inst.type.is_integer() && integer_bits(inst.type.kind()) <= 64)))
+		return kNoId;
+	const auto& first = body_.instructions[inst.next];
+	if (!direct_select(first, inst.result) || first.next == kNoId)
+		return kNoId;
+	const auto& other = body_.instructions[first.next];
+	const auto same_operand = [&](unsigned k) {
+		return inst.ops[k] == other.ops[k] || opt::same_literal(body_, inst.type, inst.ops[k], other.ops[k]);
+	};
+	if (other.op != Opcode::Compare || other.next == kNoId || uses_[other.result] != 1 || other.type != inst.type ||
+		other.sub != inst.sub || !same_operand(0) || !same_operand(1))
+		return kNoId;
+	const auto& second = body_.instructions[other.next];
+	if (!direct_select(second, other.result))
+		return kNoId;
+	compare_flags(inst);
+	choose(first, conditions[inst.sub]);
+	choose(second, conditions[inst.sub]);
+	return other.next;
+}
+
 bool Selector::compare_consumer(const lowir::Instruction& inst, BlockId block, bool flags_ready)
 {
 	if (inst.next == kNoId || uses_[inst.result] != 1 ||
 		!(inst.type.is_pointer() || (inst.type.is_integer() && integer_bits(inst.type.kind()) <= 64)))
 		return false;
 	const auto& next = body_.instructions[inst.next];
-	if (!(next.ops[0] == Value::temp(inst.result)))
-		return false;
-	if (next.op == Opcode::Select && !memory_value(next.type) && !next.ops[1].is(ValueKind::Symbol) &&
-		!next.ops[2].is(ValueKind::Symbol))
+	if (direct_select(next, inst.result))
 	{
 		if (!flags_ready)
 			compare_flags(inst);
 		choose(next, conditions[inst.sub]);
 		return true;
 	}
-	if (next.op != Opcode::Branch)
+	if (next.op != Opcode::Branch || !(next.ops[0] == Value::temp(inst.result)))
 		return false;
 	const unsigned narrow = integer_bits(inst.type.kind());
 	const auto pred = static_cast<ComparePredicate>(inst.sub);

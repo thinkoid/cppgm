@@ -652,10 +652,22 @@ bool SelectFormation::form(BlockId e)
 	// (The Wasm target takes the select there, as its reference toolchain does.)
 	if (selects != 0 && !target_model::is_wasm(c_.program.target) && loads_through_merge(cond, join))
 		return false;
-	// Two values with work on both arms: selects run both arms on every path.
+	// Both arms now run on every path. On Arm, one inexpensive latch update
+	// per arm can use two selects controlled by the same comparison.
 	if (selects == kSelectCap && from_t == t && from_f == f && body_.blocks[t].first != body_.blocks[t].last &&
 		body_.blocks[f].first != body_.blocks[f].last)
-		return false;
+	{
+		auto inexpensive = [&](BlockId arm) {
+			const auto& step = body_.instructions[body_.blocks[arm].first];
+			return step.next == body_.blocks[arm].last &&
+				(step.op == Opcode::Index ||
+					(step.op == Opcode::Binary &&
+						(step.sub == static_cast<unsigned>(BinaryOp::UShr) ||
+							step.sub == static_cast<unsigned>(BinaryOp::Add))));
+		};
+		if (!arm_ || !c_.cfg.dominates(join, e) || !inexpensive(t) || !inexpensive(f))
+			return false;
+	}
 	InstId at = previous_in_block(body_, e, term);
 	if (from_t == t)
 		at = hoist(t, e, at);
