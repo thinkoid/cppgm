@@ -215,9 +215,8 @@ The Wasm SIMD128 and scalar workloads time warmed exports in one engine.
 Arm64 kernel timings include integer and floating-point NEON. On native Linux
 Arm64, the full public and index-cpp suites compare cppgm with GCC and Clang
 at `-O3`. The index-cpp runtime column summarizes the 50 checksummed workloads.
-On Google Axion, the public suite reached 0.966× Clang's throughput at
-`521b59b53` (81 outputs matched, 80 timed). Index-cpp reached 0.982× Clang at
-`58e595248` (50 checksums passed).
+On Google Axion, `521b59b53` reached 0.966× Clang's throughput on the public
+suite (81 outputs matched, 80 timed) and 0.979× on index-cpp (50 checksums passed).
 On x86, QEMU can check the Arm executables and count guest instructions.
 [Native Arm self-build, application timings and hardware counters](docs/performance/aarch64-native-gap-plan.md#after-rebasing-on-the-size-and-lto-changes) · [Arm optimization results and instruction profiles](docs/performance/aarch64-optimization-gaps.md) · [Earlier QEMU measurements](docs/performance/aarch64-codegen-20261118.md)
 
