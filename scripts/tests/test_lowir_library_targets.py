@@ -57,6 +57,10 @@ def check_wasm(target, obj, harness, out):
         assert run(*tool('CPPGM_WASMTIME', 'wasmtime'), 'run', '--invoke', 'verify', linked).strip() == '0'
 
 
+def apple_silicon():
+    return platform.system() == 'Darwin' and platform.machine().lower() in ('arm64', 'aarch64')
+
+
 def check_arm(target, obj, harness, out):
     linked = out / 'linked'
     if target == 'aarch64-linux-gnu':
@@ -68,13 +72,13 @@ def check_arm(target, obj, harness, out):
             run(*tool('CPPGM_AARCH64_QEMU', 'qemu-aarch64'), '-cpu', 'cortex-a53', linked)
     else:
         clang = tool('CPPGM_AARCH64_CLANG', 'clang')
-        native = platform.system() == 'Darwin' and platform.machine().lower() in ('arm64', 'aarch64')
-        if native:
+        if apple_silicon():
             run(*clang, '--target=' + target, harness, obj, '-o', linked)
             run(linked)
         else:
             run(*clang, '--target=' + target, '-nostdlib', '-fuse-ld=lld', harness, obj, '-o', linked)
-            assert struct.unpack_from('<IIII', linked.read_bytes())[:2] == (0xfeedfacf, 0x0100000c)
+            magic, cpu, _, kind = struct.unpack_from('<IIII', linked.read_bytes())
+            assert (magic, cpu, kind) == (0xfeedfacf, 0x0100000c, 2), 'expected an arm64 Mach-O executable'
 
 
 def check_target(target, clients, out, levels):
@@ -88,10 +92,10 @@ def check_target(target, clients, out, levels):
     if target == 'aarch64-linux-gnu':
         run(*cc, '--target=' + target, '-c', ROOT / 'pa39/support/start.S', '-o', out / 'start.o')
 
+    pic_forms = (0,) if wasm else (0, 1)
     for form, client in clients.items():
         for level in levels:
-            options = [0] if wasm else [0, 1]
-            for pic in options:
+            for pic in pic_forms:
                 name = f'{form}-O{level}-pic{pic}'
                 obj = out / (name + '.o')
                 lowir = obj.with_suffix('.lowir')
@@ -105,7 +109,7 @@ def check_target(target, clients, out, levels):
                     check_wasm(target, obj, harness, out)
                 else:
                     check_arm(target, obj, harness, out)
-    result = 'linked' if target == 'arm64-apple-macos11' and platform.system() != 'Darwin' else 'linked and ran'
+    result = 'linked' if target == 'arm64-apple-macos11' and not apple_silicon() else 'linked and ran'
     print(f'{target}: static/shared API objects matched CLI bytes, {result} with a C caller')
 
 

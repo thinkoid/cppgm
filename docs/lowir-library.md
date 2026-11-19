@@ -6,12 +6,7 @@ process. The library uses the compiler's existing model, validator, optimizer
 and target object emitters. A producer can select the output target independently
 of the machine running the library.
 
-Build both library forms and run the C consumer checks:
-
-```sh
-make -C dev lowir-library
-make test-lowir-library
-```
+Build both library forms with `make -C dev lowir-library`.
 
 This produces `dev/libcppgm_lowir.a` and `dev/libcppgm_lowir.so` (or `.dylib`
 on macOS). Its objects use a separate `obj/lowir-library` directory and PIC;
@@ -230,13 +225,15 @@ records follow the capabilities of the selected CLI backend.
 
 With the [PA37 Wasm tools](../pa37/README.md) and [PA39 cross tools](../pa39/README.md)
 on your path, run `python3 scripts/tests/test_lowir_library_targets.py` after
-building the CLI and library. It cross-checks O0–O3 object bytes against the
+building the CLI and library. Use `--target arm64-apple-macos11` to run only
+the Apple Silicon cases with the macOS SDK. It cross-checks O0–O3 object bytes against the
 CLI and links the output with independent C callers. On Linux, Wasmtime
 runs the Wasm cases and QEMU runs the Linux Arm cases. LLVM's Mach-O linker
 checks the Apple Silicon objects on Linux. The Apple Silicon CI job also
 links and runs the same cases using the host SDK.
 
-PA27 owns the optional O0 x86-64 library lane and PA33 adds O1–O3.
+On an x86-64 host, run `make test-lowir-library` for the C consumer checks.
+PA27 owns the optional O0 x86-64 lane and PA33 adds O1–O3.
 [The student contract](../pa27/lowir-library.md) describes that scope.
 These checks remain outside default assignment reports. The myc integration and
 its timing comparisons are separate maintainer work, with no course dependency
