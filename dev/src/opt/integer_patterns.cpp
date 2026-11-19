@@ -1288,4 +1288,37 @@ bool simplify_packed_wide_part(FunctionBody& body, Instruction& inst, bool trunc
 	return false;
 }
 
+Value projected_or_input(const FunctionBody& body, IntegerPatternFacts& facts, Value input, Type type, uint64_t kept)
+{
+	const unsigned width = lowir::integer_bits(type.kind());
+	Value source = input, value = input;
+	for (unsigned step = 0; step < 8; ++step)
+	{
+		const InstId id = value.is(ValueKind::Temp) ? body.temps[value.index].def : kNoId;
+		if (id == kNoId)
+			break;
+		const Instruction* def = &body.instructions[id];
+		if (!def->type.is_integer() || lowir::integer_bits(def->type.kind()) != width)
+			break;
+		if (def->op == Opcode::Copy && def->ops[0].is(ValueKind::Temp))
+		{
+			const Type from = body.temps[def->ops[0].index].type;
+			if (!from.is_integer() || lowir::integer_bits(from.kind()) != width)
+				break;
+			value = def->ops[0];
+			continue;
+		}
+		if (def->op != Opcode::Binary || static_cast<BinaryOp>(def->sub) != BinaryOp::Or)
+			break;
+		if ((facts.possible_bits(def->ops[0], def->type) & kept) == 0)
+			value = def->ops[1];
+		else if ((facts.possible_bits(def->ops[1], def->type) & kept) == 0)
+			value = def->ops[0];
+		else
+			break;
+		source = value;
+	}
+	return source;
+}
+
 } // namespace opt

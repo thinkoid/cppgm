@@ -194,6 +194,7 @@ private:
 	bool rematerialize_frame_address(lowir::TempId id);
 	bool rematerialized(lowir::TempId id) const { return !remat_slots_.empty() && remat_slots_[id] != lowir::kNoId; }
 	void epilogue(const lowir::Instruction& inst);
+	bool load_returns_directly(const lowir::Instruction& load) const;
 	void finish(lowir::SymbolId tail = lowir::kNoId);
 
 	const lowir::Program& program_;

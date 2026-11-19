@@ -578,6 +578,13 @@ void Selector::run()
 			}
 			if (level_ && (inst.op == Opcode::Load || inst.op == Opcode::Store || inst.op == Opcode::Vector))
 			{
+				if (inst.op == Opcode::Load && load_returns_directly(inst))
+				{
+					transfer(true, result_, inst.ops[0], inst.type);
+					finish();
+					i = inst.next;
+					continue;
+				}
 				const auto last = inst.op == Opcode::Vector ? vector_combination(inst) : paired_access(inst);
 				if (last != kNoId)
 				{

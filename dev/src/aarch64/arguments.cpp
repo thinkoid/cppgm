@@ -546,6 +546,15 @@ void Selector::emit_call(const lowir::Instruction& inst, const CallLayout& layou
 	}
 }
 
+bool Selector::load_returns_directly(const lowir::Instruction& load) const
+{
+	if (level_ < 3 || result_.indirect || !load.type.is_object() || load.op != Opcode::Load ||
+		(load.flags & IF_VOLATILE) || load.next == kNoId || uses_[load.result] != 1)
+		return false;
+	const lowir::Instruction& ret = body_.instructions[load.next];
+	return ret.op == Opcode::Return && ret.type == load.type && ret.ops[0] == Value::temp(load.result);
+}
+
 void Selector::epilogue(const lowir::Instruction& inst)
 {
 	const Type type = signature_.result;

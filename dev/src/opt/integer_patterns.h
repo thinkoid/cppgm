@@ -44,4 +44,9 @@ bool tested_not_negative(const FunctionContext& context, lowir::BlockId block, l
 bool unsign_tested_division(FunctionContext& context, lowir::BlockId block, lowir::Instruction& instruction);
 // The caller has identified a truncation or right shift of an i128 pack.
 bool simplify_packed_wide_part(lowir::FunctionBody& body, lowir::Instruction& instruction, bool truncation);
+// Follow one side of a packed OR when the other contributes none of the
+// observed bits. Same-width signedness copies preserve those bits.
+lowir::Value projected_or_input(
+	const lowir::FunctionBody& body, IntegerPatternFacts& facts, lowir::Value input, lowir::Type type, uint64_t kept);
+
 } // namespace opt

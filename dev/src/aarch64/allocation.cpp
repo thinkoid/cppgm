@@ -654,6 +654,9 @@ void Selector::allocate()
 			homes_[id] != kNoId || (!call_result_slots_.empty() && call_result_slots_[id] != kNoId))
 			continue;
 		const auto type = body_.temps[id].type;
+		const auto def = body_.temps[id].def;
+		if (type.is_object() && def != kNoId && load_returns_directly(body_.instructions[def]))
+			continue;
 		if (!memory_value(type))
 			homes_[id] = scalar_spills.assign(range.first, range.last, [&]() { return reserve(8, 8); });
 		else if (type.kind() == TypeKind::V128 && !range.vector_address)

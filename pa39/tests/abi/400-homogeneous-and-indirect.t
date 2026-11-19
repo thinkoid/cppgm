@@ -15,6 +15,10 @@ extern "C" Four replace_lanes(Four input) {
     input = shift_lanes(input);
     return input;
 }
+extern "C" Four choose_lanes(const Four& input, bool original) {
+    if (original) return input;
+    return Four{{input.lane[1], input.lane[3], input.lane[0], -input.lane[2]}};
+}
 
 struct Word { long value; };
 struct Box { long* value; };

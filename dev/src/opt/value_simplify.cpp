@@ -1925,29 +1925,24 @@ bool Simplifier::even_product_halved(Instruction& inst)
 	return true;
 }
 
-// `and (or a, b), c` where c keeps none of a's possible bits is
-// `and b, c` (a packed field's store after another field's: the earlier
-// merge's kept bits fall out, and with them the eightbyte's old value).
+// A mask can take a single part of a packed word directly.
 bool Simplifier::mask_or(Instruction& inst)
 {
 	if (inst.op != Opcode::Binary || static_cast<BinaryOp>(inst.sub) != BinaryOp::And || !inst.type.is_integer() ||
 		inst.type.kind() == TypeKind::I128)
 		return false;
+	const Instruction* packed = producer(inst.ops[0]);
+	if (packed == nullptr || (packed->op != Opcode::Copy && packed->op != Opcode::Binary))
+		return false;
 	Constant cy;
 	Literal bits;
 	if (!constant(inst.ops[1], inst.type, cy) || !integer_bits(inst.type, cy, bits))
 		return false;
-	const Instruction* def = producer(inst.ops[0]);
-	if (def == nullptr || def->op != Opcode::Binary || static_cast<BinaryOp>(def->sub) != BinaryOp::Or ||
-		def->type != inst.type)
+	const Value source = projected_or_input(body_, *this, inst.ops[0], inst.type, bits.low);
+	if (source == inst.ops[0])
 		return false;
-	for (unsigned k = 0; k < 2; ++k)
-		if ((possible_bits(def->ops[k], inst.type) & bits.low) == 0)
-		{
-			inst.ops[0] = def->ops[1 - k];
-			return true;
-		}
-	return false;
+	inst.ops[0] = source;
+	return true;
 }
 
 // A part read back from two values or-ed into one: a truncation or a right
@@ -1996,8 +1991,9 @@ bool Simplifier::project_or(BlockId block, InstId& prev, InstId id)
 		type.kind() == TypeKind::I1 || type.kind() == TypeKind::I128)
 		return false;
 	const Instruction* source = producer(seen.ops[0]);
-	if (source == nullptr || source->op != Opcode::Binary || source->type != type ||
-		static_cast<BinaryOp>(source->sub) != BinaryOp::Or)
+	if (source == nullptr ||
+		(source->op != Opcode::Copy &&
+			(source->op != Opcode::Binary || static_cast<BinaryOp>(source->sub) != BinaryOp::Or)))
 		return false;
 	Constant c;
 	Literal bits;
@@ -2007,6 +2003,10 @@ bool Simplifier::project_or(BlockId block, InstId& prev, InstId id)
 		return false;
 	const unsigned right = static_cast<unsigned>(bits.low);
 	const uint64_t kept = ~uint64_t(0) << right;
+	const Value input = projected_or_input(body_, *this, seen.ops[0], type, kept);
+	const bool projected = !(input == seen.ops[0]);
+	if (!projected && (source->op != Opcode::Binary || source->type != type))
+		return false;
 	struct Part
 	{
 		Value value;
@@ -2014,15 +2014,18 @@ bool Simplifier::project_or(BlockId block, InstId& prev, InstId id)
 		bool left;
 	};
 	Part parts[8];
-	Value pending[8] = { seen.ops[0] };
+	Value pending[8] = { input };
 	unsigned pending_count = 1, count = 0, work = 0, removed = 1, created = 0;
 	while (pending_count != 0 && ++work <= 16)
 	{
 		const Value v = resolve(pending[--pending_count]);
-		if ((possible_bits(v, type) & kept) == 0)
+		const Type part_type = v.is(ValueKind::Temp) ? body_.temps[v.index].type : type;
+		if (!part_type.is_integer() || lowir::integer_bits(part_type.kind()) != lowir::integer_bits(type.kind()))
+			return false;
+		if ((possible_bits(v, part_type) & kept) == 0)
 			continue;
 		const Instruction* def = producer(v);
-		if (def == nullptr || def->op != Opcode::Binary || def->type != type)
+		if (def == nullptr || def->op != Opcode::Binary || def->type != part_type)
 			return false;
 		const bool unique = def->result < uses_.size() && uses_[def->result] == 1;
 		if (static_cast<BinaryOp>(def->sub) == BinaryOp::Or && unique && pending_count + 2 <= 8)
@@ -2034,9 +2037,10 @@ bool Simplifier::project_or(BlockId block, InstId& prev, InstId id)
 		}
 		Constant shift;
 		Literal amount;
-		if (static_cast<BinaryOp>(def->sub) != BinaryOp::Shl || count == 8 || !constant(def->ops[1], type, shift) ||
-			!integer_bits(type, shift, amount) || amount.high != 0 || amount.low == 0 || amount.low >= width ||
-			(possible_bits(def->ops[0], type) >> (width - amount.low)) != 0)
+		if (static_cast<BinaryOp>(def->sub) != BinaryOp::Shl || count == 8 ||
+			!constant(def->ops[1], part_type, shift) || !integer_bits(part_type, shift, amount) || amount.high != 0 ||
+			amount.low == 0 || amount.low >= width ||
+			(possible_bits(def->ops[0], part_type) >> (width - amount.low)) != 0)
 			return false;
 		const unsigned left = static_cast<unsigned>(amount.low);
 		const unsigned by = left >= right ? left - right : right - left;
@@ -2044,7 +2048,10 @@ bool Simplifier::project_or(BlockId block, InstId& prev, InstId id)
 		created += by != 0 ? 1 : 0;
 		removed += unique ? 1 : 0;
 	}
-	if (pending_count != 0 || count == 0 || created + count - 1 >= removed)
+	// One replacement shift can bypass the shared OR with the same number
+	// of operations. Larger plans must remove more than they introduce.
+	if (pending_count != 0 || count == 0 || created + count - 1 > removed ||
+		(created + count - 1 == removed && !(projected && count == 1)))
 		return false;
 	const uint32_t location = seen.location;
 	Value value = Value::none();

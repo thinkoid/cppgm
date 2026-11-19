@@ -89,6 +89,7 @@ private:
 			exclusive_result_apart(result_bytes_, b.root, b.offset, bytes, a.root, body_.parameter_count);
 	}
 	void flush(BlockId block, std::vector<Pair>& run);
+	bool forward_object_return(InstId copy);
 	bool forward_copies(BlockId block);
 	bool zero_fill_slots();
 	bool constant_slots();
@@ -196,6 +197,37 @@ void CopyCoalescing::flush(BlockId block, std::vector<Pair>& run)
 	run.clear();
 }
 
+bool CopyCoalescing::forward_object_return(InstId id)
+{
+	Instruction& copy = body_.instructions[id];
+	const Value source = copy.ops[0], destination = copy.ops[1];
+	if (copy.next == kNoId || (copy.flags & IF_VOLATILE) || !source.is(ValueKind::Temp) ||
+		!body_.temps[source.index].type.is_pointer())
+		return false;
+	Instruction& ret = body_.instructions[copy.next];
+	const Value slot = ret.ops[0];
+	if (ret.op != Opcode::Return || !ret.type.is_object() || !slot.is(ValueKind::Slot) || escaped_[slot.index] ||
+		body_.slots[slot.index].type != ret.type || copy.immediate != static_cast<int64_t>(storage_bytes(ret.type)))
+		return false;
+	if (!(destination == slot))
+	{
+		const InstId addr = destination.is(ValueKind::Temp) ? body_.temps[destination.index].def : kNoId;
+		if (addr == kNoId || body_.instructions[addr].op != Opcode::Addr || !(body_.instructions[addr].ops[0] == slot))
+			return false;
+	}
+	// The load snapshots the same complete value as the copy. The return
+	// can read that value without first writing the private destination.
+	Instruction load = make_instruction(Opcode::Load, ret.type);
+	load.ops[0] = source;
+	load.next = copy.next;
+	load.location = copy.location;
+	load.result = append_temp(body_, ret.type, id);
+	ret.ops[0] = Value::temp(load.result);
+	copy = load;
+	++c_.stats.stores_removed;
+	return true;
+}
+
 // A copy into the start of a slot that only a later copy from its start
 // reads (nothing else names the slot): the later copy reads the first one's
 // source instead, when that is an object value or storage nothing in
@@ -209,6 +241,7 @@ void CopyCoalescing::flush(BlockId block, std::vector<Pair>& run)
 bool CopyCoalescing::forward_copies(BlockId block)
 {
 	bool changed = false, removed = false;
+	const bool fold_return = c_.level >= 3 && target_model::is_aarch64(c_.program.target);
 	pending_.clear();
 	if (dead_.size() < body_.instructions.size())
 		dead_.resize(body_.instructions.size(), 0);
@@ -228,6 +261,11 @@ bool CopyCoalescing::forward_copies(BlockId block)
 	{
 		Instruction& inst = body_.instructions[i];
 		Rooted from, to;
+		if (fold_return && inst.op == Opcode::CopyObject && forward_object_return(i))
+		{
+			changed = true;
+			continue;
+		}
 
 		// A whole scalar copy immediately read at its own width can use that
 		// read's SSA value directly. The store preserves every private slot
