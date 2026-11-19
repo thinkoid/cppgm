@@ -3,6 +3,7 @@
 #include <cstring>
 #include <mutex>
 
+#include "aarch64/backend.h"
 #include "lowir/debug_validation.h"
 #include "lowir/validator.h"
 #include "lowir/text_writer.h"
@@ -10,6 +11,7 @@
 #include "native/object/elf_object.h"
 #include "native/object/macho_object.h"
 #include "opt/optimizer.h"
+#include "wasm/backend.h"
 
 namespace backend {
 namespace c_api {
@@ -23,7 +25,7 @@ lowir::Type type(CppgmType bits)
 	return result;
 }
 
-bool valid_type(CppgmType bits)
+bool valid_type(CppgmType bits, target_model::Target target)
 {
 	const lowir::Type t = type(bits);
 	if (t.kind_bits >= lowir::kTypeKindCount)
@@ -31,7 +33,8 @@ bool valid_type(CppgmType bits)
 	if (t.is_object())
 		return t.bytes != 0 && t.align_log2 <= 31;
 	if (t.is_pointer())
-		return t.align_log2 == 0 && (t.bytes == 0 || t.bytes == 8);
+		return t.align_log2 == 0 && t.bytes <= 8 &&
+			t.pointer_bytes() == target_model::data_layout(target).pointer_bytes;
 	return t.align_log2 == 0 && t.bytes == 0;
 }
 
@@ -57,7 +60,7 @@ uint32_t CppgmLowir::signature(CppgmType result, const CppgmType* parameters, ui
 	if (!ready())
 		return CPPGM_NO_ID;
 	const uint32_t result_record = resolve_record(result);
-	if (!valid_type(result) || (count != 0 && parameters == nullptr) || variadic > 1)
+	if (!valid_type(result, program.target) || (count != 0 && parameters == nullptr) || variadic > 1)
 	{
 		fail("invalid signature");
 		return CPPGM_NO_ID;
@@ -65,6 +68,7 @@ uint32_t CppgmLowir::signature(CppgmType result, const CppgmType* parameters, ui
 	lowir::Signature signature = {};
 	signature.result = type(result);
 	signature.boundary.result_classes = record_classes(result_record, 0);
+	signature.boundary.result_shape = record_shape(result_record);
 	signature.first_parameter = program.parameters.size();
 	signature.parameter_count = count;
 	signature.boundary.arity = variadic ? ir_model::CAM_VARIADIC : ir_model::CAM_FIXED;
@@ -72,7 +76,7 @@ uint32_t CppgmLowir::signature(CppgmType result, const CppgmType* parameters, ui
 	{
 		CppgmType bits = parameters[i];
 		const uint32_t record = resolve_record(bits);
-		if (!valid_type(bits) || type(bits).is_void())
+		if (!valid_type(bits, program.target) || type(bits).is_void())
 		{
 			fail("invalid parameter type");
 			return CPPGM_NO_ID;
@@ -81,6 +85,7 @@ uint32_t CppgmLowir::signature(CppgmType result, const CppgmType* parameters, ui
 		parameter.name = 0;
 		parameter.type = type(bits);
 		parameter.classes = record_classes(record, 0);
+		parameter.shape = record_shape(record);
 		note_parameter_record(static_cast<uint32_t>(program.parameters.size()), record);
 		program.parameters.push_back(parameter);
 	}
@@ -121,8 +126,8 @@ bool CppgmLowir::global(uint32_t id, CppgmType bits, uint32_t binding, uint32_t 
 		return false;
 	resolve_record(bits);
 	if (id >= program.symbols.size() || program.symbols[id].kind != lowir::SymbolKind::Unresolved ||
-		!valid_type(bits) || binding > 3 || storage > 2 || declaration > 1 || (count != 0 && items == nullptr) ||
-		(declaration && (count != 0 || type(bits).is_void())))
+		!valid_type(bits, program.target) || binding > 3 || storage > 2 || declaration > 1 ||
+		(count != 0 && items == nullptr) || (declaration && (count != 0 || type(bits).is_void())))
 		return fail("invalid global declaration");
 	lowir::Global global = {};
 	global.typed = !type(bits).is_void();
@@ -135,8 +140,8 @@ bool CppgmLowir::global(uint32_t id, CppgmType bits, uint32_t binding, uint32_t 
 		const CppgmDataItem& input = items[i];
 		CppgmType item_type = input.type;
 		resolve_record(item_type);
-		if (input.kind > 2 || !valid_type(item_type) || (input.kind == 1 && input.symbol >= program.symbols.size()) ||
-			(input.kind == 2 && input.amount < 0))
+		if (input.kind > 2 || !valid_type(item_type, program.target) ||
+			(input.kind == 1 && input.symbol >= program.symbols.size()) || (input.kind == 2 && input.amount < 0))
 			return fail("invalid global data item");
 		lowir::DataItem item = {};
 		item.kind = static_cast<lowir::DataItemKind>(input.kind);
@@ -203,6 +208,8 @@ bool CppgmLowir::compile(uint32_t level, uint32_t pic)
 {
 	if (level > 3 || pic > 1)
 		return fail("invalid compile options");
+	if (pic && target_model::is_wasm(program.target))
+		return fail("Wasm relocatable objects require CPPGM_CODE_FIXED");
 	if (consumed)
 		return fail("module has already been consumed");
 	if (!validate())
@@ -214,22 +221,50 @@ bool CppgmLowir::compile(uint32_t level, uint32_t pic)
 	// explicit per-compilation owner. One lock per object, never per IR item.
 	static std::mutex backend_mutex;
 	const std::lock_guard<std::mutex> lock(backend_mutex);
-	opt::OptimizerOptions options;
-	options.level = level;
-	options.has_gnu_sincos = target_model::has_gnu_sincos(program.target);
-	native::recover_jump_thunks(program, native::EhModel::Host);
+
+	std::string message;
+	if (target_model::is_wasm(program.target))
+	{
+		backend::Options options;
+		options.target = program.target;
+		options.optimization_level = level;
+		wasm::Object result;
+		std::string dump;
+		if (!wasm::build_object(program, options, result, dump, message))
+			return fail(message.c_str());
+		wasm::validate_object(result);
+		wasm::Bytes bytes;
+		wasm::write_object(result, bytes);
+		object = std::move(bytes.data);
+		return true;
+	}
+	return compile_native(level, pic != 0);
+}
+
+bool CppgmLowir::compile_native(uint32_t level, bool pic)
+{
+	const bool arm = target_model::is_aarch64(program.target);
+	if (!arm)
+		native::recover_jump_thunks(program, native::EhModel::Host);
 	if (level != 0)
 	{
+		opt::OptimizerOptions options;
+		options.level = level;
+		options.has_gnu_sincos = target_model::has_gnu_sincos(program.target);
 		opt::optimize_program(program, options, nullptr);
 		program.jump_thunks.clear();
-		native::recover_jump_thunks(program, native::EhModel::Host);
+		if (!arm)
+			native::recover_jump_thunks(program, native::EhModel::Host);
 	}
 	native::object::ObjectFile result;
 	std::string message;
-	if (!native::compile_object(
-			program, result, message, nullptr, native::EhModel::Host, level, pic != 0, program.target))
+	if (arm)
+		aarch64::compile_object(
+			program, result, level, pic || target_model::is_darwin(program.target), nullptr, false, true);
+	else if (!native::compile_object(
+				 program, result, message, nullptr, native::EhModel::Host, level, pic, program.target))
 		return fail(message.c_str());
-	if (program.target == target_model::Target::MacOS)
+	if (target_model::is_darwin(program.target))
 	{
 		if (!native::object::encode_macho_object(result, object, message))
 			return fail(message.c_str());

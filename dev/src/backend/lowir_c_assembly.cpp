@@ -110,12 +110,12 @@ const char* constraints(const CppgmAssembly& input, Tables& tables)
 	return nullptr;
 }
 
-const char* operands(const CppgmAssembly& input, Tables& tables)
+const char* operands(const CppgmAssembly& input, Tables& tables, target_model::Target target)
 {
 	for (uint32_t i = 0; i < input.operand_count; ++i)
 	{
 		const CppgmAsmOperand& from = input.operands[i];
-		if (!valid_type(from.type) || from.input_storage > 1 || !zero(from.reserved) ||
+		if (!valid_type(from.type, target) || from.input_storage > 1 || !zero(from.reserved) ||
 			!slice(from.first_alternative, from.alternative_count, input.alternative_count))
 			return "invalid assembly operand boundary";
 		asm_model::Operand operand;
@@ -150,7 +150,7 @@ const char* operands(const CppgmAssembly& input, Tables& tables)
 	return nullptr;
 }
 
-const char* convert(const CppgmAssembly& input, Tables& tables)
+const char* convert(const CppgmAssembly& input, Tables& tables, target_model::Target target)
 {
 	if ((input.text_size != 0 && input.text == nullptr) || (input.operand_count != 0 && input.operands == nullptr) ||
 		(input.alternative_count != 0 && input.alternatives == nullptr) ||
@@ -166,7 +166,7 @@ const char* convert(const CppgmAssembly& input, Tables& tables)
 	if (!registers(input.clobbers, input.clobber_count, tables.clobbers))
 		return "invalid assembly register clobber";
 	const char* problem = constraints(input, tables);
-	return problem != nullptr ? problem : operands(input, tables);
+	return problem != nullptr ? problem : operands(input, tables, target);
 }
 
 } // namespace
@@ -177,7 +177,7 @@ uint32_t CppgmLowir::assembly(const CppgmAssembly& input)
 		return CPPGM_NO_ID;
 	Tables tables;
 	lowir::DebugLocation where = lowir::DebugLocation{ 0, 0, 0 };
-	const char* problem = convert(input, tables);
+	const char* problem = convert(input, tables, program.target);
 	if (problem != nullptr)
 	{
 		fail(problem);

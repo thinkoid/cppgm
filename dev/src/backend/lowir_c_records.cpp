@@ -2,48 +2,24 @@
 
 #include <algorithm>
 
+#include "lowir/aggregate_shape.h"
 #include "lowir/object_classes.h"
 
-// Record types of the C interface (ABI version 4). A producer states an
-// object's fields once. The library passes and returns an object of the
-// record as C passes an object with those fields (psABI 3.2.3), through the
-// classes= facts the LowIR text holds, so a written module reads back as
-// the same program.
+// Producer-defined record fields are projected into LowIR boundary facts.
+// AMD64 uses eightbyte classes. AArch64 and Wasm use aggregate shapes.
 
 using namespace backend::c_api;
 
 namespace {
 
-// The size of a scalar field type, which is also its alignment; 0 for a
-// type that is not a scalar.
-uint64_t scalar_bytes(CppgmType bits)
+uint64_t scalar_bytes(CppgmType bits, target_model::Target target)
 {
-	if (!valid_type(bits))
+	if (!valid_type(bits, target))
 		return 0;
-	switch (type(bits).kind())
-	{
-	case lowir::TypeKind::I1:
-	case lowir::TypeKind::I8:
-	case lowir::TypeKind::U8:
-		return 1;
-	case lowir::TypeKind::I16:
-	case lowir::TypeKind::U16:
-		return 2;
-	case lowir::TypeKind::I32:
-	case lowir::TypeKind::U32:
-	case lowir::TypeKind::F32:
-		return 4;
-	case lowir::TypeKind::I64:
-	case lowir::TypeKind::F64:
-	case lowir::TypeKind::Ptr:
-		return 8;
-	case lowir::TypeKind::I128:
-	case lowir::TypeKind::F80:
-	case lowir::TypeKind::V128:
-		return 16;
-	default:
+	const lowir::Type field = type(bits);
+	if (field.is_object() || (field.kind() == lowir::TypeKind::F80 && target_model::needs_aggregate_shape(target)))
 		return 0;
-	}
+	return lowir::storage_bytes(field);
 }
 
 void mark(uint8_t* classes, uint64_t eightbyte, uint8_t cls)
@@ -110,7 +86,7 @@ CppgmType CppgmLowir::record(uint64_t bytes, uint32_t alignment, const CppgmFiel
 		const CppgmField& field = stated[i];
 		CppgmType bits = field.type;
 		const uint32_t inner = resolve_record(bits);
-		steps[i] = inner != CPPGM_NO_ID ? type(bits).bytes : scalar_bytes(bits);
+		steps[i] = inner != CPPGM_NO_ID ? type(bits).bytes : scalar_bytes(bits, program.target);
 		const uint64_t elements = field.count == 0 ? 1 : field.count;
 		if (steps[i] == 0 || field.offset > bytes || elements > (bytes - field.offset) / steps[i])
 		{
@@ -118,10 +94,13 @@ CppgmType CppgmLowir::record(uint64_t bytes, uint32_t alignment, const CppgmFiel
 			return 0;
 		}
 	}
-	Record result = { type_bits(bytes, alignment), static_cast<uint32_t>(fields.size()), count, CPPGM_NO_ID, 0 };
-	fields.insert(fields.end(), stated, stated + count);
-	if (bytes <= 16)
+	Record result = { type_bits(bytes, alignment), static_cast<uint32_t>(fields.size()), count, CPPGM_NO_ID, 0, {} };
+	if (target_model::needs_aggregate_shape(program.target))
+		result.shape = aggregate_shape(stated, count, type(result.object));
+	else if (bytes <= 16)
 	{
+		if (count != 0)
+			fields.insert(fields.end(), stated, stated + count);
 		result.placements = static_cast<uint32_t>(placements.size());
 		placements.resize(placements.size() + 32, lowir::AC_NO_CLASS);
 		for (uint64_t at = 0; at + bytes <= 16; ++at)
@@ -130,6 +109,57 @@ CppgmType CppgmLowir::record(uint64_t bytes, uint32_t alignment, const CppgmFiel
 	}
 	records.push_back(result);
 	return CPPGM_TYPE_RECORD | (static_cast<CppgmType>(records.size() - 1) << 16);
+}
+
+ir_model::AggregateShape CppgmLowir::aggregate_shape(const CppgmField* fields, uint32_t count, lowir::Type object) const
+{
+	using ir_model::AggregateElement;
+	using lowir::shape;
+	const bool arm = target_model::is_aarch64(program.target);
+	ir_model::AggregateShape result = shape(AggregateElement::Empty);
+	unsigned lanes = 0;
+	unsigned lane_size = 0;
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		const CppgmField& field = fields[i];
+		CppgmType bits = field.type;
+		const uint32_t record = resolve_record(bits);
+		const auto element = lowir::scalar_element(type(bits).kind());
+		const auto part = record != CPPGM_NO_ID ? records[record].shape : shape(element, 1);
+		if (part.element == AggregateElement::Empty)
+			continue;
+		const uint64_t elements = field.count == 0 ? 1 : field.count;
+		if (part.element == AggregateElement::Mixed || elements > UINT16_MAX / part.count)
+			return shape(AggregateElement::Mixed);
+		const unsigned units = static_cast<unsigned>(elements) * part.count;
+		const unsigned lane_bytes = part.element == AggregateElement::F32 ? 4
+			: part.element == AggregateElement::F64                       ? 8
+			: part.element == AggregateElement::Vector128                 ? 16
+																		  : 0;
+		if (arm && lane_bytes != 0)
+		{
+			// A homogeneous Arm record can occupy no more than four lanes.
+			// Account for overlapping union fields and verify contiguous
+			// coverage before assigning its floating-point ABI shape.
+			if ((result.element != AggregateElement::Empty && result.element != part.element) ||
+				object.bytes > 4 * lane_bytes || field.offset % lane_bytes != 0 ||
+				lowir::storage_bytes(type(bits)) != part.count * lane_bytes || units > 4)
+				return shape(AggregateElement::Mixed);
+			lanes |= ((1u << units) - 1) << (field.offset / lane_bytes);
+			lane_size = lane_bytes;
+			result = shape(part.element);
+		}
+		else
+			lowir::merge_shape(result, shape(part.element, static_cast<uint16_t>(units)));
+	}
+	if (lanes != 0 && result.element > AggregateElement::Mixed)
+	{
+		const unsigned lanes_in_object = object.bytes / lane_size;
+		if (object.bytes % lane_size != 0 || lanes != (1u << lanes_in_object) - 1)
+			return shape(AggregateElement::Mixed);
+		result.count = static_cast<uint16_t>(lanes_in_object);
+	}
+	return result;
 }
 
 CppgmType CppgmLowir::type_bits(uint64_t bytes, uint32_t alignment)
@@ -240,6 +270,14 @@ void CppgmLowir::state_record_facts()
 		if (body == nullptr)
 			continue;
 		std::vector<lowir::ArgumentFacts> derived;
+		const auto append_fact = [&](lowir::InstId inst, uint32_t argument, uint32_t record) {
+			if (record == CPPGM_NO_ID)
+				return;
+			if (records[record].shape.element != ir_model::AggregateElement::None)
+				derived.emplace_back(inst, argument, 0, records[record].shape);
+			else if (records[record].classes != 0)
+				derived.emplace_back(inst, argument, records[record].classes);
+		};
 		const auto record_of = [&](const lowir::Value& value) {
 			return value.is(lowir::ValueKind::Temp) ? find_record(entry.second.temps, value.index)
 				: value.is(lowir::ValueKind::Slot)  ? find_record(entry.second.slots, value.index)
@@ -250,20 +288,22 @@ void CppgmLowir::state_record_facts()
 			const lowir::Instruction& inst = body->instructions[id];
 			if (inst.op == lowir::Opcode::VaArg)
 			{
-				const uint32_t record = find_record(entry.second.temps, inst.result);
-				if (record_classes(record, 0) != 0)
-					derived.push_back(lowir::ArgumentFacts(id, 0, records[record].classes));
+				append_fact(id, 0, find_record(entry.second.temps, inst.result));
 				continue;
 			}
-			const lowir::Signature* boundary = inst.op == lowir::Opcode::Call ? program.call_boundary(inst) : nullptr;
+			// These buffers have yet to pass program validation. Leave invalid
+			// calls for the validator to diagnose before looking at operands.
+			if (inst.op != lowir::Opcode::Call ||
+				((inst.flags & lowir::IF_SIGNATURE) &&
+					static_cast<uint64_t>(inst.immediate) >= program.signatures.size()) ||
+				(inst.ops[0].is(lowir::ValueKind::Symbol) && inst.ops[0].index >= program.symbols.size()) ||
+				inst.extra_first > body->operands.size() || inst.extra_count > body->operands.size() - inst.extra_first)
+				continue;
+			const lowir::Signature* boundary = program.call_boundary(inst);
 			if (boundary == nullptr || boundary->boundary.arity != ir_model::CAM_VARIADIC)
 				continue;
 			for (uint32_t argument = boundary->parameter_count; argument < inst.extra_count; ++argument)
-			{
-				const uint32_t record = record_of(body->operands[inst.extra_first + argument]);
-				if (record_classes(record, 0) != 0)
-					derived.push_back(lowir::ArgumentFacts(id, argument, records[record].classes));
-			}
+				append_fact(id, argument, record_of(body->operands[inst.extra_first + argument]));
 		}
 		merge_facts(*body, derived);
 	}
@@ -271,7 +311,7 @@ void CppgmLowir::state_record_facts()
 
 void CppgmLowir::merge_facts(lowir::FunctionBody& body, const std::vector<lowir::ArgumentFacts>& derived)
 {
-	// A fact the producer stated keeps its classes.
+	// A fact the producer stated keeps its classes or shape.
 	if (derived.empty())
 		return;
 	std::vector<lowir::ArgumentFacts>& facts = body.argument_facts;
@@ -282,8 +322,14 @@ void CppgmLowir::merge_facts(lowir::FunctionBody& body, const std::vector<lowir:
 		});
 		if (found == facts.end())
 			facts.push_back(fact);
-		else if (found->classes == 0)
-			found->classes = fact.classes;
+		else
+		{
+			if (found->classes == 0)
+				found->classes = fact.classes;
+			if (found->shape().element == ir_model::AggregateElement::None && found->type() == lowir::TypeKind::Void &&
+				fact.shape().element != ir_model::AggregateElement::None)
+				*found = lowir::ArgumentFacts(fact.call, fact.argument, found->classes, fact.shape());
+		}
 	}
 	std::stable_sort(facts.begin(), facts.end(), [](const lowir::ArgumentFacts& a, const lowir::ArgumentFacts& b) {
 		return a.call < b.call || (a.call == b.call && a.argument < b.argument);

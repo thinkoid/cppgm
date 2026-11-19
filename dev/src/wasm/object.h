@@ -124,6 +124,7 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 void append_object_aliases(const lowir::Program& program, const Module& module, Object& object,
 	std::vector<uint32_t>& symbols, std::vector<uint32_t>& groups);
 void write_object(const Object& object, Bytes& output);
+void validate_object(const Object& object);
 void read_object(const std::string& path, Object& object);
 void read_link_inputs(const std::string& path, LinkInputs& inputs, bool once = false);
 void link_objects(const std::vector<Object>& objects, const backend::Options& options, Bytes& output);

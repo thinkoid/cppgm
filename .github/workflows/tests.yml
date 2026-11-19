@@ -197,6 +197,9 @@ jobs:
               cppgm lowir lowiropt lowir2native; do
               printf 'dev/%s\n' "$exe"
             done
+            if [ "${{ matrix.id }}" = ubuntu-24.04-gcc ]; then
+              printf '%s\n' dev/libcppgm_lowir.a dev/libcppgm_lowir.so
+            fi
             if [ -d obj/generated ]; then
               find obj/generated -type f -print
             fi
@@ -240,6 +243,10 @@ jobs:
         run: make -C pa38 test CPPGM_SKIP_DEV_REBUILD=1
       - name: Check the same C fixtures on Wasm
         run: make -C pa38 test-wasm CPPGM_SKIP_DEV_REBUILD=1
+      - name: Link and run typed LowIR library objects across Wasm profiles
+        run: |
+          python3 scripts/tests/test_lowir_library_targets.py \
+            --target wasm32-unknown-unknown wasm32-wasip1 wasm32-unknown-emscripten
 
   wasm-inception:
     name: optional WASI and Chromium inception

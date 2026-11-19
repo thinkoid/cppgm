@@ -24,9 +24,10 @@ ir_model::AggregateShape shape(uint8_t element, uint16_t count)
 
 // The text reader's rules for the metadata of parameter `index`; null if
 // the record follows them.
-const char* parameter_problem(const CppgmParameter& input, uint32_t index, lowir::Type result)
+const char* parameter_problem(
+	const CppgmParameter& input, uint32_t index, lowir::Type result, target_model::Target target)
 {
-	if (!valid_type(input.type) || type(input.type).is_void())
+	if (!valid_type(input.type, target) || type(input.type).is_void())
 		return "invalid parameter type";
 	const lowir::Type t = type(input.type);
 	if (input.reserved != 0 || input.pass >= ir_model::kParamPassingModeCount ||
@@ -50,10 +51,10 @@ const char* parameter_problem(const CppgmParameter& input, uint32_t index, lowir
 	return nullptr;
 }
 
-const char* boundary_problem(CppgmType result, const CppgmBoundary& input)
+const char* boundary_problem(CppgmType result, const CppgmBoundary& input, target_model::Target target)
 {
 	const uint8_t facts = CPPGM_BOUNDARY_REPEATABLE | CPPGM_BOUNDARY_NOALIAS_RESULT | CPPGM_BOUNDARY_THIS_RETURN;
-	if (!valid_type(result))
+	if (!valid_type(result, target))
 		return "invalid signature";
 	if (input.arity >= ir_model::kCallArityModeCount || input.effects >= ir_model::kCallEffectsModeCount ||
 		input.unwind >= ir_model::kCallUnwindModeCount || input.returns >= ir_model::kCallReturnModeCount ||
@@ -85,7 +86,8 @@ uint32_t CppgmLowir::boundary(
 	if (!ready())
 		return CPPGM_NO_ID;
 	CppgmBoundary input = stated != nullptr ? *stated : CppgmBoundary();
-	input.result_classes = record_classes(resolve_record(result), input.result_classes);
+	const uint32_t result_record = resolve_record(result);
+	input.result_classes = record_classes(result_record, input.result_classes);
 	// The parameters with record types resolved, and their records.
 	std::vector<CppgmParameter> resolved;
 	std::vector<uint32_t> parameter_record;
@@ -97,9 +99,10 @@ uint32_t CppgmLowir::boundary(
 		if (parameter.pass == ir_model::PPM_DIRECT)
 			parameter.classes = record_classes(parameter_record.back(), parameter.classes);
 	}
-	const char* problem = count != 0 && parameters == nullptr ? "invalid signature" : boundary_problem(result, input);
+	const char* problem = count != 0 && parameters == nullptr ? "invalid signature"
+															  : boundary_problem(result, input, program.target);
 	for (uint32_t i = 0; problem == nullptr && i < count; ++i)
-		problem = parameter_problem(resolved[i], i, type(result));
+		problem = parameter_problem(resolved[i], i, type(result), program.target);
 	if (problem != nullptr)
 	{
 		fail(problem);
@@ -117,7 +120,8 @@ uint32_t CppgmLowir::boundary(
 	signature.boundary.noalias_result = (input.facts & CPPGM_BOUNDARY_NOALIAS_RESULT) != 0;
 	signature.boundary.this_return = (input.facts & CPPGM_BOUNDARY_THIS_RETURN) != 0;
 	signature.boundary.result_classes = input.result_classes;
-	signature.boundary.result_shape = shape(input.result_shape_element, input.result_shape_count);
+	signature.boundary.result_shape = record_shape(
+		result_record, shape(input.result_shape_element, input.result_shape_count));
 	for (uint32_t i = 0; i < count; ++i)
 	{
 		const CppgmParameter& from = resolved[i];
@@ -127,7 +131,7 @@ uint32_t CppgmLowir::boundary(
 		parameter.pass = static_cast<ir_model::ParamPassingMode>(from.pass);
 		parameter.alias = static_cast<ir_model::ParamAliasMode>(from.alias);
 		parameter.classes = from.classes;
-		parameter.shape = shape(from.shape_element, from.shape_count);
+		parameter.shape = record_shape(parameter_record[i], shape(from.shape_element, from.shape_count));
 		parameter.object_bytes = from.object_bytes;
 		note_parameter_record(static_cast<uint32_t>(program.parameters.size()), parameter_record[i]);
 		program.parameters.push_back(parameter);

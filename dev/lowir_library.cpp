@@ -30,6 +30,12 @@ Result invoke(CppgmLowir* module, Result failure, Action action)
 	return failure;
 }
 
+constexpr target_model::Target targets[] = { target_model::Target::Linux, target_model::Target::MacOS,
+	target_model::Target::Wasm32, target_model::Target::Wasi, target_model::Target::Emscripten,
+	target_model::Target::AArch64Linux, target_model::Target::AArch64MacOS };
+static_assert(sizeof targets / sizeof targets[0] == CPPGM_TARGET_AARCH64_MACOS + 1,
+	"target table covers the public target enumeration");
+
 } // namespace
 
 extern "C" {
@@ -46,13 +52,13 @@ const char* cppgm_lowir_version(void)
 
 CppgmLowir* cppgm_lowir_create(uint32_t version, uint32_t target)
 {
-	if (version < CPPGM_LOWIR_ABI_VERSION_MIN || version > CPPGM_LOWIR_ABI_VERSION || target > CPPGM_TARGET_MACOS)
+	if (version < CPPGM_LOWIR_ABI_VERSION_MIN || version > CPPGM_LOWIR_ABI_VERSION ||
+		target >= sizeof targets / sizeof targets[0] || (version < 5 && target > CPPGM_TARGET_MACOS))
 		return nullptr;
 	try
 	{
 		std::unique_ptr<CppgmLowir> module(new CppgmLowir());
-		module->program.target = target == CPPGM_TARGET_LINUX ? target_model::Target::Linux
-															  : target_model::Target::MacOS;
+		module->program.target = targets[target];
 		module->program.explicit_target = true;
 		return module.release();
 	}

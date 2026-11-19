@@ -19,6 +19,7 @@ on:
       - scripts/CppgmBackendFixture.pm
       - scripts/CppgmArm64MachO.pm
       - scripts/replay_arm64_macos.pl
+      - scripts/tests/*lowir_library_targets*
       - .github/workflows/aarch64.yml
   schedule:
     - cron: '17 4 * * 1'
@@ -52,6 +53,11 @@ jobs:
             libstdc++-14-dev-arm64-cross=14.3.0-14ubuntu1cross1 libc6-dev-arm64-cross=2.43-2ubuntu2cross1
       - uses: actions/checkout@v6
       - run: make test-pa39
+      - name: Link and check typed LowIR library objects on both Arm targets
+        run: |
+          make -C dev lowir-library
+          python3 scripts/tests/test_lowir_library_targets.py \
+            --target aarch64-linux-gnu arm64-apple-macos11
       - run: perl scripts/replay_arm64_macos.pl build obj/pa39-macho
       - uses: actions/upload-artifact@v6
         with:
@@ -118,7 +124,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Build cppgm on Apple Silicon
-        run: make -C dev cppgm CXX=clang++ CPPGM_HOST_CXX=clang++
+        run: make -C dev cppgm lowir-library CXX=clang++ CPPGM_HOST_CXX=clang++
+      - name: Link and run typed LowIR library objects on Apple Silicon
+        env:
+          CPPGM_HOST_CXX: clang++
+        run: python3 scripts/tests/test_lowir_library_targets.py --target arm64-apple-macos11
       - name: Compile the Apple ABI fixture with the native build
         run: |
           dev/cppgm --target=arm64-apple-macos11 -nostdinc -x c++ -c \

@@ -14,14 +14,15 @@ struct CppgmLowir
 	std::vector<uint8_t> object;
 	// By NameId: the names cppgm_lowir_debug_file has returned.
 	std::vector<uint8_t> debug_files;
-	// Since ABI version 4 (lowir_c_records.cpp): record types by ID.
+	// Record types by ID (lowir_c_records.cpp).
 	struct Record
 	{
 		CppgmType object;     // the obj type it stands for
 		uint32_t first_field; // its fields: [first_field, first_field + field_count) of `fields`
 		uint32_t field_count;
 		uint32_t placements; // for at most 16 bytes, its classes at each offset in `placements`, else CPPGM_NO_ID
-		uint8_t classes;     // classes= of a direct object of it, 0 for the default
+		uint8_t classes;     // x86-64 classes= of a direct object, 0 for the default
+		ir_model::AggregateShape shape; // Wasm and AArch64 boundary representation
 	};
 	std::vector<Record> records;
 	std::vector<CppgmField> fields;
@@ -87,6 +88,11 @@ struct CppgmLowir
 	{
 		return stated != 0 || record == CPPGM_NO_ID ? stated : records[record].classes;
 	}
+	ir_model::AggregateShape record_shape(uint32_t record, ir_model::AggregateShape stated = {}) const
+	{
+		return stated.element != ir_model::AggregateElement::None || record == CPPGM_NO_ID ? stated
+																						   : records[record].shape;
+	}
 	void note_parameter_record(uint32_t parameter, uint32_t record);
 	// Before a body's commit: its record types become obj types.
 	void resolve_body_records(uint32_t symbol, const CppgmBodyCounts& counts);
@@ -96,6 +102,7 @@ struct CppgmLowir
 	bool validate();
 	bool write(const char* path);
 	bool compile(uint32_t level, uint32_t pic);
+	bool compile_native(uint32_t level, bool pic);
 
 	// The body of a defined function after cppgm_lowir_body_commit, or null.
 	lowir::FunctionBody* committed_body(uint32_t symbol);
@@ -106,13 +113,14 @@ struct CppgmLowir
 	// of 16 bytes; `steps` are its fields' element sizes.
 	void place(const Record& record, const std::vector<uint64_t>& steps, uint64_t at, uint8_t* classes) const;
 	void merge_facts(lowir::FunctionBody& body, const std::vector<lowir::ArgumentFacts>& derived);
+	ir_model::AggregateShape aggregate_shape(const CppgmField* fields, uint32_t count, lowir::Type object) const;
 };
 
 namespace backend {
 namespace c_api {
 
 lowir::Type type(CppgmType bits);
-bool valid_type(CppgmType bits);
+bool valid_type(CppgmType bits, target_model::Target target);
 
 } // namespace c_api
 } // namespace backend

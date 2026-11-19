@@ -1,9 +1,10 @@
 # Embedding the LowIR backend
 
 The optional `libcppgm_lowir` library lets another frontend construct typed
-LowIR and obtain a host-linkable x86-64 object in the same process. The library
-uses the compiler's existing model, validator, optimizer and object emitter.
-It contains no source frontend, LowIR text reader or command-line driver.
+LowIR and emit a relocatable x86-64, AArch64 or WebAssembly object in the same
+process. The library uses the compiler's existing model, validator, optimizer
+and target object emitters. A producer can select the output target independently
+of the machine running the library.
 
 Build both library forms and run the C consumer checks:
 
@@ -31,9 +32,9 @@ g++ producer.o dev/libcppgm_lowir.a -pthread -o producer
 
 ## Producer sequence
 
-1. Create a module with `CPPGM_LOWIR_ABI_VERSION` and its target:
-   `CPPGM_TARGET_LINUX` (ELF) or `CPPGM_TARGET_MACOS` (Mach-O). Both targets use
-   the x86-64 object backend.
+1. Create a module with `CPPGM_LOWIR_ABI_VERSION` and a target from the table
+   below. Use that target's data layout and calling convention in its typed
+   records.
 2. Intern top-level symbols once; IDs support forward references. Add function
    signatures from numeric type records. Define local functions directly and
    declare unresolved externals before compilation. A declaration can also be
@@ -77,7 +78,7 @@ once. Object encoding and the caller's eventual file write remain necessary work
 It uses the same program as compilation and must run before compilation consumes
 it. The course lane checks behavior. Maintainers can additionally run
 `python3 scripts/test_lowir_library.py --exact-objects` to check this solution
-against its CLI byte for byte for both ELF and Mach-O.
+against its CLI byte for byte for both x86-64 object formats.
 
 Each module owns independent state. Serialize calls on one module. Separate
 modules can construct and validate concurrently; compilation calls serialize
@@ -134,9 +135,8 @@ An `asm` instruction has `CPPGM_OP_ASM`, type void, the template ID in
 boundary](../pa29/assembly.md) describes the template records. Assembly-defined
 functions and ordered module assembly are not in the library.
 
-Debug type and scope IDs count from 1, and 0 is absent. The object has line
-tables when locations exist. It has source types, lexical blocks and locals when
-a debug type, scope or local exists.
+Debug type and scope IDs count from 1, and 0 is absent. The x86-64 object emitter writes line tables for locations and emits source
+types, lexical blocks and locals from the corresponding debug records.
 
 The library accepts a record when the LowIR text can state it. The text that
 `cppgm_lowir_write` writes then reads back as the same program:
@@ -176,10 +176,68 @@ and the classes. `python3 scripts/tests/test_lowir_library_records.py` links
 the library's object with C code that passes records of nine layouts, with the
 client [`scripts/tests/lowir_library_records.c`](../scripts/tests/lowir_library_records.c).
 
-The library does not expose Wasm object generation. PA27 owns the optional O0
-library lane and PA33 adds O1–O3;
-[the student contract](../pa27/lowir-library.md) describes the shared interface.
-The course lane does not use the additions of versions 3 and 4.
+## ABI version 5 and target selection
+
+Choose a target for each module at creation. Version 5 adds Wasm and
+experimental AArch64 objects. Versions 2–4 still accept the original x86-64
+target constants and use the same record layouts and functions.
+
+| C target constant | CLI target | Relocatable object |
+| --- | --- | --- |
+| `CPPGM_TARGET_LINUX` | `x86_64-linux-gnu` | x86-64 ELF |
+| `CPPGM_TARGET_MACOS` | `x86_64-apple-darwin` | x86-64 Mach-O |
+| `CPPGM_TARGET_WASM32` | `wasm32-unknown-unknown` | Freestanding Wasm |
+| `CPPGM_TARGET_WASIP1` | `wasm32-wasip1` | WASI Preview 1 Wasm |
+| `CPPGM_TARGET_EMSCRIPTEN` | `wasm32-unknown-emscripten` | Emscripten-profile Wasm |
+| `CPPGM_TARGET_AARCH64_LINUX` | `aarch64-linux-gnu` | AArch64 ELF |
+| `CPPGM_TARGET_AARCH64_MACOS` | `arm64-apple-macos11` | Apple Silicon Mach-O |
+
+For Wasm, encode each pointer type with a four-byte size and zero alignment
+bits in the type word, including pointers in signatures, bodies and data
+initializers. Use `CPPGM_CODE_FIXED` to emit an object for static Wasm linking.
+ELF targets accept `CPPGM_CODE_FIXED` and `CPPGM_CODE_PIC`. Apple Silicon
+objects use the CLI's position-independent addressing for either value.
+
+```c
+CppgmLowir* module = cppgm_lowir_create(CPPGM_LOWIR_ABI_VERSION, CPPGM_TARGET_WASM32);
+const CppgmType wasm_ptr = CPPGM_TYPE_PTR | (UINT64_C(4) << 16);
+/* Use wasm_ptr in pointer parameters, instructions and typed data. */
+```
+
+On Arm and Wasm, `cppgm_lowir_record` derives the aggregate shape from its
+fields. It supplies shape metadata to function signatures, explicit
+boundaries, unnamed variadic arguments and `va_arg` results. A producer using
+raw `obj` types can state shapes directly in `CppgmParameter`, `CppgmBoundary`
+and `CppgmArgumentFact`. Explicit shapes take precedence over derived shapes.
+On x86-64 the record helper continues to derive System V eightbyte classes.
+See the [Wasm ABI](../pa37/target-abi.md) and [AArch64 ABI profile](../pa39/README.md).
+
+Write the returned buffer to an object file. Link it with the toolchain and
+runtime for the selected target. For example, given a freestanding Wasm object
+defining `compute`, an AArch64 ELF object with a Linux caller, and an arm64
+Mach-O object with a macOS caller:
+
+```sh
+cppgm --target=wasm32-unknown-unknown --export=compute compute.o -o compute.wasm
+aarch64-linux-gnu-gcc caller-linux.o compute-linux.o -o compute-linux
+xcrun clang -arch arm64 -mmacosx-version-min=11.0 caller-macos.o compute-macos.o -o compute-macos
+```
+
+For a WASI command, link with the WASI SDK runtime. The Emscripten object
+profile is for linking against explicit SDK inputs, with the embedding
+application supplying its JS integration. Assembly templates and the debug
+records follow the capabilities of the selected CLI backend.
+
+With the [PA37 Wasm tools](../pa37/README.md) and [PA39 cross tools](../pa39/README.md)
+on your path, run `python3 scripts/tests/test_lowir_library_targets.py` after
+building the CLI and library. It cross-checks O0–O3 object bytes against the
+CLI and links the output with independent C callers. On Linux, Wasmtime
+runs the Wasm cases and QEMU runs the Linux Arm cases. LLVM's Mach-O linker
+checks the Apple Silicon objects on Linux. The Apple Silicon CI job also
+links and runs the same cases using the host SDK.
+
+PA27 owns the optional O0 x86-64 library lane and PA33 adds O1–O3.
+[The student contract](../pa27/lowir-library.md) describes that scope.
 These checks remain outside default assignment reports. The myc integration and
 its timing comparisons are separate maintainer work, with no course dependency
 on Crystal or myc.

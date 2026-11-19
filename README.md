@@ -270,6 +270,9 @@ to build the tools and library, or `cppgm-<tag>-source-with-tests.tar.gz`
 to build them and run the assignment suites. See
 [reference and version exports](TESTING_AND_REFERENCES.md#reference-and-version-exports).
 
+[The LowIR library guide](docs/lowir-library.md) covers object emission for
+x86-64, WebAssembly and experimental AArch64 targets.
+
 [The macOS guide](docs/intel-macos.md) describes Intel macOS support and its
 optional checks.
 
