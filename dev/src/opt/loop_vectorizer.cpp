@@ -165,6 +165,9 @@ private:
 	bool read_accesses();
 	bool supported(const Instruction& inst) const;
 	bool choose_lanes();
+	void read_packed_counters();
+	Type packed_counter_type(const Induction& iv) const;
+
 	bool same_group(const Access& a, const Group& group, int64_t high) const;
 	bool add_overlap_test(uint32_t a, uint32_t b, size_t limit);
 	bool read_dependences();
@@ -245,6 +248,7 @@ private:
 	std::vector<uint32_t> fixed_reads_; // indices in accesses_ of reads at fixed addresses
 	std::vector<Group> groups_;
 	std::vector<std::pair<uint32_t, uint32_t>> tests_;
+	std::vector<uint8_t> narrow_counters_;
 	std::vector<uint8_t> in_scalar_, in_wide_; // per temp
 	uint32_t counter_ = 0;
 	bool backward_ = false; // accesses step down: the top lane holds the first pass
@@ -1677,6 +1681,46 @@ bool LoopVectorizer::read_dependences()
 	return true;
 }
 
+// If every packed use truncates, the SIMD induction can wrap at 32 bits.
+// Keep the scalar induction wide for addresses, the trip test and the tail.
+void LoopVectorizer::read_packed_counters()
+{
+	narrow_counters_.clear();
+	if (!target_model::is_aarch64(c_.program.target) || lanes_ != 2)
+		return;
+	for (const Induction& iv : inductions_)
+	{
+		if (!iv.type.is_integer() || lane_bytes(iv.type) != 8 || !in_wide_[iv.phi] || in_wide_[iv.next])
+			continue;
+		const Value phi = Value::temp(iv.phi);
+		bool narrow = true, used = false;
+		for (InstId id : code_)
+		{
+			const Instruction& inst = body_.instructions[id];
+			if (inst.op != Opcode::Store && (inst.result == kNoId || !in_wide_[inst.result]))
+				continue;
+			for_each_operand(body_, inst, [&](const Value& v) {
+				if (!(v == phi))
+					return;
+				used = true;
+				narrow = narrow && inst.op == Opcode::Convert && static_cast<ConvertOp>(inst.sub) == ConvertOp::Trunc &&
+					inst.type.is_integer() && lane_bytes(inst.type) == 4;
+			});
+		}
+		if (narrow && used)
+		{
+			if (narrow_counters_.empty())
+				narrow_counters_.resize(body_.temps.size());
+			narrow_counters_[iv.phi] = 1;
+		}
+	}
+}
+
+Type LoopVectorizer::packed_counter_type(const Induction& iv) const
+{
+	return !narrow_counters_.empty() && narrow_counters_[iv.phi] ? Type::scalar(TypeKind::U32) : iv.type;
+}
+
 bool LoopVectorizer::analyze(uint32_t loop)
 {
 	const Loop& l = forest_.loops[loop];
@@ -1690,7 +1734,10 @@ bool LoopVectorizer::analyze(uint32_t loop)
 	read_lane_cells();
 	read_pair_sums();
 	mark_uses();
-	return read_accesses() && lane_cells_apart() && choose_lanes() && lane_cells_fit() && read_dependences();
+	if (!read_accesses() || !lane_cells_apart() || !choose_lanes() || !lane_cells_fit() || !read_dependences())
+		return false;
+	read_packed_counters();
+	return true;
 }
 
 void LoopVectorizer::at(BlockId block, InstId tail)
@@ -1979,7 +2026,10 @@ void LoopVectorizer::widen_convert(const Instruction& inst)
 		out = extend(v, from, to, false);
 		break;
 	case ConvertOp::Trunc:
-		out = narrow(v, from, to);
+		out = from == 8 && to == 4 && !narrow_counters_.empty() && inst.ops[0].is(ValueKind::Temp) &&
+				inst.ops[0].index < narrow_counters_.size() && narrow_counters_[inst.ops[0].index]
+			? v
+			: narrow(v, from, to);
 		break;
 	case ConvertOp::SIToFP:
 		out = from == 8 ? widen_word_to_double(v, true) : vector(to == 8 ? VectorOp::Cvtdq2pd : VectorOp::Cvtdq2ps, v);
@@ -2293,8 +2343,9 @@ void LoopVectorizer::advance_copy(
 		if (in_wide_[iv.phi])
 		{
 			VectorOp add;
-			lane_operation(BinaryOp::Add, iv.type, add);
-			wides_[iv.phi] = vector(add, lane_counters[k], broadcast(literal(iv.step * passes), iv.type));
+			const Type type = packed_counter_type(iv);
+			lane_operation(BinaryOp::Add, type, add);
+			wides_[iv.phi] = vector(add, lane_counters[k], broadcast(literal(iv.step * passes), type));
 		}
 	}
 	for (const Reduction& r : reductions_)
@@ -2832,6 +2883,7 @@ std::vector<Value> LoopVectorizer::counter_lanes()
 		if (!in_wide_[iv.phi])
 			continue;
 		at(vector_pre_, pre_tail_);
+		const Type type = packed_counter_type(iv);
 		const uint64_t d = static_cast<uint64_t>(iv.step);
 		// The pass each lane holds, counted from the first.
 		auto pass = [&](unsigned lane) { return (backward_ ? lanes_ - 1 - lane : lane) * d; };
@@ -2840,7 +2892,7 @@ std::vector<Value> LoopVectorizer::counter_lanes()
 							  : vector(VectorOp::Fromi64, literal(static_cast<int64_t>(value)));
 		};
 		Value steps = Value::none();
-		if (lane_bytes(iv.type) == 8)
+		if (lane_bytes(type) == 8)
 		{
 			const Value low = bits(pass(0));
 			steps = vector(VectorOp::Punpcklqdq, low, bits(pass(1)));
@@ -2851,11 +2903,12 @@ std::vector<Value> LoopVectorizer::counter_lanes()
 			steps = lanes_ == 2 ? low
 								: vector(VectorOp::Punpcklqdq, low, bits((pass(3) << 32) | (pass(2) & 0xffffffffu)));
 		}
+		const Value start = type == iv.type ? iv.start : convert(ConvertOp::Trunc, type, iv.type, iv.start);
 		pre_tail_ = tail_;
-		const Value from = broadcast(iv.start, iv.type);
+		const Value from = broadcast(start, type);
 		at(vector_pre_, pre_tail_);
 		VectorOp add;
-		lane_operation(BinaryOp::Add, iv.type, add);
+		lane_operation(BinaryOp::Add, type, add);
 		wide_counter[k] = vector(add, from, steps);
 		pre_tail_ = tail_;
 	}
@@ -3003,8 +3056,9 @@ void LoopVectorizer::vectorize(uint32_t loop)
 		if (in_wide_[iv.phi])
 		{
 			VectorOp add;
-			lane_operation(BinaryOp::Add, iv.type, add);
-			set_back_edge(lane_counters[k], vector(add, lane_counters[k], broadcast(literal(by), iv.type)));
+			const Type packed = packed_counter_type(iv);
+			lane_operation(BinaryOp::Add, packed, add);
+			set_back_edge(lane_counters[k], vector(add, lane_counters[k], broadcast(literal(by), packed)));
 		}
 	}
 	for (size_t k = 0; k < reductions_.size(); ++k)

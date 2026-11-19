@@ -5,6 +5,9 @@ extern "C" unsigned indexed(const unsigned*, int, unsigned);
 extern "C" void replace_half(unsigned short*, long, unsigned short);
 extern "C" unsigned long mix_bits(unsigned long, unsigned, unsigned long);
 extern "C" int signed_remainder(int, int);
+extern "C" int fixed_signed_remainder(int);
+extern "C" unsigned fixed_unsigned_quotient(unsigned);
+extern "C" double narrow_lane_counter(const double*, long, long);
 extern "C" unsigned long widen_choice(bool, unsigned);
 extern "C" unsigned byte_offset(const unsigned*, signed char, unsigned char);
 extern "C" bool signed_order(short, short);
@@ -119,6 +122,10 @@ int main() {
     }
     if (mix_bits(0xab09876543215678UL, 27, 139) != 39) return 7;
     if (signed_remainder(-123456789, 97) != -39) return 8;
+    if (fixed_signed_remainder(-279941) != -5 || fixed_signed_remainder(279941) != 5) return 45;
+    if (fixed_unsigned_quotient(0xffffffffu) != 0x01010101u) return 46;
+    static const double samples[] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+    if (narrow_lane_counter(samples, 9, 6442450941L) != -6442450935.0) return 47;
     if (widen_choice(false, 0) != 0xffffffffUL || widen_choice(true, 0x80000001u) != 0x80000001UL) return 9;
     unsigned data[] = {3, 5, 8, 13, 21};
     if (indexed(data + 1, -1, 3) != 24) return 5;

@@ -1,3 +1,4 @@
+#include "machine/constant_division.h"
 #include "machine/exact_division.h"
 #include "aarch64/selector.h"
 #include "aarch64/logical_immediate.h"
@@ -91,6 +92,33 @@ bool Selector::constant_quotient(
 	return true;
 }
 
+// Use a widening multiply when the shared word-division plan fits one.
+// The correction changes the signed quotient from floor to truncation.
+bool Selector::constant_word_division(const lowir::Instruction& inst, uint32_t divisor, unsigned lhs, unsigned dst)
+{
+	if (divisor <= 1 || divisor > INT32_MAX || (divisor & (divisor - 1)) == 0)
+		return false;
+	const auto op = static_cast<BinaryOp>(inst.sub);
+	const bool sign = op == BinaryOp::Div || op == BinaryOp::Mod;
+	const bool remainder = op == BinaryOp::Mod || op == BinaryOp::UMod;
+	const auto magic = machine::word_magic(divisor, sign ? 31 : 32);
+	if (magic.multiplier > (sign ? static_cast<uint64_t>(INT32_MAX) : UINT32_MAX))
+		return false;
+	const unsigned quotient = remainder ? 9 : dst;
+	constant(11, magic.multiplier);
+	out_.emit(sign ? Op::Smull : Op::Umull, 9, lhs, 11);
+	out_.emit(sign ? Op::Sbfm : Op::Ubfm, sign ? 9 : quotient, 9, 0, (magic.shift << 16) | (63u << 10));
+	if (sign)
+		out_.emit(Op::AddW, quotient, 9, lhs, (1u << 22) | (31u << 10));
+	if (remainder)
+	{
+		constant(11, divisor);
+		out_.emit(Op::MsubW, dst, quotient, 11, lhs << 10);
+	}
+	save(dst, inst.result, true);
+	return true;
+}
+
 bool Selector::simple_binary(const lowir::Instruction& inst)
 {
 	const auto op = static_cast<BinaryOp>(inst.sub);
@@ -151,6 +179,10 @@ bool Selector::simple_binary(const lowir::Instruction& inst)
 		// A coefficient of 1 + 2^k needs just ADD with a shifted register.
 		const uint64_t factor = w ? static_cast<uint32_t>(raw) : raw;
 		if ((op == BinaryOp::Div || op == BinaryOp::UDiv) && constant_quotient(inst, raw, bits, left, dest))
+			return true;
+		if (level_ >= 3 && bits == 32 &&
+			(op == BinaryOp::Div || op == BinaryOp::Mod || op == BinaryOp::UDiv || op == BinaryOp::UMod) &&
+			constant_word_division(inst, static_cast<uint32_t>(raw), left, dest))
 			return true;
 		if (op == BinaryOp::Mul && factor > 2 && ((factor - 1) & (factor - 2)) == 0)
 		{

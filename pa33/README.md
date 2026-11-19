@@ -367,6 +367,11 @@ iteration before choosing a fully unrolled path. Use a comparison that also
 works near the signed limit. Check the empty range, the short tail and the
 values and stores that reach the exit from each path.
 
+When every packed use of an induction value truncates it, consider keeping
+the packed counter at the narrower width. Check wraps at that width and keep
+the full-width value wherever addresses, exit conditions or scalar iterations
+observe it.
+
 Boolean conditions may pass through selected zero/one values and integer
 retypes. Meet their quality bounds while preserving actual narrowing of
 arbitrary integers; a nonzero value can become zero when narrowed.

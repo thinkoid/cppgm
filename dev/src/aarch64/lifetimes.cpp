@@ -319,7 +319,7 @@ std::vector<uint32_t> scalar_aliases(const FunctionBody& body)
 std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& body,
 	const machine::ExceptionLayout* exceptions, std::vector<uint32_t>& uses, std::vector<uint32_t>& calls,
 	std::vector<std::pair<uint32_t, uint32_t>>& segments, opt::Cfg& cfg, machine::PhiWebs& webs,
-	std::vector<uint32_t>& entries, const std::vector<uint32_t>& aliases)
+	std::vector<uint32_t>& entries, const std::vector<uint32_t>& aliases, bool separate_pointer_phis)
 {
 	FunctionLiveness plan(body);
 	uses.assign(body.temps.size(), 0);
@@ -368,11 +368,23 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 		at += 2;
 	}
 	// Layout can put a phi before its backedge, so resolve edge positions after scanning.
+	machine::PhiFanout fanout;
 	for (BlockId b : body.layout)
+	{
+		bool indexed = false;
+		const InstId first = body.blocks[b].first;
 		for (InstId i = body.blocks[b].first; i != kNoId && body.instructions[i].op == Opcode::Phi;
 			i = body.instructions[i].next)
 		{
 			const auto& phi = body.instructions[i];
+			const bool check_fanout = separate_pointer_phis && phi.type.is_pointer() &&
+				(i != first || (phi.next != kNoId && body.instructions[phi.next].op == Opcode::Phi));
+			if (check_fanout && !indexed)
+			{
+				fanout.read(body, b,
+					[&](Value v) { return v.is(ValueKind::Temp) ? Value::temp(representative(aliases, v.index)) : v; });
+				indexed = true;
+			}
 			for (uint32_t k = 0; k + 1 < phi.extra_count; k += 2)
 			{
 				const auto pred = body.operands[phi.extra_first + k].index;
@@ -384,15 +396,19 @@ std::vector<LiveRange> live_ranges(const Program& program, const FunctionBody& b
 					if (id != v.index)
 						++uses[id];
 					plan.read(id, pred, plan.spans[pred].last - 1);
-					if (webs.empty())
-						webs.reset(body.temps.size());
-					webs.join(id, phi.result);
-					plan.ranges[id].affinity = phi.result;
-					plan.ranges[phi.result].affinity = id;
+					if (!check_fanout || !fanout.contains(pred, id))
+					{
+						if (webs.empty())
+							webs.reset(body.temps.size());
+						webs.join(id, phi.result);
+						plan.ranges[id].affinity = phi.result;
+						plan.ranges[phi.result].affinity = id;
+					}
 					plan.reads[id].incoming = true;
 				}
 			}
 		}
+	}
 	if (body.layout.size() > 1 ||
 		(body.blocks[entry].first != kNoId && body.instructions[body.blocks[entry].first].op == Opcode::Phi))
 		plan.extend(program, body, exceptions, at, uses, segments, cfg);

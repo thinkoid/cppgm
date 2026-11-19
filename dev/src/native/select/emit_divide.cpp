@@ -1,6 +1,7 @@
 #include "native/select/function_selector.h"
 
 #include "native/mir/type_kinds.h"
+#include "machine/constant_division.h"
 #include "machine/exact_division.h"
 
 // Integer division and remainder. A divisor that is not a constant uses
@@ -57,35 +58,6 @@ struct SignedMagic
 	int64_t multiplier;
 	unsigned shift;
 };
-
-// Word division in a 64-bit product (Granlund and Montgomery 1994, section 6):
-// (x * multiplier) >> shift, for 0 < d < 2^31 not a power of two, and x below
-// 2^precision in magnitude. The multiplier is the smallest that serves; when
-// it would take 33 bits it is above 2^32 - 1.
-struct WordMagic
-{
-	uint64_t multiplier;
-	unsigned shift;
-};
-
-WordMagic word_magic(uint64_t d, unsigned precision)
-{
-	unsigned bits = 0;
-	while ((uint64_t(1) << bits) < d)
-		++bits;
-	const unsigned power = 32 + bits;
-	uint64_t low = (uint64_t(1) << power) / d;
-	uint64_t high = ((uint64_t(1) << power) + (uint64_t(1) << (power - precision))) / d;
-	unsigned post = bits;
-	while (post > 0 && (low >> 1) < (high >> 1))
-	{
-		low >>= 1;
-		high >>= 1;
-		--post;
-	}
-	const WordMagic magic = { high, 32 + post };
-	return magic;
-}
 
 // Hacker's Delight 10-10 (magicu2) at 64 bits: the multiplier and shift
 // for an unsigned divisor d >= 2 that is not a power of two.
@@ -551,7 +523,7 @@ Reg FunctionSelector::emit_unsigned_magic_divide(Reg x, int64_t divisor, bool re
 Reg FunctionSelector::emit_word_magic_divide(Reg x, int64_t divisor, bool remainder, bool unsigned_op)
 {
 	const uint64_t size = static_cast<uint64_t>(divisor < 0 ? -divisor : divisor);
-	const WordMagic magic = word_magic(size, unsigned_op ? 32 : 31);
+	const machine::WordMagic magic = machine::word_magic(size, unsigned_op ? 32 : 31);
 	if (magic.multiplier >> 32 != 0)
 		return kNoReg;
 	if (magic.multiplier <= INT32_MAX)

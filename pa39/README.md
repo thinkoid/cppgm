@@ -140,6 +140,9 @@ sequence and register assignments to meet those budgets.
 - Keep leaf arithmetic and vector values in registers. Check that moves
   between register banks are needed and that spilled floating values can
   be loaded directly into floating-point registers.
+- For division by a constant, compare the hardware divider with a widening
+  multiply and a shift. Check signed rounding and the cost of loading the
+  constants. A remainder can reuse the quotient.
 - For adjacent array accesses, see whether a value from one iteration can
   serve the next. Check the zero-trip path and an update through an aliased
   pointer before relying on a loop-carried value.

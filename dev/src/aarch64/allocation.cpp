@@ -442,7 +442,7 @@ void Selector::allocate()
 	machine::PhiWebs webs;
 	aliases_ = scalar_aliases(body_);
 	auto ranges = live_ranges(
-		program_, body_, out_.exceptions.get(), uses_, calls, segments, cfg, webs, entry_regs_, aliases_);
+		program_, body_, out_.exceptions.get(), uses_, calls, segments, cfg, webs, entry_regs_, aliases_, level_ >= 3);
 	std::vector<uint32_t> web_regs(webs.empty() ? 0 : count, kNoId);
 	std::stable_sort(
 		ranges.begin(), ranges.end(), [](const LiveRange& a, const LiveRange& b) { return a.first < b.first; });

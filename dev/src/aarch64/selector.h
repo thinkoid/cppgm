@@ -154,6 +154,7 @@ private:
 	unsigned operand_register(lowir::Value operand, lowir::Type type, unsigned scratch);
 	void narrow_left(lowir::Value src, lowir::Type type, lowir::TempId result, unsigned width, unsigned count);
 	bool constant_quotient(const lowir::Instruction& inst, uint64_t divisor, unsigned bits, unsigned lhs, unsigned dst);
+	bool constant_word_division(const lowir::Instruction& inst, uint32_t divisor, unsigned lhs, unsigned dst);
 	bool simple_binary(const lowir::Instruction& inst);
 	lowir::InstId arithmetic_operand(const lowir::Instruction& producer);
 	void integer_unary(const lowir::Instruction& inst);

@@ -19,6 +19,14 @@ extern "C" unsigned long mix_bits(unsigned long x, unsigned shift, unsigned long
     return ((v & 0xff00ff00ff00ff00UL) | 0x000f000f000f000fUL) % divisor;
 }
 extern "C" int signed_remainder(int x, int divisor) { return x % divisor; }
+extern "C" int fixed_signed_remainder(int x) { return x % 139968; }
+extern "C" unsigned fixed_unsigned_quotient(unsigned x) { return x / 255u; }
+extern "C" double narrow_lane_counter(const double* data, long count, long start) {
+    double sum = 0;
+    for (long j = 0, i = start; j < count; ++j, ++i)
+        sum += data[j] * static_cast<double>(static_cast<int>(i));
+    return sum;
+}
 extern "C" unsigned long widen_choice(bool a, unsigned x) { return a ? x : 0xffffffffu; }
 
 extern "C" unsigned byte_offset(const unsigned* data, signed char i, unsigned char j) {
