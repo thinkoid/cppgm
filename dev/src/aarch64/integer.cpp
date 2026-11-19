@@ -591,6 +591,26 @@ bool Selector::compare_consumer(const lowir::Instruction& inst, BlockId block, b
 	return true;
 }
 
+// An integer increment preserves NZCV. Keep the comparison's original
+// operand reads, which may precede a register being reused by the increment.
+InstId Selector::compare_before_increment(const lowir::Instruction& inst, BlockId block)
+{
+	if (inst.next == kNoId || uses_[inst.result] != 1 ||
+		!(inst.type.is_pointer() || (inst.type.is_integer() && integer_bits(inst.type.kind()) <= 64)))
+		return kNoId;
+	const auto& step = body_.instructions[inst.next];
+	if (step.op != Opcode::Binary || step.sub != static_cast<unsigned>(BinaryOp::Add) || !step.type.is_integer() ||
+		integer_bits(step.type.kind()) > 64 || step.next == kNoId)
+		return kNoId;
+	const auto& branch = body_.instructions[step.next];
+	if (branch.op != Opcode::Branch || !(branch.ops[0] == Value::temp(inst.result)))
+		return kNoId;
+	compare_flags(inst);
+	select(step, block);
+	conditional_edges(block, branch, Op::BCond, conditions[inst.sub] ^ 1);
+	return step.next;
+}
+
 void Selector::integer_unary(const lowir::Instruction& inst)
 {
 	const unsigned bits = integer_bits(inst.type.kind());

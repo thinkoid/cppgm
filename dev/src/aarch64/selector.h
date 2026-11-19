@@ -178,6 +178,7 @@ private:
 	void set_condition(lowir::TempId result, unsigned condition);
 	lowir::InstId compare_pair(const lowir::Instruction& first, lowir::BlockId block);
 	bool compare_consumer(const lowir::Instruction& inst, lowir::BlockId block, bool flags_ready = false);
+	lowir::InstId compare_before_increment(const lowir::Instruction& inst, lowir::BlockId block);
 	bool backedge_moves(lowir::BlockId from, lowir::BlockId to, lowir::BlockId other, unsigned condition);
 	bool empty_edge(lowir::BlockId block, lowir::BlockId to);
 	void conditional_edges(lowir::BlockId block, const lowir::Instruction& branch, Op test, unsigned operand);
