@@ -15,7 +15,8 @@ namespace obj = native::object;
 using namespace lowir;
 
 namespace {
-void define_global(const Program& program, SymbolId id, const std::vector<uint32_t>& symbols, obj::ObjectFile& out)
+void define_global(
+	const Program& program, SymbolId id, const std::vector<uint32_t>& symbols, obj::ObjectFile& out, bool host)
 {
 	const auto& source = program.symbols[id];
 	const Global& global = program.globals[source.detail];
@@ -24,16 +25,19 @@ void define_global(const Program& program, SymbolId id, const std::vector<uint32
 	const uint64_t size = machine::global_size(program, global, align);
 	const bool readonly = source.metadata.storage == ir_model::GSM_READONLY;
 	const bool bss = !readonly && machine::global_is_zero(program, global);
+	// The dynamic loader rebases address initializers before making these
+	// objects read-only. Put them in the same class as GOT indirection cells.
+	const bool relro = host && readonly && !source.metadata.section && machine::global_has_addresses(program, global);
 	const char* name = source.metadata.section ? program.spelling(source.metadata.section)
 		: tls                                  ? (bss ? ".tbss" : ".tdata")
-		: readonly                             ? ".rodata"
+		: readonly                             ? (relro ? ".data.rel.ro" : ".rodata")
 		: bss                                  ? ".bss"
 											   : ".data";
 	auto& symbol = out.symbols[symbols[id]];
 	uint32_t priority = 0;
 	const auto kind = tls                     ? (bss ? obj::SectionKind::TlsBss : obj::SectionKind::TlsData)
 		: initializer_section(name, priority) ? obj::SectionKind::InitArray
-		: readonly                            ? obj::SectionKind::Rodata
+		: readonly && !relro                  ? obj::SectionKind::Rodata
 		: bss                                 ? obj::SectionKind::Bss
 											  : obj::SectionKind::Data;
 	symbol.section = out.add_section(name, kind, align);
@@ -170,7 +174,7 @@ void compile_object(Program& program, obj::ObjectFile& object, int level, bool p
 		if (canonical[id] != id)
 			continue;
 		if (src.kind == SymbolKind::GlobalDefinition)
-			define_global(program, id, symbols, object);
+			define_global(program, id, symbols, object, host);
 		if (src.kind != SymbolKind::FunctionDefinition)
 			continue;
 		Function function;
