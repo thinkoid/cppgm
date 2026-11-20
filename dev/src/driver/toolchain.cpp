@@ -782,6 +782,7 @@ bool lower_source(const std::string& path, const Invocation& invocation, lower::
 		sema::Analyzer analyzer(graph, unit.identifiers(), sema::AnalysisMode::Semantics);
 		analyzer.set_source_language(invocation.preprocessor.language, invocation.preprocessor.gnu_c());
 		analyzer.set_hosted(invocation.preprocessor.hosted);
+		analyzer.set_host_objects(lowering.host_objects());
 		analyzer.set_cxx14(
 			invocation.preprocessor.language != SourceLanguage::C && invocation.preprocessor.cplusplus != "201103L");
 		analyzer.set_cxx17(invocation.preprocessor.cplusplus >= "201703L");

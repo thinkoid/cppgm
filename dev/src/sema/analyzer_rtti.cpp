@@ -240,10 +240,11 @@ ExprFacts* Analyzer::type_identity(const syntax::Expr& expr, TokenKind op, const
 	// true when both designate the same object, each type's being unique
 	// (the Itanium ABI's merged type information), whatever the member
 	// operator declared for it does; it is neither called nor odr-used.
-	// Null for any other operator call.
-	if ((op != TokenKind::OP_EQ && op != TokenKind::OP_NE) || operands.size != 2 || !IsTypeid(operands[0]) ||
-		!IsTypeid(operands[1]) || type_info_ == nullptr || !selected->member || selected->owner == nullptr ||
-		selected->owner->entity != type_info_)
+	// A host object uses the regular overload, supplied by the selected
+	// library. Null for any other operator call.
+	if (host_objects_ || (op != TokenKind::OP_EQ && op != TokenKind::OP_NE) || operands.size != 2 ||
+		!IsTypeid(operands[0]) || !IsTypeid(operands[1]) || type_info_ == nullptr || !selected->member ||
+		selected->owner == nullptr || selected->owner->entity != type_info_)
 		return nullptr;
 	ExprFacts* facts = new_facts(expr, types_.fundamental(FundamentalType::Bool), ValueCategory::PRValue);
 	facts->flags |= kTypeIdentity;

@@ -68,6 +68,7 @@ public:
 	// Hosted compilations take GNU's zero-length and flexible array
 	// members (see array_bound and member_size).
 	void set_hosted(bool on) { hosted_ = on; }
+	void set_host_objects(bool on) { host_objects_ = on; }
 	bool hosted() const { return hosted_; }
 	// -std=c++14 or later (hosted -c): the C++11 rules its headers' mode
 	// gates contradict are dropped -- a constexpr non-static member function
@@ -1866,6 +1867,7 @@ private:
 	SemanticGraph& graph_;
 	AnalysisMode mode_;
 	bool hosted_ = false;
+	bool host_objects_ = false;
 	bool cxx14_ = false;
 	bool cxx17_ = false;
 	bool cxx20_ = false;
