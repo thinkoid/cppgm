@@ -1044,7 +1044,7 @@ sub compare_text
 			# for readability, and can differ between make rule printers.
 			for ($ref_data, $my_data)
 			{
-				s/\\\n[ \t]*/ /g;
+				s/[ \t]*\\\n[ \t]*/ /g;
 				s/[ \t]+$//mg;
 			}
 		}

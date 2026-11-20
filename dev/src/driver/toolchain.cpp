@@ -292,6 +292,21 @@ bool accepted_flag(const std::string& arg)
 		starts_with(arg, "-m") || arg == "-pedantic" || arg == "-pedantic-errors" || arg == "-w" || arg == "-pipe";
 }
 
+bool visibility_option(const std::string& arg, Invocation& invocation)
+{
+	if (starts_with(arg, "-fvisibility="))
+	{
+		const std::string spelling = arg.substr(13);
+		if (!ir_model::source_visibility(spelling.data(), spelling.size(), &invocation.visibility))
+			throw InvocationError("invalid symbol visibility: " + spelling);
+	}
+	else if (arg == "-fvisibility-inlines-hidden" || arg == "-fno-visibility-inlines-hidden")
+		invocation.visibility_inlines_hidden = arg == "-fvisibility-inlines-hidden";
+	else
+		return false;
+	return true;
+}
+
 bool parse_dependency_option(const std::vector<std::string>& args, size_t& i, MakeDependencies& options)
 {
 	const std::string& arg = args[i];
@@ -534,14 +549,8 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 		}
 		else if (arg == "-fno-exceptions" || arg == "-fexceptions")
 			invocation.preprocessor.modes.exceptions = arg == "-fexceptions";
-		else if (starts_with(arg, "-fvisibility="))
-		{
-			const std::string spelling = arg.substr(13);
-			if (!ir_model::source_visibility(spelling.data(), spelling.size(), &invocation.visibility))
-				throw InvocationError("invalid symbol visibility: " + spelling);
-		}
-		else if (arg == "-fvisibility-inlines-hidden" || arg == "-fno-visibility-inlines-hidden")
-			invocation.visibility_inlines_hidden = arg == "-fvisibility-inlines-hidden";
+		else if (visibility_option(arg, invocation))
+			continue;
 		else if (arg == "-fno-strict-aliasing" || arg == "-fstrict-aliasing")
 			invocation.strict_aliasing = arg == "-fstrict-aliasing";
 		else if (arg == "-mpopcnt" || arg == "-mno-popcnt")

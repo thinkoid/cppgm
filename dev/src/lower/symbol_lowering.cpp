@@ -2541,7 +2541,7 @@ ir_model::SymbolVisibility ProgramLowering::variable_visibility(const sema::Vari
 	return variable->defined ? default_visibility_ : ir_model::SV_DEFAULT;
 }
 
-ir_model::SymbolVisibility ProgramLowering::class_visibility(const sema::ClassEntity* cls) const
+ir_model::SymbolVisibility ProgramLowering::class_visibility(const sema::ClassEntity* cls, bool definition) const
 {
 	if (!graph_->symbol_attribute_list.empty())
 	{
@@ -2554,7 +2554,7 @@ ir_model::SymbolVisibility ProgramLowering::class_visibility(const sema::ClassEn
 		if (const auto* attributes = enclosing_visibility(cls->owner))
 			return attributes->visibility;
 	}
-	return default_visibility_;
+	return definition ? default_visibility_ : ir_model::SV_DEFAULT;
 }
 
 lowir::SymbolMetadata ProgramLowering::function_metadata(const sema::FunctionEntity* function, lowir::SymbolId symbol)

@@ -1325,7 +1325,7 @@ private:
 	const sema::SemanticGraph::SymbolAttributes* enclosing_visibility(const sema::Scope* scope) const;
 	ir_model::SymbolVisibility function_visibility(const sema::FunctionEntity* function) const;
 	ir_model::SymbolVisibility variable_visibility(const sema::VariableEntity* variable) const;
-	ir_model::SymbolVisibility class_visibility(const sema::ClassEntity* cls) const;
+	ir_model::SymbolVisibility class_visibility(const sema::ClassEntity* cls, bool definition = true) const;
 	lowir::SymbolMetadata function_metadata(const sema::FunctionEntity* function, lowir::SymbolId symbol);
 	void function_bindings(const sema::FunctionEntity* function, lowir::SymbolId symbol, const std::string& object);
 	lowir::SymbolMetadata variable_metadata(const sema::VariableEntity* variable, lowir::SymbolId symbol);

@@ -439,7 +439,7 @@ lowir::SymbolId ProgramLowering::vtt_symbol(const sema::ClassEntity* entity)
 		pending.typed = false;
 		pending.metadata.binding = internal ? ir_model::SBM_INTERNAL : ir_model::SBM_STRONG;
 		if (!internal)
-			pending.metadata.visibility = class_visibility(entity);
+			pending.metadata.visibility = class_visibility(entity, false);
 		if (symbol_objects_[symbol] != 0)
 			pending.metadata.object = symbol_objects_[symbol];
 		set_pending(symbol, pending);
