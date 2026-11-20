@@ -2487,6 +2487,26 @@ const sema::SemanticGraph::SymbolAttributes* ExplicitVisibility(
 	return attributes != nullptr && attributes->has_visibility ? attributes : nullptr;
 }
 
+// Explicit instantiation also covers non-template member classes and
+// their members (14.7.2). Follow the enclosing instantiation only through
+// those classes, stopping at a separate member template specialization.
+bool DeclaredClassInstantiation(const sema::Scope* scope)
+{
+	while (scope != nullptr && scope->kind == sema::ScopeKind::Class)
+	{
+		const auto* owner = static_cast<const sema::ClassEntity*>(scope->entity);
+		const sema::ClassTemplateFacts* facts = owner->templ;
+		if (facts == nullptr)
+			return false;
+		if (facts->extern_instantiation || facts->explicit_instantiation)
+			return true;
+		if (facts->role != sema::TemplateRole::MemberInstance)
+			return false;
+		scope = owner->owner;
+	}
+	return false;
+}
+
 } // namespace
 
 const sema::SemanticGraph::SymbolAttributes* ProgramLowering::enclosing_visibility(const sema::Scope* scope) const
@@ -2517,19 +2537,11 @@ ir_model::SymbolVisibility ProgramLowering::function_visibility(const sema::Func
 	// and can be overridden on the function itself. Class visibility is
 	// still used for non-inline members and explicit instantiations.
 	const bool emitted = function->defined && !function->extern_instantiation;
+	// A hidden weak copy could hide a public definition emitted by the
+	// explicit instantiation in another object.
 	if (visibility_inlines_hidden_ && !analyzer_->c_source() && function->is_inline && emitted &&
-		!function->explicit_instantiation)
-	{
-		// An extern template declaration of the class makes its inline
-		// methods part of the explicit instantiation's shared-library ABI.
-		// A hidden weak copy here would hide that library's public copy.
-		const sema::ClassEntity* owner = function->owner != nullptr && function->owner->kind == sema::ScopeKind::Class
-			? static_cast<const sema::ClassEntity*>(function->owner->entity)
-			: nullptr;
-		const sema::ClassTemplateFacts* facts = owner != nullptr ? owner->templ : nullptr;
-		if (facts == nullptr || (!facts->extern_instantiation && !facts->explicit_instantiation))
-			return ir_model::SV_HIDDEN;
-	}
+		!function->explicit_instantiation && !DeclaredClassInstantiation(function->owner))
+		return ir_model::SV_HIDDEN;
 	if (const auto* attributes = enclosing_visibility(function->owner))
 		return attributes->visibility;
 	// Imports and the replaceable global allocation functions retain
