@@ -418,7 +418,9 @@ private:
 	void collect_abi_tags(const syntax::Attribute* list, bool on_class, std::vector<std::string>& tags,
 		const Identifier* implied = nullptr);
 	void declare_abi_tags(const void* owner, std::vector<std::string>& tags, bool redeclaration, uint32_t location);
-	void class_abi_tags(
+	void record_visibility(const Entity* entity, const syntax::Attribute& attribute);
+	void visibility_attributes(const Entity* entity, const syntax::Attribute* list, bool on_class);
+	void class_linkage_attributes(
 		const Entity* entity, const syntax::Attribute* list, bool on_class, bool redeclaration, uint32_t location);
 	void note_block_linkage(const Entity* entity, Scope* block, bool c_linkage);
 	void agree_block_linkage(const Entity* entity, bool c_linkage, bool internal, uint32_t location);

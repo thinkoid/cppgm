@@ -245,6 +245,8 @@ void make_object(lowir::Program& program, const backend::Options& options, Objec
 				object.data.push_back(std::move(data));
 			}
 		}
+		if (source.metadata.visibility == ir_model::SV_HIDDEN || source.metadata.visibility == ir_model::SV_INTERNAL)
+			symbol.flags |= 4u; // WASM_SYMBOL_VISIBILITY_HIDDEN
 		if (symbol.weak() && !symbol.undefined() && (source.metadata.flags & ir_model::SF_REPLACEABLE) == 0)
 		{
 			ObjectGroup group;

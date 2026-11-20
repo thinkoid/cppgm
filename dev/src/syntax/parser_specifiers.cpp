@@ -202,6 +202,15 @@ bool Parser::gnu_attribute(const char* spelling, Attribute& attribute, bool& kep
 		attribute.expression = parse_assignment_expression();
 		return attribute.expression != nullptr && expect(TokenKind::OP_RPAREN);
 	}
+	if (std::strcmp(spelling, "visibility") == 0 || std::strcmp(spelling, "__visibility__") == 0)
+	{
+		attribute.kind = AttributeKind::Visibility;
+		kept = true;
+		if (!expect(TokenKind::OP_LPAREN) || !tok().is_literal() || (tok().flags & kStringLiteral) == 0)
+			return fail();
+		attribute.expression = parse_primary_expression();
+		return attribute.expression != nullptr && expect(TokenKind::OP_RPAREN);
+	}
 	const auto binding = target_model::wasm_function_attribute(spelling, std::strlen(spelling));
 	const bool alias = std::strcmp(spelling, "alias") == 0 || std::strcmp(spelling, "__alias__") == 0;
 	if (alias || binding != target_model::WasmFunctionAttribute::None)
@@ -986,7 +995,7 @@ bool Parser::parse_class_or_enum_specifier(ListFrame<DeclSpecifier>& list, Speci
 	Attribute** tail = &tags;
 	for (Attribute* attribute = class_attributes; attribute != nullptr; attribute = attribute->next)
 	{
-		if (attribute->kind != AttributeKind::AbiTag &&
+		if (attribute->kind != AttributeKind::AbiTag && attribute->kind != AttributeKind::Visibility &&
 			!(attribute->kind == AttributeKind::Alignas && attribute->gnu) &&
 			!(attribute->kind == AttributeKind::NoReturn && attribute->standard))
 			continue;

@@ -112,7 +112,7 @@ Entity* Analyzer::class_specifier(const syntax::ClassSpecifier& specifier, Scope
 		binding->key = specifier.key;
 		print_in(print, binding);
 		out.declared_binding = binding;
-		class_abi_tags(entity, specifier.attributes, false, false, specifier.location);
+		class_linkage_attributes(entity, specifier.attributes, false, false, specifier.location);
 		class_body(entity, specifier, parent, print);
 		return entity;
 	}
@@ -224,7 +224,7 @@ Entity* Analyzer::class_specifier(const syntax::ClassSpecifier& specifier, Scope
 	print_in(print, binding);
 	declare_in(where, binding);
 	out.declared_binding = binding;
-	class_abi_tags(entity, specifier.attributes, false, existed || name->qualified(), name->location);
+	class_linkage_attributes(entity, specifier.attributes, false, existed || name->qualified(), name->location);
 	// An outer specialization declares its member class templates. Their
 	// own specializations use the original analyzed member definition via
 	// outside_member_template, with both argument sets bound (14.7.1p1).
@@ -377,6 +377,7 @@ uint64_t Analyzer::attribute_alignment(
 		case syntax::AttributeKind::ObjectAlias:
 		case syntax::AttributeKind::Weak:
 		case syntax::AttributeKind::Section:
+		case syntax::AttributeKind::Visibility:
 		case syntax::AttributeKind::AbiTag:
 		case syntax::AttributeKind::MayAlias:
 		case syntax::AttributeKind::Pure:
@@ -1098,7 +1099,7 @@ Entity* Analyzer::elaborated_class(
 	if (lone_class_attributes_ != nullptr && !is_friend)
 	{
 		reject_noreturn(lone_class_attributes_, "noreturn attribute on a class");
-		class_abi_tags(entity, lone_class_attributes_, true, existed, name.location);
+		class_linkage_attributes(entity, lone_class_attributes_, true, existed, name.location);
 		// GNU aligned after the class-key requests the class's alignment
 		// before its definition (GCC's type attribute; ignored once it is
 		// defined, as GCC warns).
@@ -1196,7 +1197,7 @@ Entity* Analyzer::enum_specifier(
 		number_unnamed_local_type(entity);
 		entity->fixed = underlying != nullptr;
 		entity->underlying = underlying;
-		class_abi_tags(entity, specifier.attributes, false, false, specifier.location);
+		class_linkage_attributes(entity, specifier.attributes, false, false, specifier.location);
 		Binding* binding = new_binding(BindingKind::Type, nullptr, entity, entity->type);
 		binding->hidden = true;
 		binding->key = TokenKind::KW_ENUM;
@@ -1216,7 +1217,7 @@ Entity* Analyzer::enum_specifier(
 	const Identifier* identifier = name->last().identifier;
 	if (EnumEntity* entity = redeclared_enum(specifier, where, underlying))
 	{
-		class_abi_tags(entity, specifier.attributes, false, true, specifier.location);
+		class_linkage_attributes(entity, specifier.attributes, false, true, specifier.location);
 		// The course dump keeps the first declaration's line for an opaque
 		// redeclaration or the definition that completes it.
 		if (specifier.has_body)
@@ -1242,7 +1243,7 @@ Entity* Analyzer::enum_specifier(
 	entity->label = identifier->spelling;
 	// GNU abi_tag on an enumeration: GCC mangles it as a class's (Clang
 	// rejects it).
-	class_abi_tags(entity, specifier.attributes, false, false, specifier.location);
+	class_linkage_attributes(entity, specifier.attributes, false, false, specifier.location);
 	Binding* binding = new_binding(BindingKind::Type, identifier, entity, entity->type);
 	binding->key = TokenKind::KW_ENUM;
 	binding->scoped = specifier.scoped;
@@ -1297,7 +1298,7 @@ Entity* Analyzer::qualified_enum_definition(
 	EnumEntity* entity = redeclared_enum(specifier, prefix.scope, underlying);
 	if (entity == nullptr)
 		error(name.location, "qualified enumeration does not match a declaration");
-	class_abi_tags(entity, specifier.attributes, false, true, specifier.location);
+	class_linkage_attributes(entity, specifier.attributes, false, true, specifier.location);
 	if (!specifier.has_body)
 		return entity;
 	if (entity->defined)

@@ -2955,11 +2955,19 @@ void Analyzer::explicit_instantiation(const syntax::ExplicitInstantiationDecl& d
 	// it (p5).
 	const syntax::Decl& inner = *decl.declaration;
 	// 14p3: an explicit instantiation has at most one declarator.
-	if (inner.kind == syntax::DeclKind::Simple && static_cast<const syntax::SimpleDecl&>(inner).declarators.size > 1)
+	const auto* simple = inner.kind == syntax::DeclKind::Simple ? static_cast<const syntax::SimpleDecl*>(&inner)
+																: nullptr;
+	if (simple != nullptr && simple->declarators.size > 1)
 		error(decl.location, "an explicit instantiation must declare a single entity");
-	if (inner.kind != syntax::DeclKind::Class)
+	const syntax::DeclSpecifier* class_specifier = nullptr;
+	if (inner.kind == syntax::DeclKind::Class)
+		class_specifier = &static_cast<const syntax::ClassDecl&>(inner).specifier;
+	else if (simple != nullptr && simple->declarators.empty() && simple->specifiers.size == 1 &&
+		simple->specifiers[0].kind == syntax::DeclSpecKind::Elaborated)
+		class_specifier = &simple->specifiers[0];
+	if (class_specifier == nullptr)
 		return explicit_function_instantiation(decl, scope);
-	const syntax::DeclSpecifier& specifier = static_cast<const syntax::ClassDecl&>(inner).specifier;
+	const syntax::DeclSpecifier& specifier = *class_specifier;
 	if (specifier.kind != syntax::DeclSpecKind::Elaborated ||
 		(!specifier.name->last().has_arguments && !specifier.name->qualified()))
 		error(inner.location, "an explicit instantiation names a class template specialization");
@@ -2992,6 +3000,8 @@ void Analyzer::explicit_instantiation(const syntax::ExplicitInstantiationDecl& d
 		placed = s->parent == here;
 	if (!placed)
 		error(name.location, "an explicit instantiation outside its template's namespace");
+	if (simple != nullptr)
+		visibility_attributes(entity, simple->attributes, true);
 	if (!require_complete(entity))
 		error(name.location, "explicit instantiation of an undefined class template");
 	// p11: a declaration follows no definition of the specialization; p5:

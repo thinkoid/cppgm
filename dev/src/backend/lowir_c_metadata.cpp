@@ -182,6 +182,11 @@ bool CppgmLowir::symbol_fact(uint32_t id, uint32_t key_number, uint32_t value)
 			return fail("invalid binding metadata");
 		metadata.binding = static_cast<ir_model::SymbolBindingMode>(value);
 		return true;
+	case MetadataKey::Visibility:
+		if (value >= ir_model::kSymbolVisibilityCount)
+			return fail("invalid symbol visibility");
+		metadata.visibility = static_cast<ir_model::SymbolVisibility>(value);
+		return true;
 	case MetadataKey::TlsFor:
 		if (on_global)
 			return fail("tls_for metadata requires a function");

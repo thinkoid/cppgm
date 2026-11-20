@@ -467,6 +467,11 @@ public:
 	bool darwin_host_objects() const { return host_objects_ && macho_objects_; }
 	// -fno-strict-aliasing: no access states its type.
 	void set_strict_aliasing(bool on) { strict_aliasing_ = on; }
+	void set_symbol_visibility(ir_model::SymbolVisibility visibility, bool inlines_hidden)
+	{
+		default_visibility_ = visibility;
+		visibility_inlines_hidden_ = inlines_hidden;
+	}
 	// Explicit whole-unit ISA selection (-mpopcnt), independent of the
 	// host compiler's predefined macros and of the optimization level.
 	void set_popcnt(bool on) { popcnt_ = on; }
@@ -1317,6 +1322,10 @@ private:
 	bool unmangled_placeholder(const sema::Type* type);
 	class PlaceholderReader;
 	friend class PlaceholderReader;
+	const sema::SemanticGraph::SymbolAttributes* enclosing_visibility(const sema::Scope* scope) const;
+	ir_model::SymbolVisibility function_visibility(const sema::FunctionEntity* function) const;
+	ir_model::SymbolVisibility variable_visibility(const sema::VariableEntity* variable) const;
+	ir_model::SymbolVisibility class_visibility(const sema::ClassEntity* cls) const;
 	lowir::SymbolMetadata function_metadata(const sema::FunctionEntity* function, lowir::SymbolId symbol);
 	void function_bindings(const sema::FunctionEntity* function, lowir::SymbolId symbol, const std::string& object);
 	lowir::SymbolMetadata variable_metadata(const sema::VariableEntity* variable, lowir::SymbolId symbol);
@@ -2065,6 +2074,8 @@ private:
 	bool macho_objects_ = false;
 	bool optimizing_ = false;
 	bool strict_aliasing_ = true;
+	ir_model::SymbolVisibility default_visibility_ = ir_model::SV_DEFAULT;
+	bool visibility_inlines_hidden_ = false;
 	bool popcnt_ = false;
 	bool exceptions_ = true;
 	uint64_t may_alias_kinds_ = 0; // bit per TypeKind: a may_alias typedef of the unit names it

@@ -77,6 +77,7 @@ void create_symbols(const Program& program, const std::vector<SymbolId>& canonic
 		sym.binding = src.metadata.binding == ir_model::SBM_INTERNAL ? obj::Binding::Local
 			: src.metadata.binding == ir_model::SBM_WEAK             ? obj::Binding::Weak
 																	 : obj::Binding::Global;
+		sym.visibility = static_cast<obj::Visibility>(src.metadata.visibility);
 		sym.type = src.metadata.storage == ir_model::GSM_THREAD_LOCAL ? obj::SymbolType::Tls
 			: is_function_kind(src.kind)                              ? obj::SymbolType::Function
 																	  : obj::SymbolType::Object;

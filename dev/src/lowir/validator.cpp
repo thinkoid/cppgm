@@ -590,7 +590,8 @@ bool Validator::check_links()
 		// (Each of the eight flag bits is a flag, keep_alias to cold.)
 		if (metadata.role >= ir_model::kSymbolRoleCount || metadata.linkage >= ir_model::kLanguageLinkageModeCount ||
 			metadata.binding >= ir_model::kSymbolBindingModeCount ||
-			metadata.storage >= ir_model::kGlobalStorageModeCount)
+			metadata.storage >= ir_model::kGlobalStorageModeCount ||
+			metadata.visibility >= ir_model::kSymbolVisibilityCount)
 			return fail("invalid symbol metadata", symbol.name);
 		if (metadata.tls_for != kNoId && metadata.tls_for >= symbols)
 			return fail("invalid tls_for target", symbol.name);

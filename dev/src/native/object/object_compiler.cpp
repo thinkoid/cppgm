@@ -1041,6 +1041,7 @@ uint32_t ObjectCompiler::object_symbol(uint32_t image_symbol)
 	// where no object defines it (the object-mode lowering declares
 	// vague-linkage entities strong: see ProgramLowering::finish).
 	symbol.binding = binding == ir_model::SBM_WEAK ? Binding::Weak : Binding::Global;
+	symbol.visibility = static_cast<object::Visibility>(s.metadata.visibility);
 	const bool raw = lowir::find_assembly_function(program_, image_symbol) != nullptr;
 	if (((defined || raw) && binding == ir_model::SBM_INTERNAL) ||
 		(defined && s.kind == lowir::SymbolKind::FunctionDeclaration && !raw))

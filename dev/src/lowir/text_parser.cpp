@@ -927,6 +927,10 @@ void Parser::parse_symbol_value(MetadataKey key, MetadataContext context, Symbol
 		if (!ir_model::from_spelling(value.text, value.length, &symbol.binding))
 			fail("invalid binding metadata");
 		break;
+	case MetadataKey::Visibility:
+		if (!ir_model::source_visibility(value.text, value.length, &symbol.visibility))
+			fail("invalid symbol visibility");
+		break;
 	case MetadataKey::Object:
 		symbol.object = value.name;
 		break;

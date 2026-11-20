@@ -72,6 +72,8 @@ enum class AttributeKind : uint8_t
 	// GNU section ( string-literal ): the object's ELF section, the literal
 	// in `expression` (pa27).
 	Section,
+	// GNU visibility (string-literal) changes symbol visibility independently of linkage.
+	Visibility,
 	// GNU abi_tag ( string-literal, ... ): one node per argument, its
 	// literal in `expression` (pa28).
 	AbiTag,

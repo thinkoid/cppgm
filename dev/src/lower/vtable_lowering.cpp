@@ -209,6 +209,8 @@ lowir::SymbolId ProgramLowering::class_global(
 		pending.function = false;
 		pending.typed = false;
 		pending.metadata.binding = internal ? ir_model::SBM_INTERNAL : ir_model::SBM_STRONG;
+		if (!internal)
+			pending.metadata.visibility = class_visibility(entity);
 		if (symbol_objects_[symbol] != 0)
 			pending.metadata.object = symbol_objects_[symbol];
 		set_pending(symbol, pending);
@@ -245,6 +247,8 @@ void ProgramLowering::define_vtable(const sema::ClassEntity* entity)
 	metadata.binding = entity_locality(entity) != Locality::External ? ir_model::SBM_INTERNAL
 		: key != nullptr && !key->is_inline                          ? ir_model::SBM_STRONG
 																	 : ir_model::SBM_WEAK;
+	if (metadata.binding != ir_model::SBM_INTERNAL)
+		metadata.visibility = class_visibility(entity);
 	// The group gives the primary table's final overriders (a virtual
 	// primary base's may lie off the chain).
 	const sema::VirtualSlot* slots = analyzer_->virtual_slots(entity);
@@ -971,6 +975,8 @@ lowir::SymbolId ProgramLowering::thunk_symbol(const sema::FunctionEntity* functi
 	pending.function = true;
 	pending.signature = signature;
 	pending.metadata.binding = internal ? ir_model::SBM_INTERNAL : ir_model::SBM_STRONG;
+	if (!internal)
+		pending.metadata.visibility = function_visibility(function);
 	if (symbol_objects_[symbol] != 0)
 		pending.metadata.object = symbol_objects_[symbol];
 	set_pending(symbol, pending);
@@ -998,6 +1004,8 @@ void ProgramLowering::emit_thunk(const Thunk& thunk)
 	metadata.binding = thunk.internal ? ir_model::SBM_INTERNAL
 		: thunk.strong                ? ir_model::SBM_STRONG
 									  : ir_model::SBM_WEAK;
+	if (!thunk.internal)
+		metadata.visibility = function_visibility(thunk.function);
 	if (symbol_objects_[thunk.symbol] != 0)
 		metadata.object = symbol_objects_[thunk.symbol];
 	note_thunk_family(thunk);
@@ -1061,6 +1069,8 @@ lowir::SymbolId ProgramLowering::typeinfo_name(const sema::ClassEntity* entity)
 	data_item(ScalarItem(lowir::TypeKind::I8, 0));
 	lowir::SymbolMetadata metadata;
 	metadata.binding = entity_locality(entity) != Locality::External ? ir_model::SBM_INTERNAL : ir_model::SBM_WEAK;
+	if (metadata.binding != ir_model::SBM_INTERNAL)
+		metadata.visibility = class_visibility(entity);
 	define_data(symbol, first, metadata);
 	return symbol;
 }
@@ -1110,6 +1120,8 @@ void ProgramLowering::define_typeinfo(const sema::ClassEntity* entity, lowir::Sy
 	metadata.binding = local_type_information(entity) || entity_locality(entity) != Locality::External
 		? ir_model::SBM_INTERNAL
 		: ir_model::SBM_WEAK;
+	if (metadata.binding != ir_model::SBM_INTERNAL)
+		metadata.visibility = class_visibility(entity);
 	define_data(symbol, first, metadata);
 }
 

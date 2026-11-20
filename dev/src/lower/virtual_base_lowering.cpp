@@ -438,6 +438,8 @@ lowir::SymbolId ProgramLowering::vtt_symbol(const sema::ClassEntity* entity)
 		pending.function = false;
 		pending.typed = false;
 		pending.metadata.binding = internal ? ir_model::SBM_INTERNAL : ir_model::SBM_STRONG;
+		if (!internal)
+			pending.metadata.visibility = class_visibility(entity);
 		if (symbol_objects_[symbol] != 0)
 			pending.metadata.object = symbol_objects_[symbol];
 		set_pending(symbol, pending);
@@ -450,6 +452,8 @@ lowir::SymbolId ProgramLowering::vtt_symbol(const sema::ClassEntity* entity)
 		data_item(AddressItem(program_, entry.symbol, entry.addend));
 	lowir::SymbolMetadata metadata;
 	metadata.binding = internal ? ir_model::SBM_INTERNAL : ir_model::SBM_WEAK;
+	if (!internal)
+		metadata.visibility = class_visibility(entity);
 	metadata.flags |= lowir::SF_OBJECT_ROOT;
 	define_data(symbol, first, metadata);
 	return symbol;

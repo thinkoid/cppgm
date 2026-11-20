@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "ir_symbol_model.h"
 #include "sema/lookup.h"
 #include "sema/semantic_graph.h"
 #include "sema/type_table.h"
@@ -164,6 +165,8 @@ struct SemanticGraph
 	{
 		const char* section; // an object's ELF section, or null
 		bool weak;
+		bool has_visibility;
+		ir_model::SymbolVisibility visibility;
 	};
 	const SymbolAttributes* symbol_attributes(const Entity* entity) const
 	{
@@ -178,7 +181,7 @@ struct SemanticGraph
 		if (index != PointerMap::kMissing)
 			return symbol_attribute_list[index];
 		symbol_attribute_index.set(entity, static_cast<uint32_t>(symbol_attribute_list.size()));
-		symbol_attribute_list.push_back(SymbolAttributes{ nullptr, false });
+		symbol_attribute_list.push_back(SymbolAttributes{});
 		return symbol_attribute_list.back();
 	}
 	PointerMap symbol_attribute_index;

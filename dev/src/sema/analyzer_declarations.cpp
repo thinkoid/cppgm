@@ -475,6 +475,13 @@ void Analyzer::symbol_attributes(Entity* entity, const syntax::Attribute* leadin
 				startup_attribute(entity, *attribute);
 				continue;
 			}
+			if (attribute->kind == syntax::AttributeKind::Visibility)
+			{
+				if (!attribute->on_class && !(attribute->standard && attribute->on_type) &&
+					(entity->kind == EntityKind::Function || entity->kind == EntityKind::Variable))
+					record_visibility(entity, *attribute);
+				continue;
+			}
 			if ((attribute->kind != syntax::AttributeKind::Weak && attribute->kind != syntax::AttributeKind::Section) ||
 				(attribute->standard && attribute->on_type))
 				continue;
@@ -626,7 +633,29 @@ void Analyzer::declare_abi_tags(
 	graph_.set_abi_tags(owner, SemanticGraph::AbiTags{ copy, static_cast<uint32_t>(tags.size()) });
 }
 
-void Analyzer::class_abi_tags(
+void Analyzer::record_visibility(const Entity* entity, const syntax::Attribute& attribute)
+{
+	const TokenSpelling& literal = static_cast<const syntax::LiteralExpr*>(attribute.expression)->spelling;
+	std::string name;
+	ir_model::SymbolVisibility visibility = ir_model::SV_DEFAULT;
+	if (!TokenSafeSection(literal, name) || !ir_model::source_visibility(name.data(), name.size(), &visibility))
+		error(attribute.location, "visibility must be default, internal, hidden or protected");
+	SemanticGraph::SymbolAttributes& own = graph_.own_symbol_attributes(entity);
+	if (own.has_visibility && own.visibility != visibility)
+		error(attribute.location, "a visibility attribute conflicting with an earlier declaration's");
+	own.has_visibility = true;
+	own.visibility = visibility;
+}
+
+void Analyzer::visibility_attributes(const Entity* entity, const syntax::Attribute* list, bool on_class)
+{
+	for (const syntax::Attribute* attribute = list; attribute != nullptr; attribute = attribute->next)
+		if (attribute->kind == syntax::AttributeKind::Visibility && attribute->on_class == on_class &&
+			!(attribute->standard && attribute->on_type))
+			record_visibility(entity, *attribute);
+}
+
+void Analyzer::class_linkage_attributes(
 	const Entity* entity, const syntax::Attribute* list, bool on_class, bool redeclaration, uint32_t location)
 {
 	// A class's (or enumeration's) ABI tags, after the class-key of its
@@ -634,6 +663,7 @@ void Analyzer::class_abi_tags(
 	// is defined (GCC and Clang warn).
 	if (list == nullptr)
 		return;
+	visibility_attributes(entity, list, on_class);
 	std::vector<std::string> tags;
 	collect_abi_tags(list, on_class, tags);
 	const bool defined = entity->kind == EntityKind::Class && static_cast<const ClassEntity*>(entity)->scope != nullptr;

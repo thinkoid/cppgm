@@ -2478,6 +2478,85 @@ std::string ProgramLowering::special_object(abi_mangle::AbiTargetKind kind, AbiN
 
 // ------------------------------------------------------------- metadata
 
+namespace {
+
+const sema::SemanticGraph::SymbolAttributes* ExplicitVisibility(
+	const sema::SemanticGraph& graph, const sema::Entity* entity)
+{
+	const sema::SemanticGraph::SymbolAttributes* attributes = graph.symbol_attributes(entity);
+	return attributes != nullptr && attributes->has_visibility ? attributes : nullptr;
+}
+
+} // namespace
+
+const sema::SemanticGraph::SymbolAttributes* ProgramLowering::enclosing_visibility(const sema::Scope* scope) const
+{
+	if (graph_->symbol_attribute_list.empty())
+		return nullptr;
+	for (; scope != nullptr; scope = scope->parent)
+	{
+		if (scope->kind != sema::ScopeKind::Class)
+			continue;
+		const auto* cls = static_cast<const sema::ClassEntity*>(scope->entity);
+		for (; cls != nullptr;
+			cls = cls->templ != nullptr && cls->templ->pattern != cls ? cls->templ->pattern : nullptr)
+			if (const auto* attributes = ExplicitVisibility(*graph_, cls))
+				return attributes;
+	}
+	return nullptr;
+}
+
+ir_model::SymbolVisibility ProgramLowering::function_visibility(const sema::FunctionEntity* function) const
+{
+	if (!graph_->symbol_attribute_list.empty())
+		for (const auto* declaration = function; declaration != nullptr;
+			declaration = sema::PatternOf(declaration) != declaration ? sema::PatternOf(declaration) : nullptr)
+			if (const auto* attributes = ExplicitVisibility(*graph_, declaration))
+				return attributes->visibility;
+	// The inline option affects addresses of emitted inline functions
+	// and can be overridden on the function itself. Class visibility is
+	// still used for non-inline members and explicit instantiations.
+	const bool emitted = function->defined && !function->extern_instantiation;
+	if (visibility_inlines_hidden_ && !analyzer_->c_source() && function->is_inline && emitted &&
+		!function->explicit_instantiation)
+		return ir_model::SV_HIDDEN;
+	if (const auto* attributes = enclosing_visibility(function->owner))
+		return attributes->visibility;
+	// Imports and the replaceable global allocation functions retain
+	// default visibility unless explicitly annotated.
+	return emitted && function->allocation == sema::AllocationRole::None ? default_visibility_ : ir_model::SV_DEFAULT;
+}
+
+ir_model::SymbolVisibility ProgramLowering::variable_visibility(const sema::VariableEntity* variable) const
+{
+	if (!graph_->symbol_attribute_list.empty())
+		for (const auto* declaration = variable; declaration != nullptr;
+			declaration = declaration->templ != nullptr && declaration->templ->pattern != declaration
+				? declaration->templ->pattern
+				: nullptr)
+			if (const auto* attributes = ExplicitVisibility(*graph_, declaration))
+				return attributes->visibility;
+	if (const auto* attributes = enclosing_visibility(variable->owner))
+		return attributes->visibility;
+	return variable->defined ? default_visibility_ : ir_model::SV_DEFAULT;
+}
+
+ir_model::SymbolVisibility ProgramLowering::class_visibility(const sema::ClassEntity* cls) const
+{
+	if (!graph_->symbol_attribute_list.empty())
+	{
+		for (const auto* declaration = cls; declaration != nullptr;
+			declaration = declaration->templ != nullptr && declaration->templ->pattern != declaration
+				? declaration->templ->pattern
+				: nullptr)
+			if (const auto* attributes = ExplicitVisibility(*graph_, declaration))
+				return attributes->visibility;
+		if (const auto* attributes = enclosing_visibility(cls->owner))
+			return attributes->visibility;
+	}
+	return default_visibility_;
+}
+
 lowir::SymbolMetadata ProgramLowering::function_metadata(const sema::FunctionEntity* function, lowir::SymbolId symbol)
 {
 	lowir::SymbolMetadata metadata;
@@ -2531,6 +2610,8 @@ lowir::SymbolMetadata ProgramLowering::function_metadata(const sema::FunctionEnt
 													 : ir_model::SBM_STRONG;
 	// GNU weak (the analysis allows it on entities with external linkage):
 	// replaceable, an inline function's too (lowir.md `replaceable=yes`).
+	if (metadata.binding != ir_model::SBM_INTERNAL)
+		metadata.visibility = function_visibility(function);
 	const sema::SemanticGraph::SymbolAttributes* attributes = graph_->symbol_attributes(function);
 	if (attributes != nullptr && attributes->weak && metadata.binding != ir_model::SBM_INTERNAL)
 	{
@@ -2575,6 +2656,8 @@ lowir::SymbolMetadata ProgramLowering::variable_metadata(const sema::VariableEnt
 		: (variable->templ != nullptr && variable->templ->pattern != nullptr) || variable->is_inline
 		? ir_model::SBM_WEAK
 		: ir_model::SBM_STRONG;
+	if (metadata.binding != ir_model::SBM_INTERNAL)
+		metadata.visibility = variable_visibility(variable);
 	if (variable->is_thread_local)
 		metadata.storage = ir_model::GSM_THREAD_LOCAL;
 	// GNU weak and section (pa27 README 9: section=<name> metadata).

@@ -174,6 +174,7 @@ Entity* Analyzer::class_explicit_specialization(const syntax::ClassSpecifier& sp
 	if (entity->scope != nullptr)
 		error(specifier.name->location, "class redefinition");
 	out.declared_binding = entity->templ->binding;
+	visibility_attributes(entity, specifier.attributes, false);
 	class_body(entity, specifier, entity->owner, scope);
 	return entity;
 }
@@ -369,6 +370,8 @@ void Analyzer::explicit_function_instantiation(const syntax::ExplicitInstantiati
 	const syntax::Decl& inner = *decl.declaration;
 	Specifiers specifiers = Specifiers();
 	DeclaratorInfo info = DeclaratorInfo();
+	const syntax::Attribute* attributes = nullptr;
+	const syntax::Declarator* declarator_form = nullptr;
 	Scope* saved_deferral = access_deferral_;
 	const size_t pending = pending_access_.size();
 	access_deferral_ = semantic() ? scope : nullptr;
@@ -380,7 +383,9 @@ void Analyzer::explicit_function_instantiation(const syntax::ExplicitInstantiati
 		this->specifiers(simple.specifiers, scope, specifiers, false);
 		if (specifiers.type == nullptr)
 			error(inner.location, "an explicit instantiation without a type");
-		info = declarator(simple.declarators[0].declarator, specifiers.type, scope, inner.location, &specifiers);
+		attributes = simple.attributes;
+		declarator_form = simple.declarators[0].declarator;
+		info = declarator(declarator_form, specifiers.type, scope, inner.location, &specifiers);
 	}
 	else if (inner.kind == syntax::DeclKind::SpecialMember)
 	{
@@ -396,7 +401,9 @@ void Analyzer::explicit_function_instantiation(const syntax::ExplicitInstantiati
 				: NamePrefix{ declaration_scope(scope), nullptr, nullptr };
 			result = type_id(*last.conversion, prefix.scope != nullptr ? prefix.scope : scope);
 		}
-		info = declarator(member.declarator, result, scope, inner.location);
+		attributes = member.attributes;
+		declarator_form = member.declarator;
+		info = declarator(declarator_form, result, scope, inner.location);
 	}
 	else
 		error(inner.location, "an explicit instantiation of no class, function or variable");
@@ -424,6 +431,9 @@ void Analyzer::explicit_function_instantiation(const syntax::ExplicitInstantiati
 	// has no effect, including no additional emission demand.
 	if (function->explicit_specialization)
 		return;
+	visibility_attributes(function, attributes, false);
+	for (const syntax::Declarator* part = declarator_form; part != nullptr; part = part->nested)
+		visibility_attributes(function, part->attributes, false);
 	if (decl.is_extern)
 	{
 		if (function->explicit_instantiation)
@@ -1147,6 +1157,7 @@ Entity* Analyzer::class_partial_specialization(const syntax::ClassSpecifier& spe
 		error(specifier.name->location, "class redefinition");
 	entity->templ->definition = &specifier;
 	entity->templ->definition_parameters = scope;
+	visibility_attributes(entity, specifier.attributes, false);
 	Binding* binding = new_binding(BindingKind::Type, entity->name, entity, entity->type);
 	binding->hidden = true;
 	binding->key = specifier.key;

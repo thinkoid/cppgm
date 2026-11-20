@@ -697,6 +697,7 @@ lowir::SymbolId ProgramLowering::unordered_guard(lowir::SymbolId global, const s
 	flag.init = lowir::GlobalInit::Zero;
 	program_.declare_global(guard, lowir::SymbolKind::GlobalDefinition, flag);
 	program_.symbols[guard].metadata.binding = ir_model::SBM_WEAK;
+	program_.symbols[guard].metadata.visibility = variable_visibility(variable);
 	program_.symbols[guard].metadata.object = intern(spelling.data(), static_cast<uint32_t>(spelling.size()));
 	++counters_.globals;
 	return guard;

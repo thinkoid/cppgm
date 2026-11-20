@@ -152,6 +152,8 @@ struct Invocation
 	bool dump_macros = false;
 	bool trace_includes = false;
 	MakeDependencies dependencies;
+	ir_model::SymbolVisibility visibility = ir_model::SV_DEFAULT;
+	bool visibility_inlines_hidden = false;
 	// -fsyntax-only: each source analyzed, nothing lowered or written.
 	bool syntax_only = false;
 	bool ignore_narrowing = false;
@@ -532,6 +534,14 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 		}
 		else if (arg == "-fno-exceptions" || arg == "-fexceptions")
 			invocation.preprocessor.modes.exceptions = arg == "-fexceptions";
+		else if (starts_with(arg, "-fvisibility="))
+		{
+			const std::string spelling = arg.substr(13);
+			if (!ir_model::source_visibility(spelling.data(), spelling.size(), &invocation.visibility))
+				throw InvocationError("invalid symbol visibility: " + spelling);
+		}
+		else if (arg == "-fvisibility-inlines-hidden" || arg == "-fno-visibility-inlines-hidden")
+			invocation.visibility_inlines_hidden = arg == "-fvisibility-inlines-hidden";
 		else if (arg == "-fno-strict-aliasing" || arg == "-fstrict-aliasing")
 			invocation.strict_aliasing = arg == "-fstrict-aliasing";
 		else if (arg == "-mpopcnt" || arg == "-mno-popcnt")
@@ -869,6 +879,7 @@ bool compile_native_sources(SourceInputs sources, const Invocation& invocation, 
 	lowering.set_macho_objects(target_model::is_darwin(invocation.target));
 	lowering.set_optimizing(true);
 	lowering.set_strict_aliasing(invocation.strict_aliasing);
+	lowering.set_symbol_visibility(invocation.visibility, invocation.visibility_inlines_hidden);
 	lowering.set_popcnt(invocation.preprocessor.popcnt);
 	lowering.set_exceptions(invocation.preprocessor.modes.exceptions);
 	if (invocation.whole_source_lto)
@@ -1276,6 +1287,7 @@ void configure_wasm_lowering(lower::ProgramLowering& lowering, const Invocation&
 	lowering.set_optimizing(true);
 	lowering.set_exceptions(invocation.preprocessor.modes.exceptions);
 	lowering.set_strict_aliasing(invocation.strict_aliasing);
+	lowering.set_symbol_visibility(invocation.visibility, invocation.visibility_inlines_hidden);
 }
 
 bool lower_wasm_source(
