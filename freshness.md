@@ -6,7 +6,7 @@ An asterisk marks a result at least 10 commits behind main, or outside its histo
 
 | Workload | Host | CPU | Measured commit | Commit date (UTC) | Age | Results |
 |---|---|---|---|---|---|---|
-| Public programs | EPYC | AMD EPYC 9V74 80-Core Processor | [`7697b5524`](https://github.com/thinkoid/cppgm/commit/7697b5524a9b033f6a1350581507ee478d068097) | 2026-11-19T15:11:18Z | 12 commits | [Results](epyc/report.md) |
+| Public programs | EPYC | AMD EPYC 9V45 96-Core Processor | [`94aaecc52`](https://github.com/thinkoid/cppgm/commit/94aaecc52ac26996bd3d654522334e3c28c68457) | 2026-11-20T00:32:00Z | 0 commits | [Results](epyc/report.md) |
 | cppgm | EPYC | AMD EPYC 9V74 80-Core Processor | [`6ddc5326a`](https://github.com/thinkoid/cppgm/commit/6ddc5326a8c4d8752e1d92ecedf5228df07a50e8) | 2026-11-19T18:46:24Z | 7 commits | [Results](epyc/self-build.md) |
 | index-cpp | EPYC | AMD EPYC 9V74 80-Core Processor | [`94aaecc52`](https://github.com/thinkoid/cppgm/commit/94aaecc52ac26996bd3d654522334e3c28c68457) | 2026-11-20T00:32:00Z | 0 commits | [Results](index-cpp/epyc/report.md) |
 | simdjson | EPYC | AMD EPYC 9V74 80-Core Processor | [`94aaecc52`](https://github.com/thinkoid/cppgm/commit/94aaecc52ac26996bd3d654522334e3c28c68457) | 2026-11-20T00:32:00Z | 0 commits | [Results](simdjson/epyc/report.md) |
@@ -33,6 +33,6 @@ An asterisk marks a result at least 10 commits behind main, or outside its histo
 | internal | CI Intel | Intel(R) Xeon(R) 6975P-C | [`94aaecc52`](https://github.com/thinkoid/cppgm/commit/94aaecc52ac26996bd3d654522334e3c28c68457) | 2026-11-20T00:32:00Z | 0 commits | [Results](internal/github-intel/report.md) |
 | wasm | CI Intel | Intel(R) Xeon(R) 6975P-C | [`94aaecc52`](https://github.com/thinkoid/cppgm/commit/94aaecc52ac26996bd3d654522334e3c28c68457) | 2026-11-20T00:32:00Z | 0 commits | [Results](wasm/github-intel/report.md) |
 | wasm-selfbuild | CI Intel | Intel(R) Xeon(R) 6975P-C | [`94aaecc52`](https://github.com/thinkoid/cppgm/commit/94aaecc52ac26996bd3d654522334e3c28c68457) | 2026-11-20T00:32:00Z | 0 commits | [Results](wasm-selfbuild/github-intel/report.md) |
-| Backend performance | x86-64 | AMD EPYC 9V74 80-Core Processor | [`7697b5524`](https://github.com/thinkoid/cppgm/commit/7697b5524a9b033f6a1350581507ee478d068097) | 2026-11-19T15:11:18Z | 12 commits | [Results](backend/x86_64-linux-gnu/report.md) |
+| Backend performance | x86-64 | AMD EPYC 9V45 96-Core Processor | [`94aaecc52`](https://github.com/thinkoid/cppgm/commit/94aaecc52ac26996bd3d654522334e3c28c68457) | 2026-11-20T00:32:00Z | 0 commits | [Results](backend/x86_64-linux-gnu/report.md) |
 | Backend performance | WASI | Intel(R) Xeon(R) 6975P-C | [`94aaecc52`](https://github.com/thinkoid/cppgm/commit/94aaecc52ac26996bd3d654522334e3c28c68457) | 2026-11-20T00:32:00Z | 0 commits | [Results](backend/wasm32-wasip1/report.md) |
 | Backend performance | Arm64 | aarch64 | [`c6ed61003`](https://github.com/thinkoid/cppgm/commit/c6ed610030ba933d83205fb17744340b2206efa7) | 2026-11-19T06:57:51Z | 22 commits | [Results](backend/aarch64-linux-gnu/report.md) |
