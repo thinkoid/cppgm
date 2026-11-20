@@ -1371,7 +1371,8 @@ int wasm_mode(const Invocation& invocation)
 	return EXIT_SUCCESS;
 }
 
-void preprocess_tokens(Preprocessor& preprocessor, const Invocation& invocation, PostTokenWriter& output)
+bool preprocess_tokens(
+	Preprocessor& preprocessor, const std::string& path, const Invocation& invocation, PostTokenWriter& output)
 {
 	// The stream types literals as the course's preprocessor does.
 	PostTokenizer tokens(preprocessor, nullptr,
@@ -1382,10 +1383,13 @@ void preprocess_tokens(Preprocessor& preprocessor, const Invocation& invocation,
 	{
 		const PostToken& token = tokens.next();
 		if (token.kind == PostTokenKind::Invalid)
-			throw PreprocessError(token.begin, "invalid phase-7 token");
+		{
+			std::cerr << "ERROR: " << path << ": invalid phase-7 token" << std::endl;
+			return false;
+		}
 		output.write(token);
 		if (token.kind == PostTokenKind::EndOfFile)
-			return;
+			return true;
 	}
 }
 
@@ -1410,8 +1414,8 @@ bool preprocess_unit(const std::string& input, const Invocation& invocation, std
 				}
 				preprocessor.dump_macros(out);
 			}
-			else
-				preprocess_tokens(preprocessor, invocation, output);
+			else if (!preprocess_tokens(preprocessor, path, invocation, output))
+				return false;
 			if (invocation.trace_includes)
 				preprocessor.trace_includes(std::cerr);
 			return true;
