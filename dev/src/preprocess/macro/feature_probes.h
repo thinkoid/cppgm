@@ -25,5 +25,5 @@ bool IsProvidedFeature(const char* spelling, uint32_t length, const FeatureModes
 
 // SD-6 feature-test macros for the selected language standard. These describe
 // this implementation, independently of the compiler that built it.
-std::string LanguageFeatureMacros(unsigned language);
+std::string LanguageFeatureMacros(const FeatureModes& modes);
 bool IsLanguageFeatureMacro(const char* spelling, uint32_t length);

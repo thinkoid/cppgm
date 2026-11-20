@@ -207,7 +207,7 @@ struct SourceOutputInvocation
 	// always preprocesses so; the object half's program is -c's, see
 	// run_emit_lowir_mode). `-I`, `-D` and `-U` as the driver takes them.
 	bool hosted = false;
-	bool nostdinc = false;
+	driver::StandardIncludes includes = driver::StandardIncludes::All;
 	string gcc_install_dir;
 	int plain_char_unsigned = -1;
 	bool popcnt = false;
@@ -387,11 +387,8 @@ SourceOutputInvocation parse_source_output_invocation(const vector<string>& args
 			continue;
 		}
 		const size_t option = i;
-		if (args[i] == "-nostdinc")
-		{
-			invocation.nostdinc = true;
+		if (driver::select_standard_includes(args[i], invocation.includes))
 			continue;
-		}
 		if (starts_with(args[i], "--gcc-install-dir="))
 		{
 			invocation.gcc_install_dir = args[i].substr(args[i].find('=') + 1);
@@ -528,7 +525,7 @@ bool consume_preprocess_option(const vector<string>& args, size_t& i)
 		consume_required_option_argument(args, i, "-include", "file");
 		return true;
 	}
-	if (args[i] == "-nostdinc" || starts_with(args[i], "--gcc-install-dir="))
+	if (args[i] == "-nostdinc" || args[i] == "-nostdinc++" || starts_with(args[i], "--gcc-install-dir="))
 	{
 		return true;
 	}
@@ -702,6 +699,8 @@ DriverInvocation parse_driver_invocation(const vector<string>& args)
 		{
 			continue;
 		}
+		if (args[i] == "-dM" || args[i] == "-H")
+			continue;
 		if (args[i] == "-E")
 		{
 			preprocess_only = true;
@@ -723,7 +722,7 @@ DriverInvocation parse_driver_invocation(const vector<string>& args)
 		{
 			continue;
 		}
-		if (starts_with(args[i], "-"))
+		if (args[i] != "-" && starts_with(args[i], "-"))
 		{
 			throw InvocationError("unsupported driver option: " + args[i]);
 		}
@@ -764,7 +763,8 @@ PreprocessorOptions source_preprocessor_options()
 void add_host_environment(PreprocessorOptions& options, const SourceOutputInvocation& invocation)
 {
 	string error;
-	if (!driver::add_host_environment(options, invocation.nostdinc || invocation.target != native::host_target(),
+	if (!driver::add_host_environment(options,
+			invocation.target == native::host_target() ? invocation.includes : driver::StandardIncludes::None,
 			invocation.gcc_install_dir, error))
 		throw InvocationError(error);
 }
@@ -794,13 +794,11 @@ PreprocessorOptions source_preprocessor_options(const SourceOutputInvocation& in
 		throw InvocationError("-matomics requires a Wasm target");
 	if (target_model::is_wasm(invocation.target))
 	{
-		if (!invocation.nostdinc)
-			driver::add_wasm_headers(options, invocation.sysroot, invocation.resource_directory);
+		driver::add_wasm_headers(options, invocation.sysroot, invocation.resource_directory, invocation.includes);
 	}
 	else if (target_model::is_aarch64(invocation.target))
 	{
-		if (!invocation.nostdinc)
-			driver::add_aarch64_headers(options, invocation.sysroot, invocation.resource_directory);
+		driver::add_aarch64_headers(options, invocation.sysroot, invocation.resource_directory, invocation.includes);
 	}
 	else if (!invocation.sysroot.empty() || !invocation.resource_directory.empty())
 		throw InvocationError("target header directories currently require a Wasm target");

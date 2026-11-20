@@ -104,3 +104,10 @@ void IdentifierTable::grow()
 		slots_[index] = identifier;
 	}
 }
+
+void IdentifierTable::current_macros(std::vector<const MacroDefinition*>& out) const
+{
+	for (const Identifier* identifier : slots_)
+		if (identifier != nullptr && identifier->macro != nullptr)
+			out.push_back(identifier->macro);
+}

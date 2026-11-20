@@ -5,14 +5,21 @@
 
 namespace driver {
 
+enum class StandardIncludes
+{
+	All,
+	COnly, // -nostdinc++
+	None   // -nostdinc
+};
+
+bool select_standard_includes(const std::string& arg, StandardIncludes& includes);
+
 // The hosted environment of cppgm's preprocess, compile and link modes
 // (PA26's hosted headers, PA30): the host C++ compiler's predefined macros
 // (gnu++11) and standard include directories, discovered once when cppgm
 // was built (dev/gen_builtin_host_config.pl) and baked in. Turns on
-// hosted mode, sets the builtin declarations and, unless `nostdinc`, appends the standard directories
-// after any -isystem ones. The host's macros announcing exceptions
-// (__EXCEPTIONS, __cpp_exceptions) and RTTI (__GXX_RTTI, __cpp_rtti) are
-// read only in the modes that have them (options.modes).
+// hosted mode, sets the builtin declarations, and appends the selected
+// standard directories after any -isystem ones.
 //
 // The standard directories are the build's when its C++ library directory
 // is on this system. Otherwise a build with GCC's headers takes GCC's and
@@ -27,7 +34,7 @@ namespace driver {
 //
 // False, with `error`, for a `gcc_install_dir` that cannot be used.
 bool add_host_environment(
-	PreprocessorOptions& options, bool nostdinc, const std::string& gcc_install_dir, std::string& error);
+	PreprocessorOptions& options, StandardIncludes includes, const std::string& gcc_install_dir, std::string& error);
 
 // The selected target's platform macros, including the native host target.
 // Foreign SDK paths must be explicit; baked host paths are not a foreign SDK.

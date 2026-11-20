@@ -1,6 +1,7 @@
 #include "preprocess/macro/macro_definition.h"
 
 #include <cstring>
+#include <ostream>
 
 #include "preprocess/preprocess_error.h"
 
@@ -32,6 +33,40 @@ private:
 };
 
 } // namespace
+
+void WriteMacroDefinition(std::ostream& out, const MacroDefinition& macro)
+{
+	if (macro.builtin != BuiltinMacro::None)
+		return;
+	out << "#define " << macro.name->spelling;
+	if (macro.function_like)
+	{
+		out << '(';
+		for (uint16_t i = 0; i < macro.parameter_count; ++i)
+		{
+			if (i != 0)
+				out << ',';
+			const char* parameter = macro.parameters[i]->spelling;
+			if (macro.variadic && i + 1 == macro.parameter_count)
+			{
+				if (std::strcmp(parameter, "__VA_ARGS__") != 0)
+					out << parameter;
+				out << "...";
+			}
+			else
+				out << parameter;
+		}
+		out << ')';
+	}
+	for (uint32_t i = 0; i < macro.body_size; ++i)
+	{
+		const PPToken& token = macro.body[i].token;
+		if (i == 0 || (token.flags & kLeadingSpace) != 0)
+			out.put(' ');
+		out.write(token.spelling, token.length);
+	}
+	out.put('\n');
+}
 
 bool SameDefinition(const MacroDefinition& a, const MacroDefinition& b)
 {

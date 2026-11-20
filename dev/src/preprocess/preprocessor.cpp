@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iterator>
 #include <sstream>
 
 #include "lex/text_literal.h"
@@ -30,7 +31,7 @@ void AppendQuoted(std::string& text, const std::string& contents)
 // The predefined macros with fixed values (directives.md), as #define
 // directives the translation unit reads first. __x86_64__ and __linux__
 // describe the target, as the course reference defines them.
-std::string PredefinedText(const PreprocessorOptions& options)
+std::string PredefinedText(const PreprocessorOptions& options, const FeatureModes& modes)
 {
 	std::string text = "#define __CPPGM__ 201303L\n";
 	if (options.assembler)
@@ -50,10 +51,16 @@ std::string PredefinedText(const PreprocessorOptions& options)
 	AppendQuoted(text, options.time);
 	text += "\n";
 	if (options.language != SourceLanguage::C)
-		text += LanguageFeatureMacros(options.cplusplus == "202002L" ? 20
-				: options.cplusplus == "201703L"                     ? 17
-				: options.cplusplus == "201402L"                     ? 14
-																	 : 11);
+	{
+		text += LanguageFeatureMacros(modes);
+		if (options.hosted && modes.exceptions)
+			text += "#define __EXCEPTIONS 1\n";
+		if (options.hosted && modes.rtti)
+			text += "#define __GXX_RTTI 1\n";
+	}
+	if (options.hosted)
+		text += "#define __FLT_EVAL_METHOD__ 0\n";
+
 	if (options.plain_char_unsigned)
 		text += "#define __CHAR_UNSIGNED__ 1\n";
 	if (options.popcnt)
@@ -106,7 +113,7 @@ bool Preprocessor::MacroQuery::is_defined(const char* spelling, uint32_t length)
 	return identifiers_.intern(spelling, length)->macro != nullptr;
 }
 
-Preprocessor::Preprocessor(const PreprocessorOptions& options, const std::string& path)
+Preprocessor::Preprocessor(const PreprocessorOptions& options, const std::string& path, std::istream* input)
 	: identifiers_(arena_, options.language, options.cplusplus == "202002L"), names_(identifiers_),
 	  source_(files_, identifiers_, arena_, names_, *this),
 	  expander_(arena_, identifiers_, names_, *this, macro_state_), directive_expander_(&expander_),
@@ -136,7 +143,9 @@ Preprocessor::Preprocessor(const PreprocessorOptions& options, const std::string
 	expander_.set_binary_exponents(exponents);
 	expander_.set_digit_separators(separators);
 	expander_.set_hosted_recursion(hosted_);
-	SourceFile* primary = files_.open(path);
+	SourceFile* primary = input == nullptr
+		? files_.open(path)
+		: files_.add_text(path, std::string(std::istreambuf_iterator<char>(*input), {}));
 	if (primary == nullptr)
 		throw PreprocessError(0, "cannot open the source file");
 	source_.enter(primary, path, 0);
@@ -155,7 +164,7 @@ Preprocessor::Preprocessor(const PreprocessorOptions& options, const std::string
 		builtin_begin_ = source_.current_inclusion().base;
 		builtin_end_ = builtin_begin_ + static_cast<uint32_t>(source_.current_inclusion().file->buffer().size()) + 1;
 	}
-	const std::string own = PredefinedText(options);
+	const std::string own = PredefinedText(options, modes_);
 	predefined_ = files_.add_text("<predefined>", own + options.host_predefines);
 	source_.enter(predefined_, "<predefined>", 0);
 	if (!options.host_predefines.empty())
@@ -174,6 +183,31 @@ Preprocessor::Preprocessor(const PreprocessorOptions& options, const std::string
 }
 
 Preprocessor::~Preprocessor() = default;
+
+void Preprocessor::dump_macros(std::ostream& out) const
+{
+	std::vector<const MacroDefinition*> macros;
+	identifiers_.current_macros(macros);
+	std::sort(macros.begin(), macros.end(), [](const MacroDefinition* a, const MacroDefinition* b) {
+		return std::strcmp(a->name->spelling, b->name->spelling) < 0;
+	});
+	for (const MacroDefinition* macro : macros)
+		WriteMacroDefinition(out, *macro);
+}
+
+void Preprocessor::trace_includes(std::ostream& out) const
+{
+	std::vector<size_t> depths(files_.inclusion_count());
+	for (uint32_t i = 0; i < depths.size(); ++i)
+	{
+		const SourceInclusion& inclusion = files_.inclusion(i);
+		if (inclusion.parent == kNoInclusion)
+			continue;
+		const size_t depth = depths[inclusion.parent] + 1;
+		depths[i] = depth;
+		out << std::string(depth, '.') << ' ' << inclusion.file->path() << '\n';
+	}
+}
 
 void Preprocessor::define_builtin_macros()
 {

@@ -15,10 +15,12 @@
 //
 // -E preprocesses each source in hosted mode into the PA4 preproc
 // stream (`preproc <n>`, then `sof`/posttoken/`eof` records per source).
+// -dM with -E writes the active macro definitions in source form. -H
+// with -E writes the header trace to standard error.
 //
 // Options: -c, -E, -o <file>, -I <dir>, -isystem <dir>, -D <name>[=<value>],
 // -U <name>, -L <dir>, -l <name> (each also joined), -include <file>,
-// -nostdinc, --gcc-install-dir=<dir> (the GCC installation whose headers
+// -nostdinc, -nostdinc++, --gcc-install-dir=<dir> (the GCC installation whose headers
 // are the standard ones), -x c++, --target <target> (or =),
 // --sysroot <dir>, -resource-dir <dir>, -nostartfiles, -nodefaultlibs and
 // -nostdlib (Wasm target headers and supplied runtime selection),

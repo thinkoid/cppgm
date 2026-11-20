@@ -16,6 +16,17 @@
 
 namespace driver {
 
+bool select_standard_includes(const std::string& arg, StandardIncludes& includes)
+{
+	if (arg == "-nostdinc")
+		includes = StandardIncludes::None;
+	else if (arg != "-nostdinc++")
+		return false;
+	else if (includes != StandardIncludes::None)
+		includes = StandardIncludes::COnly;
+	return true;
+}
+
 // GCC's include chain (cpplib's remove_duplicates): a directory named
 // twice is searched at its first position only, and an -I directory that
 // is also a system directory (-isystem or a standard one) is searched as
@@ -111,7 +122,7 @@ bool OwnMacro(const char* name, size_t length)
 		"__LINE__", "__CPPGM__", "__CPPGM_AUTHOR__", "__STDC__", "__STDC_VERSION__", "__CHAR_UNSIGNED__", "__POPCNT__",
 		"__OPTIMIZE__", "__OPTIMIZE_SIZE__", "__NO_INLINE__", "__PIC__", "__pic__", "__PIE__", "__pie__", "__CET__",
 		"__STDCPP_DEFAULT_NEW_ALIGNMENT__", "__cpp_aligned_new", "__cpp_deduction_guides", "__SSE__", "__SSE2__",
-		"__SSE3__", "__SSSE3__", "__SSE4_1__", "__SSE4_2__" };
+		"__SSE3__", "__SSSE3__", "__SSE4_1__", "__SSE4_2__", "__EXCEPTIONS", "__GXX_RTTI", "__FLT_EVAL_METHOD__" };
 	for (const char* own : kOwn)
 	{
 		if (std::strlen(own) == length && std::memcmp(own, name, length) == 0)
@@ -152,17 +163,11 @@ bool Named(const char* name, size_t length, const char* spelling)
 	return std::strlen(spelling) == length && std::memcmp(spelling, name, length) == 0;
 }
 
-// The host macros of a mode turned off: exceptions, RTTI.
-bool ModeMacro(const char* name, size_t length, const FeatureModes& modes)
+// A C translation unit has no C++ host macros.
+bool CxxMacro(const char* name, size_t length)
 {
-	if (modes.language == 0 &&
-		(Named(name, length, "__GNUG__") || Named(name, length, "__EXCEPTIONS") ||
-			(length >= 5 && std::memcmp(name, "__GXX", 5) == 0) ||
-			(length >= 6 && std::memcmp(name, "__cpp_", 6) == 0)))
-		return true;
-	if (!modes.exceptions && (Named(name, length, "__EXCEPTIONS") || Named(name, length, "__cpp_exceptions")))
-		return true;
-	return !modes.rtti && (Named(name, length, "__GXX_RTTI") || Named(name, length, "__cpp_rtti"));
+	return Named(name, length, "__GNUG__") || (length >= 5 && std::memcmp(name, "__GXX", 5) == 0) ||
+		(length >= 6 && std::memcmp(name, "__cpp_", 6) == 0);
 }
 
 // 16.8p4: an implementation's other predefined macro names begin with an
@@ -176,7 +181,7 @@ bool ReservedMacro(const char* name, size_t length)
 
 // The host's `-dM -E` output for the dialect (GNU, or the strict ISO
 // one's: __STRICT_ANSI__) without the definitions of unreserved,
-// OwnMacro, UnsupportedTypeMacro and ModeMacro names, plus __STDC__, which
+// OwnMacro, UnsupportedTypeMacro and C++-only names in C mode, plus __STDC__, which
 // GCC predefines without listing it. Language feature dates come from
 // the selected cppgm language mode, independently of the host probe.
 std::string HostMacroText(const FeatureModes& modes, bool strict)
@@ -199,7 +204,7 @@ std::string HostMacroText(const FeatureModes& modes, bool strict)
 				++name_end;
 			const size_t length = static_cast<size_t>(name_end - name);
 			if (ReservedMacro(name, length) && !OwnMacro(name, length) && !UnsupportedTypeMacro(name, length) &&
-				!ModeMacro(name, length, modes))
+				(modes.language != 0 || !CxxMacro(name, length)))
 			{
 				text.append(line, end);
 				text.push_back('\n');
@@ -321,9 +326,9 @@ struct GccInstallation
 		return IsDirectory(own) ? own : std::string();
 	}
 	// The compiler's own headers and the whole library are there.
-	bool usable() const
+	bool usable(bool c_only) const
 	{
-		return IsDirectory(directory + "/include") && IsDirectory(library()) && !target_library().empty();
+		return IsDirectory(directory + "/include") && (c_only || (IsDirectory(library()) && !target_library().empty()));
 	}
 };
 
@@ -400,7 +405,7 @@ std::string DefaultCompilerVersion()
 // The system's GCC installation for the build's architecture that has the
 // C++ library's headers: the one of /usr/bin/g++, else the newest. Only
 // directories are read; no program runs.
-bool FindInstallation(const GccInstallation& built, GccInstallation& found)
+bool FindInstallation(const GccInstallation& built, GccInstallation& found, bool c_only)
 {
 	const std::string architecture = built.triple.substr(0, built.triple.find('-') + 1);
 	const std::string wanted = DefaultCompilerVersion();
@@ -421,7 +426,7 @@ bool FindInstallation(const GccInstallation& built, GccInstallation& found)
 			{
 				GccInstallation candidate;
 				if (!IsVersion(version) || !ParseInstallation(roots[r] + "/" + triple + "/" + version, candidate) ||
-					!candidate.usable())
+					!candidate.usable(c_only))
 					continue;
 				const bool is_wanted = !wanted.empty() &&
 					(version == wanted || version.compare(0, wanted.size() + 1, wanted + ".") == 0);
@@ -442,15 +447,15 @@ bool FindInstallation(const GccInstallation& built, GccInstallation& found)
 // `use`'s, in GCC's order: the library's three, <installation>/include, and
 // <installation>/include-fixed (where there is one) after the first system
 // directory (/usr/local/include). The system directories stay.
-void InstallationDirectories(
-	const GccInstallation& built, const GccInstallation& use, std::vector<std::string>& directories)
+void InstallationDirectories(const GccInstallation& built, const GccInstallation& use, const char* const* paths,
+	std::vector<std::string>& directories)
 {
 	const std::string library = "/c++/" + built.version;
 	const std::string internal = built.directory + "/";
 	bool library_done = false;
 	bool internal_done = false;
 	bool fixed_done = false;
-	for (const char* const* path = cppgm_builtin_host_config::kStandardIncludePaths; *path != nullptr; ++path)
+	for (const char* const* path = paths; *path != nullptr; ++path)
 	{
 		const std::string directory = *path;
 		const size_t at = directory.find(library);
@@ -484,7 +489,7 @@ void InstallationDirectories(
 } // namespace
 
 bool add_host_environment(
-	PreprocessorOptions& options, bool nostdinc, const std::string& gcc_install_dir, std::string& error)
+	PreprocessorOptions& options, StandardIncludes includes, const std::string& gcc_install_dir, std::string& error)
 {
 	options.modes.language = options.language == SourceLanguage::C ? 0 : options.modes.language;
 	options.hosted = true;
@@ -496,8 +501,11 @@ bool add_host_environment(
 			"void* overflow_arg_area; void* reg_save_area; }; typedef struct __va_list_tag __builtin_va_list[1];\n";
 	else
 		options.builtin_declarations += builtin_template_declarations();
-	if (nostdinc)
+	if (includes == StandardIncludes::None)
 		return true;
+	const bool c_only = includes == StandardIncludes::COnly;
+	const char* const* paths = c_only ? cppgm_builtin_host_config::kCStandardIncludePaths
+									  : cppgm_builtin_host_config::kStandardIncludePaths;
 	GccInstallation built;
 	const bool gcc = BuiltInstallation(built);
 	const std::string library = BuiltLibrary();
@@ -508,23 +516,25 @@ bool add_host_environment(
 			error = "--gcc-install-dir needs a cppgm built with GCC's headers";
 		else if (!ParseInstallation(gcc_install_dir, named))
 			error = "not a GCC installation directory (<prefix>/lib/gcc/<triple>/<version>): " + gcc_install_dir;
-		else if (!named.usable())
-			error = "no C++ library headers for the GCC installation " + named.directory + " (" + named.library() + ")";
+		else if (!named.usable(c_only))
+			error = c_only
+				? "no builtin C headers for the GCC installation " + named.directory
+				: "no C++ library headers for the GCC installation " + named.directory + " (" + named.library() + ")";
 		if (!error.empty())
 			return false;
-		InstallationDirectories(built, named, options.system_include_paths);
+		InstallationDirectories(built, named, paths, options.system_include_paths);
 		return true;
 	}
-	const bool missing = !library.empty() && !IsDirectory(library);
+	const bool missing = c_only ? gcc && !built.usable(true) : !library.empty() && !IsDirectory(library);
 	GccInstallation found;
-	if (missing && gcc && FindInstallation(built, found))
+	if (missing && gcc && FindInstallation(built, found, c_only))
 	{
-		InstallationDirectories(built, found, options.system_include_paths);
+		InstallationDirectories(built, found, paths, options.system_include_paths);
 		return true;
 	}
-	for (const char* const* path = cppgm_builtin_host_config::kStandardIncludePaths; *path != nullptr; ++path)
+	for (const char* const* path = paths; *path != nullptr; ++path)
 		options.system_include_paths.push_back(*path);
-	if (missing)
+	if (missing && !c_only)
 		options.missing_headers_note = "note: the standard headers this cppgm was built with are not on this system: " +
 			library +
 			(gcc ? "\nnote: no GCC installation with C++ library headers was found; name one with "

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""cppgm's --gcc-install-dir: the standard directories of a named GCC installation."""
+"""Hosted header search and macro dump checks for the cppgm driver."""
 from pathlib import Path
 import subprocess
 import tempfile
@@ -70,6 +70,20 @@ class GccInstallDirTest(unittest.TestCase):
                                 stderr=subprocess.STDOUT)
         self.assertEqual(result.returncode, 0, result.stdout)
 
+    def test_c_only_with_a_named_installation(self):
+        directory = installation(self.work / 'gcc', False)
+        source = self.work / 'test.cpp'
+        source.write_text(
+            '#if __has_include(<library.h>) || __has_include(<backward.h>) || __has_include(<target.h>)\n'
+            '#error C++ standard include directory on the search path\n'
+            '#endif\n#include <internal.h>\n'
+        )
+        result = subprocess.run(
+            [str(COMPILER), '-E', '-nostdinc++', '--gcc-install-dir=' + str(directory), str(source)],
+            text=True, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_rejects_other_directories(self):
         directory = installation(self.work / 'gcc', False)
         result = compile_with(self.work, '--gcc-install-dir=' + str(self.work))
@@ -85,6 +99,41 @@ class GccInstallDirTest(unittest.TestCase):
         result = compile_with(self.work, '-nostdinc', '--gcc-install-dir=' + str(directory))
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('include file not found', result.stdout)
+
+
+@unittest.skipUnless(COMPILER.is_file(), 'build dev/cppgm first')
+class MacroDumpTest(unittest.TestCase):
+    def test_tracks_active_definitions_and_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            include = Path(directory) / 'nested.h'
+            include.write_text('#define INCLUDED 7\n')
+            source = ('#include <nested.h>\n#define APPLY(n, ...) n + __VA_ARGS__\n'
+                      '#define JOIN(first, rest...) first ## rest\n'
+                      '#undef REMOVED\n#undef __EXCEPTIONS\nint n;\n')
+            result = subprocess.run(
+                [str(COMPILER), '-dM', '-E', '-H', '-nostdinc', '-DREMOVED',
+                 '-isystem', directory, '-x', 'c++', '-'],
+                input=source, text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            definitions = result.stdout.splitlines()
+            self.assertIn('#define INCLUDED 7', definitions)
+            self.assertIn('#define APPLY(n,...) n + __VA_ARGS__', definitions)
+            self.assertIn('#define JOIN(first,rest...) first ## rest', definitions)
+            self.assertIn('#define __cplusplus 201103L', definitions)
+            self.assertNotIn('#define REMOVED 1', definitions)
+            self.assertNotIn('#define __EXCEPTIONS 1', definitions)
+            self.assertTrue(all(line.startswith('#define ') for line in definitions))
+            self.assertEqual(result.stderr.splitlines(), [f'. {include}'])
+
+    def test_arm_c_does_not_advertise_cxx_features(self):
+        result = subprocess.run(
+            [str(COMPILER), '--target=aarch64-linux-gnu', '-dM', '-E', '-x', 'c', '-'],
+            input='', text=True, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('#define __FLT_EVAL_METHOD__ 0\n', result.stdout)
+        self.assertNotRegex(result.stdout, r'#define __(?:GNUG__|GXX_RTTI|EXCEPTIONS|cpp_)')
 
 
 if __name__ == '__main__':

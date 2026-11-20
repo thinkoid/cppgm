@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <iosfwd>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -125,10 +126,17 @@ class Preprocessor final : public PPTokenCursor,
 						   private SourceFrameObserver
 {
 public:
-	Preprocessor(const PreprocessorOptions& options, const std::string& path);
+	Preprocessor(const PreprocessorOptions& options, const std::string& path, std::istream* input = nullptr);
 	~Preprocessor();
 
 	const PPToken& next() override;
+
+	// After consuming the entire translation unit, write its active
+	// fixed macros including definitions read in included headers.
+	void dump_macros(std::ostream& out) const;
+
+	// The headers entered during preprocessing, with one dot per level.
+	void trace_includes(std::ostream& out) const;
 
 	// `file:line:column: message` for an error from this translation unit:
 	// the presumed file name and line at its location (16.4), its 1-based

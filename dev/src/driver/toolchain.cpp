@@ -148,6 +148,8 @@ struct Invocation
 	// -ffunction-sections: each function in a section of its own.
 	bool function_sections = false;
 	bool preprocess_only = false;
+	bool dump_macros = false;
+	bool trace_includes = false;
 	// -fsyntax-only: each source analyzed, nothing lowered or written.
 	bool syntax_only = false;
 	bool ignore_narrowing = false;
@@ -287,7 +289,7 @@ bool accepted_flag(const std::string& arg)
 		arg == "-MMD" || arg == "-MD" || arg == "-MP";
 }
 
-void configure_target_runtime(Invocation& invocation, bool nostdinc)
+void configure_target_runtime(Invocation& invocation, StandardIncludes includes)
 {
 	configure_target_environment(invocation.preprocessor, invocation.target);
 	invocation.optimizer.has_gnu_sincos = target_model::has_gnu_sincos(invocation.target);
@@ -298,16 +300,14 @@ void configure_target_runtime(Invocation& invocation, bool nostdinc)
 	{
 		if (invocation.wasm_atomics)
 			invocation.preprocessor.command_line.insert(0, "#define __wasm_atomics__ 1\n");
-		if (!nostdinc)
-			add_wasm_headers(invocation.preprocessor, invocation.sysroot, invocation.resource_directory);
+		add_wasm_headers(invocation.preprocessor, invocation.sysroot, invocation.resource_directory, includes);
 		if (!invocation.sysroot.empty())
 			invocation.library_paths.push_back(invocation.sysroot + "/lib/wasm32-wasip1");
 	}
 	else if (target_model::is_aarch64(invocation.target) && !invocation.wasm_link.requested() &&
 		invocation.wasm_stack_size == 0 && !invocation.wasm_atomics_explicit)
 	{
-		if (!nostdinc)
-			add_aarch64_headers(invocation.preprocessor, invocation.sysroot, invocation.resource_directory);
+		add_aarch64_headers(invocation.preprocessor, invocation.sysroot, invocation.resource_directory, includes);
 	}
 	else if (!invocation.sysroot.empty() || !invocation.resource_directory.empty() ||
 		invocation.no_standard_libraries || invocation.no_startfiles || invocation.wasm_stack_size != 0 ||
@@ -377,6 +377,25 @@ void configure_mode_macros(Invocation& invocation, bool optimize_size, unsigned 
 	invocation.preprocessor.command_line.insert(0, mode_macros);
 }
 
+void configure_preprocessor(Invocation& invocation, StandardIncludes includes, const std::string& gcc_install_dir)
+{
+	if (!invocation.preprocess_only && (invocation.dump_macros || invocation.trace_includes))
+		throw InvocationError("-dM and -H require -E");
+	for (const Input& input : invocation.inputs)
+		if (input.name == "-" && !invocation.preprocess_only)
+			throw InvocationError("standard input requires -E");
+	configure_source_language(invocation.source_language, invocation.standard, invocation.preprocessor);
+	std::string host_error;
+	if (!add_host_environment(invocation.preprocessor,
+			invocation.target == native::host_target() ? includes : StandardIncludes::None, gcc_install_dir,
+			host_error))
+		throw InvocationError(host_error);
+	configure_target_runtime(invocation, includes);
+	prune_include_paths(invocation.preprocessor);
+	if (invocation.preprocess_only)
+		invocation.preprocessor.builtin_declarations.clear();
+}
+
 Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions& base)
 {
 	Invocation invocation;
@@ -384,7 +403,7 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 	std::string value;
 	std::string forced_includes;
 	std::string gcc_install_dir;
-	bool nostdinc = false;
+	StandardIncludes includes = StandardIncludes::All;
 	bool pthread = false;
 	bool default_lto = false;
 	bool optimize_size = false, popcnt_explicit = false, char_signedness_explicit = false;
@@ -430,8 +449,12 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 		}
 		else if (arg == "-E")
 			invocation.preprocess_only = true;
-		else if (arg == "-nostdinc")
-			nostdinc = true;
+		else if (arg == "-dM")
+			invocation.dump_macros = true;
+		else if (arg == "-H")
+			invocation.trace_includes = true;
+		else if (select_standard_includes(arg, includes))
+			continue;
 		else if (starts_with(arg, "--gcc-install-dir="))
 			gcc_install_dir = arg.substr(arg.find('=') + 1);
 		else if (starts_with(arg, "-Wl,-z,stack-size="))
@@ -585,7 +608,7 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 			throw InvocationError("unsupported option (it changes the program's meaning): " + arg);
 		else if (accepted_flag(arg))
 			continue;
-		else if (starts_with(arg, "-"))
+		else if (arg != "-" && starts_with(arg, "-"))
 			throw InvocationError("unsupported option: " + arg);
 		else
 			invocation.inputs.push_back(source_input(arg));
@@ -613,15 +636,7 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 	// Preprocessing still observes GCC's __OPTIMIZE__ for -Og.
 	if (invocation.debug_optimization && invocation.debug_types)
 		invocation.optimizer.level = 0;
-	configure_source_language(invocation.source_language, invocation.standard, invocation.preprocessor);
-	std::string host_error;
-	if (!add_host_environment(invocation.preprocessor, nostdinc || invocation.target != native::host_target(),
-			gcc_install_dir, host_error))
-		throw InvocationError(host_error);
-	configure_target_runtime(invocation, nostdinc);
-	prune_include_paths(invocation.preprocessor);
-	if (invocation.preprocess_only)
-		invocation.preprocessor.builtin_declarations.clear();
+	configure_preprocessor(invocation, includes, gcc_install_dir);
 	return invocation;
 }
 
@@ -1356,31 +1371,50 @@ int wasm_mode(const Invocation& invocation)
 	return EXIT_SUCCESS;
 }
 
-bool preprocess_unit(const std::string& path, const Invocation& invocation, PostTokenWriter& output)
+void preprocess_tokens(Preprocessor& preprocessor, const Invocation& invocation, PostTokenWriter& output)
 {
-	output.write_line("sof " + path);
+	// The stream types literals as the course's preprocessor does.
+	PostTokenizer tokens(preprocessor, nullptr,
+		invocation.preprocessor.literals == NumberDialect::Gnu ? NumberDialect::GnuStream
+															   : invocation.preprocessor.literals,
+		invocation.target, invocation.preprocessor.gnu_c());
+	for (;;)
+	{
+		const PostToken& token = tokens.next();
+		if (token.kind == PostTokenKind::Invalid)
+			throw PreprocessError(token.begin, "invalid phase-7 token");
+		output.write(token);
+		if (token.kind == PostTokenKind::EndOfFile)
+			return;
+	}
+}
+
+bool preprocess_unit(const std::string& input, const Invocation& invocation, std::ostream& out, PostTokenWriter& output)
+{
+	const std::string path = input == "-" ? "<stdin>" : input;
+	if (!invocation.dump_macros)
+		output.write_line("sof " + path);
 	try
 	{
-		Preprocessor preprocessor(invocation.preprocessor, path);
+		std::ifstream empty;
+		if (input == "/dev/null")
+			empty.open(input);
+		std::istream* stream = input == "-" ? &std::cin : empty.is_open() ? &empty : nullptr;
+		Preprocessor preprocessor(invocation.preprocessor, path, stream);
 		try
 		{
-			// The stream types literals as the course's preprocessor does.
-			PostTokenizer tokens(preprocessor, nullptr,
-				invocation.preprocessor.literals == NumberDialect::Gnu ? NumberDialect::GnuStream
-																	   : invocation.preprocessor.literals,
-				invocation.target, invocation.preprocessor.gnu_c());
-			for (;;)
+			if (invocation.dump_macros)
 			{
-				const PostToken& token = tokens.next();
-				if (token.kind == PostTokenKind::Invalid)
+				while (preprocessor.next().kind != PPTokenKind::EndOfFile)
 				{
-					std::cerr << "ERROR: " << path << ": invalid phase-7 token" << std::endl;
-					return false;
 				}
-				output.write(token);
-				if (token.kind == PostTokenKind::EndOfFile)
-					return true;
+				preprocessor.dump_macros(out);
 			}
+			else
+				preprocess_tokens(preprocessor, invocation, output);
+			if (invocation.trace_includes)
+				preprocessor.trace_includes(std::cerr);
+			return true;
 		}
 		catch (const PreprocessError& e)
 		{
@@ -1422,10 +1456,11 @@ int preprocess_mode(const Invocation& invocation)
 	}
 	std::ostream& out = invocation.output.empty() ? std::cout : file;
 	PostTokenWriter output(out);
-	output.write_line("preproc " + std::to_string(sources.size()));
+	if (!invocation.dump_macros)
+		output.write_line("preproc " + std::to_string(sources.size()));
 	for (const std::string& source : sources)
 	{
-		if (!preprocess_unit(source, invocation, output))
+		if (!preprocess_unit(source, invocation, out, output))
 			return EXIT_FAILURE;
 	}
 	output.flush();

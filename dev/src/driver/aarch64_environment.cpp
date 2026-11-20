@@ -1,7 +1,6 @@
 #include "driver/aarch64_environment.h"
 
 #include "driver/binary128_predefines.h"
-#include "driver/host_environment.h"
 
 namespace driver {
 
@@ -63,21 +62,23 @@ void configure_aarch64_environment(PreprocessorOptions& options)
 			"#define __INT64_TYPE__ long int\n#define __UINT64_TYPE__ long unsigned int\n";
 		macros += kBinary128NumericPredefines;
 		if (options.language != SourceLanguage::C)
-			macros += "#define _GNU_SOURCE 1\n#define __GXX_WEAK__ 1\n";
+			macros += "#define _GNU_SOURCE 1\n#define __GNUG__ 4\n#define __GXX_WEAK__ 1\n";
 	}
 	options.command_line.insert(0, macros);
 }
 
-void add_aarch64_headers(
-	PreprocessorOptions& options, const std::string& sysroot, const std::string& resource_directory)
+void add_aarch64_headers(PreprocessorOptions& options, const std::string& sysroot,
+	const std::string& resource_directory, StandardIncludes includes)
 {
+	if (includes == StandardIncludes::None)
+		return;
 	if (!resource_directory.empty())
 		options.system_include_paths.push_back(resource_directory + "/include");
 	if (!sysroot.empty())
 	{
 		if (target_model::is_darwin(options.target))
 		{
-			if (options.language != SourceLanguage::C)
+			if (includes == StandardIncludes::All && options.language != SourceLanguage::C)
 				options.system_include_paths.push_back(sysroot + "/usr/include/c++/v1");
 		}
 		else

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <iosfwd>
 #include <vector>
 
 #include "lex/identifier_table.h"
@@ -92,6 +93,10 @@ struct MacroDefinition
 	bool variadic;
 	BuiltinMacro builtin;
 };
+
+// Writes the stored source definition for -dM. Dynamic builtin macros have
+// no source replacement list and are omitted.
+void WriteMacroDefinition(std::ostream& out, const MacroDefinition& macro);
 
 // Whether a redefinition is allowed: same form, parameters and replacement
 // list, where white-space separations compare equal ([cpp.replace] 16.3p2).

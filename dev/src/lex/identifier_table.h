@@ -56,6 +56,7 @@ public:
 
 	uint32_t size() const { return count_; }
 	SourceLanguage language() const { return language_; }
+	void current_macros(std::vector<const MacroDefinition*>& out) const;
 
 private:
 	void grow();

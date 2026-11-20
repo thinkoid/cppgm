@@ -1,13 +1,15 @@
 #include "driver/wasm_environment.h"
 
-#include "driver/host_environment.h"
 #include "driver/binary128_predefines.h"
 
 namespace driver {
 
-void add_wasm_headers(PreprocessorOptions& options, const std::string& sysroot, const std::string& resource_directory)
+void add_wasm_headers(PreprocessorOptions& options, const std::string& sysroot, const std::string& resource_directory,
+	StandardIncludes includes)
 {
-	if (!sysroot.empty() && options.language != SourceLanguage::C)
+	if (includes == StandardIncludes::None)
+		return;
+	if (includes == StandardIncludes::All && !sysroot.empty() && options.language != SourceLanguage::C)
 	{
 		if (options.target != target_model::Target::Emscripten)
 		{
