@@ -2519,7 +2519,17 @@ ir_model::SymbolVisibility ProgramLowering::function_visibility(const sema::Func
 	const bool emitted = function->defined && !function->extern_instantiation;
 	if (visibility_inlines_hidden_ && !analyzer_->c_source() && function->is_inline && emitted &&
 		!function->explicit_instantiation)
-		return ir_model::SV_HIDDEN;
+	{
+		// An extern template declaration of the class makes its inline
+		// methods part of the explicit instantiation's shared-library ABI.
+		// A hidden weak copy here would hide that library's public copy.
+		const sema::ClassEntity* owner = function->owner != nullptr && function->owner->kind == sema::ScopeKind::Class
+			? static_cast<const sema::ClassEntity*>(function->owner->entity)
+			: nullptr;
+		const sema::ClassTemplateFacts* facts = owner != nullptr ? owner->templ : nullptr;
+		if (facts == nullptr || (!facts->extern_instantiation && !facts->explicit_instantiation))
+			return ir_model::SV_HIDDEN;
+	}
 	if (const auto* attributes = enclosing_visibility(function->owner))
 		return attributes->visibility;
 	// Imports and the replaceable global allocation functions retain

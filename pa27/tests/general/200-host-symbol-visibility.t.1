@@ -25,9 +25,15 @@ template<> struct __attribute__((visibility("default"))) Variant<long> {
 };
 int Variant<long>::value() { return 9; }
 
+template<class T> struct Shared {
+    static int inline_value() { return 10; }
+};
+extern template struct __attribute__((visibility("default"))) Shared<int>;
+
 int (*volatile used_inline)() = hidden_inline;
 int (*volatile used_exported_inline)() = exported_inline;
 int main() {
     return exported_fun() + internal_fun() + used_inline() + used_exported_inline() + API{}.out_of_line()
-         + ordinary_value + protected_value + Variant<int>::value() + Variant<long>::value() != 45;
+         + ordinary_value + protected_value + Variant<int>::value() + Variant<long>::value()
+         + Shared<int>::inline_value() != 55;
 }
