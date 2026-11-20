@@ -12,6 +12,7 @@
 
 #include "abi/itanium/abi_encoding_error.h"
 #include "driver/host_environment.h"
+#include "driver/make_dependencies.h"
 #include "driver/native_assembly.h"
 #include "driver/aarch64_environment.h"
 #include "aarch64/backend.h"
@@ -150,6 +151,7 @@ struct Invocation
 	bool preprocess_only = false;
 	bool dump_macros = false;
 	bool trace_includes = false;
+	MakeDependencies dependencies;
 	// -fsyntax-only: each source analyzed, nothing lowered or written.
 	bool syntax_only = false;
 	bool ignore_narrowing = false;
@@ -285,8 +287,35 @@ bool refused_flag(const std::string& arg)
 bool accepted_flag(const std::string& arg)
 {
 	return starts_with(arg, "-O") || starts_with(arg, "-g") || starts_with(arg, "-W") || starts_with(arg, "-f") ||
-		starts_with(arg, "-m") || arg == "-pedantic" || arg == "-pedantic-errors" || arg == "-w" || arg == "-pipe" ||
-		arg == "-MMD" || arg == "-MD" || arg == "-MP";
+		starts_with(arg, "-m") || arg == "-pedantic" || arg == "-pedantic-errors" || arg == "-w" || arg == "-pipe";
+}
+
+bool parse_dependency_option(const std::vector<std::string>& args, size_t& i, MakeDependencies& options)
+{
+	const std::string& arg = args[i];
+	if (arg == "-M" || arg == "-MM" || arg == "-MD" || arg == "-MMD")
+	{
+		options.mode = arg == "-M" || arg == "-MM" ? MakeDependencies::Mode::Only : MakeDependencies::Mode::SideFile;
+		options.include_system = arg == "-M" || arg == "-MD";
+	}
+	else if (arg == "-MP")
+		options.phony = true;
+	else if (option_value(args, i, "-MF", options.file))
+	{
+		if (options.file.empty())
+			throw InvocationError("missing dependency output file after -MF");
+	}
+	else
+	{
+		std::string target;
+		const bool quoted = option_value(args, i, "-MQ", target);
+		if (!quoted && !option_value(args, i, "-MT", target))
+			return false;
+		if (target.empty())
+			throw InvocationError("empty dependency target");
+		options.targets.push_back(quoted ? quote_make_name(target) : std::move(target));
+	}
+	return true;
 }
 
 void configure_target_runtime(Invocation& invocation, StandardIncludes includes)
@@ -379,10 +408,12 @@ void configure_mode_macros(Invocation& invocation, bool optimize_size, unsigned 
 
 void configure_preprocessor(Invocation& invocation, StandardIncludes includes, const std::string& gcc_install_dir)
 {
-	if (!invocation.preprocess_only && (invocation.dump_macros || invocation.trace_includes))
+	const bool preprocess_only = invocation.preprocess_only ||
+		invocation.dependencies.mode == MakeDependencies::Mode::Only;
+	if (!preprocess_only && (invocation.dump_macros || invocation.trace_includes))
 		throw InvocationError("-dM and -H require -E");
 	for (const Input& input : invocation.inputs)
-		if (input.name == "-" && !invocation.preprocess_only)
+		if (input.name == "-" && !preprocess_only)
 			throw InvocationError("standard input requires -E");
 	configure_source_language(invocation.source_language, invocation.standard, invocation.preprocessor);
 	std::string host_error;
@@ -392,7 +423,7 @@ void configure_preprocessor(Invocation& invocation, StandardIncludes includes, c
 		throw InvocationError(host_error);
 	configure_target_runtime(invocation, includes);
 	prune_include_paths(invocation.preprocessor);
-	if (invocation.preprocess_only)
+	if (preprocess_only)
 		invocation.preprocessor.builtin_declarations.clear();
 }
 
@@ -601,8 +632,7 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 			invocation.library_paths.push_back(value);
 		else if (option_value(args, i, "-l", value))
 			invocation.inputs.push_back(Input{ Input::Kind::Library, value });
-		else if (option_value(args, i, "-MF", value) || option_value(args, i, "-MT", value) ||
-			option_value(args, i, "-MQ", value))
+		else if (parse_dependency_option(args, i, invocation.dependencies))
 			continue;
 		else if (refused_flag(arg))
 			throw InvocationError("unsupported option (it changes the program's meaning): " + arg);
@@ -621,6 +651,10 @@ Invocation parse(const std::vector<std::string>& args, const PreprocessorOptions
 	if (invocation.inputs.empty())
 		throw InvocationError("no input files");
 	lowir_output(invocation, assembly_output);
+	const MakeDependencies& dependencies = invocation.dependencies;
+	if (dependencies.mode == MakeDependencies::Mode::None &&
+		(dependencies.phony || !dependencies.file.empty() || !dependencies.targets.empty()))
+		throw InvocationError("-MF, -MT, -MQ and -MP require a dependency generation mode");
 	// GCC's -pthread defines _REENTRANT ahead of every -D and -U wherever
 	// it is written (the host link adds the thread library; link mode's
 	// runtime needs nothing).
@@ -730,6 +764,9 @@ void optimize_unit(lowir::Program& program, const Invocation& invocation, native
 		native::recover_jump_thunks(program, eh_model);
 }
 
+void write_side_dependencies(
+	const Invocation& invocation, const std::string& path, const std::vector<std::string>& headers);
+
 bool lower_source(const std::string& path, const Invocation& invocation, lower::ProgramLowering& lowering,
 	UnitWork& work, double& front_ms, std::chrono::steady_clock::time_point start)
 {
@@ -755,6 +792,9 @@ bool lower_source(const std::string& path, const Invocation& invocation, lower::
 		try
 		{
 			analyzer.analyze(unit.tree());
+			if (invocation.dependencies.mode == MakeDependencies::Mode::SideFile)
+				write_side_dependencies(
+					invocation, path, unit.dependency_headers(invocation.dependencies.include_system));
 			front_ms += milliseconds_since(start);
 			if (invocation.syntax_only)
 				return true;
@@ -987,6 +1027,43 @@ std::string output_name(const std::string& source, const char* suffix)
 	if (dot != std::string::npos && dot != 0)
 		name.erase(dot);
 	return name + suffix;
+}
+
+void write_side_dependencies(
+	const Invocation& invocation, const std::string& path, const std::vector<std::string>& headers)
+{
+	const MakeDependencies& options = invocation.dependencies;
+	const std::string source = path == "-" ? "<stdin>" : path;
+	const std::string default_target = output_name(source, invocation.emit_lowir ? ".lowir" : ".o");
+	const std::string& output = invocation.output;
+	const std::string& target = output.empty() || invocation.preprocess_only ? default_target : output;
+	std::string file = options.file;
+	if (file.empty())
+	{
+		if (output.empty())
+			file = output_name(source, ".d");
+		else
+		{
+			const size_t slash = output.rfind('/');
+			const size_t prefix = slash == std::string::npos ? 0 : slash + 1;
+			file = output.substr(0, prefix) + output_name(output, ".d");
+		}
+	}
+	if (file == "-")
+	{
+		write_make_rule(std::cout, options, target, source, headers);
+		if (!std::cout)
+			throw InputOutputError("cannot write dependencies to standard output");
+		return;
+	}
+	if (file == output || (!invocation.preprocess_only && file == target))
+		throw InvocationError("dependency file is the same as the primary output");
+	check_output(invocation, file);
+	std::ofstream stream(file);
+	write_make_rule(stream, options, target, source, headers);
+	stream.close();
+	if (!stream)
+		throw InputOutputError("cannot write " + file);
 }
 
 // -c's output for an input, or -S -emit-lowir's (<input>.lowir).
@@ -1393,10 +1470,13 @@ bool preprocess_tokens(
 	}
 }
 
-bool preprocess_unit(const std::string& input, const Invocation& invocation, std::ostream& out, PostTokenWriter& output)
+bool preprocess_unit(const Input& source, const Invocation& invocation, std::ostream& out, PostTokenWriter& output)
 {
+	const std::string& input = source.name;
 	const std::string path = input == "-" ? "<stdin>" : input;
-	if (!invocation.dump_macros)
+	const MakeDependencies& dependencies = invocation.dependencies;
+	const bool only_dependencies = dependencies.mode == MakeDependencies::Mode::Only;
+	if (!only_dependencies && !invocation.dump_macros)
 		output.write_line("sof " + path);
 	try
 	{
@@ -1404,20 +1484,36 @@ bool preprocess_unit(const std::string& input, const Invocation& invocation, std
 		if (input == "/dev/null")
 			empty.open(input);
 		std::istream* stream = input == "-" ? &std::cin : empty.is_open() ? &empty : nullptr;
-		Preprocessor preprocessor(invocation.preprocessor, path, stream);
+		PreprocessorOptions assembly_options;
+		if (source.kind == Input::Kind::Assembly)
+		{
+			assembly_options = invocation.preprocessor;
+			assembly_options.assembler = true;
+			assembly_options.language = SourceLanguage::C;
+			assembly_options.cplusplus.clear();
+		}
+		Preprocessor preprocessor(
+			source.kind == Input::Kind::Assembly ? assembly_options : invocation.preprocessor, path, stream);
 		try
 		{
-			if (invocation.dump_macros)
+			if (only_dependencies || invocation.dump_macros)
 			{
 				while (preprocessor.next().kind != PPTokenKind::EndOfFile)
 				{
 				}
-				preprocessor.dump_macros(out);
+				if (only_dependencies)
+					write_make_rule(out, dependencies, output_name(path, ".o"), path,
+						preprocessor.dependency_headers(dependencies.include_system));
+				else
+					preprocessor.dump_macros(out);
 			}
 			else if (!preprocess_tokens(preprocessor, path, invocation, output))
 				return false;
 			if (invocation.trace_includes)
 				preprocessor.trace_includes(std::cerr);
+			if (dependencies.mode == MakeDependencies::Mode::SideFile)
+				write_side_dependencies(
+					invocation, input, preprocessor.dependency_headers(dependencies.include_system));
 			return true;
 		}
 		catch (const PreprocessError& e)
@@ -1436,37 +1532,38 @@ bool preprocess_unit(const std::string& input, const Invocation& invocation, std
 	return false;
 }
 
-// -E: the PA4 preproc stream of every source, to the -o file or standard
-// output; libraries and objects are link inputs.
+// -E: the PA4 preproc stream of every source. -M/-MM: make rules in
+// dependency order. Each mode can direct its output to a file.
 int preprocess_mode(const Invocation& invocation)
 {
-	std::vector<std::string> sources;
+	const MakeDependencies& dependencies = invocation.dependencies;
+	const bool only_dependencies = dependencies.mode == MakeDependencies::Mode::Only;
+	const std::string& path = only_dependencies && !dependencies.file.empty() ? dependencies.file : invocation.output;
+	std::vector<const Input*> sources;
 	for (const Input& input : invocation.inputs)
 	{
-		if (input.kind == Input::Kind::Object || input.kind == Input::Kind::LowIR)
-			throw InvocationError("-E needs C++ source inputs: " + input.name);
-		if (input.kind == Input::Kind::Source)
-			sources.push_back(input.name);
+		if (input.kind == Input::Kind::Source || (only_dependencies && input.kind == Input::Kind::Assembly))
+			sources.push_back(&input);
+		else if (only_dependencies || input.kind != Input::Kind::Library)
+			throw InvocationError("preprocessing requires source inputs: " + input.name);
 	}
-	if (sources.size() != 1 && !invocation.output.empty())
+	if (!only_dependencies && sources.size() != 1 && !path.empty())
 		throw InvocationError("cannot specify -o with -E and several inputs");
 	std::ofstream file;
-	if (!invocation.output.empty())
+	if (!path.empty() && (!only_dependencies || path != "-"))
 	{
-		check_output(invocation, invocation.output);
-		file.open(invocation.output, std::ios::binary);
+		check_output(invocation, path);
+		file.open(path, std::ios::binary);
 		if (!file)
-			throw InputOutputError("cannot write " + invocation.output);
+			throw InputOutputError("cannot write " + path);
 	}
-	std::ostream& out = invocation.output.empty() ? std::cout : file;
+	std::ostream& out = file.is_open() ? file : std::cout;
 	PostTokenWriter output(out);
-	if (!invocation.dump_macros)
+	if (!only_dependencies && !invocation.dump_macros)
 		output.write_line("preproc " + std::to_string(sources.size()));
-	for (const std::string& source : sources)
-	{
-		if (!preprocess_unit(source, invocation, out, output))
+	for (const Input* source : sources)
+		if (!preprocess_unit(*source, invocation, out, output))
 			return EXIT_FAILURE;
-	}
 	output.flush();
 	out.flush();
 	return out ? EXIT_SUCCESS : EXIT_FAILURE;
@@ -1495,6 +1592,8 @@ int debug_type_request(const std::string& arg)
 int run_toolchain(const std::vector<std::string>& args, const PreprocessorOptions& base)
 {
 	const Invocation invocation = parse(args, base);
+	if (invocation.dependencies.mode == MakeDependencies::Mode::Only)
+		return preprocess_mode(invocation);
 	const bool wasm_target = target_model::is_wasm(invocation.target);
 	if (invocation.whole_source_lto)
 	{

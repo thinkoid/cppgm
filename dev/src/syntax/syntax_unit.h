@@ -34,6 +34,10 @@ public:
 	IdentifierTable& identifiers() { return preprocessor_.identifiers(); }
 	// The presumed file and line of tree locations.
 	const SourcePositions& positions() const { return preprocessor_; }
+	std::vector<std::string> dependency_headers(bool include_system) const
+	{
+		return preprocessor_.dependency_headers(include_system);
+	}
 	// A diagnostic at a tree location, with its source position.
 	std::string describe(uint32_t location, const char* message) const
 	{

@@ -138,6 +138,10 @@ public:
 	// The headers entered during preprocessing, with one dot per level.
 	void trace_includes(std::ostream& out) const;
 
+	// Physical header paths in include order, once per path. The
+	// user-only form omits system headers and all their descendants.
+	std::vector<std::string> dependency_headers(bool include_system) const;
+
 	// `file:line:column: message` for an error from this translation unit:
 	// the presumed file name and line at its location (16.4), its 1-based
 	// byte column, and then for each file that included the location,

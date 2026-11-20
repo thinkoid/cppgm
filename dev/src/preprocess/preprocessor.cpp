@@ -209,6 +209,24 @@ void Preprocessor::trace_includes(std::ostream& out) const
 	}
 }
 
+std::vector<std::string> Preprocessor::dependency_headers(bool include_system) const
+{
+	std::vector<std::string> headers;
+	std::unordered_set<std::string> seen;
+	std::vector<bool> system(files_.inclusion_count());
+	for (uint32_t i = 0; i < system.size(); ++i)
+	{
+		const SourceInclusion& inclusion = files_.inclusion(i);
+		if (inclusion.parent == kNoInclusion)
+			continue;
+		system[i] = inclusion.system || system[inclusion.parent];
+		const std::string& path = inclusion.file->path();
+		if ((include_system || !system[i]) && seen.insert(path).second)
+			headers.push_back(path);
+	}
+	return headers;
+}
+
 void Preprocessor::define_builtin_macros()
 {
 	names_.file->macro = MakeBuiltinMacro(arena_, names_.file, BuiltinMacro::File);

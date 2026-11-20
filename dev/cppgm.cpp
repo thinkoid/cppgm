@@ -561,7 +561,7 @@ bool consume_search_option(const vector<string>& args, size_t& i)
 
 bool consume_dependency_option(const vector<string>& args, size_t& i)
 {
-	if (args[i] == "-MMD" || args[i] == "-MD" || args[i] == "-MP")
+	if (args[i] == "-M" || args[i] == "-MM" || args[i] == "-MMD" || args[i] == "-MD" || args[i] == "-MP")
 	{
 		return true;
 	}
