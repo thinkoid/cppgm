@@ -24,8 +24,7 @@ uint32_t external_symbol(obj::ObjectFile& object, const char* name)
 	return object.add_symbol(symbol);
 }
 
-namespace {
-uint32_t section_symbol(obj::ObjectFile& object, uint32_t section)
+uint32_t add_section_symbol(obj::ObjectFile& object, uint32_t section)
 {
 	obj::Symbol symbol;
 	symbol.type = obj::SymbolType::Section;
@@ -33,6 +32,7 @@ uint32_t section_symbol(obj::ObjectFile& object, uint32_t section)
 	return object.add_symbol(symbol);
 }
 
+namespace {
 uint32_t pointer_cell(obj::ObjectFile& object, uint32_t target)
 {
 	const uint32_t index = object.add_section(".data.rel.ro", obj::SectionKind::Data, 8);
@@ -40,7 +40,7 @@ uint32_t pointer_cell(obj::ObjectFile& object, uint32_t target)
 	section.bytes.resize(8);
 	section.size = 8;
 	section.relocations.push_back(obj::Relocation{ 0, Abs64, target, 0 });
-	return section_symbol(object, index);
+	return add_section_symbol(object, index);
 }
 
 obj::Relocation indirect_field(obj::ObjectFile& object, uint32_t offset, uint32_t symbol, bool darwin)
@@ -67,11 +67,11 @@ uint32_t exception_table(
 		const auto relocation = indirect_field(object, type.offset, symbols.at(type.type), darwin);
 		object.sections[index].relocations.push_back(relocation);
 	}
-	return section_symbol(object, index);
+	return add_section_symbol(object, index);
 }
 }
 
-void emit_unwind(const Function& function, uint32_t symbol, uint32_t shared_section,
+void emit_unwind(const Function& function, uint32_t symbol, uint32_t shared_code_symbol, uint32_t shared_section,
 	const std::vector<uint32_t>& symbols, obj::ObjectFile& object, bool darwin)
 {
 	const uint32_t lsda = exception_table(function, symbols, object, darwin);
@@ -150,7 +150,18 @@ void emit_unwind(const Function& function, uint32_t symbol, uint32_t shared_sect
 	description.code_bytes = function.code.size() * 4;
 	description.lsda_encoding = handler ? 0x1b : 0xff;
 	native::encode_fde(description, rules.data(), rules.size(), section.bytes, pc_field, lsda_field);
-	section.relocations.push_back(obj::Relocation{ pc_field, Prel32, symbol, 0 });
+	// ELF unwind ranges describe this code even when calls to its public
+	// name bind to another library. Relocate against the local section.
+	obj::Relocation start{ pc_field, Prel32, symbol, 0 };
+	if (!darwin)
+	{
+		const uint32_t code_section = object.symbols[symbol].section;
+		start.addend = static_cast<int64_t>(object.symbols[symbol].value);
+		start.symbol = code_section == object.symbols[shared_code_symbol].section
+			? shared_code_symbol
+			: add_section_symbol(object, code_section);
+	}
+	section.relocations.push_back(start);
 	if (handler)
 		section.relocations.push_back(obj::Relocation{ lsda_field, Prel32, lsda, 0 });
 	section.size = section.bytes.size();

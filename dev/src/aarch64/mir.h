@@ -76,9 +76,10 @@ struct Function
 	void bind(uint32_t label);
 };
 
-void emit_unwind(const Function& function, uint32_t symbol, uint32_t shared_section,
+void emit_unwind(const Function& function, uint32_t symbol, uint32_t shared_code_symbol, uint32_t shared_section,
 	const std::vector<uint32_t>& symbols, native::object::ObjectFile& object, bool darwin);
 uint32_t external_symbol(native::object::ObjectFile& object, const char* name);
+uint32_t add_section_symbol(native::object::ObjectFile& object, uint32_t section);
 void dump_function(const Function& function, const lowir::Program& program, const char* name, std::string& dump);
 
 struct BitTest
