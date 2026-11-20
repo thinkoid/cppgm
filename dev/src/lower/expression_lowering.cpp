@@ -326,11 +326,12 @@ RValue FunctionLowering::rvalue(const syntax::Expr& expr)
 		return converted_operand(*e);
 	if ((facts->flags & (sema::kFolded | sema::kStaticConstant)) != 0 && e->kind == syntax::ExprKind::Member)
 		member_object(static_cast<const syntax::MemberExpr&>(*e));
-	// A folded value-initialized pointer to member (5.2.3p2) is its null
-	// value.
+	// Folded value-initialization still needs the zero of the source type:
+	// null for a member pointer and a floating zero for a floating type.
 	if ((facts->flags & sema::kFolded) != 0)
-		return facts->type->unqualified->kind == sema::TypeKind::MemberPointer ? zero_value(facts->type)
-																			   : integer(facts->type, facts->value);
+		return facts->type->unqualified->kind == sema::TypeKind::MemberPointer || sema::IsFloating(facts->type)
+			? zero_value(facts->type)
+			: integer(facts->type, facts->value);
 	if ((facts->flags & sema::kStaticConstant) != 0)
 	{
 		// 9.4.2p3: the member's constant value (a member access's object
