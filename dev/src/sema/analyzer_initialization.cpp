@@ -901,9 +901,21 @@ bool Analyzer::check_narrowing(
 		(second == ValueConversion::Boolean && IsIntegralOrUnscopedEnum(source)))
 	{
 		IntegralKind to, from;
-		if (IntegralKindOf(target, to) && IntegralKindOf(source, from) &&
-			(to.bits < from.bits || (to.bits == from.bits && to.is_signed != from.is_signed) ||
-				(to.is_signed == false && from.is_signed)))
+		if (!IntegralKindOf(target, to) || !IntegralKindOf(source, from))
+			return true;
+		// A non-fixed enumeration can have nonnegative values only even
+		// when its ABI storage and integral promotion use a signed type.
+		if (source->kind == TypeKind::Enum)
+		{
+			const auto* enumeration = static_cast<const EnumEntity*>(source->entity);
+			if (!enumeration->fixed && !enumeration->negative && from.is_signed)
+			{
+				from.is_signed = false;
+				--from.bits;
+			}
+		}
+		if (to.bits < from.bits || (to.bits == from.bits && to.is_signed != from.is_signed) ||
+			(!to.is_signed && from.is_signed))
 		{
 			Constant value;
 			narrowing = !narrowing_constant(element, before, scope, &value, nullptr) || !Representable(value, to);
