@@ -108,34 +108,59 @@ function @dot_product(%t : ptr, %w : ptr, %n : i32) -> i32 [binding=internal, ob
 }
 function @pair_sums(%a : ptr, %b : ptr, %out : ptr) -> void [binding=internal, object=_ZL9pair_sumsPKsS0_Pii, no_inline=yes] {
   block ^entry:
-    jump ^unrolled_1
-
-  block ^unrolled_1:
-    %t1 = phi i64 [^unrolled_1: %t18, ^entry: 0]
-    %t2 = convert trunc exact i32 i64 %t1
-    %t3 = binary mul nowrap i32 %t2, 2
-    %t4 = index inbounds i16 [projection=array_element] %a, %t3
-    %t5 = index inbounds i16 [projection=array_element] %b, %t3
+    %t1 = load v128 %a
+    %t2 = load v128 %b
+    %t3 = vector pmaddwd %t1, %t2
+    store v128 %t3, %out
+    %t4 = index inbounds i16 [projection=array_element] %a, 8
+    %t5 = index inbounds i16 [projection=array_element] %b, 8
     %t6 = load v128 %t4
     %t7 = load v128 %t5
     %t8 = vector pmaddwd %t6, %t7
-    %t9 = index inbounds i32 [projection=array_element] %out, %t1
+    %t9 = index inbounds i32 [projection=array_element] %out, 4
     store v128 %t8, %t9
-    %t10 = binary add nowrap i32 %t2, 4
-    %t11 = binary mul nowrap i32 %t10, 2
-    %t12 = index inbounds i16 [projection=array_element] %a, %t11
-    %t13 = index inbounds i16 [projection=array_element] %b, %t11
-    %t14 = load v128 %t12
-    %t15 = load v128 %t13
-    %t16 = vector pmaddwd %t14, %t15
-    %t17 = index inbounds i32 [projection=array_element] %t9, 4
-    store v128 %t16, %t17
-    %t18 = binary add nowrap i64 %t1, 8
-    %t19 = convert trunc exact i32 i64 %t18
-    %t20 = cmp ne i32 %t19, 32
-    branch %t20, ^unrolled_1, ^loop_exit_2
-
-  block ^loop_exit_2:
+    %t10 = index inbounds i16 [projection=array_element] %a, 16
+    %t11 = index inbounds i16 [projection=array_element] %b, 16
+    %t12 = load v128 %t10
+    %t13 = load v128 %t11
+    %t14 = vector pmaddwd %t12, %t13
+    %t15 = index inbounds i32 [projection=array_element] %out, 8
+    store v128 %t14, %t15
+    %t16 = index inbounds i16 [projection=array_element] %a, 24
+    %t17 = index inbounds i16 [projection=array_element] %b, 24
+    %t18 = load v128 %t16
+    %t19 = load v128 %t17
+    %t20 = vector pmaddwd %t18, %t19
+    %t21 = index inbounds i32 [projection=array_element] %out, 12
+    store v128 %t20, %t21
+    %t22 = index inbounds i16 [projection=array_element] %a, 32
+    %t23 = index inbounds i16 [projection=array_element] %b, 32
+    %t24 = load v128 %t22
+    %t25 = load v128 %t23
+    %t26 = vector pmaddwd %t24, %t25
+    %t27 = index inbounds i32 [projection=array_element] %out, 16
+    store v128 %t26, %t27
+    %t28 = index inbounds i16 [projection=array_element] %a, 40
+    %t29 = index inbounds i16 [projection=array_element] %b, 40
+    %t30 = load v128 %t28
+    %t31 = load v128 %t29
+    %t32 = vector pmaddwd %t30, %t31
+    %t33 = index inbounds i32 [projection=array_element] %out, 20
+    store v128 %t32, %t33
+    %t34 = index inbounds i16 [projection=array_element] %a, 48
+    %t35 = index inbounds i16 [projection=array_element] %b, 48
+    %t36 = load v128 %t34
+    %t37 = load v128 %t35
+    %t38 = vector pmaddwd %t36, %t37
+    %t39 = index inbounds i32 [projection=array_element] %out, 24
+    store v128 %t38, %t39
+    %t40 = index inbounds i16 [projection=array_element] %a, 56
+    %t41 = index inbounds i16 [projection=array_element] %b, 56
+    %t42 = load v128 %t40
+    %t43 = load v128 %t41
+    %t44 = vector pmaddwd %t42, %t43
+    %t45 = index inbounds i32 [projection=array_element] %out, 28
+    store v128 %t44, %t45
     return void
 }
 function @energy(%a : ptr, %n : i32) -> u32 [binding=internal, object=_ZL6energyPKsi, no_inline=yes] {

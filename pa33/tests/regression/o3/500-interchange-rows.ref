@@ -53,39 +53,126 @@ function @product(%i : i64) -> void [no_inline=yes] {
     branch %t19, ^unrolled_1, ^terms
 
   block ^terms:
-    %t20 = phi i64 [^next: %t43, ^unrolled_1: 0]
-    %k = phi i64 [^next: %k1, ^unrolled_1: 0]
+    %t20 = phi i64 [^terms: %t123, ^unrolled_1: 0]
+    %k = phi i64 [^terms: %k1, ^unrolled_1: 0]
     %p = index f64 %ai, %k
     %rowk = index i8 %b, %t20
     %v = load typed f64 %p
-    %t25 = vector fromf64 %v
-    %t26 = vector pshufd %t25, 68
-    jump ^unrolled_3
-
-  block ^unrolled_3:
-    %t27 = phi i64 [^terms: 0, ^unrolled_3: %t40]
-    %t28 = index f64 %ri, %t27
-    %t29 = load v128 %t28
-    %t30 = index f64 %rowk, %t27
-    %t31 = load v128 %t30
-    %t32 = vector mulpd %t26, %t31
-    %t33 = vector addpd %t29, %t32
-    store v128 %t33, %t28
-    %t34 = index f64 %t28, 2
-    %t35 = load v128 %t34
-    %t36 = index f64 %t30, 2
-    %t37 = load v128 %t36
-    %t38 = vector mulpd %t26, %t37
-    %t39 = vector addpd %t35, %t38
-    store v128 %t39, %t34
-    %t40 = binary add nowrap i64 %t27, 4
-    %t41 = cmp ne i64 %t40, 32
-    branch %t41, ^unrolled_3, ^next
-
-  block ^next:
     %k1 = binary add nowrap i64 %k, 1
-    %t43 = binary add i64 %t20, 256
     %c = cmp lt i64 %k1, 32
+    %t27 = vector fromf64 %v
+    %t28 = vector pshufd %t27, 68
+    %t29 = load v128 %ri
+    %t30 = load v128 %rowk
+    %t31 = vector mulpd %t28, %t30
+    %t32 = vector addpd %t29, %t31
+    store v128 %t32, %ri
+    %t33 = index f64 %ri, 2
+    %t34 = load v128 %t33
+    %t35 = index f64 %rowk, 2
+    %t36 = load v128 %t35
+    %t37 = vector mulpd %t28, %t36
+    %t38 = vector addpd %t34, %t37
+    store v128 %t38, %t33
+    %t39 = index f64 %ri, 4
+    %t40 = load v128 %t39
+    %t41 = index f64 %rowk, 4
+    %t42 = load v128 %t41
+    %t43 = vector mulpd %t28, %t42
+    %t44 = vector addpd %t40, %t43
+    store v128 %t44, %t39
+    %t45 = index f64 %ri, 6
+    %t46 = load v128 %t45
+    %t47 = index f64 %rowk, 6
+    %t48 = load v128 %t47
+    %t49 = vector mulpd %t28, %t48
+    %t50 = vector addpd %t46, %t49
+    store v128 %t50, %t45
+    %t51 = index f64 %ri, 8
+    %t52 = load v128 %t51
+    %t53 = index f64 %rowk, 8
+    %t54 = load v128 %t53
+    %t55 = vector mulpd %t28, %t54
+    %t56 = vector addpd %t52, %t55
+    store v128 %t56, %t51
+    %t57 = index f64 %ri, 10
+    %t58 = load v128 %t57
+    %t59 = index f64 %rowk, 10
+    %t60 = load v128 %t59
+    %t61 = vector mulpd %t28, %t60
+    %t62 = vector addpd %t58, %t61
+    store v128 %t62, %t57
+    %t63 = index f64 %ri, 12
+    %t64 = load v128 %t63
+    %t65 = index f64 %rowk, 12
+    %t66 = load v128 %t65
+    %t67 = vector mulpd %t28, %t66
+    %t68 = vector addpd %t64, %t67
+    store v128 %t68, %t63
+    %t69 = index f64 %ri, 14
+    %t70 = load v128 %t69
+    %t71 = index f64 %rowk, 14
+    %t72 = load v128 %t71
+    %t73 = vector mulpd %t28, %t72
+    %t74 = vector addpd %t70, %t73
+    store v128 %t74, %t69
+    %t75 = index f64 %ri, 16
+    %t76 = load v128 %t75
+    %t77 = index f64 %rowk, 16
+    %t78 = load v128 %t77
+    %t79 = vector mulpd %t28, %t78
+    %t80 = vector addpd %t76, %t79
+    store v128 %t80, %t75
+    %t81 = index f64 %ri, 18
+    %t82 = load v128 %t81
+    %t83 = index f64 %rowk, 18
+    %t84 = load v128 %t83
+    %t85 = vector mulpd %t28, %t84
+    %t86 = vector addpd %t82, %t85
+    store v128 %t86, %t81
+    %t87 = index f64 %ri, 20
+    %t88 = load v128 %t87
+    %t89 = index f64 %rowk, 20
+    %t90 = load v128 %t89
+    %t91 = vector mulpd %t28, %t90
+    %t92 = vector addpd %t88, %t91
+    store v128 %t92, %t87
+    %t93 = index f64 %ri, 22
+    %t94 = load v128 %t93
+    %t95 = index f64 %rowk, 22
+    %t96 = load v128 %t95
+    %t97 = vector mulpd %t28, %t96
+    %t98 = vector addpd %t94, %t97
+    store v128 %t98, %t93
+    %t99 = index f64 %ri, 24
+    %t100 = load v128 %t99
+    %t101 = index f64 %rowk, 24
+    %t102 = load v128 %t101
+    %t103 = vector mulpd %t28, %t102
+    %t104 = vector addpd %t100, %t103
+    store v128 %t104, %t99
+    %t105 = index f64 %ri, 26
+    %t106 = load v128 %t105
+    %t107 = index f64 %rowk, 26
+    %t108 = load v128 %t107
+    %t109 = vector mulpd %t28, %t108
+    %t110 = vector addpd %t106, %t109
+    store v128 %t110, %t105
+    %t111 = index f64 %ri, 28
+    %t112 = load v128 %t111
+    %t113 = index f64 %rowk, 28
+    %t114 = load v128 %t113
+    %t115 = vector mulpd %t28, %t114
+    %t116 = vector addpd %t112, %t115
+    store v128 %t116, %t111
+    %t117 = index f64 %ri, 30
+    %t118 = load v128 %t117
+    %t119 = index f64 %rowk, 30
+    %t120 = load v128 %t119
+    %t121 = vector mulpd %t28, %t120
+    %t122 = vector addpd %t118, %t121
+    store v128 %t122, %t117
+    %t123 = binary add i64 %t20, 256
     branch %c, ^terms, ^done
 
   block ^done:
@@ -122,33 +209,58 @@ function @started() -> void [no_inline=yes] {
     branch %t15, ^unrolled_1, ^terms
 
   block ^terms:
-    %t16 = phi i64 [^next: %t33, ^unrolled_1: 0]
-    %k = phi i64 [^next: %k1, ^unrolled_1: 0]
+    %t16 = phi i64 [^terms: %t58, ^unrolled_1: 0]
+    %k = phi i64 [^terms: %k1, ^unrolled_1: 0]
     %rowk = index i8 %b, %t16
-    jump ^unrolled_3
-
-  block ^unrolled_3:
-    %t19 = phi i64 [^terms: 0, ^unrolled_3: %t30]
-    %t20 = index i32 %r, %t19
-    %t21 = load v128 %t20
-    %t22 = index i32 %rowk, %t19
-    %t23 = load v128 %t22
-    %t24 = vector paddd %t21, %t23
-    store v128 %t24, %t20
-    %t25 = index i32 %t20, 4
-    %t26 = load v128 %t25
-    %t27 = index i32 %t22, 4
-    %t28 = load v128 %t27
-    %t29 = vector paddd %t26, %t28
-    store v128 %t29, %t25
-    %t30 = binary add nowrap i64 %t19, 8
-    %t31 = cmp ne i64 %t30, 32
-    branch %t31, ^unrolled_3, ^next
-
-  block ^next:
     %k1 = binary add nowrap i64 %k, 1
-    %t33 = binary add i64 %t16, 128
     %c = cmp lt i64 %k1, 32
+    %t21 = load v128 %r
+    %t22 = load v128 %rowk
+    %t23 = vector paddd %t21, %t22
+    store v128 %t23, %r
+    %t24 = index i32 %r, 4
+    %t25 = load v128 %t24
+    %t26 = index i32 %rowk, 4
+    %t27 = load v128 %t26
+    %t28 = vector paddd %t25, %t27
+    store v128 %t28, %t24
+    %t29 = index i32 %r, 8
+    %t30 = load v128 %t29
+    %t31 = index i32 %rowk, 8
+    %t32 = load v128 %t31
+    %t33 = vector paddd %t30, %t32
+    store v128 %t33, %t29
+    %t34 = index i32 %r, 12
+    %t35 = load v128 %t34
+    %t36 = index i32 %rowk, 12
+    %t37 = load v128 %t36
+    %t38 = vector paddd %t35, %t37
+    store v128 %t38, %t34
+    %t39 = index i32 %r, 16
+    %t40 = load v128 %t39
+    %t41 = index i32 %rowk, 16
+    %t42 = load v128 %t41
+    %t43 = vector paddd %t40, %t42
+    store v128 %t43, %t39
+    %t44 = index i32 %r, 20
+    %t45 = load v128 %t44
+    %t46 = index i32 %rowk, 20
+    %t47 = load v128 %t46
+    %t48 = vector paddd %t45, %t47
+    store v128 %t48, %t44
+    %t49 = index i32 %r, 24
+    %t50 = load v128 %t49
+    %t51 = index i32 %rowk, 24
+    %t52 = load v128 %t51
+    %t53 = vector paddd %t50, %t52
+    store v128 %t53, %t49
+    %t54 = index i32 %r, 28
+    %t55 = load v128 %t54
+    %t56 = index i32 %rowk, 28
+    %t57 = load v128 %t56
+    %t58 = binary add i64 %t16, 128
+    %t59 = vector paddd %t55, %t57
+    store v128 %t59, %t54
     branch %c, ^terms, ^done
 
   block ^done:
@@ -242,27 +354,136 @@ function @consecutive() -> void [no_inline=yes] {
     jump ^columns
 
   block ^columns:
-    %j = phi i64 [^entry: 0, ^loop_exit_3: %j1]
-    jump ^wide_loop_2
-
-  block ^wide_loop_2:
-    %t4 = phi f64 [^wide_loop_2: %t13, ^columns: 0]
-    %t5 = phi i64 [^wide_loop_2: %t14, ^columns: 0]
-    %t6 = index f64 %b, %t5
-    %t7 = load v128 %t6
-    %t8 = vector mulpd %t7, %t7
-    %t9 = vector tof64 %t8
-    %t10 = binary add f64 %t4, %t9
-    %t11 = vector pshufd %t8, 238
-    %t12 = vector tof64 %t11
-    %t13 = binary add f64 %t10, %t12
-    %t14 = binary add nowrap i64 %t5, 2
-    %t15 = cmp le i64 %t14, 30
-    branch %t15, ^wide_loop_2, ^loop_exit_3
-
-  block ^loop_exit_3:
+    %j = phi i64 [^entry: 0, ^columns: %j1]
     %cell = index f64 %r, %j
-    store typed f64 %t13, %cell
+    %t5 = load v128 %b
+    %t6 = vector mulpd %t5, %t5
+    %t7 = vector tof64 %t6
+    %t8 = binary add f64 %t7, 0
+    %t9 = vector pshufd %t6, 238
+    %t10 = vector tof64 %t9
+    %t11 = binary add f64 %t8, %t10
+    %t12 = index f64 %b, 2
+    %t13 = load v128 %t12
+    %t14 = vector mulpd %t13, %t13
+    %t15 = vector tof64 %t14
+    %t16 = binary add f64 %t11, %t15
+    %t17 = vector pshufd %t14, 238
+    %t18 = vector tof64 %t17
+    %t19 = binary add f64 %t16, %t18
+    %t20 = index f64 %b, 4
+    %t21 = load v128 %t20
+    %t22 = vector mulpd %t21, %t21
+    %t23 = vector tof64 %t22
+    %t24 = binary add f64 %t19, %t23
+    %t25 = vector pshufd %t22, 238
+    %t26 = vector tof64 %t25
+    %t27 = binary add f64 %t24, %t26
+    %t28 = index f64 %b, 6
+    %t29 = load v128 %t28
+    %t30 = vector mulpd %t29, %t29
+    %t31 = vector tof64 %t30
+    %t32 = binary add f64 %t27, %t31
+    %t33 = vector pshufd %t30, 238
+    %t34 = vector tof64 %t33
+    %t35 = binary add f64 %t32, %t34
+    %t36 = index f64 %b, 8
+    %t37 = load v128 %t36
+    %t38 = vector mulpd %t37, %t37
+    %t39 = vector tof64 %t38
+    %t40 = binary add f64 %t35, %t39
+    %t41 = vector pshufd %t38, 238
+    %t42 = vector tof64 %t41
+    %t43 = binary add f64 %t40, %t42
+    %t44 = index f64 %b, 10
+    %t45 = load v128 %t44
+    %t46 = vector mulpd %t45, %t45
+    %t47 = vector tof64 %t46
+    %t48 = binary add f64 %t43, %t47
+    %t49 = vector pshufd %t46, 238
+    %t50 = vector tof64 %t49
+    %t51 = binary add f64 %t48, %t50
+    %t52 = index f64 %b, 12
+    %t53 = load v128 %t52
+    %t54 = vector mulpd %t53, %t53
+    %t55 = vector tof64 %t54
+    %t56 = binary add f64 %t51, %t55
+    %t57 = vector pshufd %t54, 238
+    %t58 = vector tof64 %t57
+    %t59 = binary add f64 %t56, %t58
+    %t60 = index f64 %b, 14
+    %t61 = load v128 %t60
+    %t62 = vector mulpd %t61, %t61
+    %t63 = vector tof64 %t62
+    %t64 = binary add f64 %t59, %t63
+    %t65 = vector pshufd %t62, 238
+    %t66 = vector tof64 %t65
+    %t67 = binary add f64 %t64, %t66
+    %t68 = index f64 %b, 16
+    %t69 = load v128 %t68
+    %t70 = vector mulpd %t69, %t69
+    %t71 = vector tof64 %t70
+    %t72 = binary add f64 %t67, %t71
+    %t73 = vector pshufd %t70, 238
+    %t74 = vector tof64 %t73
+    %t75 = binary add f64 %t72, %t74
+    %t76 = index f64 %b, 18
+    %t77 = load v128 %t76
+    %t78 = vector mulpd %t77, %t77
+    %t79 = vector tof64 %t78
+    %t80 = binary add f64 %t75, %t79
+    %t81 = vector pshufd %t78, 238
+    %t82 = vector tof64 %t81
+    %t83 = binary add f64 %t80, %t82
+    %t84 = index f64 %b, 20
+    %t85 = load v128 %t84
+    %t86 = vector mulpd %t85, %t85
+    %t87 = vector tof64 %t86
+    %t88 = binary add f64 %t83, %t87
+    %t89 = vector pshufd %t86, 238
+    %t90 = vector tof64 %t89
+    %t91 = binary add f64 %t88, %t90
+    %t92 = index f64 %b, 22
+    %t93 = load v128 %t92
+    %t94 = vector mulpd %t93, %t93
+    %t95 = vector tof64 %t94
+    %t96 = binary add f64 %t91, %t95
+    %t97 = vector pshufd %t94, 238
+    %t98 = vector tof64 %t97
+    %t99 = binary add f64 %t96, %t98
+    %t100 = index f64 %b, 24
+    %t101 = load v128 %t100
+    %t102 = vector mulpd %t101, %t101
+    %t103 = vector tof64 %t102
+    %t104 = binary add f64 %t99, %t103
+    %t105 = vector pshufd %t102, 238
+    %t106 = vector tof64 %t105
+    %t107 = binary add f64 %t104, %t106
+    %t108 = index f64 %b, 26
+    %t109 = load v128 %t108
+    %t110 = vector mulpd %t109, %t109
+    %t111 = vector tof64 %t110
+    %t112 = binary add f64 %t107, %t111
+    %t113 = vector pshufd %t110, 238
+    %t114 = vector tof64 %t113
+    %t115 = binary add f64 %t112, %t114
+    %t116 = index f64 %b, 28
+    %t117 = load v128 %t116
+    %t118 = vector mulpd %t117, %t117
+    %t119 = vector tof64 %t118
+    %t120 = binary add f64 %t115, %t119
+    %t121 = vector pshufd %t118, 238
+    %t122 = vector tof64 %t121
+    %t123 = binary add f64 %t120, %t122
+    %t124 = index f64 %b, 30
+    %t125 = load v128 %t124
+    %t126 = vector mulpd %t125, %t125
+    %t127 = vector tof64 %t126
+    %t128 = binary add f64 %t123, %t127
+    %t129 = vector pshufd %t126, 238
+    %t130 = vector tof64 %t129
+    %t131 = binary add f64 %t128, %t130
+    store typed f64 %t131, %cell
     %j1 = binary add nowrap i64 %j, 1
     %d = cmp lt i64 %j1, 32
     branch %d, ^columns, ^done

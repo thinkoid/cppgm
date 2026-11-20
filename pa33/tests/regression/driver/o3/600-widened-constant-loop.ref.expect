@@ -1,0 +1,3 @@
+# Keep the fixed-width sweep within the branch budget, including the guard
+# and scalar path needed if its inputs overlap.
+count(branch) <= 4 in @accumulate_row

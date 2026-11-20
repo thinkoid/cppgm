@@ -651,7 +651,7 @@ bool finish_loops(FunctionContext& context, const OptimizerOptions& options)
 		RUN_PASS(simplify_values);
 		RUN_PASS(cleanup_cfg);
 		RUN_PASS(remove_dead_code);
-		if (target_model::is_aarch64(context.program.target))
+		if (!target_model::is_wasm(context.program.target))
 			for (unsigned round = 0; round < 2 && RUN_PASS(unroll_vector_loops); ++round)
 			{
 				RUN_PASS(simplify_values);

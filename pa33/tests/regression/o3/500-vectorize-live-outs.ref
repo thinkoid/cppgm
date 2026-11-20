@@ -265,84 +265,122 @@ function @last(%x : ptr, %n : i64) -> u32 [no_inline=yes] {
 function @rounds(%x : ptr) -> u32 [no_inline=yes] {
   block ^entry:
     %t1 = vector fromi32 5
-    jump ^unrolled_1
-
-  block ^unrolled_1:
-    %t2 = phi v128 [^unrolled_1: %t15, ^entry: %t1]
-    %t3 = phi i64 [^unrolled_1: %t16, ^entry: 0]
-    %t4 = index u32 %x, %t3
+    %t2 = load v128 %x
+    %t3 = vector pxor %t1, %t2
+    %t4 = index u32 %x, 4
     %t5 = load v128 %t4
-    %t6 = vector pxor %t2, %t5
-    %t7 = index u32 %t4, 4
+    %t6 = vector pxor %t3, %t5
+    %t7 = index u32 %x, 8
     %t8 = load v128 %t7
     %t9 = vector pxor %t6, %t8
-    %t10 = index u32 %t4, 8
+    %t10 = index u32 %x, 12
     %t11 = load v128 %t10
     %t12 = vector pxor %t9, %t11
-    %t13 = index u32 %t4, 12
+    %t13 = index u32 %x, 16
     %t14 = load v128 %t13
     %t15 = vector pxor %t12, %t14
-    %t16 = binary add nowrap i64 %t3, 16
-    %t17 = cmp ne i64 %t16, 64
-    branch %t17, ^unrolled_1, ^loop_exit_2
-
-  block ^loop_exit_2:
-    %t18 = vector pshufd %t15, 78
-    %t19 = vector pxor %t15, %t18
-    %t20 = vector pshufd %t19, 177
-    %t21 = vector pxor %t19, %t20
-    %t22 = vector toi32 %t21
-    %t23 = copy u32 %t22
-    return u32 %t23
+    %t16 = index u32 %x, 20
+    %t17 = load v128 %t16
+    %t18 = vector pxor %t15, %t17
+    %t19 = index u32 %x, 24
+    %t20 = load v128 %t19
+    %t21 = vector pxor %t18, %t20
+    %t22 = index u32 %x, 28
+    %t23 = load v128 %t22
+    %t24 = vector pxor %t21, %t23
+    %t25 = index u32 %x, 32
+    %t26 = load v128 %t25
+    %t27 = vector pxor %t24, %t26
+    %t28 = index u32 %x, 36
+    %t29 = load v128 %t28
+    %t30 = vector pxor %t27, %t29
+    %t31 = index u32 %x, 40
+    %t32 = load v128 %t31
+    %t33 = vector pxor %t30, %t32
+    %t34 = index u32 %x, 44
+    %t35 = load v128 %t34
+    %t36 = vector pxor %t33, %t35
+    %t37 = index u32 %x, 48
+    %t38 = load v128 %t37
+    %t39 = vector pxor %t36, %t38
+    %t40 = index u32 %x, 52
+    %t41 = load v128 %t40
+    %t42 = vector pxor %t39, %t41
+    %t43 = index u32 %x, 56
+    %t44 = load v128 %t43
+    %t45 = vector pxor %t42, %t44
+    %t46 = index u32 %x, 60
+    %t47 = load v128 %t46
+    %t48 = vector pxor %t45, %t47
+    %t49 = vector pshufd %t48, 78
+    %t50 = vector pxor %t48, %t49
+    %t51 = vector pshufd %t50, 177
+    %t52 = vector pxor %t50, %t51
+    %t53 = vector toi32 %t52
+    %t54 = copy u32 %t53
+    return u32 %t54
 }
 function @not_rounds(%x : ptr) -> u32 [no_inline=yes] {
   block ^entry:
     %t1 = vector fromi32 5
-    jump ^unrolled_1
-
-  block ^unrolled_1:
-    %t2 = phi v128 [^unrolled_1: %t15, ^entry: %t1]
-    %t3 = phi i64 [^unrolled_1: %t16, ^entry: 0]
-    %t4 = index u32 %x, %t3
+    %t2 = load v128 %x
+    %t3 = vector pxor %t1, %t2
+    %t4 = index u32 %x, 4
     %t5 = load v128 %t4
-    %t6 = vector pxor %t2, %t5
-    %t7 = index u32 %t4, 4
+    %t6 = vector pxor %t3, %t5
+    %t7 = index u32 %x, 8
     %t8 = load v128 %t7
     %t9 = vector pxor %t6, %t8
-    %t10 = index u32 %t4, 8
+    %t10 = index u32 %x, 12
     %t11 = load v128 %t10
     %t12 = vector pxor %t9, %t11
-    %t13 = index u32 %t4, 12
+    %t13 = index u32 %x, 16
     %t14 = load v128 %t13
     %t15 = vector pxor %t12, %t14
-    %t16 = binary add nowrap i64 %t3, 16
-    %t17 = cmp ne i64 %t16, 48
-    branch %t17, ^unrolled_1, ^wide_loop_2
-
-  block ^wide_loop_2:
-    %t18 = phi v128 [^wide_loop_2: %t22, ^unrolled_1: %t15]
-    %t19 = phi i64 [^wide_loop_2: %t23, ^unrolled_1: %t16]
-    %t20 = index u32 %x, %t19
-    %t21 = load v128 %t20
-    %t22 = vector pxor %t18, %t21
-    %t23 = binary add nowrap i64 %t19, 4
-    %t24 = cmp ult i64 %t23, 62
-    branch %t24, ^wide_loop_2, ^loop_exit_3
-
-  block ^loop_exit_3:
-    %t25 = phi v128 [^wide_loop_2: %t22]
-    %t26 = phi i64 [^wide_loop_2: %t23]
-    %t27 = vector pshufd %t25, 78
-    %t28 = vector pxor %t25, %t27
-    %t29 = vector pshufd %t28, 177
-    %t30 = vector pxor %t28, %t29
-    %t31 = vector toi32 %t30
-    %t32 = copy u32 %t31
+    %t16 = index u32 %x, 20
+    %t17 = load v128 %t16
+    %t18 = vector pxor %t15, %t17
+    %t19 = index u32 %x, 24
+    %t20 = load v128 %t19
+    %t21 = vector pxor %t18, %t20
+    %t22 = index u32 %x, 28
+    %t23 = load v128 %t22
+    %t24 = vector pxor %t21, %t23
+    %t25 = index u32 %x, 32
+    %t26 = load v128 %t25
+    %t27 = vector pxor %t24, %t26
+    %t28 = index u32 %x, 36
+    %t29 = load v128 %t28
+    %t30 = vector pxor %t27, %t29
+    %t31 = index u32 %x, 40
+    %t32 = load v128 %t31
+    %t33 = vector pxor %t30, %t32
+    %t34 = index u32 %x, 44
+    %t35 = load v128 %t34
+    %t36 = vector pxor %t33, %t35
+    %t37 = index u32 %x, 48
+    %t38 = load v128 %t37
+    %t39 = vector pxor %t36, %t38
+    %t40 = index u32 %x, 52
+    %t41 = load v128 %t40
+    %t42 = vector pxor %t39, %t41
+    %t43 = index u32 %x, 56
+    %t44 = load v128 %t43
+    %t45 = vector pxor %t42, %t44
+    %t46 = index u32 %x, 60
+    %t47 = load v128 %t46
+    %t48 = vector pxor %t45, %t47
+    %t49 = vector pshufd %t48, 78
+    %t50 = vector pxor %t48, %t49
+    %t51 = vector pshufd %t50, 177
+    %t52 = vector pxor %t50, %t51
+    %t53 = vector toi32 %t52
+    %t54 = copy u32 %t53
     jump ^body
 
   block ^body:
-    %i = phi i64 [^loop_exit_3: %t26, ^body: %next]
-    %s = phi u32 [^loop_exit_3: %t32, ^body: %t]
+    %i = phi i64 [^entry: 64, ^body: %next]
+    %s = phi u32 [^entry: %t54, ^body: %t]
     %p = index u32 %x, %i
     %v = load typed u32 %p
     %t = binary xor u32 %s, %v
@@ -351,43 +389,54 @@ function @not_rounds(%x : ptr) -> u32 [no_inline=yes] {
     branch %more, ^body, ^done
 
   block ^done:
-    return u32 %t
+    %t62 = phi u32 [^body: %t]
+    return u32 %t62
 }
 function @nested(%x : ptr, %rows : i64) -> u32 [no_inline=yes] {
   block ^entry:
     jump ^outer
 
   block ^outer:
-    %t1 = phi i64 [^entry: 0, ^loop_exit_3: %t24]
-    %r = phi i64 [^entry: 0, ^loop_exit_3: %r_next]
-    %acc = phi u32 [^entry: 0, ^loop_exit_3: %mixed]
+    %t1 = phi i64 [^entry: 0, ^outer: %t40]
+    %r = phi i64 [^entry: 0, ^outer: %r_next]
+    %acc = phi u32 [^entry: 0, ^outer: %mixed]
     %row = copy i64 %t1
     %base = index u32 %x, %row
     %t6 = copy i32 %acc
     %t7 = vector fromi32 %t6
-    jump ^wide_loop_2
-
-  block ^wide_loop_2:
-    %t8 = phi v128 [^outer: %t7, ^wide_loop_2: %t12]
-    %t9 = phi i64 [^outer: 0, ^wide_loop_2: %t13]
-    %t10 = index u32 %base, %t9
+    %t8 = load v128 %base
+    %t9 = vector paddd %t7, %t8
+    %t10 = index u32 %base, 4
     %t11 = load v128 %t10
-    %t12 = vector paddd %t8, %t11
-    %t13 = binary add nowrap i64 %t9, 4
-    %t14 = cmp ule i64 %t13, 28
-    branch %t14, ^wide_loop_2, ^loop_exit_3
-
-  block ^loop_exit_3:
-    %t15 = vector pshufd %t12, 78
-    %t16 = vector paddd %t12, %t15
-    %t17 = vector pshufd %t16, 177
-    %t18 = vector paddd %t16, %t17
-    %t19 = vector toi32 %t18
-    %t20 = copy u32 %t19
-    %rot = binary shl u32 %t20, 3
-    %mixed = binary xor u32 %rot, %t20
+    %t12 = vector paddd %t9, %t11
+    %t13 = index u32 %base, 8
+    %t14 = load v128 %t13
+    %t15 = vector paddd %t12, %t14
+    %t16 = index u32 %base, 12
+    %t17 = load v128 %t16
+    %t18 = vector paddd %t15, %t17
+    %t19 = index u32 %base, 16
+    %t20 = load v128 %t19
+    %t21 = vector paddd %t18, %t20
+    %t22 = index u32 %base, 20
+    %t23 = load v128 %t22
+    %t24 = vector paddd %t21, %t23
+    %t25 = index u32 %base, 24
+    %t26 = load v128 %t25
+    %t27 = vector paddd %t24, %t26
+    %t28 = index u32 %base, 28
+    %t29 = load v128 %t28
+    %t30 = vector paddd %t27, %t29
+    %t31 = vector pshufd %t30, 78
+    %t32 = vector paddd %t30, %t31
+    %t33 = vector pshufd %t32, 177
+    %t34 = vector paddd %t32, %t33
+    %t35 = vector toi32 %t34
+    %t36 = copy u32 %t35
+    %rot = binary shl u32 %t36, 3
+    %mixed = binary xor u32 %rot, %t36
     %r_next = binary add i64 %r, 1
-    %t24 = binary add i64 %t1, 32
+    %t40 = binary add i64 %t1, 32
     %again = cmp ult i64 %r_next, %rows
     branch %again, ^outer, ^done
 
