@@ -134,7 +134,9 @@ for my $level (@{$expect->{levels} // [0..3]}) {
     die "$test: expected relocation $expect->{relocation}\n"
         if $expect->{relocation} && index($header, $expect->{relocation}) < 0;
     if ($expect->{shared_link}) {
-        run(0, $lld, '-m', 'aarch64elf', '-shared', '--no-undefined', $object, '-o', "$directory/libfixture.so");
+        my $pic_object = "$directory/pic-unit.o";
+        run(0, $compiler, @flags, '-fPIC', '-x', 'c++', '-c', $test, '-o', $pic_object);
+        run(0, $lld, '-m', 'aarch64elf', '-shared', '--no-undefined', $pic_object, '-o', "$directory/libfixture.so");
     }
     my $quality = $expect->{quality};
     if ($quality && grep { $_ eq $level } @{$quality->{levels} // [1, 2, 3]}) {
